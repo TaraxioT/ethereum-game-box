@@ -46,6 +46,11 @@ import { createTimers } from "./timers.ts";
 export const JOIN_SETTLE_MS = 700;
 /** Home falls back to attract after this long with no taps or touches. */
 export const IDLE_MS = 60_000;
+/**
+ * The game builder goes back to Home after this long with no command from the screen. Its views send `build` as the
+ * player works (and as a build streams in), so only a builder left alone times out; a running build carries on.
+ */
+export const BUILD_IDLE_MS = 5 * 60_000;
 /** How often a running game is stepped. */
 export const TICK_MS = 50;
 /** A finished game stays on screen this long (the winner, the reaction times, the last seal) before it settles. */
@@ -63,6 +68,8 @@ export type Opponent = "bot" | "hotseat";
 export interface CoreOptions {
   /** The bot's badge. With the opponent `bot`, Player 2's seat is the bot's alone. Absent: always hot seat. */
   readonly bot?: Badge;
+  /** This Box has the game builder (the Box server): Home's NEW GAME opens the `build` phase. The demo has none. */
+  readonly builder?: boolean;
 }
 
 export interface Core extends BoxLink {
@@ -326,7 +333,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   function resetIdle(): void {
     timers.cancel(idleTimer);
-    idleTimer = phase === "home" ? timers.after(IDLE_MS, () => setPhase("attract")) : null;
+    if (phase === "home") idleTimer = timers.after(IDLE_MS, () => setPhase("attract"));
+    else if (phase === "build") idleTimer = timers.after(BUILD_IDLE_MS, () => setPhase("home"));
+    else idleTimer = null;
   }
 
   function setPhase(to: Phase): void {
@@ -605,6 +614,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const seatedHere = sameBadge(seats[seat].badge, badge);
     switch (phase) {
       case "boot":
+      case "build":
         return "ignored";
       case "result":
         return rematchTap(seat, badge);
@@ -736,7 +746,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         fundSeats();
         return;
       case "back":
-        if (phase === "join" || (phase === "stake" && nobodySigned())) setPhase("home");
+        if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
         return;
       case "rematch":
         if (phase !== "result") return;
@@ -744,7 +754,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         setPhase(bothSeated() ? "stake" : "join");
         return;
       case "home":
-        if (phase === "result") setPhase("home");
+        if (phase === "result" || phase === "build") setPhase("home");
+        return;
+      case "build":
+        // From Home, the builder opens; inside it, resetIdle() above was the point (a player is still there).
+        if (phase === "home" && options.builder) setPhase("build");
         return;
       case "refund":
         if (phase === "refund") for (const seat of SEATS) claimRefund(seat);

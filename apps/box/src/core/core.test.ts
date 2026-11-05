@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { LedgerData, LibraryPort } from "./ports.ts";
 import type { Badge, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { createCore, END_HOLD_MS, type Core } from "./core.ts";
+import { BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -30,7 +30,7 @@ interface Rig {
   readonly logged: Transcript[];
 }
 
-function rig(options: { ledger?: LedgerData; library?: LibraryPort } = {}): Rig {
+function rig(options: { ledger?: LedgerData; library?: LibraryPort; builder?: boolean } = {}): Rig {
   const clock = createFakeClock(START);
   const rnd = mulberry32(7);
   const shows: [Seat, StationView][] = [];
@@ -44,7 +44,7 @@ function rig(options: { ledger?: LedgerData; library?: LibraryPort } = {}): Rig 
     library: options.library ?? teamLibrary(),
     log: { record: (t) => void logged.push(t), countedSince: () => 0 },
     random: () => Math.floor(rnd() * 2 ** 32) >>> 0,
-  });
+  }, { builder: options.builder ?? false });
   const events: BoxEvent[] = [];
   core.subscribe((_, event) => events.push(event));
   return { core, clock, events, shows, buzzes, store, logged };
@@ -366,5 +366,62 @@ describe("the core on its ports", () => {
     until(r, (state) => state.txs.every((tx) => tx.step === "paid"));
     expect(r.core.state().phase).toBe("home");
     expect(r.store.current().escrow).toEqual({});
+  });
+});
+
+describe("the build phase", () => {
+  /** Booted, with NOVA seated, on Home. */
+  function onHome(builder: boolean): Rig {
+    const r = rig({ builder });
+    r.core.send({ type: "booted" });
+    instantTap(r.core, 0, NOVA, 1); // attract → Home
+    instantTap(r.core, 0, NOVA, 1); // seated
+    expect(r.core.state().phase).toBe("home");
+    return r;
+  }
+
+  it("opens from Home only on a Box with the builder, and home or back returns", () => {
+    const demo = onHome(false);
+    demo.core.send({ type: "build" });
+    expect(demo.core.state().phase).toBe("home");
+
+    const { core, events } = onHome(true);
+    core.send({ type: "build" });
+    expect(core.state().phase).toBe("build");
+    expect(events.at(-1)).toEqual({ type: "phase", from: "home", to: "build" });
+    core.send({ type: "home" });
+    expect(core.state().phase).toBe("home");
+    core.send({ type: "build" });
+    core.send({ type: "back" });
+    expect(core.state().phase).toBe("home");
+    // Only from Home: not mid-flow.
+    core.send({ type: "play" });
+    core.send({ type: "build" });
+    expect(core.state().phase).toBe("join");
+  });
+
+  it("plans no taps while building, ignores the ones that come, and keeps the seats", () => {
+    const r = onHome(true);
+    r.core.send({ type: "build" });
+    expect([r.core.plan(0), r.core.plan(1)]).toEqual(["none", "none"]);
+    instantTap(r.core, 1, KITE, 1);
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: false });
+    expect(r.buzzes.at(-1)).toEqual([1, "no"]);
+    expect(r.core.state().seats[1].badge).toBeNull();
+    expect(r.core.state().seats[0].badge).toEqual(NOVA);
+    expect(r.core.state().stations.map((view) => view.big)).toEqual(["NEW GAME", "NEW GAME"]);
+  });
+
+  it("goes back to Home after BUILD_IDLE_MS with no command, and each build command holds it there", () => {
+    const r = onHome(true);
+    r.core.send({ type: "build" });
+    r.clock.advance(IDLE_MS + 1);
+    expect(r.core.state().phase).toBe("build");
+    r.clock.advance(BUILD_IDLE_MS - IDLE_MS - 2);
+    r.core.send({ type: "build" });
+    r.clock.advance(BUILD_IDLE_MS - 1);
+    expect(r.core.state().phase).toBe("build");
+    r.clock.advance(1);
+    expect(r.core.state().phase).toBe("home");
   });
 });

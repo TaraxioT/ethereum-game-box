@@ -1,7 +1,7 @@
 # The core
 
-The Box's phase machine (boot → attract → home → join → stake → playing → result | refund), with its simulated
-ledger, chain clock, transactions, station views and bot. It has no DOM, no Node APIs and no clock of its own: it
+The Box's phase machine (boot → attract → home → join → stake → playing → result | refund, and home ⇄ build), with its
+simulated ledger, chain clock, transactions, station views and bot. It has no DOM, no Node APIs and no clock of its own: it
 reaches the world only through `CorePorts` (`ports.ts`). Two hosts run it: `SimLink` in the browser for the demo
 (`screen/link/sim.ts`) and the Box server on the Pi (`server/box.ts`). `tsconfig.core.json` checks it with ES2023
 alone (no DOM, no Node types, no timers), so anything platform-bound fails the check.
@@ -38,6 +38,16 @@ take ids from `core.nextTap()`). Only station taps are evidence for a counted re
 - On the result, a seated badge's tap is a rematch, but only `REMATCH_TAP_MS` (4 s) after the game ended: a chip left
   on the reader must not skip the result.
 
+## The build phase
+
+On a Box with the game builder (`createCore(ports, { builder: true })`, the server; the demo has none), Home's NEW
+GAME sends `{ type: "build" }` and the Box enters `build`: the Designer and the Build screen. `home` or `back` returns.
+While building, taps plan `none` and any that come are refused (two buzzes); the seats stay as they were, and the
+stations read `NEW GAME`. The phase goes back to Home after `BUILD_IDLE_MS` (5 minutes) with no screen command; the
+builder's views send `build` again as the player works and as a build streams in, so only a builder left alone times
+out (a build that is running carries on). Whether a game is being built is the server's to know (`/api/state`'s `busy`),
+not the core's.
+
 ## Matches and records
 
 Every match is written to the match log after its end hold, as `@egb/sdk`'s `Transcript`: the seed, both badges, the
@@ -55,7 +65,7 @@ back; an open transaction still on its way locks nothing when it lands.
 | `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState`, `BoxEvent`, `ScreenCommand`, `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art), `Match`, `Tx`. `StationView` is `@egb/sdk`'s. | types |
 | `ports.ts` | `CorePorts` and the types that cross them: `Clock`, `StationsPort`, `LedgerStore`, `LibraryPort`, `RulesRunnerPort`, `MatchLog`, `TapEvent`, `TapPlan`. | types |
 | `wire.ts` | The link's messages (`LinkDown`, `LinkUp`), `LINK_PATH`, `LINK_COALESCE_MS`, and `STATE_ONLY`: the one event that goes out as a coalesced `state` message. | types, constants |
-| `core.ts` | The phase machine on its ports. | `createCore(ports, { bot? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, …). |
+| `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
@@ -73,4 +83,5 @@ back; an open transaction still on its way locks nothing when it lands.
 Tests: `core.test.ts` drives whole matches through the ports on a fake clock (judged by touch time, an unknown chip's
 earlier touch waited for, rolls from `done`, a frozen card let go on `fail`, refusals, dropped stale taps, transcripts
 and their counting, the rematch tap, the stranded escrow returned, reset, station pushes, the ledger store, the
-library); `bot`, `chain`, `ledger`, `stations`, `transcript` and `txs` have their own.
+library, the build phase: only on a Box with the builder, taps refused, its idle); `bot`, `chain`, `ledger`,
+`stations`, `transcript` and `txs` have their own.

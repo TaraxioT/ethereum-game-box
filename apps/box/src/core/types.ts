@@ -102,7 +102,8 @@ export type Phase =
   | "stake" // pick a stake, both tap to sign
   | "playing" // a game runs
   | "result" // the winner is paid
-  | "refund"; // the Box missed its settle: each seat takes its stake back
+  | "refund" // the Box missed its settle: each seat takes its stake back
+  | "build"; // the game builder: the Designer and the Build screen (the Box's own screen only, never the demo)
 
 export interface BoxState {
   readonly phase: Phase;
@@ -152,7 +153,9 @@ export type ScreenCommand =
   | { readonly type: "rematch" }
   | { readonly type: "home" }
   /** Refund: once the stakes unlock, send every refund still owed (each goes to its own badge, whoever asks). */
-  | { readonly type: "refund" };
+  | { readonly type: "refund" }
+  /** Home's NEW GAME cartridge: opens the game builder. Sent again while building, it says a player is still there. */
+  | { readonly type: "build" };
 
 export interface BoxLink {
   state(): BoxState;

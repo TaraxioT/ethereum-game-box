@@ -88,6 +88,8 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
       return lines("", "");
     case "attract":
       return lines("TAP", "to start");
+    case "build":
+      return lines("NEW GAME", "being designed");
     case "home":
     case "join":
       return seated(mine);
