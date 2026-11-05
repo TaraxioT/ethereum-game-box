@@ -16,7 +16,7 @@ named.
 |---|---|---|
 | `EGB_PORT` | `8790` | The port for HTTP and the link. |
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
-| `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver). |
+| `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games) and `forge/`. |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
 | `EGB_STATIONS` | `e4ba70,df3d88` | The station ids at Player 1's and Player 2's seats. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
@@ -46,6 +46,8 @@ Relative paths are from the repo root; `~` is the home folder.
 | `POST /api/taps/bench` | local origin | `{ count? }` (1–1000, default 200): the taps bench's report (`pnpm taps:bench` calls this). |
 | `POST /api/taps/fake` | local origin | The fake receiver's hands: `{ op: "place", badge, st }`, `{ op: "lift", badge }`, `{ op: "linkDown" \| "linkUp", st }`, `{ op: "unplug" \| "plug" }`. 409 on real hardware. |
 | `/api/builder/…` | launcher token | The game builder: below. |
+| `GET /games/<id>/icon.svg`, `screen.js`, `frame.html` | anyone | A built game's cartridge art, screen module and sandboxed frame page, under the frame's own CSP (`games/`). |
+| `GET /parts.js`, `/parts.css`, `/parts/…`, `/frame.js` | anyone | What every frame loads besides the game: the parts, their look and fonts, the frame's program. |
 | `GET /`, `/index.html` | anyone | The screen's page, never cached; the launcher token is written into it only for a top-level navigation. |
 | `GET /test` | anyone | The test page (same rules as the screen's page). |
 | `GET /…` | anyone | The built files (`assets/` cached for good). |
@@ -62,8 +64,16 @@ constant time).
 The Forge and the Designer (`src/builder/`) start once the server listens (the Forge reads its jobs from the disk),
 sharing one edit lock, and their routes join the handler then (`builder-host.ts`). A confirmed design is built at once
 on `EGB_FORGE_PROVIDER`; a provider that can't build here (no Claude login) refuses the confirm with a 409. Builds run
-in the Forge's child processes, so nothing here waits on one. The Forge's `onLibraryChange` is the hook the library's
-rescan mounts on (it logs until then).
+in the Forge's child processes, so nothing here waits on one. The Forge's `onLibraryChange` rescans the library, so a
+game it installs reaches Home's rack as a `games` event.
+
+## Built games
+
+The library (`library/`) is the core's `LibraryPort`: the catalogue's team games at once, then, from the scan after
+the listen, the team games' game.json and the built games in `$EGB_DATA/games/`, oldest first, sealed with their
+reason when they can't be offered. The rules host (`rules/`) is the core's `RulesRunnerPort`: each built game's rules
+in a sandboxed child, one game at a time, with a budget on every step; a bundle that won't load in its child seals the
+game. The game routes (`games/`) serve the cartridges and the frames ahead of the screen's files.
 
 Every route is a `launcher` route; every one that isn't a GET also needs a local origin. Paths and replies are in
 `builder-wire.ts`, which the screen and the test page import too.
@@ -122,7 +132,10 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `main.ts` | The entry: env files, settings, the Box, signals. Uncaught errors are logged and never fatal; SIGTERM and SIGINT stop it within 10 s (the taps closed, the ledger and the log on disk). | |
 | `env.ts` | `.env`-style files, never overriding a set key. | `parseEnv`, `loadEnvFile`, `envFiles`, `loadEnv` |
 | `settings.ts` | The typed, checked settings. | `readSettings(env, home, repoRoot)`, `SettingsError` |
-| `box.ts` | The Box put together: the core on Node's ports, the taps and the game builder (after it listens), the session log, the routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, builder? }): Box` |
+| `box.ts` | The Box put together: the core on Node's ports (the library and the rules host among them), the taps, the library's scan and the game builder (after it listens), the session log, the routes and the built games' routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, builder? }): Box` (`core`, `library`, `rules`, `taps()`, `builder()`) |
+| `library/` | The game library (its own README). | `createLibrary` |
+| `rules/` | The rules runner host and the sandbox's proof (its own README). | `createRulesHost` |
+| `games/` | Built games over HTTP: cartridges, frames, the frames' shared assets (its own README). | `createGameRoutes`, `createFrameAssets` |
 | `api.ts` | The Box's routes: health, state, injected taps, the Box tab. | `apiRoutes`, `busy(state, building)` |
 | `builder-host.ts` | The game builder on the server: the Forge and the Designer on one lock, a confirmed design built on `EGB_FORGE_PROVIDER`, every change fanned out to the stream. | `startBuilder(options): Builder`, `forgeProvider(env)` |
 | `builder-api.ts` | The builder's routes, refusals as their codes. | `builderRoutes(builder)`, `AUDIO_LIMIT` |
@@ -131,7 +144,7 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `builder-testing.ts` | For tests: a Box whose shelf is the Forge's fixture, token-carrying requests, the event stream parsed. | `startBuilderBox`, `call`, `callJson`, `openStream` |
 | `taps-api.ts` | The stations' routes for the test page and the bench. | `tapsRoutes` |
 | `sessions.ts` | The session log, and the records and per-pair counts rebuilt from it. | `createSessionLog(dataDir, log)` (the core's `MatchLog`), `dayOf` |
-| `routes.ts` | The HTTP handler: local origin, the launcher guard, the API, the screen's files. | `createHandler`, `Route` |
+| `routes.ts` | The HTTP handler: local origin, the launcher guard, the API, the built games' routes, the screen's files. | `createHandler`, `Route` |
 | `http.ts` | Static files, capped bodies, the local-origin rule. | `localOrigin`, `within`, `sendFile`, `readBody`, `readJson`, `HttpError` |
 | `security.ts` | The CSP and the launcher token. | `CSP`, `createLauncherToken`, `isTopNavigation`, `withToken`, `hasToken` |
 | `link.ts` | The screen's WebSocket on the HTTP server (`ws`, `noServer`). | `attachLink(server, box, log)`, `parseCommand` |
@@ -152,4 +165,6 @@ touch ending in done or fail when the receiver is unplugged mid-roll. `builder-a
 builder route, a local origin on every write, the Designer's refusals as their codes, the audio cap, mock voice heard,
 a confirm that builds (the design locked, `/api/state` busy) with the event stream replaying the build to a late screen
 and `?job=` replaying a finished one. `builder-session`: a whole design by mock voice over the HTTP API, its spoken "yes"
-building a game with the sim provider, installed, every step on the stream.
+building a game with the sim provider, installed, every step on the stream. `built-match`: a game the Forge's sim provider builds and installs reaches the rack as
+a `games` event with its art and frame served, plays a whole match by injected taps with its rules in the sandboxed
+child to a paid result and its transcript, and a game whose rules hang is voided at its budget with both stakes back.

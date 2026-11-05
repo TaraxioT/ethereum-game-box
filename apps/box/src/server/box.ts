@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
 import type { Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
-import { teamLibrary } from "../core/catalogue.ts";
 import { systemClock } from "../core/system-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { badgeOf } from "../taps/roster.ts";
@@ -24,6 +23,10 @@ import { readCommit } from "./release.ts";
 import { createHandler } from "./routes.ts";
 import { createLauncherToken } from "./security.ts";
 import { createSessionLog } from "./sessions.ts";
+import { createFrameAssets } from "./games/assets.ts";
+import { createGameRoutes } from "./games/routes.ts";
+import { createLibrary, type Library } from "./library/library.ts";
+import { createRulesHost, type RulesHost } from "./rules/host.ts";
 import { tapsRoutes } from "./taps-api.ts";
 
 export interface BoxOptions {
@@ -46,6 +49,10 @@ export interface Box {
   readonly url: string;
   readonly port: number;
   readonly core: Core;
+  /** The games: the team games and the installed built games. */
+  readonly library: Library;
+  /** Built games' rules, each in its sandboxed child. */
+  readonly rules: RulesHost;
   /** The taps library, once it has started (after the server listens); null with EGB_RECEIVER=none. */
   taps(): Taps | null;
   /** The game builder, once it has started (after the server listens). */
@@ -72,6 +79,14 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   await mkdir(settings.dataDir, { recursive: true });
   const ledger = createLedgerFile(join(settings.dataDir, "ledger.json"), log);
   const sessions = createSessionLog(settings.dataDir, log);
+  // The library answers with the catalogue until its first scan, which runs after the listen.
+  const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log });
+  const rules = createRulesHost({
+    locate: (id) => library.rules(id),
+    log,
+    // A bundle that doesn't load in its child seals its cartridge.
+    onUnloadable: (id, reason) => library.seal(id, reason),
+  });
   let taps: Taps | null = null;
   const core = createCore({
     clock,
@@ -81,7 +96,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       buzz: (seat, kind) => taps?.buzz(seat, kind),
     },
     ledger,
-    library: teamLibrary(),
+    library,
+    rules,
     log: sessions,
     random: () => randomInt(2 ** 32),
   }, { builder: true });
@@ -99,7 +115,14 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     }),
     ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, stations: settings.stations }),
   ];
-  const server = http.createServer(createHandler({ routes, screenDir: settings.screenDir, token, log }));
+  const games = createGameRoutes({
+    built(id) {
+      const entry = library.entry(id);
+      return entry?.info.kind === "built" && entry.dir ? { dir: entry.dir, ready: entry.info.ready, title: entry.info.title } : null;
+    },
+    assets: createFrameAssets(log),
+  });
+  const server = http.createServer(createHandler({ routes, games, screenDir: settings.screenDir, token, log }));
   const link = attachLink(server, core, log);
 
   // Listen first: the kiosk and the deploy's health check get answers before anything slow (opening the receiver,
@@ -112,6 +135,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     });
   });
   server.on("error", (error) => log(`http: ${error.message}`));
+
+  void library.rescan();
 
   if (settings.receiver.kind !== "none") {
     taps = createTaps({
@@ -133,8 +158,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     env: builderEnv,
     gameRoots: options.builder?.gameRoots ?? [GAMES_DIR],
     log,
-    // The Forge installed or removed a game: the library rescans here once it is mounted.
-    onLibraryChange: () => log("[builder] the library changed: a game was installed or removed"),
+    // The Forge installed or removed a game: the rack follows (the core hears the library's change).
+    onLibraryChange: () => void library.rescan(),
     ...(options.builder?.simSpeed === undefined ? {} : { simSpeed: options.builder.simSpeed }),
   });
   routes.push(...builderRoutes(builder));
@@ -150,6 +175,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     url: `http://${urlHost(settings.host)}:${port}`,
     port,
     core,
+    library,
+    rules,
     taps: () => taps,
     builder: () => builder,
     token,
