@@ -48,7 +48,7 @@ describe("LiveLink", () => {
     tb.box.core.subscribe((_, event) => sent.push(event));
     link.send({ type: "booted" });
     await wait(() => tb.box.core.state().phase === "attract");
-    await post(tb.box, "/api/taps/inject", { seat: 0, badge: NOVA });
+    await post(tb.box, "/api/taps/inject", { seat: 0, badge: NOVA.address });
     tb.advance(15_000);
     await wait(() => heard.length >= sent.length);
     expect(heard.map(([, event]) => event)).toEqual(sent);

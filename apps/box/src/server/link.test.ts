@@ -37,7 +37,7 @@ describe("the screen's link", () => {
     tb.box.core.subscribe((_, event) => heard.push(event));
     screen.send({ type: "booted" });
     await screen.next((m) => m.t === "event" && m.event.type === "phase");
-    expect((await post(tb.box, "/api/taps/inject", { seat: 0, badge: NOVA })).status).toBe(200);
+    expect((await post(tb.box, "/api/taps/inject", { seat: 0, badge: NOVA.address })).status).toBe(200);
     tb.advance(13_000);
     await screen.next(() => events(screen.messages).length >= heard.length);
     expect(events(screen.messages)).toEqual(heard);

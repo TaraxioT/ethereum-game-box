@@ -1,0 +1,100 @@
+/* The test page: the Box's palette and type (tokens.css), plain and dense. Unlike the screen, it scrolls and its text
+   can be selected. */
+html, body {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  font-size: 15px;
+}
+
+body { padding: 0 16px 32px; }
+
+/* The tabs and the fake's card hide with the attribute; their own display rules mustn't bring them back. */
+[hidden] { display: none !important; }
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+
+h1 {
+  margin: 0;
+  font: 900 22px var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h1 span { color: var(--neon-lav); }
+
+h2 {
+  margin: 0 0 10px;
+  font: 700 13px var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.tabs { display: flex; gap: 8px; }
+
+button, select, input {
+  font: 600 14px var(--body);
+  color: var(--fg);
+  background: linear-gradient(var(--metal-hi), var(--metal));
+  border: 1px solid var(--metal-lo);
+  border-radius: 6px;
+  padding: 6px 12px;
+  box-shadow: var(--lit-edge);
+}
+
+input, select { background: var(--ink-1); box-shadow: var(--well); }
+input[type="number"] { width: 6em; }
+input[type="checkbox"] { padding: 0; width: 18px; height: 18px; vertical-align: middle; }
+button:disabled { opacity: 0.5; }
+.tabs button.on { background: linear-gradient(var(--brass-hi), var(--brass)); color: var(--brass-ink); border-color: var(--brass-edge); }
+
+.tab { display: grid; gap: 16px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+
+.card {
+  background: linear-gradient(var(--plate-hi), var(--plate-lo));
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: var(--plate-shadow), var(--lit-edge);
+  min-width: 0;
+}
+
+.card.seat-0 { border-top: 2px solid var(--p1); }
+.card.seat-1 { border-top: 2px solid var(--p2); }
+
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+dt { color: var(--fg-3); }
+dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.result { display: block; min-height: 1.4em; margin-top: 8px; font-family: var(--mono); color: var(--neon-mint); overflow-wrap: anywhere; }
+.status { color: var(--fg-2); margin: 0 0 12px; }
+.phase { font: 700 18px var(--display); margin: 0 0 10px; }
+.hint { color: var(--fg-3); margin: 0 0 8px; }
+.good { color: var(--win); }
+.bad { color: var(--lose); }
+.badge-name { min-width: 10em; font-family: var(--mono); }
+
+table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 13px; }
+th, td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--metal-lo); overflow-wrap: anywhere; }
+th { color: var(--fg-3); font-weight: 500; }
+
+.json {
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+  font: 12px/1.4 var(--mono);
+  color: var(--fg-2);
+  background: var(--ink-1);
+  padding: 10px;
+  border-radius: 6px;
+}

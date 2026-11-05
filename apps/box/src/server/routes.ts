@@ -38,11 +38,14 @@ export function createHandler(options: HandlerOptions): (req: http.IncomingMessa
     await route.handle(req, res, url);
   }
 
-  /** The screen's page: the launcher token goes in only for a top-level navigation, and the page is never cached. */
-  async function page(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  /**
+   * A page of the Box's own (the screen, the test page): the launcher token goes in only for a top-level navigation,
+   * and the page is never cached.
+   */
+  async function page(req: http.IncomingMessage, res: http.ServerResponse, file: string): Promise<void> {
     let html: string;
     try {
-      html = await readFile(join(screenDir, "index.html"), "utf8");
+      html = await readFile(join(screenDir, file), "utf8");
     } catch {
       return sendText(res, 503, "The screen isn't built: run pnpm --filter @egb/box build:box");
     }
@@ -51,7 +54,8 @@ export function createHandler(options: HandlerOptions): (req: http.IncomingMessa
   }
 
   async function screen(req: http.IncomingMessage, res: http.ServerResponse, path: string): Promise<void> {
-    if (path === "/" || path === "/index.html") return page(req, res);
+    if (path === "/" || path === "/index.html") return page(req, res, "index.html");
+    if (path === "/test" || path === "/test/") return page(req, res, "test/index.html");
     const file = within(screenDir, path);
     if (!file) return sendText(res, 404, "not found");
     // Vite names everything under assets/ by its content: it never changes under the same name.
