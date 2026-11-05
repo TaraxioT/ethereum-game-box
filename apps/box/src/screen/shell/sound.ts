@@ -22,8 +22,8 @@ interface Tone {
   readonly gain: number;
   readonly type?: OscillatorType;
   readonly attack?: number;
-  /** A low-pass that opens with the note (brass). */
-  readonly bright?: number;
+  /** A low-pass at this cutoff, or one that sweeps from `from` to `to` over `over` seconds. */
+  readonly lowpass?: number | { readonly from: number; readonly to: number; readonly over: number };
 }
 
 function envelope(v: Voice, at: number, dur: number, gain: number, attack: number): GainNode {
@@ -42,12 +42,14 @@ function tone(v: Voice, t: Tone): void {
   osc.frequency.setValueAtTime(t.freq, start);
   if (t.to) osc.frequency.exponentialRampToValueAtTime(t.to, start + t.dur);
   const amp = envelope(v, start, t.dur, t.gain, t.attack ?? 0.004);
-  if (t.bright) {
+  if (t.lowpass) {
     const lp = v.ctx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.setValueAtTime(t.bright * 0.35, start);
-    lp.frequency.exponentialRampToValueAtTime(t.bright, start + Math.min(0.06, t.dur / 2));
-    lp.frequency.exponentialRampToValueAtTime(t.bright * 0.5, start + t.dur);
+    if (typeof t.lowpass === "number") lp.frequency.setValueAtTime(t.lowpass, start);
+    else {
+      lp.frequency.setValueAtTime(t.lowpass.from, start);
+      lp.frequency.exponentialRampToValueAtTime(t.lowpass.to, start + t.lowpass.over);
+    }
     osc.connect(lp).connect(amp);
   } else {
     osc.connect(amp);
@@ -70,19 +72,24 @@ function hiss(v: Voice, at: number, dur: number, gain: number, type: BiquadFilte
   src.stop(start + dur + 0.02);
 }
 
+const A3 = 220;
+const E4 = 329.63;
+const A4 = 440;
+const CS5 = 554.37;
 const C5 = 523.25;
 const E5 = 659.25;
 const G5 = 783.99;
 const C6 = 1046.5;
 
+// The launcher's cues (boot, tap, block, error, win, lose) lean toward a dark analogue synth: saws and squares
+// through low-passes. seal, flip and tick belong to the games and keep their own sound.
 const CUES: Readonly<Record<Cue, (v: Voice) => void>> = {
   tap(v) {
-    tone(v, { freq: 2100, to: 1300, at: 0, dur: 0.035, gain: 0.22 });
-    hiss(v, 0, 0.02, 0.18, "bandpass", 3600);
+    tone(v, { freq: 1200, to: 1800, at: 0, dur: 0.045, gain: 0.18, type: "square", lowpass: 4000 });
   },
   block(v) {
-    tone(v, { freq: 196, to: 150, at: 0, dur: 0.1, gain: 0.2 });
-    hiss(v, 0, 0.03, 0.05, "lowpass", 900);
+    tone(v, { freq: 62, at: 0, dur: 0.14, gain: 0.3 });
+    hiss(v, 0, 0.01, 0.08, "highpass", 3000);
   },
   seal(v) {
     tone(v, { freq: C5, at: 0, dur: 1.1, gain: 0.14, type: "triangle", attack: 0.008 });
@@ -98,21 +105,23 @@ const CUES: Readonly<Record<Cue, (v: Voice) => void>> = {
     hiss(v, 0, 0.012, 0.07, "bandpass", 3800);
   },
   win(v) {
-    [C5, E5, G5, C6].forEach((freq, i) =>
-      tone(v, { freq, at: i * 0.09, dur: i === 3 ? 0.55 : 0.2, gain: 0.16, type: "sawtooth", attack: 0.012, bright: 2600 }),
+    [A3, E4, A4, CS5, E5].forEach((freq, i, notes) =>
+      tone(v, { freq, at: i * 0.09, dur: i === notes.length - 1 ? 0.6 : 0.16, gain: 0.12, type: "sawtooth", attack: 0.008, lowpass: 3000 }),
     );
   },
   lose(v) {
-    tone(v, { freq: 392, to: 380, at: 0, dur: 0.24, gain: 0.16, type: "triangle", attack: 0.01 });
-    tone(v, { freq: 293.66, to: 277, at: 0.26, dur: 0.45, gain: 0.16, type: "triangle", attack: 0.01 });
+    tone(v, { freq: E4, at: 0, dur: 0.22, gain: 0.14, type: "sawtooth", attack: 0.01, lowpass: 1200 });
+    tone(v, { freq: A3, at: 0.22, dur: 0.22, gain: 0.14, type: "sawtooth", attack: 0.01, lowpass: 1200 });
   },
   error(v) {
-    tone(v, { freq: 110, at: 0, dur: 0.09, gain: 0.12, type: "square", bright: 520 });
-    tone(v, { freq: 110, at: 0.14, dur: 0.09, gain: 0.12, type: "square", bright: 520 });
+    for (const at of [0, 0.22])
+      for (const freq of [98, 104]) tone(v, { freq, at, dur: 0.16, gain: 0.1, type: "sawtooth", attack: 0.004, lowpass: 900 });
   },
   boot(v) {
-    tone(v, { freq: 110, to: 220, at: 0, dur: 1.3, gain: 0.14, attack: 0.55 });
-    tone(v, { freq: 165, to: 330, at: 0.05, dur: 1.25, gain: 0.06, attack: 0.55 });
+    const sweep = { from: 180, to: 2600, over: 1.6 };
+    for (const [freq, gain] of [[55, 0.08], [55.4, 0.08], [110, 0.05]] as const)
+      tone(v, { freq, at: 0, dur: 2.8, gain, type: "sawtooth", attack: 0.6, lowpass: sweep });
+    tone(v, { freq: 1760, at: 1, dur: 0.6, gain: 0.025, attack: 0.15 });
   },
 };
 
