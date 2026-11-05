@@ -7,7 +7,7 @@
 # and its scripts. Then prunes old releases.
 # Exit status: 0 live, 1 failed (rolled back), 2 usage, 3 the Box stayed busy past EGB_IDLE_WAIT (nothing changed).
 set -euo pipefail
-# shellcheck source=lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 force=0

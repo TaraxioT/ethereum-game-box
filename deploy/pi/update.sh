@@ -11,7 +11,7 @@
 # - A push from a laptop (push.sh) stays live until the branch moves again: only a new commit on the branch deploys.
 # - If the Box stays busy past EGB_IDLE_WAIT, the built release waits and the next run activates it.
 set -euo pipefail
-# shellcheck source=lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 lock_deploy --quiet

@@ -17,7 +17,7 @@
 # It never touches audio: no sink, volume or Bluetooth setting.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$here/lib.sh"
 
 boot=0

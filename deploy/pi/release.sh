@@ -5,7 +5,7 @@
 # server on a spare port against a fake receiver and a throwaway data folder. On any failure the release is removed
 # and the exit status is not 0. On success the only line on stdout is the release's path; the log goes to stderr.
 set -euo pipefail
-# shellcheck source=lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 [ $# -eq 2 ] || { echo "usage: release.sh <source dir> <commit>" >&2; exit 2; }
