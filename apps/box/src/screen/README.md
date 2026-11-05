@@ -161,6 +161,8 @@ How it moves:
   the gun). The winner's plate is ringed in its seat colour. A carved plank with `PLAYER 1 WINS` / `PLAYER 2 WINS` in
   seat paint swings in across the post. After an early tap the sign stays on `WAIT…` and rattles on its pins. The
   whole sequence is done in about a second, inside the ~2.4 s the Box holds it before Result.
+- **Stood again**: when nobody draws within 4 s of the flip, the rules stand the standoff again (the phase goes back
+  to `wait` with a new start), and the view runs the standoff from the top.
 - **Taps**: each accepted `tap` event jolts that seat's figure a few pixels back, so the player feels it land.
 - Only transform and opacity animate; every shadow and glow is static. Under reduced motion it shows end states: a
   fixed dim during the wait, no heartbeat, the plate already turned, the poses, plates and plank in place.
@@ -192,7 +194,8 @@ How it moves:
 - **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` at the Box's clock (`link.now()`). When the
   front card changes the drum indexes one card: the old front card rises and tips back over the top of the drum
   (rotateX about the rail, edge-on at the midpoint), then stands up again at the back while the others step forward;
-  it always ends upright. The ring drains with transforms only (two half rings turning in clipped windows). A
+  it always ends upright. While a chip on the reader is still rolling, its seat's front card is held (the rules'
+  `held`): the drum stays on it and its ring stops. The ring drains with transforms only (two half rings turning in clipped windows). A
   played card lifts off the rail and flies face down onto its rest on the blotter, and that seat's lamp flares. Once
   one seat has played, the other's plinth reads `LAST TURN`.
 - **Dial**: the astrolabe wakes from dim, the rete spins three turns, swings a few degrees past the stat and settles

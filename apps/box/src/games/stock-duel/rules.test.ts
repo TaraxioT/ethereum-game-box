@@ -5,6 +5,7 @@ import {
   DEAL_MS,
   DIAL_MS,
   DWELL_MS,
+  HOLD_MAX_MS,
   REVEAL_MS,
   SHOW_LAG_MS,
   dwellForRound,
@@ -186,6 +187,72 @@ describe("tapping in the pick", () => {
     expect(both.played[1]).not.toBeNull();
     expect(both.auto).toEqual([false, false]);
     expect(both.stat).toBe(STATS[(2 + 6) % 4]);
+  });
+});
+
+describe("a tap as touch, then done or fail", () => {
+  const touch = (state: StockDuelState, seat: Seat, now: number) => rules.step(state, { type: "touch", seat, now });
+  const release = (state: StockDuelState, seat: Seat) => rules.step(state, { type: "release", seat });
+
+  it("freezes the front card the player saw at the touch, while the chip rolls", () => {
+    const pick = picking();
+    const at = PICK_AT + pick.dwellMs - 100;
+    const seen = frontCard(pick, 0, at);
+    const held = touch(pick, 0, at);
+    expect(held.held[0]).toEqual({ card: seen, at });
+    // The drum would have turned twice by now; the held card stays in front and its ring stays where it was.
+    expect(frontCard(held, 0, at + 2 * pick.dwellMs)).toBe(seen);
+    expect(frontRemainingMs(held, 0, at + 2 * pick.dwellMs)).toBe(100);
+    expect(frontCard(held, 1, at + 2 * pick.dwellMs)).toBe(frontCard(pick, 1, at + 2 * pick.dwellMs));
+  });
+
+  it("plays the held card at the touch time with the chip's roll, however late the roll comes back", () => {
+    const pick = picking();
+    const at = PICK_AT + pick.dwellMs - 100;
+    const seen = frontCard(pick, 0, at);
+    const played = tap(touch(pick, 0, at), 0, at, 0xabcdef);
+    expect(played.played[0]).toBe(seen);
+    expect(played.rolls[0]).toBe(0xabcdef);
+    expect(played.held[0]).toBeNull();
+    expect(played.deadline).toBe(at + pick.dwellMs * 4);
+  });
+
+  it("lets the drum turn on when the tap fails", () => {
+    const pick = picking();
+    const at = PICK_AT + 500;
+    const released = release(touch(pick, 0, at), 0);
+    expect(released.held).toEqual([null, null]);
+    expect(frontCard(released, 0, at + pick.dwellMs * 2)).toBe(frontCard(pick, 0, at + pick.dwellMs * 2));
+  });
+
+  it("waits out the other seat's deadline for a chip still rolling, then plays what it holds", () => {
+    const pick = picking();
+    const first = tap(pick, 0, PICK_AT + 100, 1);
+    const deadline = first.deadline ?? 0;
+    const at = deadline - 50;
+    const held = touch(first, 1, at);
+    const late = tick(held, deadline + 700);
+    expect(late.phase).toBe("pick");
+    const played = tap(late, 1, at, 2);
+    expect(played.played[1]).toBe(frontCard(first, 1, at - SHOW_LAG_MS));
+    expect(played.auto[1]).toBe(false);
+    expect(played.phase).toBe("dial");
+  });
+
+  it("lets go of a card held past HOLD_MAX_MS, so a lost tap can't stall the round", () => {
+    const pick = picking();
+    const first = tap(pick, 0, PICK_AT + 100, 1);
+    const held = touch(first, 1, (first.deadline ?? 0) - 50);
+    const later = tick(held, (first.deadline ?? 0) - 50 + HOLD_MAX_MS);
+    expect(later.phase).toBe("dial");
+    expect(later.auto[1]).toBe(true);
+  });
+
+  it("ignores a touch outside the pick, or from a seat that has played", () => {
+    const start = rules.start(5, T0);
+    expect(touch(start, 0, T0 + 100)).toBe(start);
+    const played = tap(picking(), 0, PICK_AT + 100, 3);
+    expect(touch(played, 0, PICK_AT + 200)).toBe(played);
   });
 });
 

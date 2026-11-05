@@ -6,12 +6,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Seat } from "@egb/sdk";
 import type { BoxState, ScreenCommand } from "../core/types.ts";
 import { END_HOLD_MS } from "../core/core.ts";
-import { reactionMs } from "../games/quick-draw/rules.ts";
+import { reactionMs, SETTLE_MS } from "../games/quick-draw/rules.ts";
 import type { Injected } from "./inject.ts";
 import { openScreen, post, startTestBox, type TestBox, type TestScreen } from "./testing.ts";
 
-const NOVA = { address: `0x${"a1".repeat(20)}`, name: "NOVA" };
-const KITE = { address: `0x${"b2".repeat(20)}`, name: "KITE" };
+// Badges the roster doesn't know are named by their address's start.
+const NOVA = { address: `0x${"a1".repeat(20)}`, name: "0xa1a1" };
+const KITE = { address: `0x${"b2".repeat(20)}`, name: "0xb2b2" };
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -19,7 +20,7 @@ afterEach(async () => {
 });
 
 async function inject(tb: TestBox, seat: Seat, badge: typeof NOVA): Promise<Injected> {
-  const res = await post(tb.box, "/api/taps/inject", { seat, badge });
+  const res = await post(tb.box, "/api/taps/inject", { seat, badge: badge.address });
   expect(res.status).toBe(200);
   return (await res.json()) as Injected;
 }
@@ -72,7 +73,8 @@ describe("whole matches over the link", () => {
       return play?.game === "quick-draw" && play.state.phase === "draw";
     });
     tb.advance(230);
-    expect(await inject(tb, 1, KITE)).toEqual({ tap: expect.any(Number), plan: "identify", accepted: true });
+    expect(await inject(tb, 1, KITE)).toEqual({ tap: expect.any(Number), plan: "identify", badge: KITE, accepted: true });
+    tb.advance(SETTLE_MS + 50);
     expect(await inject(tb, 0, NOVA)).toMatchObject({ plan: "none", accepted: false });
     const match = tb.box.core.state().match;
     if (match?.play.game !== "quick-draw") throw new Error("no Quick Draw");
@@ -84,7 +86,7 @@ describe("whole matches over the link", () => {
     expect(final.seats.map((s) => s.balance)).toEqual([90, 110]);
     const phases = screen.messages.flatMap((m) => (m.t === "event" && m.event.type === "phase" ? [m.event.to] : []));
     expect(phases).toEqual(["attract", "home", "stake", "playing", "result"]);
-    expect(await ledgerOnDisk(tb)).toEqual({ balances: { [NOVA.address]: 90, [KITE.address]: 110 }, escrow: 0 });
+    expect(await ledgerOnDisk(tb)).toEqual({ balances: { [NOVA.address]: 90, [KITE.address]: 110 }, escrow: {} });
   });
 
   it("plays a Stock Duel by injected taps, each with its own roll, to a paid result", async () => {

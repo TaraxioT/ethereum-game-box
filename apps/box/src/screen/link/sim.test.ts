@@ -94,8 +94,9 @@ describe("SimLink", () => {
     // Player 1 taps the moment the sign flips (unless the bot jumped the gun first).
     until((state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase !== "wait", 7_000);
     link.tap(0);
+    // The tap waits SETTLE_MS for the other station's touch, which could still come in earlier.
+    until((state) => state.match?.outcome != null, 1_000);
     const outcome = link.state().match?.outcome;
-    expect(outcome).not.toBeNull();
     const winner = outcome?.winner;
 
     // The end hold: still playing, and taps mean nothing.

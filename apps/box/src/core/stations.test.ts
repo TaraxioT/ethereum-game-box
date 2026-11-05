@@ -37,6 +37,7 @@ function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
     refundBlock: 101,
     play,
     outcome: null,
+    endedAt: null,
     refunded: [false, false],
     ...extra,
   };
@@ -86,11 +87,13 @@ describe("station views", () => {
     expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: wait })), 0, NOW).big).toBe("WAIT");
     const draw = quickDraw.step(wait, { type: "tick", now: wait.drawAt });
     expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: draw })), 1, NOW).big).toBe("DRAW!");
-    const done = quickDraw.step(draw, { type: "tap", seat: 1, now: wait.drawAt + 231 });
+    const tapped = quickDraw.step(draw, { type: "tap", seat: 1, at: wait.drawAt + 231, now: wait.drawAt + 235 });
+    expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: tapped })), 1, NOW)).toMatchObject({ big: "DRAW!", small: "231 ms" });
+    const done = quickDraw.step(tapped, { type: "tick", now: wait.drawAt + 1000 });
     const ended = input("result", both, matchOf({ game: "quick-draw", state: done }));
     expect(lines(stationView(ended, 1, NOW))).toEqual({ tag: "P2", big: "WIN", small: "231 ms" });
     expect(lines(stationView(ended, 0, NOW))).toEqual({ tag: "P1", big: "LOSE", small: "no tap" });
-    const early = quickDraw.step(wait, { type: "tap", seat: 0, now: NOW + 10 });
+    const early = quickDraw.step(wait, { type: "tap", seat: 0, at: NOW + 10, now: NOW + 12 });
     expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: early })), 0, NOW).small).toBe("too early");
   });
 

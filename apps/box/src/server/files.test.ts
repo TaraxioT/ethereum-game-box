@@ -37,11 +37,11 @@ describe("the ledger file", () => {
     const file = join(dir, "ledger.json");
     const logs: string[] = [];
     const first = createLedgerFile(file, (text) => logs.push(text));
-    expect(first.load()).toEqual({ balances: {}, escrow: 0 });
-    first.save({ balances: { [NOVA]: 100 }, escrow: 0 });
-    first.save({ balances: { [NOVA]: 90, [KITE]: 90 }, escrow: 20 });
+    expect(first.load()).toEqual({ balances: {}, escrow: {} });
+    first.save({ balances: { [NOVA]: 100 }, escrow: {} });
+    first.save({ balances: { [NOVA]: 90, [KITE]: 90 }, escrow: { [NOVA]: 10, [KITE]: 10 } });
     await first.flush();
-    expect(createLedgerFile(file, () => {}).load()).toEqual({ balances: { [NOVA]: 90, [KITE]: 90 }, escrow: 20 });
+    expect(createLedgerFile(file, () => {}).load()).toEqual({ balances: { [NOVA]: 90, [KITE]: 90 }, escrow: { [NOVA]: 10, [KITE]: 10 } });
     expect(logs).toEqual([]);
   });
 
@@ -49,7 +49,7 @@ describe("the ledger file", () => {
     const file = join(dir, "ledger.json");
     await writeFile(file, "{ half a ledger");
     const logs: string[] = [];
-    expect(createLedgerFile(file, (text) => logs.push(text)).load()).toEqual({ balances: {}, escrow: 0 });
+    expect(createLedgerFile(file, (text) => logs.push(text)).load()).toEqual({ balances: {}, escrow: {} });
     expect(logs[0]).toMatch(/isn't a ledger/);
     const files = await readdir(dir);
     expect(files).toHaveLength(1);
@@ -57,10 +57,11 @@ describe("the ledger file", () => {
   });
 
   it("checks the shape: whole EGB, real addresses", () => {
-    expect(checkLedger({ balances: { [NOVA]: 5 }, escrow: 0 })).toEqual({ balances: { [NOVA]: 5 }, escrow: 0 });
-    expect(checkLedger({ balances: { [NOVA]: -5 }, escrow: 0 })).toBeNull();
-    expect(checkLedger({ balances: { nova: 5 }, escrow: 0 })).toBeNull();
-    expect(checkLedger({ balances: {}, escrow: 1.5 })).toBeNull();
+    expect(checkLedger({ balances: { [NOVA]: 5 }, escrow: { [KITE]: 5 } })).toEqual({ balances: { [NOVA]: 5 }, escrow: { [KITE]: 5 } });
+    expect(checkLedger({ balances: { [NOVA]: -5 }, escrow: {} })).toBeNull();
+    expect(checkLedger({ balances: { nova: 5 }, escrow: {} })).toBeNull();
+    expect(checkLedger({ balances: {}, escrow: { [NOVA]: 1.5 } })).toBeNull();
+    expect(checkLedger({ balances: {}, escrow: 20 })).toBeNull();
     expect(checkLedger([])).toBeNull();
   });
 });

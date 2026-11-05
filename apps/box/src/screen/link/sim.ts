@@ -28,7 +28,8 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     stations: { show() {}, buzz() {} },
     ledger: memoryLedgerStore(),
     library: teamLibrary(),
-    log: { record() {} },
+    // The demo keeps no records.
+    log: { record() {}, countedSince: () => 0 },
     random,
   };
   const core = createCore(ports, { bot: BOT_BADGE });
