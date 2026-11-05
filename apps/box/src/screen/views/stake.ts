@@ -1,4 +1,4 @@
-// Stake: pick the stake on brass keys, see the game's trust tier, then each player taps to sign the entry. Both
+// Stake: pick the stake on the light keys, see the game's trust tier, then each player taps to sign the entry. Both
 // signed, the Box opens the match: one transaction moves both stakes into the game.
 import type { BoxState, GameInfo, SeatState } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
@@ -6,7 +6,7 @@ import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
-import { createSeatPanel } from "./seat-panel.ts";
+import { createSeatPanel, type SeatTone } from "./seat-panel.ts";
 
 const TIER: Record<GameInfo["tier"], string> = {
   refereed: "REFEREED · THE BOX SAW IT, ITS STAKE BACKS ITS WORD",
@@ -51,9 +51,9 @@ export function stakeView(ctx: ViewContext): View {
   });
   keys.append(back, ...amounts.map((a) => a.key));
 
-  function status(s: SeatState, stake: number): [string, "ask" | "done" | "lose"] {
+  function status(s: SeatState, stake: number): [string, SeatTone] {
     if (s.signed) return ["SIGNED", "done"];
-    if (s.balance + s.pending < stake) return [`NEEDS ${stake} EGB`, "lose"];
+    if (s.balance + s.pending < stake) return [`NEEDS ${stake} EGB`, "alert"];
     return [`TAP TO SIGN ${stake} EGB`, "ask"];
   }
 

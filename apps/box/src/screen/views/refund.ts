@@ -44,7 +44,8 @@ export function refundView(ctx: ViewContext): View {
     const m = state.match;
     if (!m) return;
     const left = Math.max(0, m.refundBlock - state.chain.block);
-    line.textContent = left > 0 ? `UNLOCKS AT BLOCK ${m.refundBlock.toLocaleString("en-US")}` : "UNLOCKED · TAP YOUR BADGE";
+    if (left > 0) line.replaceChildren("UNLOCKS AT BLOCK ", el("span", "refund-count", m.refundBlock.toLocaleString("en-US")));
+    else line.textContent = "UNLOCKED · TAP YOUR BADGE";
     const owed = m.refunded.some((done, i) => !done && !state.txs.some((tx) => tx.kind === "refund" && tx.seat === i));
     both.toggleAttribute("disabled", left > 0 || !owed);
     state.seats.forEach((s, i) => {

@@ -4,7 +4,7 @@ import type { BoxState, GameInfo } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";
-import { el, fitFont, fitWidth, place, play } from "../shell/dom.ts";
+import { el, facesReady, fitFont, fitWidth, place, play } from "../shell/dom.ts";
 import { createRack } from "./rack.ts";
 
 export function homeView(ctx: ViewContext): View {
@@ -64,7 +64,7 @@ export function homeView(ctx: ViewContext): View {
     fitFont(titleText, layout.title.w, layout.orientation === "portrait" ? 52 : 64);
     fitWidth(facts, layout.facts.w);
   }
-  void document.fonts.ready.then(fit);
+  void facesReady().then(fit);
 
   function onKey(e: KeyboardEvent): void {
     if (!current) return;

@@ -9,6 +9,7 @@
 // little: there is no physical edge to travel down.
 import { chamferClip, fitFrame } from "./frame.ts";
 import { motion, pick, shadow, sheet } from "./part.ts";
+import { facesReady } from "../shell/dom.ts";
 
 const CHAMFER = 14;
 
@@ -79,7 +80,7 @@ export class EgbKey extends HTMLElement {
     // The label shrinks to fit: when the key is sized, when its words change, and once the face has loaded.
     new ResizeObserver(() => this.#fit()).observe(this.#shape);
     pick(root, "slot").addEventListener("slotchange", () => this.#fit());
-    void document.fonts.ready.then(() => this.#fit());
+    void facesReady().then(() => this.#fit());
   }
 
   attributeChangedCallback(): void {
