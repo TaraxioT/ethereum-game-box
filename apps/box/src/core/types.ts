@@ -1,6 +1,6 @@
 // The one interface between the screen and the Box. The screen reads `BoxState`, hears `BoxEvent`s and sends
 // `ScreenCommand`s; whatever runs the Box (SimLink in the demo, LiveLink to the Box server) sits behind `BoxLink`.
-import type { Seat, StationView } from "@egb/sdk";
+import type { GameManifest, Seat, StationView } from "@egb/sdk";
 import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelState } from "../games/stock-duel/types.ts";
 
@@ -24,8 +24,13 @@ export interface GameInfo {
   readonly tier: "refereed" | "verified";
   /** false: sealed on Home with a SOON plate; Play stays dark. */
   readonly ready: boolean;
+  /** Why a game that should play can't (a built game whose bundle failed), shown when it is focused; null otherwise. */
+  readonly sealed: string | null;
   /** A built game's cartridge art (its icon.svg, served by the Box). null: a team game's art is the cartridge's own. */
   readonly icon: string | null;
+  /** Its game.json as the Box checked it: what a built game's taps ask of the badge, what its frame is told. null for a
+   * catalogue game with no folder, and for a game.json that failed its check. */
+  readonly manifest: GameManifest | null;
 }
 
 export interface Badge {
@@ -73,13 +78,22 @@ export interface Tx {
   readonly stepAt: number;
 }
 
+/** A built game's match as its rules child last returned it: its state (the frame draws it) and its stations. */
+export interface BuiltPlay {
+  readonly game: "built";
+  readonly id: GameId;
+  readonly state: unknown;
+  readonly stations: readonly [StationView, StationView];
+}
+
 export type MatchPlay =
   | { readonly game: "quick-draw"; readonly state: QuickDrawState }
-  | { readonly game: "stock-duel"; readonly state: StockDuelState };
+  | { readonly game: "stock-duel"; readonly state: StockDuelState }
+  | BuiltPlay;
 
 export interface Match {
   readonly id: number;
-  readonly game: TeamGameId;
+  readonly game: GameId;
   /** EGB per seat. */
   readonly stake: number;
   /** The block the match opened in, and the block after which either seat may take its stake back. */
@@ -88,6 +102,8 @@ export interface Match {
   readonly play: MatchPlay;
   /** Set when the game ends. `winner` null is a draw. */
   readonly outcome: { readonly winner: Seat | null } | null;
+  /** The built game's rules failed (over budget, crashed): the match is void and both stakes go back. */
+  readonly voided: boolean;
   /** When the game ended (ms since the epoch), or null while it runs. */
   readonly endedAt: number | null;
   /** Each seat has taken its stake back (Refund). */

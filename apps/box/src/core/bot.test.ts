@@ -84,6 +84,7 @@ describe("bot intents", () => {
       refundBlock: 51,
       play: { game: "quick-draw" as const, state },
       outcome: null,
+      voided: false,
       endedAt: null,
       refunded: [false, false] as const,
     };
@@ -163,6 +164,7 @@ describe("bot scheduler", () => {
       refundBlock: 51,
       play: { game: "stock-duel" as const, state: duel },
       outcome: null,
+      voided: false,
       endedAt: null,
       refunded: [false, false] as const,
     });

@@ -4,7 +4,7 @@ import { counts, FREE_MIN_MATCH_MS, FREE_PER_PAIR_HOUR, transcriptOf, type Match
 const END = 10_000_000;
 const record: MatchRecord = {
   match: 3, game: "stock-duel", seed: 99, badges: ["0xa", "0xb"], stake: 10, startedAt: END - 30_000, endedAt: END,
-  taps: [{ seat: 1, at: END - 5_000, roll: 42, accepted: true }], winner: 1, seen: [END - 40_000, END - 39_000],
+  taps: [{ seat: 1, at: END - 5_000, roll: 42, accepted: true }], winner: 1, voided: false, seen: [END - 40_000, END - 39_000],
 };
 const none = { countedSince: () => 0 };
 

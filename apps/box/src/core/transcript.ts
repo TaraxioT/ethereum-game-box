@@ -22,6 +22,8 @@ export interface MatchRecord {
   readonly endedAt: number;
   readonly taps: readonly TranscriptTap[];
   readonly winner: Seat | null;
+  /** The built game's rules failed: no result, both stakes back. */
+  readonly voided: boolean;
   /** The first station tap each seated badge made from Stake on, or null for none. */
   readonly seen: readonly [number | null, number | null];
 }
@@ -29,7 +31,7 @@ export interface MatchRecord {
 /** Whether a match's result counts toward records. */
 export function counts(record: MatchRecord, log: Pick<MatchLog, "countedSince">): boolean {
   const [one, two] = record.seen;
-  if (one === null || two === null) return false;
+  if (record.voided || one === null || two === null) return false;
   if (record.endedAt - Math.min(one, two) < FREE_MIN_MATCH_MS) return false;
   return log.countedSince(record.badges, record.endedAt - HOUR_MS) < FREE_PER_PAIR_HOUR;
 }
@@ -45,7 +47,7 @@ export function transcriptOf(record: MatchRecord, log: Pick<MatchLog, "countedSi
     startedAt: record.startedAt,
     endedAt: record.endedAt,
     taps: record.taps,
-    result: { winner: record.winner },
+    result: record.voided ? "void" : { winner: record.winner },
     counts: counts(record, log),
   };
 }

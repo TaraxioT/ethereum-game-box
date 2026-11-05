@@ -7,17 +7,21 @@
 //   - In a game, the game hears the touch at once: Quick Draw takes a known seated badge's touch as its tap, and holds
 //     an unknown chip's touch until its read says whose it is; Stock Duel freezes the card the player saw, plays it on
 //     `done` with the chip's roll, and lets it go on `fail`.
+//   - A built game's rules run outside the core (RulesRunnerPort, a sandboxed child on the Pi): its taps reach them
+//     as finished taps judged at their touch time, a known badge's at its touch when the game needs no roll, and
+//     anything the rules get wrong (over budget, a throw, a crash) voids the match and sends both stakes back.
 //   - A tap that touched before the phase changed never reaches the new phase.
 // Every finished match goes to the match log as a transcript; a stake left in escrow from before a restart goes back.
 import type { Seat } from "@egb/sdk";
 import { hash32, other, SEATS } from "@egb/sdk";
-import type { CorePorts, TapEvent, TapPlan, TapSource, TimerHandle } from "./ports.ts";
+import type { CorePorts, RulesSnapshot, TapEvent, TapPlan, TapSource, TimerHandle } from "./ports.ts";
 import type { TranscriptTap } from "@egb/sdk";
 import type {
   Badge,
   BoxEvent,
   BoxLink,
   BoxState,
+  BuiltPlay,
   Cue,
   GameId,
   GameInfo,
@@ -41,6 +45,7 @@ import { createTxBook } from "./txs.ts";
 import { stationViews, type StationInput } from "./stations.ts";
 import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
+import { startBuilt, type BuiltDriver } from "./built.ts";
 
 /** Join waits this long with both seats full before moving on to Stake. */
 export const JOIN_SETTLE_MS = 700;
@@ -129,13 +134,16 @@ function sameBadge(a: Badge | null, b: Badge | null): boolean {
   return a !== null && b !== null && a.address === b.address;
 }
 
-function startPlay(game: TeamGameId, seed: number, now: number): MatchPlay {
+/** A team game's play: its rules run here, in the core. */
+type TeamPlay = Exclude<MatchPlay, BuiltPlay>;
+
+function startPlay(game: TeamGameId, seed: number, now: number): TeamPlay {
   return game === "quick-draw"
     ? { game, state: quickDraw.start(seed, now) }
     : { game, state: stockDuel.start(seed, now) };
 }
 
-function outcomeOf(play: MatchPlay): Match["outcome"] {
+function outcomeOf(play: TeamPlay): Match["outcome"] {
   return play.game === "quick-draw" ? quickDraw.outcome(play.state) : stockDuel.outcome(play.state);
 }
 
@@ -185,7 +193,7 @@ function stockDuelEvent(tap: GameTap | null, now: number): StockDuelEvent {
 }
 
 /** One game step: a tick (tap null) or a tap's part. */
-function nextPlay(play: MatchPlay, tap: GameTap | null, now: number): MatchPlay {
+function nextPlay(play: TeamPlay, tap: GameTap | null, now: number): TeamPlay {
   if (play.game === "quick-draw") {
     const next = quickDraw.step(play.state, quickDrawEvent(tap, now));
     return next === play.state ? play : { game: "quick-draw", state: next };
@@ -216,7 +224,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   const focused = gameOf(focus);
   if (!focused) throw new Error("the library has no games");
   let stake = defaultStake(focused);
-  let game: TeamGameId | null = null;
+  let game: GameId | null = null;
+  /** The running built game's rules, through the runner; null for a team game or none. */
+  let built: BuiltDriver | null = null;
   let match: Match | null = null;
   let matchCount = 0;
   let ledger: Ledger = ports.ledger.load();
@@ -349,7 +359,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       seats[1].signed = false;
     }
     if (to === "home" || to === "stake") match = null;
-    if (to === "home") fitSeatsToOpponent();
+    if (to === "home") {
+      fitSeatsToOpponent();
+      // The built game's child goes with the game: Join starts it again.
+      stopBuilt();
+      if (game && gameOf(game)?.kind === "built") ports.rules?.stop();
+    }
     if (to === "stake") {
       seen[0] = null;
       seen[1] = null;
@@ -478,22 +493,25 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const now = clock.now();
     // The seed takes fresh randomness, so nobody can work out the draw from the seats and the block.
     seed = hash32("match", id, one, two, block, ports.random());
-    const play = startPlay(game, seed, now);
     matchStartedAt = now;
     matchTaps = [];
     refunding[0] = false;
     refunding[1] = false;
-    match = {
+    const opened = (play: MatchPlay): Match => ({
       id,
-      game,
+      game: game ?? play.game,
       stake,
       openedBlock: block,
       refundBlock: block + REFUND_AFTER_BLOCKS,
       play,
       outcome: null,
+      voided: false,
       endedAt: null,
       refunded: [false, false],
-    };
+    });
+    if (gameOf(game)?.kind === "built") return openBuilt(game, now, opened);
+    const play = startPlay(game as TeamGameId, seed, now);
+    match = opened(play);
     lastFronts = fronts(play, now);
     setPhase("playing");
     cue("boot");
@@ -502,11 +520,75 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - now), () => stepGame(null));
   }
 
+  // ── Built games ───────────────────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Starts a built game's rules. The match opens when their first state comes back (the child started at Join, so
+   * that is a few ms); until then the Box stays on Stake. A start that fails voids the match before it plays.
+   */
+  function openBuilt(id: GameId, now: number, opened: (play: MatchPlay) => Match): void {
+    const rules = ports.rules;
+    const blank: BuiltPlay = { game: "built", id, state: null, stations: state.stations };
+    const driver: BuiltDriver | null = rules
+      ? startBuilt(rules, id, seed, now, {
+          snapshot: (snap) => (match ? applyBuilt(snap) : beginBuilt(opened({ ...blank, state: snap.state, stations: snap.stations }), snap)),
+          failed: () => voidBuilt(() => opened(blank)),
+        })
+      : null;
+    built = driver;
+    if (!driver) voidBuilt(() => opened(blank));
+  }
+
+  function beginBuilt(first: Match, snap: RulesSnapshot): void {
+    if (phase !== "stake") return stopBuilt();
+    match = first;
+    setPhase("playing");
+    cue("boot");
+    tickTimer = timers.every(TICK_MS, () => built?.tick(clock.now()));
+    if (snap.outcome) endBuilt(snap.outcome);
+  }
+
+  function applyBuilt(snap: RulesSnapshot): void {
+    if (!match || match.outcome || match.play.game !== "built") return;
+    match = { ...match, play: { ...match.play, state: snap.state, stations: snap.stations } };
+    emit({ type: "game" });
+    if (snap.outcome) endBuilt(snap.outcome);
+  }
+
+  function endBuilt(outcome: NonNullable<Match["outcome"]>): void {
+    if (!match) return;
+    match = { ...match, outcome, endedAt: clock.now() };
+    stopBuilt();
+    emit({ type: "game" });
+    cue("seal");
+    timers.after(END_HOLD_MS, conclude);
+  }
+
+  /** The rules failed: the match is void, a draw nobody played, and both stakes go back at the settle. */
+  function voidBuilt(blank: () => Match): void {
+    const before = phase;
+    if (before !== "stake" && before !== "playing") return;
+    stopBuilt();
+    match = { ...(match ?? blank()), outcome: { winner: null }, voided: true, endedAt: clock.now() };
+    emit({ type: "game" });
+    cue("error");
+    // Voided before it began: straight to the result. Mid-game: the screen holds a moment first.
+    if (before === "stake") conclude();
+    else timers.after(END_HOLD_MS, conclude);
+  }
+
+  function stopBuilt(): void {
+    built?.stop();
+    built = null;
+    timers.cancel(tickTimer);
+    tickTimer = null;
+  }
+
   // ── Playing ───────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Steps the game with a tick (tap null) or a tap. Returns whether the game changed. */
   function stepGame(tap: GameTap | null): boolean {
-    if (!match || match.outcome) return false;
+    if (!match || match.outcome || match.play.game === "built") return false;
     const now = clock.now();
     const before = match.play;
     const after = nextPlay(before, tap, now);
@@ -543,6 +625,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           endedAt,
           taps: matchTaps,
           winner,
+          voided: match.voided,
           seen: [seen[0], seen[1]],
         },
         ports.log,
@@ -570,7 +653,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       for (const [address, sum] of payees) land(address, sum);
     });
     setPhase("result");
-    if (winner !== null) cue(opponent === "bot" && winner === 1 ? "lose" : "win");
+    if (winner !== null && !match.voided) cue(opponent === "bot" && winner === 1 ? "lose" : "win");
   }
 
   // ── Refund ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -636,6 +719,13 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** A tap's end in the game: the transcript keeps it, with its touch time and roll. */
   function gameTap(tap: Extract<GameTap, { kind: "tap" }>): TapResult {
+    if (match?.play.game === "built") {
+      // The rules judge it; the Box has handed it on at its touch time.
+      const accepted = built !== null && match.outcome === null;
+      built?.tap(tap.seat, tap.at, tap.roll);
+      matchTaps.push({ seat: tap.seat, at: tap.at, roll: tap.roll, accepted });
+      return accepted ? "accepted" : "ignored";
+    }
     const accepted = stepGame(tap);
     // The Stock Duel tap that played nothing still holds its card: let it go.
     if (!accepted) stepGame({ kind: "release", seat: tap.seat });
@@ -673,6 +763,15 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function touch(event: Extract<TapEvent, { phase: "touch" }>, source: TapSource): void {
     const entry: OpenTap = { seat: event.seat, at: event.at, source, epoch, acted: false, held: false };
     open.set(`${source}:${event.tap}`, entry);
+    if (inGame(event.seat, event.badge) && match?.play.game === "built") {
+      // A built game hears finished taps: a known badge's now, at its touch, when the game needs no roll; anything
+      // else when the chip has answered (its `done`), still judged at the touch.
+      if (event.badge && tapPlan(state, event.seat, clock.now()) !== "random") {
+        entry.acted = true;
+        judge(entry, event.badge, null);
+      }
+      return;
+    }
     if (inGame(event.seat, event.badge)) {
       // Quick Draw judges a known seated badge by its touch; anything else the game holds until the chip is read.
       if (match?.play.game === "quick-draw" && event.badge) {
@@ -729,8 +828,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         return;
       case "play": {
         const info = gameOf(focus);
-        if (phase !== "home" || !info?.ready || !isTeamGame(info.id)) return;
+        if (phase !== "home" || !info?.ready) return;
+        if (info.kind === "built" ? !ports.rules : !isTeamGame(info.id)) return;
         game = info.id;
+        // A built game's child starts now, at Join, so its first step pays no start-up cost.
+        if (info.kind === "built") ports.rules?.prepare(info.id);
         if (!info.stakes.includes(stake)) {
           stake = defaultStake(info);
           emit({ type: "stake", amount: stake });
@@ -751,6 +853,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "rematch":
         if (phase !== "result") return;
         fitSeatsToOpponent();
+        if (game && gameOf(game)?.kind === "built") ports.rules?.prepare(game);
         setPhase(bothSeated() ? "stake" : "join");
         return;
       case "home":
@@ -831,14 +934,15 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       power = on;
     },
     reset() {
-      timers.cancel(tickTimer);
-      tickTimer = null;
+      stopBuilt();
       openTxId = null;
       // A match that hasn't sent its settlement hands each stake back; one in Result is already paying out.
       if (phase !== "result" && escrowTotal(ledger) > 0) setLedger(returnAll(ledger));
       setPhase("home");
     },
     stop() {
+      stopBuilt();
+      ports.rules?.stop();
       timers.clear();
       book.stop();
       unwatchLibrary();

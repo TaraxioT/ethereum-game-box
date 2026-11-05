@@ -98,6 +98,8 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
     case "playing":
     case "result":
       if (!match) return seated(mine);
+      if (match.voided) return lines("VOID", "stakes back");
+      if (match.play.game === "built") return lines(match.play.stations[seat].big, match.play.stations[seat].small);
       return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat) : stockDuel(match.play.state, seat, now);
     case "refund":
       return match ? refunding(input, match, seat) : seated(mine);
@@ -106,6 +108,9 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
 
 /** One station's OLED. `now` places Stock Duel's Rolodex. */
 export function stationView(input: StationInput, seat: Seat, now: number): StationView {
+  const { match } = input;
+  // A built game's stations are its rules' own, tag and tap words included.
+  if ((input.phase === "playing" || input.phase === "result") && match?.play.game === "built" && !match.voided) return match.play.stations[seat];
   const { big, small } = idle(input, seat, now);
   if (input.phase === "boot") return fitView("", big, small);
   const badge = input.seats[seat].badge;

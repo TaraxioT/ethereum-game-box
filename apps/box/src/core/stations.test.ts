@@ -37,6 +37,7 @@ function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
     refundBlock: 101,
     play,
     outcome: null,
+    voided: false,
     endedAt: null,
     refunded: [false, false],
     ...extra,

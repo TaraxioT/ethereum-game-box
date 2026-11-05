@@ -13,8 +13,8 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 | `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, Home's idle). |
 | `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap. |
 | `ledger` | `load()` once at start; `save(ledger)` after every change (faucet, stake lock, settle, refund). A stake still in escrow at start belonged to a match the Box lost when it stopped: each goes straight back to the badge that put it in (the escrow keeps every stake under its badge for this), as its refund would have paid it. |
-| `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). |
-| `rules` | Built games' rules (later steps); absent in the demo. |
+| `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). A `GameInfo` carries its checked game.json (`manifest`) and, for a game that should play but can't, why (`sealed`). |
+| `rules` | Built games' rules, run outside the core (the server's sandboxed children): `prepare` at Join, `start` when the match opens, `step` for each tick and tap; any rejection voids the match. Absent in the demo, where built games can't be played. |
 | `log` | `record(transcript)` once per match, after its end hold; `countedSince(pair, since)` for the per-pair cap. The demo keeps nothing. |
 | `random` | uint32s for match seeds and the simulated chain's gas. Never a game's outcome on a real Box: badges roll those. |
 
@@ -37,6 +37,24 @@ take ids from `core.nextTap()`). Only station taps are evidence for a counted re
   is dropped, so a stake tap that finishes after the match opened never reaches the game.
 - On the result, a seated badge's tap is a rematch, but only `REMATCH_TAP_MS` (4 s) after the game ended: a chip left
   on the reader must not skip the result.
+
+## Built games
+
+A built game's rules run outside the core, through `RulesRunnerPort` (`built.ts` drives it):
+
+- Play on a built game starts its child at once (`prepare`), at Join, so the first step pays no start-up cost; a
+  rematch prepares it again, and going Home stops it.
+- When the stakes land, the core asks the rules to `start` with the match's seed; the match opens (`playing`) on
+  their first state. The play is `{ game: "built", id, state, stations }`: the rules' state as they returned it (the
+  kiosk's frame draws it) and their two station views, which the stations show as they are, tag and tap words
+  included.
+- Every `TICK_MS` a tick goes to the rules, unless a step is still out (ticks only move the clock on). Taps go to them
+  as finished taps (`BuiltEvent`), judged at their touch time: a known badge's at its touch when the game.json's taps
+  are `identify`; otherwise on the chip's `done`, with its verified roll when they are `random`. A tap is never dropped.
+- Any rejection (over budget, a throw, a crash or exit, a broken protocol) voids the match: `voided`, a draw nobody
+  played, the stations read `VOID`, and after the end hold both stakes go back at the settle and the transcript's
+  result is `void` (it never counts). Rules that fail to start void the match before it plays: straight to Result.
+- A snapshot or failure from a match that is over, or that a reset overtook, never reaches the next one.
 
 ## The build phase
 
@@ -62,10 +80,11 @@ back; an open transaction still on its way locks nothing when it lands.
 
 | Module | What it is | API |
 |---|---|---|
-| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState`, `BoxEvent`, `ScreenCommand`, `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art), `Match`, `Tx`. `StationView` is `@egb/sdk`'s. | types |
+| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState`, `BoxEvent`, `ScreenCommand`, `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art, `sealed`, `manifest`), `Match` (`voided`), `MatchPlay` (with `BuiltPlay`), `Tx`. `StationView` is `@egb/sdk`'s. | types |
 | `ports.ts` | `CorePorts` and the types that cross them: `Clock`, `StationsPort`, `LedgerStore`, `LibraryPort`, `RulesRunnerPort`, `MatchLog`, `TapEvent`, `TapPlan`. | types |
 | `wire.ts` | The link's messages (`LinkDown`, `LinkUp`), `LINK_PATH`, `LINK_COALESCE_MS`, and `STATE_ONLY`: the one event that goes out as a coalesced `state` message. | types, constants |
 | `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
+| `built.ts` | A built game's match through the rules runner: a start, then ticks (skipped while a step is out) and taps (never), each snapshot handed on, the first failure once. | `startBuilt(rules, game, seed, now, { snapshot, failed }): BuiltDriver` |
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
@@ -84,4 +103,6 @@ Tests: `core.test.ts` drives whole matches through the ports on a fake clock (ju
 earlier touch waited for, rolls from `done`, a frozen card let go on `fail`, refusals, dropped stale taps, transcripts
 and their counting, the rematch tap, the stranded escrow returned, reset, station pushes, the ledger store, the
 library, the build phase: only on a Box with the builder, taps refused, its idle); `bot`, `chain`, `ledger`,
-`stations`, `transcript` and `txs` have their own.
+`stations`, `transcript` and `txs` have their own; `built.test.ts` plays a built game on a fake rules runner (prepared at
+Join, opened on the first state, taps at their touch time with the roll for `random`, the rules' stations, a void
+mid-game and at start with both stakes back, the child stopped at Home).
