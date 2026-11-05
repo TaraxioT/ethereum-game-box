@@ -5,6 +5,7 @@ import http from "node:http";
 import { randomInt } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
 import type { Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
@@ -15,6 +16,8 @@ import { badgeOf } from "../taps/roster.ts";
 import { createTaps, type Taps } from "../taps/taps.ts";
 import type { Settings } from "./settings.ts";
 import { apiRoutes } from "./api.ts";
+import { builderRoutes } from "./builder-api.ts";
+import { forgeProvider, startBuilder, type Builder, type BuilderOptions } from "./builder-host.ts";
 import { createLedgerFile } from "./ledger-file.ts";
 import { attachLink } from "./link.ts";
 import { readCommit } from "./release.ts";
@@ -31,7 +34,12 @@ export interface BoxOptions {
   /** The fake receiver's timing, with EGB_RECEIVER=fake (tests: `timeScale: 0`). */
   readonly fake?: FakeOptions;
   readonly log?: (text: string) => void;
+  /** The game builder's settings: its environment (default: process.env), its shelf's folders, the sim's pace. */
+  readonly builder?: Partial<Pick<BuilderOptions, "env" | "gameRoots" | "simSpeed">>;
 }
+
+/** The team games: the Forge's templates. */
+const GAMES_DIR = fileURLToPath(new URL("../games", import.meta.url));
 
 export interface Box {
   /** Where the screen is served. */
@@ -40,6 +48,8 @@ export interface Box {
   readonly core: Core;
   /** The taps library, once it has started (after the server listens); null with EGB_RECEIVER=none. */
   taps(): Taps | null;
+  /** The game builder, once it has started (after the server listens). */
+  builder(): Builder | null;
   /** This boot's launcher token. */
   readonly token: string;
   /** Stops the link, the core, the taps and the server, and waits for the ledger and the log to reach the disk. */
@@ -56,6 +66,9 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   const log = options.log ?? ((text: string) => console.log(text));
   const clock = options.clock ?? systemClock();
   const started = performance.now();
+  const builderEnv = options.builder?.env ?? process.env;
+  // A bad EGB_FORGE_PROVIDER stops the start before anything listens.
+  forgeProvider(builderEnv);
   await mkdir(settings.dataDir, { recursive: true });
   const ledger = createLedgerFile(join(settings.dataDir, "ledger.json"), log);
   const sessions = createSessionLog(settings.dataDir, log);
@@ -71,9 +84,10 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     library: teamLibrary(),
     log: sessions,
     random: () => randomInt(2 ** 32),
-  });
+  }, { builder: true });
   const token = createLauncherToken();
   let commit: string | null = null;
+  let builder: Builder | null = null;
   const routes = [
     ...apiRoutes({
       core,
@@ -81,6 +95,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       uptimeMs: () => performance.now() - started,
       roster: () => taps?.roster().map(badgeOf) ?? [],
       records: () => sessions.records(),
+      building: () => builder?.building() ?? false,
     }),
     ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, stations: settings.stations }),
   ];
@@ -112,6 +127,17 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     const state = core.state();
     for (const seat of SEATS) taps.show(seat, state.stations[seat]);
   }
+  // The builder reads its jobs from the disk: it starts after the listen too, and its routes join the handler's then.
+  builder = startBuilder({
+    dataDir: settings.dataDir,
+    env: builderEnv,
+    gameRoots: options.builder?.gameRoots ?? [GAMES_DIR],
+    log,
+    // The Forge installed or removed a game: the library rescans here once it is mounted.
+    onLibraryChange: () => log("[builder] the library changed: a game was installed or removed"),
+    ...(options.builder?.simSpeed === undefined ? {} : { simSpeed: options.builder.simSpeed }),
+  });
+  routes.push(...builderRoutes(builder));
   void readCommit(options.repoRoot).then((found) => {
     commit = found;
   });
@@ -125,13 +151,14 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     port,
     core,
     taps: () => taps,
+    builder: () => builder,
     token,
     stop() {
       stopping ??= (async () => {
         link.close();
         core.stop();
         server.closeAllConnections();
-        await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close()]);
+        await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close(), builder?.stop()]);
         await Promise.all([ledger.flush(), sessions.flush()]);
       })();
       return stopping;

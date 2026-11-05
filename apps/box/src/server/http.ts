@@ -18,6 +18,7 @@ const MIME: Readonly<Record<string, string>> = {
   ".ico": "image/x-icon",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
+  ".mp3": "audio/mpeg",
   ".txt": "text/plain; charset=utf-8",
 };
 
@@ -75,8 +76,8 @@ export class HttpError extends Error {
   }
 }
 
-/** A JSON body of at most `limit` bytes. A larger one is a 413; one that isn't JSON, a 400. */
-export async function readJson(req: http.IncomingMessage, limit = JSON_LIMIT): Promise<unknown> {
+/** The raw body, of at most `limit` bytes; a larger one is a 413, refused before it is read when it says so up front. */
+export async function readBody(req: http.IncomingMessage, limit: number): Promise<Buffer> {
   const tooLarge = new HttpError(413, `the body is over ${limit} bytes`);
   if (Number(req.headers["content-length"] ?? 0) > limit) throw tooLarge;
   const chunks: Buffer[] = [];
@@ -86,8 +87,14 @@ export async function readJson(req: http.IncomingMessage, limit = JSON_LIMIT): P
     if (size > limit) throw tooLarge;
     chunks.push(chunk);
   }
+  return Buffer.concat(chunks);
+}
+
+/** A JSON body of at most `limit` bytes. A larger one is a 413; one that isn't JSON, a 400. */
+export async function readJson(req: http.IncomingMessage, limit = JSON_LIMIT): Promise<unknown> {
+  const body = await readBody(req, limit);
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(body.toString("utf8"));
   } catch {
     throw new HttpError(400, "the body must be JSON");
   }

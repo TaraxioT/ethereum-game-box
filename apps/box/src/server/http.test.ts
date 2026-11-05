@@ -135,6 +135,6 @@ describe("the API", () => {
     expect((await fetch(`${box.url}/api/builder`)).status).toBe(403);
     expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: "x".repeat(box.token.length) } })).status).toBe(403);
     expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: "short" } })).status).toBe(403);
-    expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: box.token } })).status).toBe(501);
+    expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: box.token } })).status).toBe(200);
   });
 });

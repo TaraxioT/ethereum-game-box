@@ -7,6 +7,7 @@
 // the page. The screen sends it back as the `x-egb-launcher` header, compared in constant time.
 import type http from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { LAUNCHER_HEADER, LAUNCHER_META } from "./builder-wire.ts";
 
 /**
  * Scripts, styles, fonts, sockets and frames from this server only; no plugins, no <base>, and no page may frame the
@@ -25,8 +26,7 @@ export const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-export const LAUNCHER_HEADER = "x-egb-launcher";
-export const LAUNCHER_META = "egb-launcher";
+export { LAUNCHER_HEADER, LAUNCHER_META } from "./builder-wire.ts";
 
 export function createLauncherToken(): string {
   return randomBytes(24).toString("base64url");
