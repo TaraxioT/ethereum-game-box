@@ -1,5 +1,5 @@
 // The machine: the Box's own objects that stay on screen across views — the Grid, the packets on its traces, the
-// core, the two ports, the chain clock and gas gauge, and the transaction strip. Views ask it for moments (a packet, a
+// core, the two ports, the block readout and gas bar, and the transaction strip. Views ask it for moments (a packet, a
 // swell, a coin turn); the app feeds it the Box's state and events.
 import type { Badge, BoxEvent, BoxState, Seat, Tx } from "../link/types.ts";
 import type { Machine, Pose } from "../views/view.ts";
