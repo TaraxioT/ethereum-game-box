@@ -68,6 +68,19 @@ Two pure modules go with them:
 - `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation that resolves at once under reduced motion), `wait`, `calm`.
 
+## Views
+
+`views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
+on `BoxEvent`s and acts only through `link.send`.
+
+- `routes.ts`: phase → view and pose.
+- `attract.ts`: the Box's name, the rack rising, a breathing brass `TAP TO START`.
+- `home.ts`: the focused game's title, IC-chip facts and brass Play, and the rack (`rack.ts`). Touch or arrow keys
+  focus; the cartridge rises, its feed lights and the core turns once. Enter plays.
+- `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
+  per player (`seat-panel.ts`), a plate under the core and keys at the bottom.
+- Game screens live with their games in `src/games/<game>/screen.ts`.
+
 ## Demo
 
 `demo/` draws the hardware a browser doesn't have: a dark walnut bench with a gunmetal rail along the bottom of the
@@ -96,4 +109,39 @@ How it moves: the buzz is a 220 ms shake of the puck (transform only) with a rin
 double shake; a badge read flashes the ring; a badge hovering over a puck lights its ring until it drops. The toggle
 flips, the slide knob slides, the pilot lamp and the opponent lamps fade. Under reduced motion nothing shakes, the
 ring still flashes, and a dropped badge goes straight home.
+
+## Quick Draw
+
+`games/quick-draw/screen.ts` exports `quickDrawScreen`, the `ViewFactory` the router mounts while a Quick Draw match
+plays. It draws from `state.match.play` (game `quick-draw`) on the whole stage, in its own look: a western standoff at
+dusk in flat layered silhouette. The Box's thin overlay sits over the top ~130 px (landscape) / ~150 px (portrait),
+which holds nothing important. Each orientation has its own geometry table in `screen.ts`; portrait stands the
+figures lower-left and lower-right.
+
+| Module | What it is | API |
+|---|---|---|
+| `screen.ts` | The view: places the parts, runs the standoff from the game's phase and the Box's events. | `quickDrawScreen: ViewFactory` |
+| `scene.ts` | The static landscape, drawn once: a graded dusk sky, a big low sun on a long horizon, three ranges of flat-topped mesas with sun-lit ridges, scrub, rocks and two saguaros, a dust haze and a band of drifting motes. | `createScene(spec): { el, sun }` |
+| `sign.ts` | The flip-plate sign on its post: planked wood from layered gradients, nail heads, two iron pins, a plate with a dark painted `WAIT…` face and a bright `DRAW` face, hand-painted letters a little off square, paint wear over them. | `createSign(): { el, flip(instant?), reset(), rattle() }` |
+| `figure.ts` | One gunslinger in silhouette (SVG, facing right; Player 2 mirrored), a seat-coloured rim on its sun-facing edges, hat band and bandana. Body, holstered arm and drawn arm are separate layers. | `createFigure(seat): { el, idle(), twitch(), win(), lose() }` |
+| `quick-draw.css` | All its styles, imported by `screen.ts`. | |
+
+How it moves:
+
+- **Wait**: the sign reads `WAIT…`. A dark layer fades in from the standoff's start over the longest possible wait
+  (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette beat like a heart, and the
+  beat quickens once the shortest wait has passed. The figures hold. All of this is the same for every match, timed
+  from `startedAt` and `Date.now()`, so it never gives away when the draw comes. A remounted view picks the dimming
+  up where it has got to.
+- **Draw** (the phase turns to `draw`, or a `cue: flip` event): the plate turns over on its pins (rotateX) with a
+  swing that settles. The horizon flashes and the light comes back up.
+- **Done**: the winner's arm comes up out of the holster and fires (a muzzle-flash spark, a recoil); the loser sags
+  back on its heels. A brass plate drops in under each figure with its reaction time (`reactionMs`, JetBrains Mono)
+  or `TOO EARLY`. A player who never tapped reads `TOO SLOW` (the other drew first) or `HELD FIRE` (the other jumped
+  the gun). The winner's plate is ringed in its seat colour. A carved plank with `PLAYER 1 WINS` / `PLAYER 2 WINS` in
+  seat paint swings in across the post. After an early tap the sign stays on `WAIT…` and rattles on its pins. The
+  whole sequence is done in about a second, inside the ~2.4 s the Box holds it before Result.
+- **Taps**: each accepted `tap` event jolts that seat's figure a few pixels back, so the player feels it land.
+- Only transform and opacity animate; every shadow and glow is static. Under reduced motion it shows end states: a
+  fixed dim during the wait, no heartbeat, the plate already turned, the poses, plates and plank in place.
 
