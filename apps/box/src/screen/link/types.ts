@@ -145,7 +145,9 @@ export type ScreenCommand =
   | { readonly type: "stake"; readonly amount: number }
   | { readonly type: "back" }
   | { readonly type: "rematch" }
-  | { readonly type: "home" };
+  | { readonly type: "home" }
+  /** Refund: once the stakes unlock, send every refund still owed (each goes to its own badge, whoever asks). */
+  | { readonly type: "refund" };
 
 export interface BoxLink {
   state(): BoxState;

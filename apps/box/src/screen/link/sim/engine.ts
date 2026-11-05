@@ -560,6 +560,9 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       case "home":
         if (phase === "result") setPhase("home");
         return;
+      case "refund":
+        if (phase === "refund") for (const seat of SEATS) claimRefund(seat);
+        return;
     }
   }
 

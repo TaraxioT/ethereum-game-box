@@ -87,7 +87,7 @@ states with short fades.
 | **Quick Draw** | The game, under the thin Box overlay. | Ends → Result. |
 | **Stock Duel** | The game, under the thin Box overlay. | Ends → Result. |
 | **Result** | The winner's port lit, `WINNER`, the payout transaction running from the core to their port. A draw returns both stakes. | Rematch (both seats tap again on Stake) or Home. |
-| **Refund** | Shown when the Box fails to settle in time: the open match, its timeout counted in blocks, then each seat taps to take its stake back (a transaction each). | In Demo mode, the `CUT POWER` switch on the DEMO plate makes the Box miss its settle during a game. Both refunded → Home. |
+| **Refund** | Shown when the Box fails to settle in time: the open match, its timeout counted in blocks, then each seat taps to take its stake back (a transaction each), or `REFUND ALL` sends whatever is still owed (a refund always pays the stake's owner, whoever asks). | In Demo mode, the `CUT POWER` switch on the DEMO plate makes the Box miss its settle during a game. Both refunded → Home. |
 
 ## 5. Games inside the Box
 

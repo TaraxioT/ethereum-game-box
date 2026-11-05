@@ -57,3 +57,7 @@
 .page-keys { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
 .page-keys egb-key { flex: 0 0 auto; width: 200px; height: auto; }
 .page-note { display: grid; place-items: center; text-align: center; font: 600 16px/1.4 var(--display); letter-spacing: 0.06em; color: var(--fg-3); }
+.refund-keys { align-items: center; gap: 24px; }
+.refund-keys .page-note { flex: 1 1 auto; justify-items: start; text-align: left; }
+.refund-keys egb-key { flex: none; width: 280px; height: 72px; }
+[data-orientation="portrait"] .refund-keys .page-note { font-size: 14px; }

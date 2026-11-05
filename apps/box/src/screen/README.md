@@ -79,6 +79,8 @@ on `BoxEvent`s and acts only through `link.send`.
   focus; the cartridge rises, its feed lights and the core turns once. Enter plays.
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`), a plate under the core and keys at the bottom.
+  Refund's `REFUND ALL` key (once the stakes unlock) sends every refund still owed, so the Box never waits on a
+  player who walked away.
 - Game screens live with their games in `src/games/<game>/screen.ts`.
 
 ## Demo

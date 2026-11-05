@@ -217,6 +217,32 @@ describe("SimLink", () => {
     expect(link.state().phase).toBe("home");
   });
 
+  it("refunds both stakes from the screen in hot seat, once they unlock, without a tap", () => {
+    open();
+    link.setOpponent("hotseat");
+    toHome();
+    link.tap(0);
+    link.tap(1);
+    link.send({ type: "focus", game: "quick-draw" });
+    link.send({ type: "play" });
+    signAndOpen();
+    link.setPower(false);
+    link.tap(0);
+    vi.advanceTimersByTime(END_HOLD_MS);
+    const match = link.state().match;
+    if (!match) throw new Error("no match");
+    expect(link.state().phase).toBe("refund");
+    link.send({ type: "refund" });
+    expect(link.state().txs.some((tx) => tx.kind === "refund")).toBe(false);
+    until((s) => s.chain.block >= match.refundBlock, 40_000);
+    link.send({ type: "refund" });
+    expect(link.state().txs.filter((tx) => tx.kind === "refund").map((tx) => tx.seat)).toEqual([0, 1]);
+    until((s) => s.match?.refunded.every(Boolean) === true, 15_000);
+    expect(balances()).toEqual([100, 100]);
+    vi.advanceTimersByTime(REFUND_DONE_MS);
+    expect(link.state().phase).toBe("home");
+  });
+
   it("tops up a spent-out badge on rematch", () => {
     open();
     link.setOpponent("hotseat");
