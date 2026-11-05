@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-labelledby="t d">
+  <title id="t">Ethereum Game Box</title>
+  <desc id="d">A tap station's two-tone OLED screen reading: tap to play.</desc>
+  <defs>
+    <pattern id="px" width="5" height="5" patternUnits="userSpaceOnUse">
+      <rect width="5" height="5" fill="none"/>
+      <path d="M0 4.5H5M4.5 0V5" stroke="#050709" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="pcb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22579A"/>
+      <stop offset="1" stop-color="#173F73"/>
+    </linearGradient>
+  </defs>
+
+  <!-- the module: a blue SSD1306 board, as on every tap station -->
+  <rect x="60" y="10" width="1080" height="360" rx="22" fill="url(#pcb)"/>
+  <rect x="60.5" y="10.5" width="1079" height="359" rx="21.5" fill="none" stroke="#3D74BC" stroke-opacity=".5"/>
+  <g fill="#0B0D10" stroke="#C9A13B" stroke-width="5">
+    <circle cx="100" cy="50" r="13"/><circle cx="1100" cy="50" r="13"/>
+    <circle cx="100" cy="330" r="13"/><circle cx="1100" cy="330" r="13"/>
+  </g>
+
+  <!-- header pins -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#DCE8F7" text-anchor="middle" letter-spacing="1">
+    <g fill="#C9A13B"><rect x="519" y="22" width="18" height="18" rx="2"/><rect x="559" y="22" width="18" height="18" rx="9"/><rect x="599" y="22" width="18" height="18" rx="9"/><rect x="639" y="22" width="18" height="18" rx="9"/></g>
+    <text x="528" y="58">GND</text><text x="568" y="58">VCC</text><text x="608" y="58">SCL</text><text x="648" y="58">SDA</text>
+  </g>
+
+  <!-- glass -->
+  <rect x="150" y="76" width="900" height="270" rx="6" fill="#06090C"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" filter="url(#glow)">
+    <!-- yellow band: the top rows of a two-tone OLED -->
+    <g fill="#FFD23F" font-size="22" font-weight="700" letter-spacing="2">
+      <circle cx="186" cy="113" r="7"/>
+      <text x="204" y="121">STATION 2</text>
+      <text x="1018" y="121" text-anchor="end">mumbai-01.gamebox.eth</text>
+    </g>
+    <!-- blue body -->
+    <g fill="#5EC8FF" text-anchor="middle">
+      <text x="574" y="238" font-size="78" font-weight="800" letter-spacing="10">TAP TO PLAY</text>
+      <rect x="890" y="180" width="34" height="62">
+        <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;.5;.5;1" dur="1.1s" repeatCount="indefinite"/>
+      </rect>
+      <text x="600" y="300" font-size="21" letter-spacing="3" fill-opacity=".85">badge = wallet · box = referee · ethereum = bank</text>
+    </g>
+  </g>
+  <line x1="150" y1="146" x2="1050" y2="146" stroke="#06090C" stroke-width="6"/>
+
+  <!-- pixel grid over the glass -->
+  <rect x="150" y="76" width="900" height="270" rx="6" fill="url(#px)" opacity=".55"/>
+</svg>
