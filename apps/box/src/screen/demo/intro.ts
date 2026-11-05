@@ -1,21 +1,19 @@
-// The one-time brass instruction plate (an <egb-plate> with a brass <egb-key>): how to tap without hardware, the
-// opponent switch and the power cut. OK puts it away for good (localStorage `gamebox-intro=1`). The parts must be
+// The one-time Demo intro: a panel centred over the screen that rezzes in once the boot has finished. How to tap
+// without hardware (a player's frame, or their half of the screen in a game; A and L), and where the opponent switch
+// and the power cut are. OK or Escape puts it away for good (localStorage `gamebox-intro=2`). The parts must be
 // registered first.
 import "./demo.css";
-import { calm, el } from "../shell/dom.ts";
+import type { BoxLink } from "../link/types.ts";
+import { el } from "../shell/dom.ts";
+import { derez, rez } from "../shell/rez.ts";
 
 const SEEN_KEY = "gamebox-intro";
-
-const WAYS: readonly string[] = [
-  "Drag a badge onto a puck",
-  "Click or touch a puck",
-  "Press A for Player 1",
-  "Press L for Player 2",
-];
+/** Bumped when the ways to tap change, so returning visitors see the new ones once. */
+const SEEN = "2";
 
 function seen(): boolean {
   try {
-    return localStorage.getItem(SEEN_KEY) === "1";
+    return localStorage.getItem(SEEN_KEY) === SEEN;
   } catch {
     return false;
   }
@@ -23,55 +21,61 @@ function seen(): boolean {
 
 function remember(): void {
   try {
-    localStorage.setItem(SEEN_KEY, "1");
+    localStorage.setItem(SEEN_KEY, SEEN);
   } catch {
-    // Storage blocked: the plate shows again next visit.
+    // Storage blocked: the intro shows again next visit.
   }
 }
 
-/** Shows the plate over everything unless it was dismissed before. */
-export function showIntroOnce(host: HTMLElement): void {
+/** Shows the intro once the Box has booted, unless it was dismissed before. */
+export function showIntroOnce(host: HTMLElement, link: BoxLink): void {
   if (seen()) return;
-  const backdrop = el("div", "dk-intro");
-  const plate = document.createElement("egb-panel");
-  plate.className = "dk-intro-plate";
-  plate.setAttribute("role", "dialog");
-  plate.setAttribute("aria-modal", "true");
-  plate.setAttribute("aria-labelledby", "dk-intro-title");
-  const kicker = el("div", "dk-intro-kicker", "Demo");
-  const title = el("h2", "dk-intro-title", "Four ways to tap");
-  title.id = "dk-intro-title";
-  const list = el("ol", "dk-intro-ways");
-  WAYS.forEach((way, i) => {
-    const item = el("li", "dk-intro-way");
-    item.append(el("span", "dk-intro-num", String(i + 1)), el("span", "dk-intro-text", way));
-    list.append(item);
+  if (link.state().phase !== "boot") return show(host);
+  const stop = link.subscribe((state) => {
+    if (state.phase === "boot") return;
+    stop();
+    show(host);
   });
-  const rule = el("div", "dk-intro-rule");
-  const notes = el("div", "dk-intro-notes");
-  notes.append(
-    el("p", "dk-intro-note", "VS BOT or HOT SEAT: play the bot, or a friend on the same desk"),
-    el("p", "dk-intro-note", "CUT POWER to see a refund"),
-  );
+}
+
+function show(host: HTMLElement): void {
+  const backdrop = el("div", "demo-intro");
+  const panel = document.createElement("egb-panel");
+  panel.className = "demo-intro-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  panel.setAttribute("aria-labelledby", "demo-intro-title");
+  const title = el("h2", "demo-intro-title", "TWO WAYS TO TAP");
+  title.id = "demo-intro-title";
   const ok = document.createElement("egb-key");
-  ok.className = "dk-intro-ok";
+  ok.className = "demo-intro-ok";
   ok.textContent = "OK";
-  plate.append(kicker, title, list, rule, notes, ok);
-  backdrop.append(plate);
+  panel.append(
+    el("div", "demo-intro-kicker", "DEMO"),
+    title,
+    el("p", "demo-intro-line", "TOUCH A PLAYER'S FRAME, OR THEIR HALF OF THE SCREEN IN A GAME"),
+    el("p", "demo-intro-line", "PRESS A FOR PLAYER 1, L FOR PLAYER 2"),
+    el("i", "demo-intro-rule"),
+    el("p", "demo-intro-note", "VS BOT, HOT SEAT AND CUT POWER ARE IN THE DEMO TAG"),
+    ok,
+  );
+  backdrop.append(panel);
   host.append(backdrop);
-  requestAnimationFrame(() => backdrop.classList.add("dk-intro-in"));
+  void rez(panel);
   ok.focus({ preventScroll: true });
 
+  let closed = false;
   const close = (): void => {
+    if (closed) return;
+    closed = true;
     remember();
-    ok.removeEventListener("click", close);
-    backdrop.removeEventListener("keydown", onKey);
-    backdrop.classList.remove("dk-intro-in");
-    setTimeout(() => backdrop.remove(), calm() ? 0 : 320);
-  };
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") close();
+    void derez(panel).then(() => backdrop.remove());
   };
   ok.addEventListener("click", close);
-  backdrop.addEventListener("keydown", onKey);
+  // Its keys and touches are its own: Enter on OK must not also start the Box, nor a touch tap a seat.
+  backdrop.addEventListener("pointerdown", (e) => e.stopPropagation());
+  backdrop.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") close();
+  });
 }

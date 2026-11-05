@@ -1,7 +1,7 @@
 // The machine: the Box's own objects that stay on screen across views — the Grid, the packets on its traces, the
 // core, the two ports, the chain clock and gas gauge, and the transaction strip. Views ask it for moments (a packet, a
 // swell, a coin turn); the app feeds it the Box's state and events.
-import type { BoxEvent, BoxState, Seat, Tx } from "../link/types.ts";
+import type { Badge, BoxEvent, BoxState, Seat, Tx } from "../link/types.ts";
 import type { Machine, Pose } from "../views/view.ts";
 import type { Layout } from "./layout.ts";
 import type { EgbCore } from "../parts/core.ts";
@@ -34,7 +34,12 @@ export interface MachineView extends Machine {
   dispose(): void;
 }
 
-export function createMachine(layout: Layout, scale: number): MachineView {
+export interface MachineOptions {
+  /** Whether a badge is the bot's: its port wears a BOT tag (Demo mode). */
+  readonly isBot?: (badge: Badge) => boolean;
+}
+
+export function createMachine(layout: Layout, scale: number, options: MachineOptions = {}): MachineView {
   const root = el("div", "machine");
   const grid = el("div", "grid");
   let gridCanvas = drawGrid(layout, scale);
@@ -61,6 +66,7 @@ export function createMachine(layout: Layout, scale: number): MachineView {
   const ports = layout.ports.map((p, i) => {
     const port = document.createElement("egb-port") as EgbPort;
     port.setAttribute("seat", String(i));
+    port.dataset.seat = String(i);
     place(port, p.module);
     overlay.append(port);
     return port;
@@ -136,7 +142,12 @@ export function createMachine(layout: Layout, scale: number): MachineView {
     update(state, event) {
       // Attract's only idle motion besides TAP TO START: it stops the moment the phase moves on.
       if (event.type === "init" || event.type === "phase") packets.ambient(state.phase === "attract");
-      if (event.type === "init" || event.type === "seat") state.seats.forEach((s, i) => ports[i]?.set(s));
+      if (event.type === "init" || event.type === "seat") {
+        state.seats.forEach((s, i) => {
+          ports[i]?.set(s);
+          ports[i]?.toggleAttribute("bot", Boolean(s.badge && options.isBot?.(s.badge)));
+        });
+      }
       if (event.type === "init" || event.type === "block") clock.block = state.chain.block;
       if (event.type === "init" || event.type === "gas") gauge.gwei = state.chain.gasGwei;
       if (event.type === "block" && pose !== "game") core.swell();

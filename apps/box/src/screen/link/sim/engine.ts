@@ -23,7 +23,7 @@ import { defaultStake, DEFAULT_FOCUS, GAMES, gameInfo } from "./catalogue.ts";
 import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
 import { balanceOf, EMPTY_LEDGER, faucet, FAUCET_EGB, lock, refund, settle, type Ledger } from "./ledger.ts";
 import { createTxBook } from "./txs.ts";
-import { BOT_BADGE, DESK_BADGES } from "./badges.ts";
+import { BOT_BADGE, DEMO_BADGES } from "./badges.ts";
 import { stationViews, type StationInput } from "./stations.ts";
 import { createBot } from "./bot.ts";
 
@@ -509,10 +509,10 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     return badge === null || sameBadge(badge, BOT_BADGE);
   }
 
-  function deskBadgeFor(seat: Seat): Badge | null {
+  function demoBadgeFor(seat: Seat): Badge | null {
     const seated = seats[seat].badge;
     if (seated) return seated;
-    return DESK_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
+    return DEMO_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
   }
 
   // ── Screen commands ───────────────────────────────────────────────────────────────────────────────────────────
@@ -597,7 +597,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   });
 
   return {
-    badges: [...DESK_BADGES, BOT_BADGE],
+    badges: [...DEMO_BADGES, BOT_BADGE],
     botBadge: BOT_BADGE,
     state: () => state,
     subscribe(listener) {
@@ -609,7 +609,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     send: command,
     tap(seat, badge) {
       if (botHolds(seat)) return;
-      const chosen = badge ?? deskBadgeFor(seat);
+      const chosen = badge ?? demoBadgeFor(seat);
       if (chosen) press(seat, chosen);
     },
     opponent: () => opponent,

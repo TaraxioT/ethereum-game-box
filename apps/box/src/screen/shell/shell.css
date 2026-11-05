@@ -1,14 +1,7 @@
 /* The shell: the window, the scaled stage, the machine's layers and its three poses. */
-.app { position: fixed; inset: 0; overflow: hidden; background: var(--room); }
-.screen-area { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; }
-.screen-area::before {
-  /* The room round the stage when the window's shape differs from it: Devcon's night, a violet dawn high left. */
-  content: ""; position: absolute; inset: 0;
-  background:
-    radial-gradient(60% 70% at 8% 0%, rgb(143 107 255 / 0.18), transparent 70%),
-    radial-gradient(55% 60% at 100% 100%, rgb(255 140 210 / 0.08), transparent 70%),
-    linear-gradient(180deg, #1c1538, #140e2b 70%);
-}
+.app { position: fixed; inset: 0; overflow: hidden; background: var(--void); }
+/* The whole window; the room round the stage, where the window's shape differs from it, is the void. */
+.screen-area { position: absolute; inset: 0; overflow: hidden; }
 .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; contain: layout paint; }
 
 .machine, .machine > * { position: absolute; inset: 0; }
@@ -38,6 +31,14 @@
 }
 .machine[data-pose="game"] .stake-chip:not([hidden]) { opacity: 1; }
 [data-orientation="portrait"] .stake-chip { top: 40px; }
+
+/* Demo mode: a touch on a player's half of the screen in a game. */
+.tap-ripple {
+  position: absolute; width: 120px; height: 120px; border-radius: 50%; pointer-events: none; opacity: 0;
+  --seat: var(--p1); --seat-bloom: var(--p1-bloom);
+  border: 2px solid var(--seat); box-shadow: 0 0 8px var(--seat-bloom), 0 0 18px var(--seat-bloom), inset 0 0 8px var(--seat-bloom);
+}
+.tap-ripple.seat-1 { --seat: var(--p2); --seat-bloom: var(--p2-bloom); }
 
 /* The boot's cover: the void with a hole at the core; scaled up, it uncovers the Grid outward from the core. */
 .boot-cover {

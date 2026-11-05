@@ -4,7 +4,7 @@ import { mulberry32 } from "../../../games/random.ts";
 import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
 import { DEAL_MS, rules as stockDuel } from "../../../games/stock-duel/rules.ts";
 import { GAMES } from "./catalogue.ts";
-import { BOT_BADGE, DESK_BADGES } from "./badges.ts";
+import { BOT_BADGE, DEMO_BADGES } from "./badges.ts";
 import {
   botDelay,
   botIntent,
@@ -20,7 +20,7 @@ import {
 } from "./bot.ts";
 
 const NOW = 9_000_000;
-const NOVA = DESK_BADGES[0] ?? BOT_BADGE;
+const NOVA = DEMO_BADGES[0] ?? BOT_BADGE;
 const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
 
 function box(patch: Partial<BoxState>): BoxState {
@@ -72,7 +72,7 @@ describe("bot intents", () => {
   });
 
   it("sits out while somebody else holds Player 2's seat", () => {
-    const kite: SeatState = { badge: DESK_BADGES[1] ?? NOVA, balance: 100, signed: false, pending: 0 };
+    const kite: SeatState = { badge: DEMO_BADGES[1] ?? NOVA, balance: 100, signed: false, pending: 0 };
     expect(botIntent(box({ phase: "stake", seats: [human(true), kite] }), NOW, BOT_BADGE)).toBeNull();
   });
 
