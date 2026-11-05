@@ -1,0 +1,18 @@
+/* Home and attract. */
+.home-title { overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.home-title-text {
+  margin: 0; font: 900 64px/1 var(--display); letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
+  color: #fbf8ff;
+  /* Lit from the top left: a bright top edge, a violet edge glow kept tight to the letters, a dark drop. */
+  text-shadow: 0 -1px 0 #ffffff, 0 0 2px rgb(196 170 247 / 0.9), 0 0 8px rgb(173 143 255 / 0.55), 0 3px 0 #2a1d58, 0 5px 6px rgb(4 2 12 / 0.6);
+}
+[data-orientation="portrait"] .home-title { align-items: center; }
+[data-orientation="portrait"] .home-title-text { font-size: 52px; }
+.home-facts { display: flex; gap: 12px; align-items: center; }
+[data-orientation="portrait"] .home-facts { justify-content: center; }
+.home-facts egb-fact { height: 44px; }
+.home-play, .attract-start { font: 900 30px/1 var(--display); letter-spacing: 0.04em; }
+
+.attract-kicker { font: 700 22px/1 var(--display); letter-spacing: 0.3em; color: var(--lavender); margin-bottom: 8px; }
+.attract-start { font-size: 24px; }
+

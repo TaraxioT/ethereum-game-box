@@ -42,3 +42,29 @@ Two pure modules go with them:
 - `parts/eth-mark.ts`: `ethMarkSvg({ backlight })`, the real six-facet Ethereum mark as an SVG string, with an
   optional soft light behind it.
 
+## Shell
+
+`shell/` holds the Box's own objects and the machinery that places, scales and moves them.
+
+- `layout.ts`: every anchor in stage pixels, for the 1280×800 landscape stage and the 720×1080 portrait one (core,
+  ports, clock, gauge, title, facts, Play, the four rack housings, the transaction LCD). Everything else places
+  itself from these, so traces always land on the parts they feed.
+- `stage.ts`: `fit(layout, w, h)` scales and centres the stage in the space it gets; `createStage`, `applyFit`.
+  Tested in `stage.test.ts`.
+- `route.ts`, `traces.ts`: pure geometry. 45° routing, buses, sampling and clipping; `tracesFor(layout)` gives the
+  named traces (`port0`, `port1`, `clock`, `slot0`–`slot3`) and the side bundles. Tested.
+- `board.ts`: `drawBoard(layout, scale)` draws the static board once (plates, seams, screws, 3D parts, copper,
+  neon traces, connectors) and caches it per size.
+- `packets.ts`: a live canvas over the board. `run(trace)` sends a comet along the copper; `light(trace)` lights the
+  focused cartridge's feed. It draws only while a packet is in flight.
+- `machine.ts`: the objects that stay across views (board, packets, core, ports, clock, gauge, transaction LCD, the
+  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `packet`, `swell`, `coin`,
+  `feed`, `anchor`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
+  when it lands in a block, a packet out to the port for a payout.
+- `router.ts`: mounts the view for the Box's phase and moves between views in depth (the old sinks, the new rises).
+- `boot.ts`: one step at a time: the core ignites, the board powers on outward from it, the ports and clock come up.
+- `app.ts`: the screen area (the window less the desk), the stage, the machine and the router; rebuilds the stage
+  when the window turns between landscape and portrait.
+- `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
+- `dom.ts`: `el`, `place`, `play` (a Web Animation that resolves at once under reduced motion), `wait`, `calm`.
+
