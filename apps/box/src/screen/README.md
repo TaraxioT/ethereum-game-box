@@ -68,3 +68,32 @@ Two pure modules go with them:
 - `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation that resolves at once under reduced motion), `wait`, `calm`.
 
+## Demo
+
+`demo/` draws the hardware a browser doesn't have: a dark walnut bench with a gunmetal rail along the bottom of the
+window, below the Box's screen. On it are the two tap stations (Player 1 left, Player 2 right), the badges between
+them, and the engraved `DEMO` plate with its controls. The desk drives the simulated Box through `SimControl`
+(`link/sim/control.ts`) and listens to it (`sim.subscribe`) to keep the OLEDs, the buzz motors, the seated badges and
+the switches in step. Call `registerParts()` first: the plates are `<egb-plate>`s and OK is an `<egb-key>`.
+
+| Module | What it is | API |
+|---|---|---|
+| `desk.ts` | The bench and its layout. Landscape: one row (puck, badges, plate, puck), with the wide plate, or the tall one when the window is narrow. Portrait, or a landscape too narrow for a row: the badges on top, the pucks in the bottom corners with the plate between them. The plate is a metal `<egb-plate>`: `DEMO`, a bat-handle `CUT POWER` toggle with a red pilot lamp that lights while the power is cut (`sim.setPower`), a `VS BOT / HOT SEAT` slide switch (`sim.setOpponent`) and a mute key with a speaker (`sound.setMuted`). | `mountDesk(host, sim, sound): Desk`. `Desk.height(viewW, viewH)`: ~20 % of the height in landscape (130–220 px), ~26 % in portrait (180–260 px); it also lays the desk out for that size. `deskLayout(w, h)` is the sizing, pure. |
+| `puck.ts` | One tap station: a round dark puck, bevelled and lit from the top left, a seat-colour NFC ring (2.5 px neon, ≤ 8 px glow) round its OLED, `P1`/`P2` engraved on the rim and its key (`A`/`L`) on a tiny keycap. With the bot in seat 2, puck 2 wears a `BOT` plate and ignores clicks and drops. | `createPuck(seat, sim): Puck` with `show(view)`, `buzz()`, `refuse()`, `flash()`, `setBot(on)`, `hits(x, y)`, `arm(on)`, `size(diameter)`, `dispose()`. |
+| `oled.ts` | The station's 128 × 64 one-bit panel on a real canvas of that size: a yellow top band and a blue-white body, as on a two-tone SSD1306, scaled with hard pixel edges (a whole number of device pixels per panel pixel where there's room for two or more; a soft scale below one, so type doesn't lose rows). | `createOled(): { el, show(view), size(fitWidth) }`, `panelWidth(fitWidth, dpr)`. |
+| `oled-font.ts` | The pixel font and the panel layout, pure. 5 × 7 glyphs as base-32 rows, trimmed to their ink; digits, A–Z, `! ? . : ; , - + × = / % $ # ' " ( ) < > * @ & _ · → ← ▲ ▼`; a hollow box for anything else. The top line sits in the yellow band, the big line at the largest scale that fits (3×, 2× on up to two lines, then 1×), the bottom line last. Tested in `oled-font.test.ts`. | `glyph`, `hasGlyph`, `textWidth`, `drawText`, `fit`, `wrap`, `bigLines`, `stationPixels(view): Pixel[]`. |
+| `badges.ts` | The desk's badges (`sim.badges` less the bot's) as NFC cards: violet PVC, a punched lanyard slot, a gold chip, the blockie, the name. Pointer Events drag them (mouse and touch). Dropped on a puck, the card lands on it, taps (`sim.tap(seat, badge)`) and slides home; dropped anywhere else it springs back. A seated badge lights a seat-colour lamp. Cards overlap when the tray is narrow. | `createBadgeTray(sim, pucks): { el, update(state), size(cardHeight), dispose() }`, `CARD_RATIO`. |
+| `keys.ts` | A taps Player 1, L taps Player 2, in demo and box mode. Held keys, modifier shortcuts and typing in a field don't tap. | `bindTapKeys(sim): () => void` |
+| `intro.ts` | The one-time brass plate: the four ways to tap (drag a badge onto a puck, click or touch a puck, press A, press L), `VS BOT or HOT SEAT`, `CUT POWER to see a refund`, and a brass OK. OK or Escape dismisses it for good (localStorage `gamebox-intro=1`). | `showIntroOnce(host)` |
+| `demo.css` | Every style above, imported by `desk.ts` and `intro.ts`. Desk sizes scale with `--u` (1 on a 160 px landscape desk); a puck from `--d`; a badge from its own width. | |
+
+`shell/sound.ts` (`createSound(): Sound`) goes with it: every `Cue` synthesized with WebAudio (tap a click, block a
+soft low tick, seal a warm chime, flip a card flick, tick a wood tick, win a rising brass arpeggio, lose a falling
+two-note, error a dull double buzz, boot a power-on swell). The AudioContext is made on the first user gesture;
+until then, and while muted, cues are silent. Muting is remembered (localStorage `gamebox-muted=1`). It never throws.
+
+How it moves: the buzz is a 220 ms shake of the puck (transform only) with a ring flash; an unaccepted tap is a
+double shake; a badge read flashes the ring; a badge hovering over a puck lights its ring until it drops. The toggle
+flips, the slide knob slides, the pilot lamp and the opponent lamps fade. Under reduced motion nothing shakes, the
+ring still flashes, and a dropped badge goes straight home.
+
