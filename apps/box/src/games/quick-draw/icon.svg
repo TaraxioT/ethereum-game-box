@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Quick Draw</title>
+  <style>
+    .spark { animation: twinkle 1.6s ease-in-out infinite alternate; }
+    .bolt { transform-box: fill-box; transform-origin: center; animation: charge 3.2s ease-in-out infinite; }
+    @keyframes twinkle { from { opacity: 1; } to { opacity: .35; } }
+    @keyframes charge { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+    @media (prefers-reduced-motion: reduce) { .spark, .bolt { animation: none; } }
+  </style>
+  <defs>
+    <radialGradient id="glass" cx=".5" cy=".38" r=".75"><stop offset="0" stop-color="#1d1a2c"/><stop offset=".8" stop-color="#0d0b15"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2c8"/><stop offset=".42" stop-color="#ffc46b"/><stop offset="1" stop-color="#e08a2a"/></linearGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#glass)"/>
+  <ellipse cx="128" cy="214" rx="70" ry="7" fill="#ad8fff" opacity=".12"/>
+  <g transform="translate(-42.8 38.4) scale(2.8)">
+    <g class="bolt">
+      <path d="M68 2 40 34h17l-9 28 34-36H64L76 2Z" fill="none" stroke="#ffc46b" stroke-width="5" stroke-linejoin="round" opacity=".22"/>
+      <path d="M68 2 40 34h17l-9 28 34-36H64L76 2Z" fill="url(#gold)" stroke="#2a1804" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M67.4 4.4 43.6 32.2M58.4 35.2 51 57.4" fill="none" stroke="#fffbe8" stroke-opacity=".75" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g class="spark"><path d="M34 14l-7-5M30 24h-8M86 12l7-6M92 22h8M88 40l6 4" fill="none" stroke="#ffe3a1" stroke-width="2.4" stroke-linecap="round"/></g>
+  </g>
+</svg>

@@ -1,0 +1,13 @@
+{
+  "id": "quick-draw",
+  "title": "Quick Draw",
+  "blurb": "A standoff at dusk: wait for the sign to flip to DRAW, then tap first. Tap before it and you lose.",
+  "players": 2,
+  "minutes": 1,
+  "stakes": [5, 10, 25],
+  "tier": "refereed",
+  "taps": "identify",
+  "kind": "team",
+  "budgetMs": 50,
+  "forge": { "template": true, "label": "Quick Draw", "default": true }
+}

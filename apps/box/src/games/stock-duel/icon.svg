@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Stock Duel</title>
+  <style>
+    .bulls { animation: bob 2.4s ease-in-out infinite; }
+    .bears { animation: bob 2.4s ease-in-out -1.2s infinite; }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    @media (prefers-reduced-motion: reduce) { .bulls, .bears { animation: none; } }
+  </style>
+  <defs>
+    <radialGradient id="glass" cx=".5" cy=".38" r=".75"><stop offset="0" stop-color="#1d1a2c"/><stop offset=".8" stop-color="#0d0b15"/></radialGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#glass)"/>
+  <path d="M28 196H228M28 156H228M28 116H228M28 76H228" stroke="#ad8fff" stroke-opacity=".08" stroke-width="1.5"/>
+  <ellipse cx="128" cy="200" rx="96" ry="6" fill="#ad8fff" opacity=".12"/>
+  <g transform="translate(3 65) scale(2.1)">
+    <g class="bulls">
+      <path d="M22 30V58" stroke="#ff9b3d" stroke-width="2" stroke-linecap="round"/>
+      <rect x="17" y="36" width="10" height="16" rx="1.6" fill="#ff9b3d" stroke="#0b0914" stroke-width="1"/>
+      <rect x="18" y="37" width="2.2" height="14" rx="1" fill="#ffd2a3" opacity=".85"/>
+      <path d="M52 25V52" stroke="#ff9b3d" stroke-width="2" stroke-linecap="round"/>
+      <rect x="47" y="32" width="10" height="14" rx="1.6" fill="#ff9b3d" stroke="#0b0914" stroke-width="1"/>
+      <rect x="48" y="33" width="2.2" height="12" rx="1" fill="#ffd2a3" opacity=".85"/>
+      <path d="M82 15V40" stroke="#ff9b3d" stroke-width="2" stroke-linecap="round"/>
+      <rect x="77" y="22" width="10" height="12" rx="1.6" fill="#ff9b3d" stroke="#0b0914" stroke-width="1"/>
+      <rect x="78" y="23" width="2.2" height="10" rx="1" fill="#ffd2a3" opacity=".85"/>
+    </g>
+    <g class="bears">
+      <path d="M37 22V50" stroke="#3fd9ff" stroke-width="2" stroke-linecap="round"/>
+      <rect x="32" y="28" width="10" height="16" rx="1.6" fill="#3fd9ff" stroke="#0b0914" stroke-width="1"/>
+      <rect x="33" y="29" width="2.2" height="14" rx="1" fill="#b5f1ff" opacity=".85"/>
+      <path d="M67 12V42" stroke="#3fd9ff" stroke-width="2" stroke-linecap="round"/>
+      <rect x="62" y="18" width="10" height="18" rx="1.6" fill="#3fd9ff" stroke="#0b0914" stroke-width="1"/>
+      <rect x="63" y="19" width="2.2" height="16" rx="1" fill="#b5f1ff" opacity=".85"/>
+      <path d="M97 2V32" stroke="#3fd9ff" stroke-width="2" stroke-linecap="round"/>
+      <rect x="92" y="7" width="10" height="19" rx="1.6" fill="#3fd9ff" stroke="#0b0914" stroke-width="1"/>
+      <rect x="93" y="8" width="2.2" height="17" rx="1" fill="#b5f1ff" opacity=".85"/>
+    </g>
+  </g>
+</svg>
