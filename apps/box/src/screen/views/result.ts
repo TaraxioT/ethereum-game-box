@@ -1,5 +1,6 @@
 // Result: the winner's side lit and paid. The payout runs from the core to the winner's port on the LCD; a draw sends
-// both stakes back. Rematch goes back to Stake with the same seats; Home returns to the library.
+// both stakes back, and so does a void (a built game's rules failed). Rematch goes back to Stake with the same seats;
+// Home returns to the library.
 import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -47,11 +48,12 @@ export function resultView(ctx: ViewContext): View {
     if (!m?.outcome) return;
     const { winner } = m.outcome;
     state.seats.forEach((s, i) => {
-      if (winner === null) panels[i]?.set(s, `DRAW · ${m.stake} EGB BACK`, "done");
+      if (m.voided) panels[i]?.set(s, `VOID · ${m.stake} EGB BACK`, "done");
+      else if (winner === null) panels[i]?.set(s, `DRAW · ${m.stake} EGB BACK`, "done");
       else if (winner === i) panels[i]?.set(s, `WINNER · +${m.stake * 2} EGB`, "win");
       else panels[i]?.set(s, `−${m.stake} EGB`, "lose");
     });
-    banner.textContent = winner === null ? "DRAW" : `PLAYER ${winner + 1} WINS`;
+    banner.textContent = m.voided ? "VOID · THE GAME FAILED" : winner === null ? "DRAW" : `PLAYER ${winner + 1} WINS`;
   }
 
   return {

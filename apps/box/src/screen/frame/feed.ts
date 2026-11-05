@@ -16,6 +16,15 @@ export interface FrameMatch {
 /** Finds the built match in the Box's state, or null while none plays. */
 export type FrameSource = (state: BoxState) => FrameMatch | null;
 
+/** The built game playing in the Box's state, with its checked game.json from the library; null for anything else. */
+export const builtMatch: FrameSource = (state) => {
+  const match = state.match;
+  if (!match || match.play.game !== "built" || match.voided) return null;
+  const { id, state: rules } = match.play;
+  const manifest = state.games.find((g) => g.id === id)?.manifest;
+  return manifest ? { id, manifest, state: rules, over: match.outcome !== null } : null;
+};
+
 /** Each seat's badge as the frame names it. */
 export function frameSeats(state: BoxState): readonly [FrameSeat, FrameSeat] {
   const seat = (i: 0 | 1): FrameSeat => {

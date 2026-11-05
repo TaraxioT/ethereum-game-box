@@ -45,7 +45,8 @@ export default defineConfig(() => {
     envDir: "..",
     plugins: [pagePaths()],
     build: { outDir: "../dist/screen", emptyOutDir: true, target: "es2023", rollupOptions: { input } },
-    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true } } },
+    // Built games' cartridges and frames are the Box server's too (server/games/): the frame's page, its parts and fonts.
+    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": BOX, "/parts": BOX, "/frame.js": BOX } },
     test: { root: ".", include: ["src/**/*.test.ts"], environment: "node", passWithNoTests: true },
   };
 });

@@ -12,12 +12,16 @@ export interface RackCart {
   readonly title: string;
   /** What `<egb-cart game>` draws: a game's art, sealed, or the blank cartridge. */
   readonly art: string;
+  /** A built game's art, served by the Box. */
+  readonly icon: string | null;
+  /** A game that should play but can't: its cover says SEALED. */
+  readonly sealed: boolean;
 }
 
 /** The blank cartridge at the end of the rack: it opens the game builder. */
-export const NEW_GAME: RackCart = { id: "new-game", title: "NEW GAME", art: "new-game" };
+export const NEW_GAME: RackCart = { id: "new-game", title: "NEW GAME", art: "new-game", icon: null, sealed: false };
 
-export const cartOf = (game: GameInfo): RackCart => ({ id: game.id, title: game.title, art: game.id });
+export const cartOf = (game: GameInfo): RackCart => ({ id: game.id, title: game.title, art: game.id, icon: game.icon, sealed: game.sealed !== null });
 
 /** The game builder is on the Box's own screen only: the demo's rack has no NEW GAME. */
 export const HAS_BUILDER = import.meta.env.VITE_EGB_MODE === "box";
@@ -54,6 +58,8 @@ export interface Rack {
   press(id: string): void;
   /** Boot and attract: the cartridges rise into their housings one after another. */
   rise(): Promise<void>;
+  /** A game just installed: its cartridge slides down into its housing. */
+  slideIn(id: string): void;
 }
 
 export function createRack(layout: Layout, entries: readonly RackCart[], onPick?: (id: string) => void): Rack {
@@ -63,6 +69,8 @@ export function createRack(layout: Layout, entries: readonly RackCart[], onPick?
     const cart = document.createElement("egb-cart") as EgbCart;
     cart.setAttribute("game", entry.art);
     cart.setAttribute("title", entry.title);
+    if (entry.icon) cart.setAttribute("icon", entry.icon);
+    cart.toggleAttribute("sealed", entry.sealed);
     const slot = slots[i];
     if (slot) place(cart, slot);
     if (onPick) cart.addEventListener("click", () => onPick(entry.id));
@@ -86,6 +94,10 @@ export function createRack(layout: Layout, entries: readonly RackCart[], onPick?
           }),
         ),
       );
+    },
+    slideIn(id) {
+      const cart = carts[entries.findIndex((entry) => entry.id === id)];
+      if (cart) void play(cart, [{ opacity: 0, transform: "translateY(-120px)" }, { opacity: 1, transform: "none" }], { duration: 640, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
     },
   };
 }

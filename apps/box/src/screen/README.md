@@ -29,7 +29,7 @@ How they are built:
 | `<egb-gauge>` | The analogue gas gauge: a chrome bezel, a dark dial with ticks from 0 to 5 gwei (cold to hot), a gold pump glyph, an amber needle, a mint readout plate under it (`1.8 GWEI`). | `gwei` (number). Fills its square box; the readout hangs just below it. | The needle eases to each new value over 1.2 s. |
 | `<egb-fact>` | A fact about the focused game as an IC chip: dark epoxy body, silver pins top and bottom, a pin-1 dimple, a line icon and a word in silkscreen. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `press(delayMs)`. Height from its box (44 px default), width from the word. | `press()`: after the delay it comes down, presses into the board and settles (Home presses each in turn when the focus changes). |
 | `<egb-key>` | A physical key. `brass`: a bright bevelled gold frame round a brushed, warmer face, engraved letters, a bronze edge under it. `metal`: the gunmetal secondary key. A real `<button>` inside. | `variant` (`brass` default, `metal`), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. Fills its box. | Travels down on press (the cap covers more of its edge). `breathe`: a slow gold light breathing round it (`TAP TO START`). `disabled`: dark, no travel. |
-| `<egb-cart>` | A game's cartridge: a gunmetal keycap in a wider clipped housing; a dark glass screen with the title in arcade caps and the game's art on the glass (Quick Draw: a marigold bolt with sparks; Stock Duel: orange and cyan candlesticks; `new-game`, the Box's blank cartridge: a dashed frame and a plus). A game without art is sealed: a riveted cover, the title engraved, a brass `SOON` plate. | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`, `new-game`), `title` (the printed title), `focused`, `pressed`. Designed at 176 × 186. | `focused`: the keycap rises 16 px on a spring, and only then a lavender strip lights at its foot and round the housing's rim. Idle: no light at all. `pressed`: the keycap seats 8 px down (launch). |
+| `<egb-cart>` | A game's cartridge: a gunmetal keycap in a wider clipped housing; a dark glass screen with the title in arcade caps and the game's art on the glass (Quick Draw: a marigold bolt with sparks; Stock Duel: orange and cyan candlesticks; `new-game`, the Box's blank cartridge: a dashed frame and a plus; a built game: its `icon` filling the glass under the title). A game without art is sealed: a riveted cover, the title engraved, a brass `SOON` plate (`SEALED` for a built game that can't load). | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`, `new-game`, or a built game's id), `title` (the printed title), `icon` (a built game's art URL, set as an image's `src`), `sealed`, `focused`, `pressed`. Designed at 176 × 186. | `focused`: the keycap rises 16 px on a spring, and only then a lavender strip lights at its foot and round the housing's rim. Idle: no light at all. `pressed`: the keycap seats 8 px down (launch). |
 | `<egb-txbar>` | The transaction-progress LCD strip: the kind and amount (`FAUCET +100 EGB`, `STAKE 2×10 EGB`, `PAYOUT 20 EGB`, `REFUND 10 EGB`), a hash cell (shortened hash, or `SIMULATED`), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | Each step lights mint as the transaction reaches it; unreached steps stay ghosts. The strip fades in on `show` and out on `hide`. |
 | `<egb-plate>` | An engraved plate with a screw in each corner: `DEMO`, `SOON`, the instruction plate. | `variant` (`brass` default, `metal`). Its children are its content (words, a switch, several lines). Sizes from `font-size`. | Never. |
 | `<egb-lcd>` | A text LCD in the clock's bevelled frame and glass: the agent's words while a game builds, the Designer's status and captions. The newest line sits at the foot of the glass, the older ones dimmer above it, the oldest going under the bezel's shade; lines wrap. | `tone` (`mint` default, `amber`), `caret` (a blinking block cursor: the machine is working). `push(text, mark?)` (`bad` red, `ok` bright), `set(lines)`, `clear()`. Fills its box; `font-size` sets the text. | `push`: the lines step up by the new one's height as it fades in. The caret blinks by opacity. |
@@ -93,20 +93,23 @@ sent `booted` at once (`shell/app.ts`).
 `views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
 on `BoxEvent`s and acts only through `link.send`.
 
-- `routes.ts`: phase → view and pose (`build` → the game builder).
+- `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`).
 - `attract.ts`: the Box's name, the rack rising, a breathing brass `TAP TO START`.
 - `home.ts`: the focused game's title, IC-chip facts and brass Play, and the rack (`rack.ts`). Touch or arrow keys
   focus; the cartridge rises, its feed lights and the core turns once. Enter plays. On the Box (`build:box`) the rack
   ends in the blank NEW GAME cartridge: it focuses like a game, on the screen alone (the Box's focus is always a game),
-  and its key, DESIGN, sends `build`.
+  and its key, DESIGN, sends `build`. Built games' cartridges stand before it with their art from the Box; one that
+  can't load is sealed, and focusing it shows SEALED and why under the title. When the library changes (a `games`
+  event) the rack is built again, and a game installed since Home last stood slides down into its housing.
 - `rack.ts`: the rack's entries (`rackOf(games)`: each game's cartridge, then NEW GAME where the Box has the builder)
   and where each stands (`rackSlots`: the layout's housings, each fed by a trace, then on along the row; a row too long
   for the stage closes up to fit, as in portrait, where the cartridges past the fourth then stand off the traces).
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`), a plate under the core and keys at the bottom.
   Refund's `REFUND ALL` key (once the stakes unlock) sends every refund still owed, so the Box never waits on a
-  player who walked away.
-- Game screens live with their games in `src/games/<game>/screen.ts`.
+  player who walked away. Result says `VOID` when a built game's rules failed and both stakes went back.
+- Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
+  frame (`frame/`, its own README).
 
 ## The game builder
 
