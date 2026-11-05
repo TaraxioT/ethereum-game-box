@@ -17,7 +17,7 @@
 .board-dimmer { background: rgb(9 5 22 / 0.62); opacity: 0; pointer-events: none; transition: opacity var(--t-page) var(--ease-out); }
 .core-host { inset: auto; display: grid; place-items: center; pointer-events: none; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 .view-layer { pointer-events: none; }
-.view-layer > .view { position: absolute; inset: 0; pointer-events: auto; transform-origin: 50% 45%; }
+.view-layer > .view { position: absolute; inset: 0; pointer-events: auto; }
 .overlay { pointer-events: none; }
 .overlay > * { pointer-events: auto; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 
