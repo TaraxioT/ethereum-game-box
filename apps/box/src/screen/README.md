@@ -23,7 +23,7 @@ How they are built:
 
 | Part | What it is | Attributes and API | When it moves |
 |---|---|---|---|
-| `<egb-core>` | The world computer: a black glass sphere in a thick gunmetal collar on a thin base ring, a lavender neon line between them; the Ethereum mark inside, front on, lit from behind; window reflection, specular point, Fresnel rim, the board's neon caught in its lower curve. | `glass`, `collar`: radii in px. It fills its parent and centres its drawing there. `dark`: unlit. `swell()`, `coin()`, `ignite(): Promise<void>`. | Holds still (the mark levitates 3 px, very slowly). `swell()`: the glass and its light swell once (a transaction landed, a block sealed). `coin()`: the mark turns once like a coin, 900 ms (a game loads). `ignite()`: from `dark`, light comes up in the glass, then the mark, then the rim, ~900 ms (boot). |
+| `<egb-core>` | The world computer: a black glass sphere in a thick gunmetal collar on a thin base ring, a lavender neon line between them; the Ethereum mark inside, front on, lit from behind; window reflection, specular point, Fresnel rim, the board's neon caught in its lower curve. | `glass`, `collar`: radii in px. It fills its parent and centres its drawing there. `dark`: unlit. `swell()`, `coin()`, `ignite(): Promise<void>`. | Holds still. `swell()`: the glass and its light swell once (a transaction landed, a block sealed). `coin()`: the mark turns once like a coin, 900 ms (a game loads). `ignite()`: from `dark`, light comes up in the glass, then the mark, then the rim, ~900 ms (boot). |
 | `<egb-port>` | A player's port in a top corner: a gunmetal socket with a neon ring (Player 1 orange, Player 2 cyan), a tile whose LED matrix shows the badge's blockie in the seat's neon, the badge's name, the balance on an amber `<egb-seg>` with an EGB legend. Empty: unlit ring, engraved `TAP BADGE`. | `seat` (`0` reads rightwards from a ring at the left; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `set(seat: SeatState)`, `pulse()`. Designed at 380 × 96; the ring's centre sits 52 px in from the outer side, halfway down. | A badge arriving strikes the ring like a neon tube and lights the tile; leaving fades the ring. Balance changes roll. `pulse()`: the ring flashes once (a tap). |
 | `<egb-clock>` | The chain clock: a bevelled LCD module hanging on two short chains, `BLOCK 12,071,233` in mint seven-segment digits, `SEPOLIA` engraved on its lower lip. | `block` (number). Designed at 276 × 64; the chains rise out of the top of its box. | Each new block rolls the changed digits one at a time. |
 | `<egb-gauge>` | The analogue gas gauge: a chrome bezel, a dark dial with ticks from 0 to 5 gwei (cold to hot), a gold pump glyph, an amber needle, a mint readout plate under it (`1.8 GWEI`). | `gwei` (number). Fills its square box; the readout hangs just below it. | The needle eases to each new value over 1.2 s. |
@@ -58,15 +58,15 @@ Two pure modules go with them:
 - `packets.ts`: a live canvas over the board. `run(trace)` sends a comet along the copper; `light(trace)` lights the
   focused cartridge's feed. It draws only while a packet is in flight.
 - `machine.ts`: the objects that stay across views (board, packets, core, ports, clock, gauge, transaction LCD, the
-  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `packet`, `swell`, `coin`,
-  `feed`, `anchor`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
+  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin`, `feed`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
   when it lands in a block, a packet out to the port for a payout.
 - `router.ts`: mounts the view for the Box's phase and moves between views in depth (the old sinks, the new rises).
+  A move that a newer one or a rebuilt stage overtakes never mounts.
 - `boot.ts`: one step at a time: the core ignites, the board powers on outward from it, the ports and clock come up.
 - `app.ts`: the screen area (the window less the desk), the stage, the machine and the router; rebuilds the stage
   when the window turns between landscape and portrait.
 - `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
-- `dom.ts`: `el`, `place`, `play` (a Web Animation that resolves at once under reduced motion), `wait`, `calm`.
+- `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`, `fitWidth`, `wait`, `calm`.
 
 ## Views
 

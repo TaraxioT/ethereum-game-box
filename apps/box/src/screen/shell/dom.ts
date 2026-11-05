@@ -17,12 +17,14 @@ export function place(node: HTMLElement, r: Rect): void {
   node.style.height = `${r.h}px`;
 }
 
-/** Runs a transform/opacity animation and resolves when it ends (at once under reduced motion). */
+/** Runs a transform/opacity animation and resolves when it ends. Under reduced motion it is a short fade to the end
+ * state instead of a move. */
 export function play(node: Element, frames: Keyframe[], options: KeyframeAnimationOptions): Promise<void> {
   if (calm()) {
     const last = frames[frames.length - 1];
-    if (last) node.animate([last], { duration: 1, fill: options.fill ?? "none" });
-    return Promise.resolve();
+    if (!last) return Promise.resolve();
+    const end = { ...last, ...(last.opacity === undefined ? {} : { opacity: last.opacity }) };
+    return node.animate([end], { duration: 160, fill: options.fill ?? "none" }).finished.then(() => undefined, () => undefined);
   }
   return node.animate(frames, options).finished.then(() => undefined, () => undefined);
 }

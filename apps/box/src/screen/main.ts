@@ -19,6 +19,8 @@ const demo = (import.meta.env.VITE_EGB_MODE ?? "demo") === "demo";
 registerParts();
 const sim = createSimLink();
 const sound = createSound();
+// A Box has two real stations and no bot: both seats are people.
+if (!demo) sim.setOpponent("hotseat");
 bindTapKeys(sim);
 
 const desk = demo ? mountDesk(document.body, sim, sound) : null;

@@ -10,7 +10,6 @@ import {
   offset,
   pointAt,
   polyHitsRect,
-  rng,
   route,
   simplify,
   slice,
@@ -170,16 +169,5 @@ describe("hit tests", () => {
   it("finds crossings but not shared ends", () => {
     expect(crossing({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 })).toEqual({ x: 5, y: 5 });
     expect(crossing({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 })).toBeNull();
-  });
-});
-
-describe("rng", () => {
-  it("repeats for a seed and stays in [0, 1)", () => {
-    const a = rng(7);
-    const b = rng(7);
-    const xs = Array.from({ length: 200 }, () => a());
-    expect(xs).toEqual(Array.from({ length: 200 }, () => b()));
-    expect(xs.every((x) => x >= 0 && x < 1)).toBe(true);
-    expect(rng(8)()).not.toBe(xs[0]);
   });
 });

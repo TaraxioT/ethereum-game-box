@@ -7,7 +7,7 @@
 // its parent by default), so the shell places it by the core's centre. Attribute `dark`: everything that gives light
 // is off (the boot holds it so until `ignite()`).
 //
-// It holds still, but for a slow 3 px levitation of the mark. `swell()`: the glass and its light swell once (a
+// It holds still. `swell()`: the glass and its light swell once (a
 // transaction landed, a block sealed). `coin()`: the mark turns once like a coin (a game loads). `ignite()`: from
 // dark, light comes up in the glass, then the mark, then the rim (~900 ms).
 import { ethMarkSvg } from "./eth-mark.ts";
@@ -98,9 +98,8 @@ const styles = sheet(`
 .refl { inset: 0; width: 100%; height: 100%; }
 /* The mark, a little above centre. It turns about its upright axis for coin(). */
 .gem { left: 25.3%; top: 14.5%; width: 49.4%; height: 64.5%; }
-.float { position: absolute; inset: 0; animation: float 9s ease-in-out infinite; }
+.float { position: absolute; inset: 0; }
 .float svg { display: block; width: 100%; height: 100%; }
-@keyframes float { 50% { transform: translateY(-3px); } }
 /* The room on the front surface: a curved window across the top, crisp along its upper edge and fading down. */
 .window {
   left: 14%; top: 3%; width: 72%; height: 40%; border-radius: 50%;

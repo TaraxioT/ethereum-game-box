@@ -186,10 +186,15 @@ export function mountDesk(host: HTMLElement, sim: SimLink, sound: Sound): Desk {
   root.append(bench, rail, grid);
   host.append(root);
 
-  /** The plate's switches and the BOT plate, from the sim (the switches change it without an event). */
+  /**
+   * The plate's switches and the BOT plate, from the sim (the switches change it without an event). Puck 2 is the
+   * bot's only while the bot holds seat 2 (empty or seated by it), the same test the sim uses: a switch made
+   * mid-match takes effect only after the match.
+   */
   function switches(): void {
     plate.sync();
-    pucks[1].setBot(sim.opponent() === "bot");
+    const seated = sim.state().seats[1].badge;
+    pucks[1].setBot(sim.opponent() === "bot" && (seated === null || seated.address === sim.botBadge.address));
   }
 
   function draw(state: BoxState, event: BoxEvent): void {

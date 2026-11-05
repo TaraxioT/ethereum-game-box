@@ -1,5 +1,6 @@
 // What every part shares: a shadow root holding the part's own stylesheet over the shared materials, and motion that
 // respects reduced motion. Parts animate only transform and opacity; under reduced motion they jump to end states.
+import { calm } from "../shell/dom.ts";
 
 /** Materials more than one part is built from, and the reduced-motion rule (the page's own rule stops at the shadow
  * boundary, so every shadow root carries it). */
@@ -64,10 +65,6 @@ export function pick<T extends Element = HTMLElement>(root: ParentNode, selector
   const found = root.querySelector<T>(selector);
   if (!found) throw new Error(`part markup lacks ${selector}`);
   return found;
-}
-
-export function calm(): boolean {
-  return matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /** A transform/opacity animation, or null under reduced motion (the caller's end state stands). */

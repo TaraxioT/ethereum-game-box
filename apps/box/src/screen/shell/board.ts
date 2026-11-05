@@ -3,7 +3,8 @@
 // copper scattered (seeded, so the same every load) in the free board, and the neon traces with their connectors and
 // the collar's landing pads. Callers put the canvas behind the stage at the stage's own size (stage pixels).
 import type { Layout, Point, Rect } from "./layout.ts";
-import { inflate, rectsOverlap, rng } from "./route.ts";
+import { inflate, rectsOverlap } from "./route.ts";
+import { mulberry32 } from "../../games/random.ts";
 import { tracesFor, type Trace } from "./traces.ts";
 
 const MAX_SIDE = 4096;
@@ -388,7 +389,7 @@ const SMALL: readonly Kind[] = ["res", "res", "mlcc", "mlcc", "array", "pad"];
 
 /** Parts and unlit copper scattered in the free board: chips, each with a few passives round it, then walks. */
 function scatter(l: Layout, plates: readonly Plate[], traces: readonly Trace[], screws: readonly Point[]) {
-  const rand = rng(l.orientation === "portrait" ? 23 : 11);
+  const rand = mulberry32(l.orientation === "portrait" ? 23 : 11);
   const space = new Space(l.width, l.height);
   for (const p of plates) space.open(inflate(p.r, -10));
   for (const r of readRects(l)) space.take(inflate(r, 8));

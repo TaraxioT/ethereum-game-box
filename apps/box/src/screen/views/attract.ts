@@ -6,7 +6,9 @@ import { el, fitFont, place } from "../shell/dom.ts";
 import { createRack } from "./rack.ts";
 
 export function attractView(ctx: ViewContext): View {
-  const { layout, link, sound } = ctx;
+  const { layout, link, machine, sound } = ctx;
+  // Idle: no cartridge is focused, so no feed is lit.
+  machine.feed(null);
   const root = el("div", "attract");
 
   const title = el("div", "home-title attract-title");

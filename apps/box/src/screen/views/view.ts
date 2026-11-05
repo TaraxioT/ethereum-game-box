@@ -1,8 +1,8 @@
 // The view contract: every screen (Home, Join, Stake, a game, Result, Refund) is a View the router mounts on the
 // stage when the Box's phase calls for it. Views draw from `BoxState`, animate on `BoxEvent`s, and act only through
 // `ctx.link.send`. The Box's own objects (board, core, ports, clock) belong to the machine, not to a view.
-import type { BoxEvent, BoxLink, BoxState, Seat } from "../link/types.ts";
-import type { Layout, Point } from "../shell/layout.ts";
+import type { BoxEvent, BoxLink, BoxState } from "../link/types.ts";
+import type { Layout } from "../shell/layout.ts";
 import type { Cue } from "../link/types.ts";
 
 export interface View {
@@ -10,8 +10,6 @@ export interface View {
   readonly el: HTMLElement;
   /** Draw from the state; `event` says what just changed. Called once with `{ type: "init" }` after mounting. */
   update(state: BoxState, event: BoxEvent): void;
-  /** Called by the router before removal; resolve when the exit is done. */
-  leave?(): Promise<void>;
   /** Free timers and listeners. */
   dispose?(): void;
 }
@@ -24,15 +22,10 @@ export type Pose =
 
 export interface Machine {
   pose(pose: Pose): void;
-  /** Runs a packet of light along the copper; resolves when it lands. */
-  packet(from: "port" | "core", seat: Seat | null, colour?: string): Promise<void>;
-  /** The core's moments: swell (a tx landed, a block sealed) and turn once like a coin (a game loads). */
-  swell(): void;
+  /** The core turns once like a coin: a game loads. */
   coin(): void;
   /** Lights the focused cartridge's feed into the core. */
   feed(slot: number | null): void;
-  /** Where a part stands now, in stage pixels (for views that aim at it). */
-  anchor(name: "core" | "port0" | "port1" | "clock"): Point;
 }
 
 export interface Sound {

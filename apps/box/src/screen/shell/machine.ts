@@ -3,7 +3,7 @@
 // swell, a coin turn); the app feeds it the Box's state and events.
 import type { BoxEvent, BoxState, Seat, Tx } from "../link/types.ts";
 import type { Machine, Pose } from "../views/view.ts";
-import type { Layout, Point } from "./layout.ts";
+import type { Layout } from "./layout.ts";
 import type { EgbCore } from "../parts/core.ts";
 import type { EgbPort } from "../parts/port.ts";
 import type { EgbClock } from "../parts/clock.ts";
@@ -14,7 +14,6 @@ import { createPackets, type Packets } from "./packets.ts";
 import type { SlotTrace } from "./traces.ts";
 import { el, place } from "./dom.ts";
 
-const SEAT_COLOUR = ["#ffb066", "#7ae6ff"] as const;
 
 export interface MachineView extends Machine {
   readonly root: HTMLElement;
@@ -83,12 +82,17 @@ export function createMachine(layout: Layout, scale: number): MachineView {
   const shown = new Map<number, Tx["step"]>();
   let hideTx: ReturnType<typeof setTimeout> | undefined;
 
-  function packet(from: "port" | "core", seat: Seat | null, colour?: string): Promise<void> {
+  // The seats' light, from the tokens: a packet on a port's copper is that player's colour.
+  const tokens = getComputedStyle(document.documentElement);
+  const seatColour = [tokens.getPropertyValue("--p1-hi").trim(), tokens.getPropertyValue("--p2-hi").trim()] as const;
+
+  /** Runs a packet along a port's copper (into the core, or out of it for a payout); resolves when it lands. */
+  function packet(from: "port" | "core", seat: Seat | null): Promise<void> {
     if (pose === "game") return Promise.resolve();
     const seats: Seat[] = seat === null ? [0, 1] : [seat];
-    return Promise.all(
-      seats.map((s) => packets.run(`port${s}`, { colour: colour ?? SEAT_COLOUR[s], reverse: from === "core" })),
-    ).then(() => undefined);
+    return Promise.all(seats.map((s) => packets.run(`port${s}`, { colour: seatColour[s], reverse: from === "core" }))).then(
+      () => undefined,
+    );
   }
 
   function onTx(tx: Tx): void {
@@ -115,9 +119,6 @@ export function createMachine(layout: Layout, scale: number): MachineView {
       if (next !== "home") machine.feed(null);
     },
 
-    packet,
-
-    swell: () => core.swell(),
     coin: () => core.coin(),
 
     feed(slot) {
@@ -127,11 +128,6 @@ export function createMachine(layout: Layout, scale: number): MachineView {
       if (slot !== null) void packets.run(`slot${slot}` as SlotTrace, { colour: "#d6c6ff" }).then(() => core.swell());
     },
 
-    anchor(name): Point {
-      if (name === "core") return layout.core.centre;
-      if (name === "clock") return { x: layout.clock.x + layout.clock.w / 2, y: layout.clock.y + layout.clock.h / 2 };
-      return layout.ports[name === "port0" ? 0 : 1].ring;
-    },
 
     update(state, event) {
       if (event.type === "init" || event.type === "seat") state.seats.forEach((s, i) => ports[i]?.set(s));

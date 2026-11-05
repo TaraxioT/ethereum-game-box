@@ -54,7 +54,7 @@ export function stakeView(ctx: ViewContext): View {
 
   function status(s: SeatState, stake: number): [string, "ask" | "done" | "lose"] {
     if (s.signed) return ["SIGNED", "done"];
-    if (s.balance < stake) return [`NEEDS ${stake} EGB`, "lose"];
+    if (s.balance + s.pending < stake) return [`NEEDS ${stake} EGB`, "lose"];
     return [`TAP TO SIGN ${stake} EGB`, "ask"];
   }
 
