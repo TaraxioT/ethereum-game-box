@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BoxState, SeatState } from "../types.ts";
-import { mulberry32 } from "@egb/sdk";
-import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
-import { DEAL_MS, rules as stockDuel } from "../../../games/stock-duel/rules.ts";
-import { GAMES } from "./catalogue.ts";
+import { describe, expect, it, vi } from "vitest";
+import type { BoxState, SeatState } from "./types.ts";
+import { mulberry32, stationView } from "@egb/sdk";
+import { rules as quickDraw } from "../games/quick-draw/rules.ts";
+import { DEAL_MS, rules as stockDuel } from "../games/stock-duel/rules.ts";
+import { TEAM_GAMES } from "./catalogue.ts";
+import { createFakeClock } from "./fake-clock.ts";
 import { BOT_BADGE, DESK_BADGES } from "./badges.ts";
 import {
   botDelay,
@@ -26,17 +27,14 @@ const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
 function box(patch: Partial<BoxState>): BoxState {
   return {
     phase: "home",
-    games: GAMES,
+    games: TEAM_GAMES,
     focus: "quick-draw",
     seats: [EMPTY, EMPTY],
     chain: { block: 50, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
     stake: 10,
     match: null,
     txs: [],
-    stations: [
-      { top: "", big: "", bottom: "" },
-      { top: "", big: "", bottom: "" },
-    ],
+    stations: [stationView("", "", ""), stationView("", "", "")],
     ...patch,
   };
 }
@@ -131,28 +129,23 @@ describe("bot timing", () => {
 });
 
 describe("bot scheduler", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-  });
-  afterEach(() => vi.useRealTimers());
-
   it("taps once per moment, and not at all once the moment has passed", () => {
+    const clock = createFakeClock(NOW);
     let state = box({ seats: [human(), EMPTY] });
     const tap = vi.fn();
-    const driver = createBot({ badge: BOT_BADGE, state: () => state, active: () => true, tap, rnd: mulberry32(5) });
+    const driver = createBot({ badge: BOT_BADGE, clock, state: () => state, active: () => true, tap, rnd: mulberry32(5) });
     driver.update();
     driver.update();
-    vi.advanceTimersByTime(JOIN_MS[0] - 1);
+    clock.advance(JOIN_MS[0] - 1);
     expect(tap).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(JOIN_MS[1] - JOIN_MS[0] + 1);
+    clock.advance(JOIN_MS[1] - JOIN_MS[0] + 1);
     expect(tap).toHaveBeenCalledTimes(1);
 
     state = box({ phase: "stake", seats: [human(true), bot()] });
     driver.update();
     state = box({ phase: "home", seats: [EMPTY, bot()] });
     driver.update();
-    vi.advanceTimersByTime(SIGN_MS[1]);
+    clock.advance(SIGN_MS[1]);
     expect(tap).toHaveBeenCalledTimes(1);
     driver.stop();
   });
@@ -160,7 +153,7 @@ describe("bot scheduler", () => {
   it("plays a Stock Duel card before it leaves the front", () => {
     const dealt = stockDuel.start(21, NOW);
     let duel = stockDuel.step(dealt, { type: "tick", now: NOW + DEAL_MS });
-    vi.setSystemTime(NOW + DEAL_MS);
+    const clock = createFakeClock(NOW + DEAL_MS);
     const matchOf = () => ({
       id: 2,
       game: "stock-duel" as const,
@@ -172,10 +165,11 @@ describe("bot scheduler", () => {
       refunded: [false, false] as const,
     });
     const tap = vi.fn(() => {
-      duel = stockDuel.step(duel, { type: "tap", seat: 1, now: Date.now(), roll: 1 });
+      duel = stockDuel.step(duel, { type: "tap", seat: 1, now: clock.now(), roll: 1 });
     });
     const driver = createBot({
       badge: BOT_BADGE,
+      clock,
       state: () => box({ phase: "playing", seats: [human(true), bot(true)], match: matchOf() }),
       active: () => true,
       tap,
@@ -183,7 +177,7 @@ describe("bot scheduler", () => {
     });
     for (let i = 0; i < 1_000 && duel.played[1] === null; i++) {
       driver.update();
-      vi.advanceTimersByTime(50);
+      clock.advance(50);
     }
     expect(tap).toHaveBeenCalledTimes(1);
     expect(duel.played[1]).not.toBeNull();

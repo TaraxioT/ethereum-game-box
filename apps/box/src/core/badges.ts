@@ -1,5 +1,6 @@
-// The badges on the demo desk and the bot's. Names are invented; addresses are fake but fixed, derived from the name.
-import type { Badge } from "../types.ts";
+// The badges on the demo desk and the bot's (names invented; addresses fake but fixed, derived from the name), and how
+// a station or port prints any badge.
+import type { Badge } from "./types.ts";
 import { hash32 } from "@egb/sdk";
 
 /** A 20-byte address from five hashes of the name, so a badge has the same address every visit. */

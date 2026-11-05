@@ -9,7 +9,7 @@
 // `set(seat)` draws a seat. Empty: a dark socket, the ring unlit, an engraved TAP BADGE where the name goes. When a
 // badge arrives the ring powers on (a short neon flicker) and the tile fills; when the balance changes its digits roll.
 // `pulse()`: the ring flashes once (a tap).
-import type { SeatState } from "../link/types.ts";
+import type { SeatState } from "../../core/types.ts";
 import { blockieLedSvg } from "./blockie.ts";
 import { motion, pick, shadow, sheet } from "./part.ts";
 import type { EgbSeg } from "./seg.ts";

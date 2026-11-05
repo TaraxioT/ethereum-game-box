@@ -1,7 +1,7 @@
 // The router: mounts the view the Box's phase calls for and moves between views in depth — the old one sinks back,
 // the new one rises toward the glass. State changes reach the mounted view; the new view starts from the current
 // state, so nothing that happened during a move is lost.
-import type { BoxEvent, BoxState } from "../link/types.ts";
+import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Pose, View, ViewContext, ViewFactory } from "../views/view.ts";
 import { play } from "./dom.ts";
 

@@ -1,9 +1,9 @@
 // The view contract: every screen (Home, Join, Stake, a game, Result, Refund) is a View the router mounts on the
 // stage when the Box's phase calls for it. Views draw from `BoxState`, animate on `BoxEvent`s, and act only through
 // `ctx.link.send`. The Box's own objects (board, core, ports, clock) belong to the machine, not to a view.
-import type { BoxEvent, BoxLink, BoxState } from "../link/types.ts";
+import type { BoxEvent, BoxLink, BoxState } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
-import type { Cue } from "../link/types.ts";
+import type { Cue } from "../../core/types.ts";
 
 export interface View {
   /** The view's root, absolutely positioned on the stage (stage pixels). */

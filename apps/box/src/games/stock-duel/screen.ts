@@ -109,7 +109,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     frame = 0;
     const s = last;
     if (!alive || !s || s.phase !== "pick") return;
-    const now = Date.now();
+    const now = ctx.link.now();
     for (const seat of SEATS) {
       drums[seat].turnTo(frontIndex(s, seat, now));
       drums[seat].drain(frontRemainingMs(s, seat, now) / s.dwellMs);
@@ -131,7 +131,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
 
   /** Draws a state as it stands, for a screen joining mid-match. Moments already under way carry on from now. */
   function draw(s: StockDuelState): void {
-    const now = Date.now();
+    const now = ctx.link.now();
     reveal.clear(false);
     for (const seat of SEATS) {
       const front = frontIndex(s, seat, now);
@@ -157,7 +157,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
 
   /** Animates what changed between two states of the same match. */
   function step(prev: StockDuelState, s: StockDuelState): void {
-    const now = Date.now();
+    const now = ctx.link.now();
     // Cards put down by this change: each lifts off its drum and slides face down onto the blotter.
     for (const seat of SEATS) {
       const card = s.played[seat];

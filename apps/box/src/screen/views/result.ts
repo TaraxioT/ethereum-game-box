@@ -1,6 +1,6 @@
 // Result: the winner's side lit and paid. The payout runs from the core to the winner's port on the LCD; a draw sends
 // both stakes back. Rematch goes back to Stake with the same seats; Home returns to the library.
-import type { BoxState } from "../link/types.ts";
+import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPlate } from "../parts/plate.ts";

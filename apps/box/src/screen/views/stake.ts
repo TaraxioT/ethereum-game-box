@@ -1,6 +1,6 @@
 // Stake: pick the stake on brass keys, see the game's trust tier, then each player taps to sign the entry. Both
 // signed, the Box opens the match: one transaction moves both stakes into the game.
-import type { BoxState, GameInfo, SeatState } from "../link/types.ts";
+import type { BoxState, GameInfo, SeatState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPlate } from "../parts/plate.ts";

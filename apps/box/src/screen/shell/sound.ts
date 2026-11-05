@@ -1,7 +1,7 @@
 // The Box's sounds: every cue synthesized on the spot with WebAudio, no files. The AudioContext is made on the
 // first user gesture (browsers keep audio locked until one); until then, and while muted, cues are silent. Muting
 // is remembered (localStorage `gamebox-muted`). Nothing here ever throws into the caller.
-import type { Cue } from "../link/types.ts";
+import type { Cue } from "../../core/types.ts";
 import type { Sound } from "../views/view.ts";
 
 const MUTED_KEY = "gamebox-muted";

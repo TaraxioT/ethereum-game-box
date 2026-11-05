@@ -6,7 +6,7 @@
 // The dimming runs from the standoff's start over the longest possible wait, and the heartbeat quickens once the
 // shortest wait has passed. Both are the same for every match, so neither gives away when the draw comes.
 import "./quick-draw.css";
-import type { BoxEvent, BoxState } from "../../screen/link/types.ts";
+import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Orientation, Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
@@ -146,7 +146,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     for (const node of [...plates, banner]) for (const a of node.getAnimations()) a.cancel();
     stopHeart();
     dimming?.cancel();
-    const elapsed = Math.min(Math.max(Date.now() - s.startedAt, 0), MAX_WAIT_MS);
+    const elapsed = Math.min(Math.max(ctx.link.now() - s.startedAt, 0), MAX_WAIT_MS);
     if (ctx.calm) {
       dimming = null;
       dim.style.opacity = String(DIM_AT_MIN);

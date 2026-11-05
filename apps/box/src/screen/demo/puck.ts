@@ -1,7 +1,8 @@
 // One drawn tap station: a dark bevelled puck with a seat-colour NFC ring round its OLED. A click or touch taps with
-// the seat's badge; the buzz motor is a short shake (a double one for "no"); a read flashes the ring.
-import type { SimControl } from "../link/sim/control.ts";
-import type { Seat, StationView } from "../link/types.ts";
+// the seat's badge; the buzz motor is a short shake (a double one for "no"); a read flashes the ring, and the OLED
+// shows the station's DONE screen for a moment, as a real station does after a read.
+import type { SimControl } from "../link/control.ts";
+import type { Seat, StationView } from "../../core/types.ts";
 import { calm, el } from "../shell/dom.ts";
 import { createOled } from "./oled.ts";
 
@@ -15,6 +16,8 @@ export interface Puck {
   refuse(): void;
   /** A badge was read: the ring flashes. */
   flash(): void;
+  /** A tap went through: the OLED shows the view's DONE screen, then its idle screen again. */
+  done(): void;
   /** The bot holds this seat: a BOT plate, and clicks do nothing. */
   setBot(bot: boolean): void;
   /** Whether a viewport point lies on the puck (a badge dropped there taps it). */
@@ -45,7 +48,9 @@ const FLASH: Keyframe[] = [{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opaci
 
 /** The ring's outer diameter and the OLED's fit inside it, as parts of the puck's diameter. */
 const RING = 0.78;
-const OLED_IN_RING = 0.88;
+const OLED_IN_RING = 0.86;
+/** How long the DONE screen stays up after a tap. */
+const DONE_MS = 600;
 
 export function createPuck(seat: Seat, sim: Pick<SimControl, "tap">): Puck {
   const root = el("button", "dk-puck");
@@ -69,6 +74,8 @@ export function createPuck(seat: Seat, sim: Pick<SimControl, "tap">): Puck {
   let isBot = false;
   let shake: Animation | null = null;
   let refusing: ReturnType<typeof setTimeout> | undefined;
+  let view: StationView = { tag: "", big: "", small: "" };
+  let doneTimer: ReturnType<typeof setTimeout> | undefined;
 
   const onClick = (): void => {
     if (!isBot) sim.tap(seat);
@@ -89,7 +96,10 @@ export function createPuck(seat: Seat, sim: Pick<SimControl, "tap">): Puck {
   return {
     el: root,
     seat,
-    show: oled.show,
+    show(next) {
+      view = next;
+      if (doneTimer === undefined) oled.show(view);
+    },
     buzz() {
       // A refusal already shook for this moment; a buzz arriving with it is the same motor.
       if (refusing === undefined) motor(SHAKE, 220);
@@ -100,6 +110,14 @@ export function createPuck(seat: Seat, sim: Pick<SimControl, "tap">): Puck {
       motor(NO, 520);
     },
     flash,
+    done() {
+      clearTimeout(doneTimer);
+      oled.show(view, "done");
+      doneTimer = setTimeout(() => {
+        doneTimer = undefined;
+        oled.show(view);
+      }, DONE_MS);
+    },
     setBot(on) {
       isBot = on;
       bot.hidden = !on;
@@ -124,6 +142,7 @@ export function createPuck(seat: Seat, sim: Pick<SimControl, "tap">): Puck {
     },
     dispose() {
       clearTimeout(refusing);
+      clearTimeout(doneTimer);
       shake?.cancel();
       root.removeEventListener("click", onClick);
     },

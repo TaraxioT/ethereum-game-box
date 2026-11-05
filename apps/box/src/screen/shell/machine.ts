@@ -1,7 +1,7 @@
 // The machine: the Box's own objects that stay on screen across views — the board, the packets on its copper, the
 // core, the two ports, the chain clock and gas gauge, and the transaction LCD. Views ask it for moments (a packet, a
 // swell, a coin turn); the app feeds it the Box's state and events.
-import type { BoxEvent, BoxState, Seat, Tx } from "../link/types.ts";
+import type { BoxEvent, BoxState, Seat, Tx } from "../../core/types.ts";
 import type { Machine, Pose } from "../views/view.ts";
 import type { Layout } from "./layout.ts";
 import type { EgbCore } from "../parts/core.ts";

@@ -4,7 +4,7 @@
 //
 // Size: it fills its box (designed at 380 × 52). `show(tx)` draws a transaction's current step (fading the strip in if
 // it was hidden); `hide()` fades it out.
-import type { Tx, TxStep } from "../link/types.ts";
+import type { Tx, TxStep } from "../../core/types.ts";
 import { pick, shadow, sheet } from "./part.ts";
 
 const STEPS: readonly TxStep[] = ["signed", "sent", "in-block", "paid"];

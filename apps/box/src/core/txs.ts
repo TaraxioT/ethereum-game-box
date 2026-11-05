@@ -1,8 +1,10 @@
 // Simulated transactions and their timing: signed at once, sent SEND_MS later, in the first block sealed after it
 // was sent, paid PAY_MS after that block, then on screen for LINGER_MS more. Blocks come from whoever runs the
-// chain clock, through `seal`.
-import type { Tx, TxKind } from "../types.ts";
+// chain clock, through `seal`. Time is the core's clock.
+import type { Tx, TxKind } from "./types.ts";
 import type { Seat } from "@egb/sdk";
+import type { Clock } from "./ports.ts";
+import { createTimers } from "./timers.ts";
 
 export const SEND_MS = 400;
 export const PAY_MS = 900;
@@ -38,27 +40,19 @@ interface Entry {
   sentAt: number | null;
 }
 
-export function createTxBook(hooks: TxHooks): TxBook {
+export function createTxBook(hooks: TxHooks, clock: Clock): TxBook {
   const entries: Entry[] = [];
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const timers = createTimers(clock);
   let nextId = 1;
 
-  function later(ms: number, run: () => void): void {
-    const timer = setTimeout(() => {
-      timers.delete(timer);
-      run();
-    }, ms);
-    timers.add(timer);
-  }
-
   function advance(entry: Entry, changes: Partial<Tx>): void {
-    entry.tx = { ...entry.tx, ...changes, stepAt: Date.now() };
+    entry.tx = { ...entry.tx, ...changes, stepAt: clock.now() };
     hooks.step(entry.tx);
   }
 
   function pay(entry: Entry): void {
     advance(entry, { step: "paid" });
-    later(LINGER_MS, () => {
+    timers.after(LINGER_MS, () => {
       entries.splice(entries.indexOf(entry), 1);
       hooks.drop(entry.tx);
     });
@@ -66,12 +60,12 @@ export function createTxBook(hooks: TxHooks): TxBook {
 
   return {
     submit(order, land) {
-      const tx: Tx = { id: nextId++, ...order, step: "signed", block: null, hash: null, stepAt: Date.now() };
+      const tx: Tx = { id: nextId++, ...order, step: "signed", block: null, hash: null, stepAt: clock.now() };
       const entry: Entry = { tx, land, sentAt: null };
       entries.push(entry);
       hooks.step(tx);
-      later(SEND_MS, () => {
-        entry.sentAt = Date.now();
+      timers.after(SEND_MS, () => {
+        entry.sentAt = clock.now();
         advance(entry, { step: "sent" });
       });
       return tx;
@@ -81,14 +75,13 @@ export function createTxBook(hooks: TxHooks): TxBook {
         if (entry.tx.step !== "sent" || entry.sentAt === null || entry.sentAt >= at) continue;
         entry.land();
         advance(entry, { step: "in-block", block });
-        later(PAY_MS, () => pay(entry));
+        timers.after(PAY_MS, () => pay(entry));
       }
     },
     list() {
       return entries.map((entry) => entry.tx);
     },
     stop() {
-      for (const timer of timers) clearTimeout(timer);
       timers.clear();
     },
   };

@@ -1,6 +1,6 @@
 // Home: the library. The focused game's title, its facts as IC chips and a brass Play on the left; the cartridge rack
 // along the bottom, fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays.
-import type { BoxState, GameInfo } from "../link/types.ts";
+import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";

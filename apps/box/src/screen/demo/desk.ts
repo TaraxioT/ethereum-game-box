@@ -4,8 +4,8 @@
 // simulated Box itself, to keep the OLEDs, the buzz motors, the seated badges and the switches true. The parts must
 // be registered first (the plate is an <egb-plate>).
 import "./demo.css";
-import type { Opponent, SimLink } from "../link/sim/control.ts";
-import type { BoxEvent, BoxState } from "../link/types.ts";
+import type { Opponent, SimLink } from "../link/control.ts";
+import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Sound } from "../views/view.ts";
 import { el } from "../shell/dom.ts";
 import { CARD_RATIO, createBadgeTray } from "./badges.ts";
@@ -204,7 +204,10 @@ export function mountDesk(host: HTMLElement, sim: SimLink, sound: Sound): Desk {
     switches();
     if (event.type === "buzz") pucks[event.seat].buzz();
     if (event.type === "tap") {
-      if (event.accepted) pucks[event.seat].flash();
+      if (event.accepted) {
+        pucks[event.seat].flash();
+        pucks[event.seat].done();
+      }
       else pucks[event.seat].refuse();
     }
   }

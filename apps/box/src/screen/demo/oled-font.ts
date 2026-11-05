@@ -1,12 +1,12 @@
-// The tap station's pixel font and how a `StationView` lands on its 128×64 panel. Pure: glyphs are 5×7 bitmaps,
+// The tap station's pixel font and how a `StationView` lands on its 72×40 panel. Pure: glyphs are 5×7 bitmaps,
 // trimmed to their inked columns so narrow marks (`.`, `:`, `!`, `1`) set close, and the layout returns the lit
 // pixels for the panel to draw.
-import type { StationView } from "../link/types.ts";
+import type { StationView } from "@egb/sdk";
+import { BIG_CHARS, SMALL_CHARS } from "@egb/sdk";
 
-export const OLED_W = 128;
-export const OLED_H = 64;
-/** A two-tone panel: the top rows glow yellow, the rest blue-white. */
-export const BAND_ROWS = 16;
+/** The station's SSD1306 0.42-inch panel. */
+export const OLED_W = 72;
+export const OLED_H = 40;
 
 const GLYPH_H = 7;
 const SPACE_W = 3;
@@ -128,37 +128,74 @@ export function wrap(text: string, width: number, scale: number, breakWords = fa
   return lines;
 }
 
-/** The panel's three zones. */
-const TOP_Y = 4;
-const BIG_TOP = 17;
-const BIG_H = 38;
-const BOTTOM_Y = 57;
+/**
+ * The panel's zones: the tag in a lit badge at the top left, the big line under it, the small line (one or two rows)
+ * at the foot.
+ */
+const TAG_PAD = 2;
+const TAG_H = GLYPH_H + 2;
+const BIG_TOP = TAG_H + 1;
+const BIG_H = GLYPH_H * 2;
+const SMALL_TOP = BIG_TOP + BIG_H + 1;
+const SMALL_H = OLED_H - SMALL_TOP;
+
+/** What a station shows: its idle screen, or one of the four a tap in progress brings up. */
+export type Face = "idle" | "hold" | "sign" | "done" | "fail";
+
+/** The station's own words for each tap face, when the Box gives none (firmware/tap-station/protocol.md). */
+const DEFAULT_FACE: Readonly<Record<Exclude<Face, "idle">, string>> = {
+  hold: "HOLD|reading",
+  sign: "HOLD STILL|signing",
+  done: "DONE",
+  fail: "AGAIN|tap again",
+};
+
+/** A face's big and small lines: an override is `BIG|small`, cut as the station cuts it. */
+export function faceLines(view: StationView, face: Face): { readonly big: string; readonly small: string } {
+  if (face === "idle") return { big: view.big, small: view.small };
+  const text = view[face] ?? DEFAULT_FACE[face];
+  const bar = text.indexOf("|");
+  const big = bar < 0 ? text : text.slice(0, bar);
+  const small = bar < 0 ? "" : text.slice(bar + 1);
+  return { big: big.slice(0, BIG_CHARS).toUpperCase(), small: small.slice(0, SMALL_CHARS) };
+}
 
 function centred(text: string, y: number, scale: number): Pixel[] {
   return drawText(text, Math.floor((OLED_W - textWidth(text, scale)) / 2), y, scale);
 }
 
-/** The big line: the largest scale (3, 2, then 1) at which it fits, on as many lines as the zone holds. */
-export function bigLines(text: string): { readonly scale: number; readonly lines: readonly string[] } {
-  for (const scale of [3, 2, 1]) {
-    const gap = scale;
-    const room = Math.floor((BIG_H + gap) / (GLYPH_H * scale + gap));
-    const lines = wrap(text, OLED_W, scale);
-    if (lines && lines.length <= room) return { scale, lines };
-  }
-  const room = Math.floor((BIG_H + 1) / (GLYPH_H + 1));
-  return { scale: 1, lines: (wrap(text, OLED_W, 1, true) ?? []).slice(0, room) };
+/** The big line: double size when it fits across the panel, else single, cut to the panel. */
+export function bigLine(text: string): { readonly scale: number; readonly text: string } {
+  if (textWidth(text, 2) <= OLED_W) return { scale: 2, text };
+  return { scale: 1, text: fit(text, OLED_W) };
 }
 
-/** Every lit pixel of a station's view: the top line in the yellow band, the big line, the bottom line. */
-export function stationPixels(view: StationView): Pixel[] {
-  const { scale, lines } = bigLines(view.big);
-  const lineH = GLYPH_H * scale;
-  const blockH = lines.length * lineH + Math.max(0, lines.length - 1) * scale;
-  const bigY = BIG_TOP + Math.floor((BIG_H - blockH) / 2);
+/** The small line, broken over at most two rows. */
+export function smallLines(text: string): readonly string[] {
+  return (wrap(text, OLED_W, 1, true) ?? []).slice(0, Math.floor((SMALL_H + 1) / (GLYPH_H + 1)));
+}
+
+/** The tag: dark letters cut out of a lit badge. */
+function tagPixels(tag: string): Pixel[] {
+  if (!tag) return [];
+  const w = textWidth(tag) + TAG_PAD * 2;
+  const ink = new Set(drawText(tag, TAG_PAD, 1).map(([x, y]) => y * OLED_W + x));
+  const out: Pixel[] = [];
+  for (let y = 0; y < TAG_H; y++) for (let x = 0; x < w; x++) if (!ink.has(y * OLED_W + x)) out.push([x, y]);
+  return out;
+}
+
+/** Every lit pixel of a station's view, showing `face`. */
+export function stationPixels(view: StationView, face: Face = "idle"): Pixel[] {
+  const { big, small } = faceLines(view, face);
+  const line = bigLine(big);
+  const bigY = BIG_TOP + Math.floor((BIG_H - GLYPH_H * line.scale) / 2);
+  const rows = smallLines(small);
+  const blockH = rows.length * GLYPH_H + Math.max(0, rows.length - 1);
+  const smallY = SMALL_TOP + Math.floor((SMALL_H - blockH) / 2);
   return [
-    ...centred(fit(view.top, OLED_W), TOP_Y, 1),
-    ...lines.flatMap((line, i) => centred(line, bigY + i * (lineH + scale), scale)),
-    ...centred(fit(view.bottom, OLED_W), BOTTOM_Y, 1),
+    ...tagPixels(view.tag),
+    ...centred(line.text, bigY, line.scale),
+    ...rows.flatMap((row, i) => centred(row, smallY + i * (GLYPH_H + 1), 1)),
   ];
 }
