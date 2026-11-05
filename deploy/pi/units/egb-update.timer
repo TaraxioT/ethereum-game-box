@@ -1,0 +1,12 @@
+[Unit]
+Description=Ethereum Game Box: look for a new commit every 30 s
+# Installed by setup.sh but not enabled until the repo's deploy key exists:
+#   systemctl --user enable --now egb-update.timer
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

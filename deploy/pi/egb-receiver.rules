@@ -1,0 +1,12 @@
+# Installed by setup.sh as /etc/udev/rules.d/70-egb-receiver.rules.
+#
+# The tap receiver (ESP32-C3, Espressif USB-Serial-JTAG 303a:1001, serial 7C:DF:A1:D5:04:CC) gets a name of its own,
+# /dev/egb-receiver, so nothing depends on which ttyACM number the kernel hands out. The two tap stations are
+# ESP32-S3 boards with other serial numbers, and the radio carries their traffic, so only the receiver is named.
+# To use another receiver board, change the serial here and rerun setup.sh.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="7C:DF:A1:D5:04:CC", \
+  SYMLINK+="egb-receiver", GROUP="dialout", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# uhubctl switches a USB port's power (to reboot a board that has hung) by talking to its hub. That needs write access
+# to the hub's device node, which only root has by default: give the plugdev group (the pi user is in it) the hubs.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{bDeviceClass}=="09", GROUP="plugdev", MODE="0660"

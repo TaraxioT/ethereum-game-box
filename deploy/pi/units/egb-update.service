@@ -1,0 +1,14 @@
+[Unit]
+Description=Ethereum Game Box: build and deploy new commits (see egb-update.timer)
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/egb/env
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# A stable copy, refreshed on every good deploy, so a broken release can't break its own fix.
+ExecStart=%h/egb/bin/update.sh
+# Builds run behind the server and the screen: a deploy in the middle of a match must not slow the taps.
+Nice=15
+IOSchedulingClass=idle
+# A build plus up to 15 minutes of waiting for an idle Box.
+TimeoutStartSec=45min
