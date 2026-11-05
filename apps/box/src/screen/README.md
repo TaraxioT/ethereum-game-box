@@ -1,72 +1,100 @@
 # The screen
 
-The Box's touchscreen: a stage of physical parts on a circuit board, drawn from `BoxState` and talking to the Box
-only through `BoxLink` (`link/types.ts`). Vite and TypeScript, small custom elements, no UI framework. The look is
-in the project plan (`plan/game-ui.md` §3): World Computer, skeuomorphic, one key light from the top left, glows
-kept to their edges, only transform and opacity animating.
+The Box's touchscreen, drawn from `BoxState` and talking to the Box only through `BoxLink` (`link/types.ts`). Vite and
+TypeScript, small custom elements, no UI framework.
+
+**The look: the Grid.** A near-black world where all brightness comes from thin emissive lines. The system's light is
+cool white-blue (`--sys`), Player 1 is orange and Player 2 cyan, and red (`--alert`) only ever means something is
+wrong. Shapes are straight runs, 45° bends and chamfered corners, with circles only for the core and the badge
+sockets; a perspective floor grid runs toward the viewer under one horizon line. Display text is Syncopate, labels
+Oxanium, numbers JetBrains Mono. Every glow is static (shadows, stacked SVG strokes, or baked once into the Grid's
+canvas) and reaches at most 24 px. Things **rez** in as a line of light that opens into them and **derez** back into
+a line that goes out; that is every entrance and exit in the launcher. Only transform and opacity animate. The rules
+are in the project plan (`plan/game-ui.md` §3). The two game screens keep their own looks.
 
 ## Parts
 
-`parts/` holds the Box's physical objects as custom elements, each a real-looking object with depth and edges.
-Call `registerParts()` (`parts/register.ts`) once before creating any of them.
+`parts/` holds the Box's objects as custom elements. Call `registerParts()` (`parts/register.ts`) once before creating
+any of them.
 
 How they are built:
 
-- Each part draws inside its own shadow root (`parts/part.ts` gives it the shared materials: the LCD frame and
-  glass, screws, and the reduced-motion rule). The palette, type and motion tokens of `tokens.css` reach inside
-  because custom properties inherit.
+- Each part draws inside its own shadow root (`parts/part.ts` gives it a small shared base and the reduced-motion
+  rule). The tokens of `tokens.css` reach inside because custom properties inherit.
+- Chamfered parts draw their frame with `parts/frame.ts`: `frameSvg({ w, h, chamfer, corners, tone, ticks })` gives two
+  SVG layers, `.frame-line` (a 2 px line in the tone over a 1 px hot core, and hot ticks on the uncut corners for
+  panels) and `.frame-bloom` (10 px and 5 px soft strokes); `fitFrame(box, options)` lays them in a box and keeps them
+  to its size; `chamferClip` cuts the fill under them. A part lights its frame by the layers' opacity: 30 % idle,
+  100 % with the bloom when active, 12 % disabled, 25 % with nothing seated. `--frame-tone` recolours a frame.
+  Chamfers: keys 14 px, facts 8, panels and the strip 12, programs 16 (cut top right and bottom left; the rest cut top
+  left and bottom right).
 - Parts with a fixed shape fill the box the shell gives them (`width`/`height`, placed in stage px from
-  `shell/layout.ts`) and scale everything inside from it; each has a default size for when nothing sets one. Parts
-  that carry words (`<egb-fact>`, `<egb-plate>`, `<egb-seg>`) size from `font-size` instead.
-- Text in `<egb-key>`, `<egb-fact>` and `<egb-plate>` is the element's own text, so a view can set `textContent`.
+  `shell/layout.ts`) and scale everything inside from it. Parts that carry words (`<egb-fact>`, `<egb-panel>`) size
+  from their content.
+- Text in `<egb-key>`, `<egb-fact>` and `<egb-panel>` is the element's own text, so a view can set `textContent`.
 - Under `prefers-reduced-motion` every part shows its end state at once.
 
 | Part | What it is | Attributes and API | When it moves |
 |---|---|---|---|
-| `<egb-core>` | The world computer: a black glass sphere in a thick gunmetal collar on a thin base ring, a lavender neon line between them; the Ethereum mark inside, front on, lit from behind; window reflection, specular point, Fresnel rim, the board's neon caught in its lower curve. | `glass`, `collar`: radii in px. It fills its parent and centres its drawing there. `dark`: unlit. `swell()`, `coin()`, `ignite(): Promise<void>`. | Holds still. `swell()`: the glass and its light swell once (a transaction landed, a block sealed). `coin()`: the mark turns once like a coin, 900 ms (a game loads). `ignite()`: from `dark`, light comes up in the glass, then the mark, then the rim, ~900 ms (boot). |
-| `<egb-port>` | A player's port in a top corner: a gunmetal socket with a neon ring (Player 1 orange, Player 2 cyan), a tile whose LED matrix shows the badge's blockie in the seat's neon, the badge's name, the balance on an amber `<egb-seg>` with an EGB legend. Empty: unlit ring, engraved `TAP BADGE`. | `seat` (`0` reads rightwards from a ring at the left; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `set(seat: SeatState)`, `pulse()`. Designed at 380 × 96; the ring's centre sits 52 px in from the outer side, halfway down. | A badge arriving strikes the ring like a neon tube and lights the tile; leaving fades the ring. Balance changes roll. `pulse()`: the ring flashes once (a tap). |
-| `<egb-clock>` | The chain clock: a bevelled LCD module hanging on two short chains, `BLOCK 12,071,233` in mint seven-segment digits, `SEPOLIA` engraved on its lower lip. | `block` (number). Designed at 276 × 64; the chains rise out of the top of its box. | Each new block rolls the changed digits one at a time. |
-| `<egb-gauge>` | The analogue gas gauge: a chrome bezel, a dark dial with ticks from 0 to 5 gwei (cold to hot), a gold pump glyph, an amber needle, a mint readout plate under it (`1.8 GWEI`). | `gwei` (number). Fills its square box; the readout hangs just below it. | The needle eases to each new value over 1.2 s. |
-| `<egb-fact>` | A fact about the focused game as an IC chip: dark epoxy body, silver pins top and bottom, a pin-1 dimple, a line icon and a word in silkscreen. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `press(delayMs)`. Height from its box (44 px default), width from the word. | `press()`: after the delay it comes down, presses into the board and settles (Home presses each in turn when the focus changes). |
-| `<egb-key>` | A physical key. `brass`: a bright bevelled gold frame round a brushed, warmer face, engraved letters, a bronze edge under it. `metal`: the gunmetal secondary key. A real `<button>` inside. | `variant` (`brass` default, `metal`), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. Fills its box. | Travels down on press (the cap covers more of its edge). `breathe`: a slow gold light breathing round it (`TAP TO START`). `disabled`: dark, no travel. |
-| `<egb-cart>` | A game's cartridge: a gunmetal keycap in a wider clipped housing; a dark glass screen with the title in arcade caps and the game's art on the glass (Quick Draw: a marigold bolt with sparks; Stock Duel: orange and cyan candlesticks). A game without art is sealed: a riveted cover, the title engraved, a brass `SOON` plate. | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`), `title` (the printed title), `focused`, `pressed`. Designed at 176 × 186. | `focused`: the keycap rises 16 px on a spring, and only then a lavender strip lights at its foot and round the housing's rim. Idle: no light at all. `pressed`: the keycap seats 8 px down (launch). |
-| `<egb-txbar>` | The transaction-progress LCD strip: the kind and amount (`FAUCET +100 EGB`, `STAKE 2×10 EGB`, `PAYOUT 20 EGB`, `REFUND 10 EGB`), a hash cell (shortened hash, or `SIMULATED`), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | Each step lights mint as the transaction reaches it; unreached steps stay ghosts. The strip fades in on `show` and out on `hide`. |
-| `<egb-plate>` | An engraved plate with a screw in each corner: `DEMO`, `SOON`, the instruction plate. | `variant` (`brass` default, `metal`). Its children are its content (words, a switch, several lines). Sizes from `font-size`. | Never. |
-| `<egb-seg>` | A seven-segment LCD readout with the unlit ghost segments showing; a point or comma lights the decimal mark of the digit before it. Used by the port and the clock. | `tone` (`amber` default, `mint`), `digits` (the fewest cells; the value is right-aligned), `value` (text). `font-size` is the cell height. | Changed digits roll in turn, left to right, 70 ms apart. |
+| `<egb-core>` | The core: an outer ring of light with four notches, 24 arc segments inside it, a thin inner ring round a dark disc, and the Ethereum mark in wireframe (near-black facets edged in hot lines). | `glass`, `collar`: the inner and outer rings' radii in px. It fills its parent and centres there. `dark`: every line at 8 %, the mark hidden. `swell()`, `coin()`, `ignite(): Promise<void>`. | Holds still. `ignite()`: the segments light clockwise from 12 o'clock 20 ms apart, then the rings, then the mark (~900 ms, boot). `swell()`: a copy of the outer ring grows to 1.18 and fades while the segments bloom once (a transaction landed, a block sealed). `coin()`: the mark turns once on its upright axis, 900 ms (a launch). |
+| `<egb-port>` | A player's node in a top corner: a socket of seat-colour light holding the badge's blockie as an LED grid, the name, a mono balance with an `EGB` label, and a seat-colour underline ending in a tick. Empty: the socket at 25 % and `TAP BADGE`. | `seat` (`0` reads rightwards from its socket; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `key` (`A`/`L`, Demo mode): a key hint, and hover lifts the socket. `bot`: a `BOT` tag. `set(seat: SeatState)`, `pulse()`, `refuse()`. Designed at 380 × 96; the socket's centre is 52 px in from the outer side, halfway down. | A badge arriving rezzes the socket and name; leaving derezzes the name and dims the socket. Changed balance digits flicker in left to right. `pulse()`: the socket's bloom flashes (a tap). `refuse()`: the module shakes and the socket flashes red (a tap that meant nothing). |
+| `<egb-clock>` | The block readout: four corner brackets round `BLOCK` and the head block in glowing mono, `SEPOLIA` under them. | `block` (number). Designed at 276 × 64. | Changed digits flicker in, 60 ms apart. |
+| `<egb-gauge>` | Gas as a bar: 16 segments of system light for 0–5 gwei (one colour, so never a seat's), a mono `1.8 GWEI` under it. | `gwei` (number). Designed at 88 × 48. | The segments that change switch one at a time from the old end toward the new, 30 ms apart. |
+| `<egb-fact>` | A data tag about the focused game: a chamfered frame at idle brightness round a line icon and a word. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `rez(delayMs)`. 44 px tall, width from the word. | `rez()`: after the delay the tag rezzes in (Home rezzes each in turn on a new focus). |
+| `<egb-key>` | A light key: a chamfered frame round a dark face and a Syncopate label at 0.36 × its height, shrunk to fit its width. A real `<button>` inside. | `variant` (`primary` default, `ghost`, `alert`), `selected` (filled solid with light: the chosen stake), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. `flash()`. Fills its box. | A press flashes the shape white and squeezes it to 0.97. `breathe`: the bloom breathes 0.35 ↔ 1 over 2.4 s (`TAP TO START`; 0.7 under reduced motion). |
+| `<egb-cart>` | A game's program in the rack: a chamfered frame round an art window with a faint grid and the game's art in light lines (Quick Draw: a hot bolt and sparks; Stock Duel: orange and cyan candlesticks), the title in Syncopate under it. A game without art is sealed: the window hatched, the title dim, a `SOON` tag. | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`), `title`, `focused`, `pressed`. Designed at 176 × 186. | `focused`: it lifts 12 px on a spring and only then lights its frame (a sealed one to 50 %), a hot foot bar and its title. Losing focus it drops and dims. `pressed`: the frame flashes white and it settles 6 px (launch). |
+| `<egb-txbar>` | The transaction strip: a panel-style frame, the kind and amount (`FAUCET +100 EGB`, `STAKE 2×10 EGB`, `PAYOUT 20 EGB`, `REFUND 10 EGB`) beside the hash (or `SIMULATED`), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | `show()` on a hidden strip rezzes it; each step lights in system light when reached, and the one just reached flickers once. `hide()` derezzes it. |
+| `<egb-panel>` | A panel of light: a chamfered frame at 45 % with hot ticks on its uncut corners round a nearly opaque dark fill. The page plates, the in-game stake chip, the Demo intro. | Its children are its content; sizes from `font-size`. `--frame-tone` and `--panel-line` (the line's opacity) restyle it. | Never by itself. |
 
-Two pure modules go with them:
+Pure modules go with them, each tested:
 
-- `parts/blockie.ts`: the classic ethereum-blockies identicon for an address. `blockie(address)` gives its colours
-  and 8 × 8 cells; `blockieSvg(address, size)` draws it in its own colours; `blockieLedSvg(address, size)` draws it
-  as an LED matrix whose LEDs a caller lights (`.c0` off, `.c1` colour, `.c2` spot). Tested in `blockie.test.ts`.
-- `parts/eth-mark.ts`: `ethMarkSvg({ backlight })`, the real six-facet Ethereum mark as an SVG string, with an
-  optional soft light behind it.
+- `parts/blockie.ts`: the classic ethereum-blockies identicon for an address. `blockie(address)` gives its colours and
+  8 × 8 cells; `blockieLedSvg(address, size)` draws it as an LED grid whose LEDs a caller lights in the seat's colour
+  (`.c0` off, `.c1` colour, `.c2` spot).
+- `parts/frame.ts`: `framePoints`, `tickPath` and `chamferClip`, the frame's geometry.
+- `parts/digits.ts`: `changedDigits(prev, next)`, which characters of a number changed (lined up from the right), and
+  `setDigits`, which flickers them in.
+- `parts/gas-level.ts`: `litSegments(gwei)`, how many of the 16 gas segments light.
+- `parts/eth-mark.ts`: `ethMarkSvg()`, the real six-facet Ethereum mark in wireframe, as an SVG string.
 
 ## Shell
 
-`shell/` holds the Box's own objects and the machinery that places, scales and moves them.
+`shell/` holds the machinery that places, scales and moves the Box's objects.
 
 - `layout.ts`: every anchor in stage pixels, for the 1280×800 landscape stage and the 720×1080 portrait one (core,
-  ports, clock, gauge, title, facts, Play, the four rack housings, the transaction LCD). Everything else places
+  horizon, ports, clock, gas, title, facts, Play, the four rack slots, the transaction strip). Everything else places
   itself from these, so traces always land on the parts they feed.
 - `stage.ts`: `fit(layout, w, h)` scales and centres the stage in the space it gets; `createStage`, `applyFit`.
   Tested in `stage.test.ts`.
 - `route.ts`, `traces.ts`: pure geometry. 45° routing, buses, sampling and clipping; `tracesFor(layout)` gives the
-  named traces (`port0`, `port1`, `clock`, `slot0`–`slot3`) and the side bundles. Tested.
-- `board.ts`: `drawBoard(layout, scale)` draws the static board once (plates, seams, screws, 3D parts, copper,
-  neon traces, connectors) and caches it per size.
-- `packets.ts`: a live canvas over the board. `run(trace)` sends a comet along the copper; `light(trace)` lights the
-  focused cartridge's feed. It draws only while a packet is in flight.
-- `machine.ts`: the objects that stay across views (board, packets, core, ports, clock, gauge, transaction LCD, the
-  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin`, `feed`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
-  when it lands in a block, a packet out to the port for a payout.
-- `router.ts`: mounts the view for the Box's phase and moves between views in depth (the old sinks, the new rises).
-  A move that a newer one or a rebuilt stage overtakes never mounts.
-- `boot.ts`: one step at a time: the core ignites, the board powers on outward from it, the ports and clock come up.
-- `app.ts`: the screen area (the window less the desk), the stage, the machine and the router; rebuilds the stage
-  when the window turns between landscape and portrait.
+  named traces (`port0`, `port1`, `clock`, `slot0`–`slot3`) and the side bundles, in their light's colours. Tested.
+- `grid.ts`: `drawGrid(layout, scale)` draws the static Grid once per layout and pixel size and caches it: the void, the
+  back wall's grid, the horizon, the perspective floor, the core's reflection, and every trace as an unpowered light
+  line with lit terminal bars. `drawTraces` is shared with the packets.
+- `packets.ts`: a live canvas over the Grid. `run(trace)` sends a hot head along a trace, leaving a trail in its colour
+  that fades over 500 ms; it resolves when the head lands. `light(trace)` lights the focused program's feed (a cached
+  layer); `flare()` flashes every trace once (a launch); `ambient(on)` sends a lone packet along a side trace every
+  7 s ± 2 s (attract only). It draws only while something is in flight.
+- `rez.ts`: `rez(node, { delay })` and `derez(node)`, the launcher's entrance and exit (transform and opacity only,
+  a short fade under reduced motion), `flicker(node)` and the flicker budget (three a second at most). The keyframes
+  are pure and tested in `rez.test.ts`.
+- `machine.ts`: the objects that stay across views (Grid, packets, core, ports, clock, gas bar, transaction strip,
+  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin` (the core turns and
+  every trace flares), `feed`. It turns transaction steps into moments: a packet from the port when a stake is sent,
+  a swell when it lands in a block, a packet out to the port for a payout. It shakes a port on a refused tap and runs
+  attract's ambience.
+- `router.ts`: mounts the view for the Box's phase; the old view derezzes and the new one rezzes. A move that a newer
+  one or a rebuilt stage overtakes never mounts.
+- `boot.ts`: one step at a time, about 4 s: the void, the horizon drawn out from under the core, the core igniting,
+  the Grid powering on outward, a white packet out along every named trace, then the ports, clock and gas bar rezzing
+  120 ms apart.
+- `app.ts`: the screen area (the whole window), the stage, the machine and the router; rebuilds the stage when the
+  window turns between landscape and portrait. With `onSeatTap` (Demo mode) a touch on a `data-seat` element (a port,
+  a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in, with a ring of that
+  seat's light. `isBot` tags the bot's port.
 - `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
-- `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`, `fitWidth`, `wait`, `calm`.
+- `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`,
+  `fitWidth`, `facesReady`, `wait`, `calm`.
 
 ## Views
 
@@ -74,43 +102,39 @@ Two pure modules go with them:
 on `BoxEvent`s and acts only through `link.send`.
 
 - `routes.ts`: phase → view and pose.
-- `attract.ts`: the Box's name, the rack rising, a breathing brass `TAP TO START`.
-- `home.ts`: the focused game's title, IC-chip facts and brass Play, and the rack (`rack.ts`). Touch or arrow keys
-  focus; the cartridge rises, its feed lights and the core turns once. Enter plays.
+- `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes.
+- `home.ts`: the focused game's title, its facts and Play, and the rack (`rack.ts`). Touch or arrow keys focus: the
+  old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
+  derezzes and rezzes, the facts rez in turn and the `tick` plays. Enter or Play launches: the key and program flash,
+  the core turns and every trace flares.
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
-  per player (`seat-panel.ts`), a plate under the core and keys at the bottom.
-  Refund's `REFUND ALL` key (once the stakes unlock) sends every refund still owed, so the Box never waits on a
-  player who walked away.
+  per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
+  loss, `NEEDS n EGB` in red), a panel under the core and keys at the bottom. Result's banner is the winner's colour
+  (a draw in system light). Refund's panel is red, and its `REFUND ALL` key (an `alert` key, once the stakes unlock)
+  sends every refund still owed, so the Box never waits on a player who walked away.
 - Game screens live with their games in `src/games/<game>/screen.ts`.
 
 ## Demo
 
-`demo/` draws the hardware a browser doesn't have: a dark walnut bench with a gunmetal rail along the bottom of the
-window, below the Box's screen. On it are the two tap stations (Player 1 left, Player 2 right), the badges between
-them, and the engraved `DEMO` plate with its controls. The desk drives the simulated Box through `SimControl`
-(`link/sim/control.ts`) and listens to it (`sim.subscribe`) to keep the OLEDs, the buzz motors, the seated badges and
-the switches in step. Call `registerParts()` first: the plates are `<egb-plate>`s and OK is an `<egb-key>`.
+`demo/` is what Demo mode adds to the screen, which then stands in for the tap stations a browser doesn't have.
 
 | Module | What it is | API |
 |---|---|---|
-| `desk.ts` | The bench and its layout. Landscape: one row (puck, badges, plate, puck), with the wide plate, or the tall one when the window is narrow. Portrait, or a landscape too narrow for a row: the badges on top, the pucks in the bottom corners with the plate between them. The plate is a metal `<egb-plate>`: `DEMO`, a bat-handle `CUT POWER` toggle with a red pilot lamp that lights while the power is cut (`sim.setPower`), a `VS BOT / HOT SEAT` slide switch (`sim.setOpponent`) and a mute key with a speaker (`sound.setMuted`). | `mountDesk(host, sim, sound): Desk`. `Desk.height(viewW, viewH)`: ~20 % of the height in landscape (130–220 px), ~26 % in portrait (180–260 px); it also lays the desk out for that size. `deskLayout(w, h)` is the sizing, pure. |
-| `puck.ts` | One tap station: a round dark puck, bevelled and lit from the top left, a seat-colour NFC ring (2.5 px neon, ≤ 8 px glow) round its OLED, `P1`/`P2` engraved on the rim and its key (`A`/`L`) on a tiny keycap. With the bot in seat 2, puck 2 wears a `BOT` plate and ignores clicks and drops. | `createPuck(seat, sim): Puck` with `show(view)`, `buzz()`, `refuse()`, `flash()`, `setBot(on)`, `hits(x, y)`, `arm(on)`, `size(diameter)`, `dispose()`. |
-| `oled.ts` | The station's 128 × 64 one-bit panel on a real canvas of that size: a yellow top band and a blue-white body, as on a two-tone SSD1306, scaled with hard pixel edges (a whole number of device pixels per panel pixel where there's room for two or more; a soft scale below one, so type doesn't lose rows). | `createOled(): { el, show(view), size(fitWidth) }`, `panelWidth(fitWidth, dpr)`. |
-| `oled-font.ts` | The pixel font and the panel layout, pure. 5 × 7 glyphs as base-32 rows, trimmed to their ink; digits, A–Z, `! ? . : ; , - + × = / % $ # ' " ( ) < > * @ & _ · → ← ▲ ▼`; a hollow box for anything else. The top line sits in the yellow band, the big line at the largest scale that fits (3×, 2× on up to two lines, then 1×), the bottom line last. Tested in `oled-font.test.ts`. | `glyph`, `hasGlyph`, `textWidth`, `drawText`, `fit`, `wrap`, `bigLines`, `stationPixels(view): Pixel[]`. |
-| `badges.ts` | The desk's badges (`sim.badges` less the bot's) as NFC cards: violet PVC, a punched lanyard slot, a gold chip, the blockie, the name. Pointer Events drag them (mouse and touch). Dropped on a puck, the card lands on it, taps (`sim.tap(seat, badge)`) and slides home; dropped anywhere else it springs back. A seated badge lights a seat-colour lamp. Cards overlap when the tray is narrow. | `createBadgeTray(sim, pucks): { el, update(state), size(cardHeight), dispose() }`, `CARD_RATIO`. |
+| `demo-tag.ts` | The DEMO tag, always visible, fixed to the window's bottom-right corner: a small chamfered panel reading `DEMO` (or `POWER CUT`, with a red lamp) and a chevron. A tap or Enter rezzes a panel up out of it with `CUT POWER` (a light switch, `sim.setPower`), `OPPONENT` (`VS BOT \| HOT SEAT`, `sim.setOpponent`) and `SOUND` (a switch, `sound.setMuted`). A tap outside, Escape or the chevron derezzes it. It keeps in step with `sim.subscribe`, and its pointer and key events never reach the stage. | `mountDemoTag(host, sim, sound)` |
+| `intro.ts` | The one-time intro: a panel that rezzes in once the boot has finished. `DEMO`, `TWO WAYS TO TAP`, how to tap (a player's frame, or their half of the screen in a game; A and L) and where the DEMO tag's switches are, with an OK key. OK or Escape dismisses it for good (localStorage `gamebox-intro=2`). | `showIntroOnce(host, link)` |
 | `keys.ts` | A taps Player 1, L taps Player 2, in demo and box mode. Held keys, modifier shortcuts and typing in a field don't tap. | `bindTapKeys(sim): () => void` |
-| `intro.ts` | The one-time brass plate: the four ways to tap (drag a badge onto a puck, click or touch a puck, press A, press L), `VS BOT or HOT SEAT`, `CUT POWER to see a refund`, and a brass OK. OK or Escape dismisses it for good (localStorage `gamebox-intro=1`). | `showIntroOnce(host)` |
-| `demo.css` | Every style above, imported by `desk.ts` and `intro.ts`. Desk sizes scale with `--u` (1 on a 160 px landscape desk); a puck from `--d`; a badge from its own width. | |
+| `demo.css` | The tag's and the intro's styles. | |
 
-`shell/sound.ts` (`createSound(): Sound`) goes with it: every `Cue` synthesized with WebAudio (tap a click, block a
-soft low tick, seal a warm chime, flip a card flick, tick a wood tick, win a rising brass arpeggio, lose a falling
-two-note, error a dull double buzz, boot a power-on swell). The AudioContext is made on the first user gesture;
-until then, and while muted, cues are silent. Muting is remembered (localStorage `gamebox-muted=1`). It never throws.
+Taps on the screen themselves are the app's (`shell/app.ts`, `onSeatTap`); `main.ts` passes `sim.tap` in Demo mode
+only, so in box mode the real stations (and A / L) are the only taps. The simulated Box's hardware side is
+`SimControl` (`link/sim/control.ts`); its station model and `StationView` stay for the real stations.
 
-How it moves: the buzz is a 220 ms shake of the puck (transform only) with a ring flash; an unaccepted tap is a
-double shake; a badge read flashes the ring; a badge hovering over a puck lights its ring until it drops. The toggle
-flips, the slide knob slides, the pilot lamp and the opponent lamps fade. Under reduced motion nothing shakes, the
-ring still flashes, and a dropped badge goes straight home.
+`shell/sound.ts` (`createSound(): Sound`) goes with it: every `Cue` synthesized with WebAudio. The launcher's lean
+toward a dark analogue synth: boot three detuned saws under a low-pass that opens over 1.6 s with a high shimmer, tap
+a short gliding square, block a low sine with a click, error a doubled saw buzz, win a saw arpeggio up to E5, lose a
+falling saw pair. The games' seal (a warm chime), flip (a card flick) and tick (a wood tick) are their own. The
+AudioContext is made on the first user gesture; until then, and while muted, cues are silent. Muting is remembered
+(localStorage `gamebox-muted=1`). It never throws.
 
 ## Quick Draw
 
