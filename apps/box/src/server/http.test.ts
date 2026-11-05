@@ -1,0 +1,139 @@
+import { get } from "node:http";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
+import { LINK_PATH } from "../core/wire.ts";
+import { localOrigin, within } from "./http.ts";
+import { CSP, LAUNCHER_HEADER } from "./security.ts";
+import { busy } from "./api.ts";
+import { PAGE, post, startTestBox, type TestBox } from "./testing.ts";
+
+let tb: TestBox | null = null;
+afterEach(async () => {
+  await tb?.stop();
+  tb = null;
+});
+
+async function start(): Promise<TestBox> {
+  tb = await startTestBox();
+  return tb;
+}
+
+const NAVIGATION = { "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" };
+
+/** A plain GET with exactly these headers (fetch sets its own Sec-Fetch-* headers). */
+function page(url: string, headers: Record<string, string>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    get(url, { headers }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk: string) => (body += chunk));
+      res.on("end", () => resolve(body));
+    }).on("error", reject);
+  });
+}
+
+describe("the local-origin rule", () => {
+  it("allows only this machine, and requests without an Origin", () => {
+    for (const origin of [undefined, "http://localhost", "http://localhost:5173", "http://127.0.0.1:8790", "http://[::1]:8790"]) {
+      expect(localOrigin(origin), String(origin)).toBe(true);
+    }
+    for (const origin of ["http://evil.example", "http://localhost.evil.example", "https://localhost", "http://127.0.0.1.nip.io", "null"]) {
+      expect(localOrigin(origin), origin).toBe(false);
+    }
+  });
+
+  it("keeps file paths inside the screen's folder", () => {
+    expect(within("/srv/screen", "/assets/a.js")).toBe("/srv/screen/assets/a.js");
+    expect(within("/srv/screen", "/../etc/passwd")).toBeNull();
+    expect(within("/srv/screen", "/%2e%2e/screen-other/x")).toBeNull();
+    expect(within("/srv/screen", "/%E0%A4%A")).toBeNull();
+  });
+
+  it("refuses a POST and a link from another origin", async () => {
+    const { box } = await start();
+    const badge = { address: `0x${"ab".repeat(20)}`, name: "NOVA" };
+    const evil = await post(box, "/api/taps/inject", { seat: 0, badge }, { origin: "http://evil.example" });
+    expect(evil.status).toBe(403);
+    expect((await post(box, "/api/taps/inject", { seat: 0, badge })).status).toBe(200);
+    const refused = new WebSocket(`${box.url.replace("http", "ws")}${LINK_PATH}`, { origin: "http://evil.example" });
+    const status = await new Promise<number>((resolve) => refused.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0)));
+    expect(status).toBe(403);
+    const elsewhere = new WebSocket(`${box.url.replace("http", "ws")}/other`);
+    const missing = await new Promise<number>((resolve) => elsewhere.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0)));
+    expect(missing).toBe(404);
+  });
+});
+
+describe("the screen", () => {
+  it("serves the page under the CSP, with the launcher token only for a top-level navigation", async () => {
+    const { box } = await start();
+    const fetched = await fetch(`${box.url}/`);
+    expect(fetched.headers.get("content-security-policy")).toBe(CSP);
+    expect(fetched.headers.get("cache-control")).toBe("no-store");
+    expect(await fetched.text()).toBe(PAGE);
+    const opened = await page(`${box.url}/`, NAVIGATION);
+    expect(opened).toContain(`<head><meta name="egb-launcher" content="${box.token}">`);
+    const framed = await page(`${box.url}/index.html`, { "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" });
+    expect(framed).not.toContain(box.token);
+  });
+
+  it("has the plan's CSP", () => {
+    for (const rule of ["default-src 'self'", "connect-src 'self'", "frame-src 'self'", "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'"]) {
+      expect(CSP.split("; ")).toContain(rule);
+    }
+    expect(CSP).not.toMatch(/script-src[^;]*unsafe|style-src [^;]*unsafe/);
+  });
+
+  it("serves assets for good, 404s the rest, and says when the screen isn't built", async () => {
+    const t = await start();
+    const asset = await fetch(`${t.box.url}/assets/app-1234.js`);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    expect(asset.headers.get("cache-control")).toContain("immutable");
+    expect((await fetch(`${t.box.url}/missing.js`)).status).toBe(404);
+    expect((await fetch(`${t.box.url}/..%2f..%2fetc%2fpasswd`)).status).toBe(404);
+    expect((await fetch(`${t.box.url}/`, { method: "DELETE" })).status).toBe(405);
+    await rm(join(t.dir, "screen", "index.html"));
+    expect((await fetch(`${t.box.url}/`)).status).toBe(503);
+  });
+});
+
+describe("the API", () => {
+  it("answers health and state", async () => {
+    const { box } = await start();
+    const health = (await (await fetch(`${box.url}/api/health`)).json()) as { ok: boolean; commit: unknown; uptimeMs: number };
+    expect(health.ok).toBe(true);
+    expect(health.uptimeMs).toBeGreaterThanOrEqual(0);
+    expect(await (await fetch(`${box.url}/api/state`)).json()).toEqual({ phase: "boot", match: false, busy: false, now: box.core.now() });
+    expect((await fetch(`${box.url}/api/nope`)).status).toBe(404);
+    expect((await post(box, "/api/state", {})).status).toBe(405);
+  });
+
+  it("calls the Box busy from Join on, while a match is open and while money moves", () => {
+    const state = (patch: object) => ({ phase: "home", match: null, txs: [], ...patch }) as unknown as Parameters<typeof busy>[0];
+    expect(busy(state({}))).toBe(false);
+    expect(busy(state({ phase: "attract" }))).toBe(false);
+    expect(busy(state({ phase: "join" }))).toBe(true);
+    expect(busy(state({ phase: "result" }))).toBe(true);
+    expect(busy(state({ txs: [{ step: "in-block" }] }))).toBe(true);
+    expect(busy(state({ txs: [{ step: "paid" }] }))).toBe(false);
+  });
+
+  it("caps JSON bodies at 64 KB and refuses what isn't JSON", async () => {
+    const { box } = await start();
+    const big = JSON.stringify({ seat: 0, badge: { address: `0x${"ab".repeat(20)}`, name: "NOVA" }, pad: "x".repeat(70_000) });
+    expect((await post(box, "/api/taps/inject", big)).status).toBe(413);
+    expect((await post(box, "/api/taps/inject", "{ nope")).status).toBe(400);
+    expect((await post(box, "/api/taps/inject", { seat: 2, badge: { address: "0x1", name: "" } })).status).toBe(400);
+  });
+
+  it("guards the builder's routes with this boot's launcher token", async () => {
+    const { box } = await start();
+    expect((await fetch(`${box.url}/api/builder`)).status).toBe(403);
+    expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: "x".repeat(box.token.length) } })).status).toBe(403);
+    expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: "short" } })).status).toBe(403);
+    expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: box.token } })).status).toBe(501);
+  });
+});

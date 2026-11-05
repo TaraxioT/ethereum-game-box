@@ -1,7 +1,7 @@
 # The screen
 
 The Box's touchscreen: a stage of physical parts on a circuit board, drawn from `BoxState` and talking to the Box
-only through `BoxLink` (`link/types.ts`). Vite and TypeScript, small custom elements, no UI framework. The look is
+only through `BoxLink` (`core/types.ts`). Vite and TypeScript, small custom elements, no UI framework. The look is
 in the project plan (`plan/game-ui.md` §3): World Computer, skeuomorphic, one key light from the top left, glows
 kept to their edges, only transform and opacity animating.
 
@@ -68,6 +68,24 @@ Two pure modules go with them:
 - `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`, `fitWidth`, `wait`, `calm`.
 
+## Link
+
+`link/` holds the two `BoxLink`s. `main.ts` picks one by the build's mode: `VITE_EGB_MODE=demo` (the default, `pnpm
+build`) runs `SimLink`; `box` (`pnpm build:box`, for the Pi's kiosk) runs `LiveLink` to the Box server that served
+the page, at `/link` on the same origin. Views read the Box's clock from `link.now()`, never `Date.now()`: on
+`SimLink` they are the same clock; on `LiveLink` it is the screen's clock plus the link's offset.
+
+| Module | What it is | API |
+|---|---|---|
+| `sim.ts` | `SimLink`: the core (`src/core/`) in the browser, on the browser's clock, a ledger in memory and the team games, with the bot on Player 2. The desk taps with a whole tap at once (touch, then done with a fresh roll). | `createSimLink({ seed? }): SimLink` |
+| `control.ts` | `SimControl`, what the desk drives and BoxLink doesn't have: tap a seat, the opponent switch, the power cut. `SimLink = BoxLink & SimControl`. | types |
+| `live.ts` | `LiveLink`: BoxLink over the WebSocket. The whole state on connect, then each event in order; a `state` message after the first is the stations moving (`stations` event). Commands go up only while connected. Reconnects after 250 ms, doubling to 4 s, and starts over from the whole state (an `init` event). | `connectLive({ url, socket?, localNow? }): Promise<LiveLink>` (resolves on the first state) |
+| `offset.ts` | The link's clock offset: the largest `boxNow − localNow` of the last 10 s (a message only ever arrives late). | `createClockOffset()` |
+| `reuse.ts` | Structural sharing: every part of a new state equal to the last one's keeps the last one's object, so views that compare by identity behave as on `SimLink`. | `reuse(prev, next)` |
+
+The shell carries a restarted Box on: a server that comes back in `boot` under a screen that has already booted is
+sent `booted` at once (`shell/app.ts`).
+
 ## Views
 
 `views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
@@ -88,17 +106,17 @@ on `BoxEvent`s and acts only through `link.send`.
 `demo/` draws the hardware a browser doesn't have: a dark walnut bench with a gunmetal rail along the bottom of the
 window, below the Box's screen. On it are the two tap stations (Player 1 left, Player 2 right), the badges between
 them, and the engraved `DEMO` plate with its controls. The desk drives the simulated Box through `SimControl`
-(`link/sim/control.ts`) and listens to it (`sim.subscribe`) to keep the OLEDs, the buzz motors, the seated badges and
+(`link/control.ts`) and listens to it (`sim.subscribe`) to keep the OLEDs, the buzz motors, the seated badges and
 the switches in step. Call `registerParts()` first: the plates are `<egb-plate>`s and OK is an `<egb-key>`.
 
 | Module | What it is | API |
 |---|---|---|
 | `desk.ts` | The bench and its layout. Landscape: one row (puck, badges, plate, puck), with the wide plate, or the tall one when the window is narrow. Portrait, or a landscape too narrow for a row: the badges on top, the pucks in the bottom corners with the plate between them. The plate is a metal `<egb-plate>`: `DEMO`, a bat-handle `CUT POWER` toggle with a red pilot lamp that lights while the power is cut (`sim.setPower`), a `VS BOT / HOT SEAT` slide switch (`sim.setOpponent`) and a mute key with a speaker (`sound.setMuted`). | `mountDesk(host, sim, sound): Desk`. `Desk.height(viewW, viewH)`: ~20 % of the height in landscape (130–220 px), ~26 % in portrait (180–260 px); it also lays the desk out for that size. `deskLayout(w, h)` is the sizing, pure. |
-| `puck.ts` | One tap station: a round dark puck, bevelled and lit from the top left, a seat-colour NFC ring (2.5 px neon, ≤ 8 px glow) round its OLED, `P1`/`P2` engraved on the rim and its key (`A`/`L`) on a tiny keycap. With the bot in seat 2, puck 2 wears a `BOT` plate and ignores clicks and drops. | `createPuck(seat, sim): Puck` with `show(view)`, `buzz()`, `refuse()`, `flash()`, `setBot(on)`, `hits(x, y)`, `arm(on)`, `size(diameter)`, `dispose()`. |
-| `oled.ts` | The station's 128 × 64 one-bit panel on a real canvas of that size: a yellow top band and a blue-white body, as on a two-tone SSD1306, scaled with hard pixel edges (a whole number of device pixels per panel pixel where there's room for two or more; a soft scale below one, so type doesn't lose rows). | `createOled(): { el, show(view), size(fitWidth) }`, `panelWidth(fitWidth, dpr)`. |
-| `oled-font.ts` | The pixel font and the panel layout, pure. 5 × 7 glyphs as base-32 rows, trimmed to their ink; digits, A–Z, `! ? . : ; , - + × = / % $ # ' " ( ) < > * @ & _ · → ← ▲ ▼`; a hollow box for anything else. The top line sits in the yellow band, the big line at the largest scale that fits (3×, 2× on up to two lines, then 1×), the bottom line last. Tested in `oled-font.test.ts`. | `glyph`, `hasGlyph`, `textWidth`, `drawText`, `fit`, `wrap`, `bigLines`, `stationPixels(view): Pixel[]`. |
+| `puck.ts` | One tap station: a round dark puck, bevelled and lit from the top left, a seat-colour NFC ring (2.5 px neon, ≤ 8 px glow) round its OLED, `P1`/`P2` engraved on the rim and its key (`A`/`L`) on a tiny keycap. With the bot in seat 2, puck 2 wears a `BOT` plate and ignores clicks and drops. After an accepted tap its OLED shows the station's DONE screen for 0.6 s, as a real station does after a read. | `createPuck(seat, sim): Puck` with `show(view)`, `buzz()`, `refuse()`, `flash()`, `done()`, `setBot(on)`, `hits(x, y)`, `arm(on)`, `size(diameter)`, `dispose()`. |
+| `oled.ts` | The station's 72 × 40 one-bit panel (the SSD1306 0.42″ on the real station) on a real canvas of that size, blue-white on black glass, drawn bigger than life and scaled with hard pixel edges (a whole number of device pixels per panel pixel when that keeps at least 85 % of the room; otherwise the room itself, still hard-edged; a soft scale below one device pixel, so type doesn't lose rows). | `createOled(): { el, show(view, face?), size(fitWidth) }`, `panelWidth(fitWidth, dpr)`. |
+| `oled-font.ts` | The pixel font and the panel layout, pure. 5 × 7 glyphs as base-32 rows, trimmed to their ink; digits, A–Z, `! ? . : ; , - + × = / % $ # ' " ( ) < > * @ & _ · → ← ▲ ▼`; a hollow box for anything else. It draws the station's own screen model (`@egb/sdk`'s `StationView`): the tag as dark letters in a lit badge at the top left, the big line under it at 2× when it fits across the panel (else 1×), the small line at the foot on up to two rows. A `face` shows a tap in progress: `hold`, `sign`, `done` or `fail`, each the Box's `BIG\|small` override or the station's own words. Tested in `oled-font.test.ts`. | `glyph`, `hasGlyph`, `textWidth`, `drawText`, `fit`, `wrap`, `bigLine`, `smallLines`, `faceLines`, `stationPixels(view, face?): Pixel[]`. |
 | `badges.ts` | The desk's badges (`sim.badges` less the bot's) as NFC cards: violet PVC, a punched lanyard slot, a gold chip, the blockie, the name. Pointer Events drag them (mouse and touch). Dropped on a puck, the card lands on it, taps (`sim.tap(seat, badge)`) and slides home; dropped anywhere else it springs back. A seated badge lights a seat-colour lamp. Cards overlap when the tray is narrow. | `createBadgeTray(sim, pucks): { el, update(state), size(cardHeight), dispose() }`, `CARD_RATIO`. |
-| `keys.ts` | A taps Player 1, L taps Player 2, in demo and box mode. Held keys, modifier shortcuts and typing in a field don't tap. | `bindTapKeys(sim): () => void` |
+| `keys.ts` | A taps Player 1, L taps Player 2, in the demo only (the Box has real stations). Held keys, modifier shortcuts and typing in a field don't tap. | `bindTapKeys(sim): () => void` |
 | `intro.ts` | The one-time brass plate: the four ways to tap (drag a badge onto a puck, click or touch a puck, press A, press L), `VS BOT or HOT SEAT`, `CUT POWER to see a refund`, and a brass OK. OK or Escape dismisses it for good (localStorage `gamebox-intro=1`). | `showIntroOnce(host)` |
 | `demo.css` | Every style above, imported by `desk.ts` and `intro.ts`. Desk sizes scale with `--u` (1 on a 160 px landscape desk); a puck from `--d`; a badge from its own width. | |
 
@@ -133,7 +151,7 @@ How it moves:
 - **Wait**: the sign reads `WAIT…`. A dark layer fades in from the standoff's start over the longest possible wait
   (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette beat like a heart, and the
   beat quickens once the shortest wait has passed. The figures hold. All of this is the same for every match, timed
-  from `startedAt` and `Date.now()`, so it never gives away when the draw comes. A remounted view picks the dimming
+  from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A remounted view picks the dimming
   up where it has got to.
 - **Draw** (the phase turns to `draw`, or a `cue: flip` event): the plate turns over on its pins (rotateX) with a
   swing that settles. The horizon flashes and the light comes back up.
@@ -171,7 +189,7 @@ How it moves:
 
 - **Deal**: the cards drop onto each drum's rail one at a time, the two drums half a beat apart, the front card last;
   each lands with a `tick`. Nothing is ever laid out on the desk.
-- **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` from `Date.now()`. When the
+- **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` at the Box's clock (`link.now()`). When the
   front card changes the drum indexes one card: the old front card rises and tips back over the top of the drum
   (rotateX about the rail, edge-on at the midpoint), then stands up again at the back while the others step forward;
   it always ends upright. The ring drains with transforms only (two half rings turning in clipped windows). A
