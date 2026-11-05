@@ -1,15 +1,18 @@
 // Home: the library. The focused game's title, its facts as IC chips and a brass Play on the left; the cartridge rack
-// along the bottom, fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays.
+// along the bottom, fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays. On the Box,
+// the rack ends in a blank NEW GAME cartridge: it focuses like a game (on this screen alone: the Box's focus is always
+// a game), and its key opens the game builder.
 import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";
 import { el, fitFont, fitWidth, place, play } from "../shell/dom.ts";
-import { createRack } from "./rack.ts";
+import { createRack, NEW_GAME, rackOf } from "./rack.ts";
 
 export function homeView(ctx: ViewContext): View {
   const { layout, link, machine, sound } = ctx;
   const games = link.state().games;
+  const entries = rackOf(games);
   const root = el("div", "home");
 
   const title = el("div", "home-title");
@@ -24,6 +27,13 @@ export function homeView(ctx: ViewContext): View {
   playKey.classList.add("home-play");
   place(playKey, layout.play);
   playKey.addEventListener("click", () => {
+    if (newGame) {
+      sound.play("tap");
+      rack.press(NEW_GAME.id);
+      machine.coin();
+      link.send({ type: "build" });
+      return;
+    }
     if (!current?.ready) return;
     sound.play("tap");
     rack.press(current.id);
@@ -31,16 +41,20 @@ export function homeView(ctx: ViewContext): View {
     link.send({ type: "play" });
   });
 
-  const rack = createRack(layout, games, (id) => {
+  const rack = createRack(layout, entries, (id) => {
     sound.play("tick");
-    link.send({ type: "focus", game: id });
+    if (id === NEW_GAME.id) focusNewGame(true);
+    else focusGame(id);
   });
 
   root.append(title, facts, playKey, rack.el);
 
   let current: GameInfo | undefined;
+  /** NEW GAME is focused on this screen. */
+  let newGame = false;
 
   function show(state: BoxState, animate: boolean): void {
+    if (newGame) return;
     const game = state.games.find((g) => g.id === state.focus);
     if (!game || game === current) return;
     current = game;
@@ -50,8 +64,35 @@ export function homeView(ctx: ViewContext): View {
     facts.replaceChildren(...factsFor(game));
     fit();
     rack.focus(game.id);
-    machine.feed(state.games.indexOf(game));
-    if (!animate) return;
+    const slot = state.games.indexOf(game);
+    machine.feed(slot < layout.rack.length ? slot : null);
+    if (animate) settle();
+  }
+
+  function focusNewGame(animate: boolean): void {
+    if (newGame) return;
+    newGame = true;
+    current = undefined;
+    titleText.textContent = NEW_GAME.title;
+    playKey.textContent = "DESIGN";
+    playKey.removeAttribute("disabled");
+    facts.replaceChildren(fact("players", "2 PLAYERS"), fact("shield", "BUILT ON THE BOX"));
+    fit();
+    rack.focus(NEW_GAME.id);
+    machine.feed(null);
+    if (animate) settle();
+  }
+
+  function focusGame(id: string): void {
+    const fromNew = newGame;
+    newGame = false;
+    // Back from NEW GAME to the game the Box still has in focus: no event will come, so draw it now.
+    if (fromNew && id === link.state().focus) show(link.state(), true);
+    else link.send({ type: "focus", game: id });
+  }
+
+  /** The focus moved: the core turns, the title rises in, the chips press in one by one. */
+  function settle(): void {
     machine.coin();
     void play(titleText, [{ transform: "translateY(100%)", opacity: 0 }, { transform: "none", opacity: 1 }], {
       duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
@@ -67,12 +108,17 @@ export function homeView(ctx: ViewContext): View {
   void document.fonts.ready.then(fit);
 
   function onKey(e: KeyboardEvent): void {
-    if (!current) return;
-    const i = games.findIndex((g) => g.id === current?.id);
+    const at = newGame ? NEW_GAME.id : current?.id;
+    if (!at) return;
+    const i = entries.findIndex((entry) => entry.id === at);
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (step) {
-      const next = games[(i + step + games.length) % games.length];
-      if (next) link.send({ type: "focus", game: next.id });
+      const next = entries[(i + step + entries.length) % entries.length];
+      if (next) {
+        sound.play("tick");
+        if (next.id === NEW_GAME.id) focusNewGame(true);
+        else focusGame(next.id);
+      }
     } else if (e.key === "Enter") {
       playKey.click();
     }
@@ -82,6 +128,8 @@ export function homeView(ctx: ViewContext): View {
   return {
     el: root,
     update(state, event) {
+      // A focus the Box moved (another screen, a keyboard) takes over from NEW GAME.
+      if (event.type === "focus") newGame = false;
       show(state, event.type === "focus");
     },
     dispose() {

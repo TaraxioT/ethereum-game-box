@@ -3,7 +3,7 @@
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import { el, fitFont, place } from "../shell/dom.ts";
-import { createRack } from "./rack.ts";
+import { createRack, rackOf } from "./rack.ts";
 
 export function attractView(ctx: ViewContext): View {
   const { layout, link, machine, sound } = ctx;
@@ -26,7 +26,7 @@ export function attractView(ctx: ViewContext): View {
   const name = title.lastElementChild as HTMLElement;
   void document.fonts.ready.then(() => fitFont(name, layout.title.w, layout.orientation === "portrait" ? 52 : 64));
 
-  const rack = createRack(layout, link.state().games);
+  const rack = createRack(layout, rackOf(link.state().games));
   root.append(title, start, rack.el);
   void rack.rise();
 

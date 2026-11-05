@@ -121,6 +121,10 @@ export function createMachine(layout: Layout, scale: number): MachineView {
 
     coin: () => core.coin(),
 
+    run: (trace, options) => packets.run(trace, options),
+
+    swell: () => core.swell(),
+
     feed(slot) {
       if (slot === lit) return;
       lit = slot;

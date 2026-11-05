@@ -29,9 +29,10 @@ How they are built:
 | `<egb-gauge>` | The analogue gas gauge: a chrome bezel, a dark dial with ticks from 0 to 5 gwei (cold to hot), a gold pump glyph, an amber needle, a mint readout plate under it (`1.8 GWEI`). | `gwei` (number). Fills its square box; the readout hangs just below it. | The needle eases to each new value over 1.2 s. |
 | `<egb-fact>` | A fact about the focused game as an IC chip: dark epoxy body, silver pins top and bottom, a pin-1 dimple, a line icon and a word in silkscreen. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `press(delayMs)`. Height from its box (44 px default), width from the word. | `press()`: after the delay it comes down, presses into the board and settles (Home presses each in turn when the focus changes). |
 | `<egb-key>` | A physical key. `brass`: a bright bevelled gold frame round a brushed, warmer face, engraved letters, a bronze edge under it. `metal`: the gunmetal secondary key. A real `<button>` inside. | `variant` (`brass` default, `metal`), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. Fills its box. | Travels down on press (the cap covers more of its edge). `breathe`: a slow gold light breathing round it (`TAP TO START`). `disabled`: dark, no travel. |
-| `<egb-cart>` | A game's cartridge: a gunmetal keycap in a wider clipped housing; a dark glass screen with the title in arcade caps and the game's art on the glass (Quick Draw: a marigold bolt with sparks; Stock Duel: orange and cyan candlesticks). A game without art is sealed: a riveted cover, the title engraved, a brass `SOON` plate. | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`), `title` (the printed title), `focused`, `pressed`. Designed at 176 × 186. | `focused`: the keycap rises 16 px on a spring, and only then a lavender strip lights at its foot and round the housing's rim. Idle: no light at all. `pressed`: the keycap seats 8 px down (launch). |
+| `<egb-cart>` | A game's cartridge: a gunmetal keycap in a wider clipped housing; a dark glass screen with the title in arcade caps and the game's art on the glass (Quick Draw: a marigold bolt with sparks; Stock Duel: orange and cyan candlesticks; `new-game`, the Box's blank cartridge: a dashed frame and a plus). A game without art is sealed: a riveted cover, the title engraved, a brass `SOON` plate. | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`, `new-game`), `title` (the printed title), `focused`, `pressed`. Designed at 176 × 186. | `focused`: the keycap rises 16 px on a spring, and only then a lavender strip lights at its foot and round the housing's rim. Idle: no light at all. `pressed`: the keycap seats 8 px down (launch). |
 | `<egb-txbar>` | The transaction-progress LCD strip: the kind and amount (`FAUCET +100 EGB`, `STAKE 2×10 EGB`, `PAYOUT 20 EGB`, `REFUND 10 EGB`), a hash cell (shortened hash, or `SIMULATED`), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | Each step lights mint as the transaction reaches it; unreached steps stay ghosts. The strip fades in on `show` and out on `hide`. |
 | `<egb-plate>` | An engraved plate with a screw in each corner: `DEMO`, `SOON`, the instruction plate. | `variant` (`brass` default, `metal`). Its children are its content (words, a switch, several lines). Sizes from `font-size`. | Never. |
+| `<egb-lcd>` | A text LCD in the clock's bevelled frame and glass: the agent's words while a game builds, the Designer's status and captions. The newest line sits at the foot of the glass, the older ones dimmer above it, the oldest going under the bezel's shade; lines wrap. | `tone` (`mint` default, `amber`), `caret` (a blinking block cursor: the machine is working). `push(text, mark?)` (`bad` red, `ok` bright), `set(lines)`, `clear()`. Fills its box; `font-size` sets the text. | `push`: the lines step up by the new one's height as it fades in. The caret blinks by opacity. |
 | `<egb-seg>` | A seven-segment LCD readout with the unlit ghost segments showing; a point or comma lights the decimal mark of the digit before it. Used by the port and the clock. | `tone` (`amber` default, `mint`), `digits` (the fewest cells; the value is right-aligned), `value` (text). `font-size` is the cell height. | Changed digits roll in turn, left to right, 70 ms apart. |
 
 Two pure modules go with them:
@@ -58,7 +59,8 @@ Two pure modules go with them:
 - `packets.ts`: a live canvas over the board. `run(trace)` sends a comet along the copper; `light(trace)` lights the
   focused cartridge's feed. It draws only while a packet is in flight.
 - `machine.ts`: the objects that stay across views (board, packets, core, ports, clock, gauge, transaction LCD, the
-  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin`, `feed`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
+  in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin`, `feed`, `run` (a
+  packet along a named trace, into the core or out of it) and `swell`. It turns transaction steps into moments: a packet from the port when a stake is sent, a swell
   when it lands in a block, a packet out to the port for a payout.
 - `router.ts`: mounts the view for the Box's phase and moves between views in depth (the old sinks, the new rises).
   A move that a newer one or a rebuilt stage overtakes never mounts.
@@ -91,15 +93,61 @@ sent `booted` at once (`shell/app.ts`).
 `views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
 on `BoxEvent`s and acts only through `link.send`.
 
-- `routes.ts`: phase → view and pose.
+- `routes.ts`: phase → view and pose (`build` → the game builder).
 - `attract.ts`: the Box's name, the rack rising, a breathing brass `TAP TO START`.
 - `home.ts`: the focused game's title, IC-chip facts and brass Play, and the rack (`rack.ts`). Touch or arrow keys
-  focus; the cartridge rises, its feed lights and the core turns once. Enter plays.
+  focus; the cartridge rises, its feed lights and the core turns once. Enter plays. On the Box (`build:box`) the rack
+  ends in the blank NEW GAME cartridge: it focuses like a game, on the screen alone (the Box's focus is always a game),
+  and its key, DESIGN, sends `build`.
+- `rack.ts`: the rack's entries (`rackOf(games)`: each game's cartridge, then NEW GAME where the Box has the builder)
+  and where each stands (`rackSlots`: the layout's housings, each fed by a trace, then on along the row; a row too long
+  for the stage closes up to fit, as in portrait, where the cartridges past the fourth then stand off the traces).
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`), a plate under the core and keys at the bottom.
   Refund's `REFUND ALL` key (once the stakes unlock) sends every refund still owed, so the Box never waits on a
   player who walked away.
 - Game screens live with their games in `src/games/<game>/screen.ts`.
+
+## The game builder
+
+The Box's `build` phase (the box build only): the Designer and the Build screen, talking to the server's builder
+routes (`server/README.md`) with the launcher token, and following its event stream.
+
+| Module | What it is |
+|---|---|
+| `views/builder.ts` | The routed view: holds the stream (`hello`, then `designer` and `forge` events; it reconnects and starts over), shows the Designer or the Build screen and moves between them in depth (the old sinks, the new rises), setting the machine's pose (`page` for the Designer, `home` for a build). A newly queued build takes the screen at once. On entering, a design left half-way is picked up; one already built (the newest job is that brief, done), or none, starts afresh. While the player works and while a build streams in it sends `build`, so the Box only times out back to Home when the builder is left alone. |
+| `views/designer.ts` | The Designer on a page round the sunken core: the step's name and its question (as big as fits) on the left, the step's brass keys under it; the brief on the right; the status LCD under the core (the model reading, what was heard, a refusal in the Box's words); along the bottom HOME, BACK, a big typed-answer field with SEND (Enter sends), and HOLD TO TALK. A refusal goes on the LCD; a `stale` design is fetched again. Locked while a build runs; BUILD stays dark when the provider can't build here. |
+| `views/build.ts` | The World Computer making the game, on the whole lit board: the kicker (`BUILDING`, `CHECKING`, `READY TO PLAY`, `DIDN'T BUILD`) with a `SIMULATED` plate for a sim build, the title, the step at work and an amber elapsed clock; the agent's words on a mint LCD; the brief on the right; the four compile plates (manifest, type check, bundle, icon) standing in the rack's housings. The result: `HOME`, or the error and `DESIGNER` (the brief is kept) and `HOME`. |
+| `views/brief-plates.ts` | The brief as engraved plates, one per field: gunmetal once settled, brass for the question asked, faint while open. Says which fields filled. |
+| `views/builder-layout.ts` | Where the builder's pieces stand, landscape and portrait; a compile plate's place in a housing. |
+| `views/builder-link.ts` | The page's line to the builder: takes the launcher token from its meta tag at load (and removes the tag), sends it on the builder's routes only; `getJson`, `postJson`, `postBytes`, `getBytes`, `BuilderError` (status, the Designer's code, the Box's words); `openBuilderStream` (a fetch read frame by frame, since EventSource can't send a header; reconnects 0.5 s doubling to 4 s). The test page uses it too. |
+| `views/builder.css` | Every style above. |
+
+How it moves:
+
+- **Designer.** A new question's keys rise in one after another. A field that fills presses its plate in and runs a
+  packet up a cartridge feed into the core, which swells. While the model reads an answer the LCD's cursor blinks and a
+  packet runs down the clock's feed into the core every 1.1 s; when it lands, the LCD says whether it got anything.
+- **Build.** Each tool call the agent makes runs a packet into the core along its kind of work's trace: reading and
+  searching down Player 1's copper (lavender), writing and editing down Player 2's (mint), the build check down the
+  clock's feed (gold); one packet a trace at a time, so a burst stays readable. A failed tool call runs a red packet out
+  of the core. A build check sets every compile plate checking (its lamp breathing amber); each check that lands lights
+  its plate mint or red, seats it, and runs a packet up its housing's trace. The result turns the core once (a game
+  loaded) and raises the keys. Events older than two seconds are a replay (a screen that came in late): they set the
+  end state without a moment.
+- Only transform and opacity animate; every glow is static. Under reduced motion the screens show end states and the
+  packets land at once.
+
+## Voice
+
+`voice/`: the Designer's push-to-talk, as the Box's voice port has it (`GET /api/builder` says which). Nothing here
+talks to anything but the Box: every ElevenLabs call is the server's, behind its own monthly budget.
+
+| Module | What it is | API |
+|---|---|---|
+| `designer-voice.ts` | The key's behaviour. Mock voice (the default): no microphone; the press shows the scripted player's next line (`GET turns`) and the release sends an empty take, which the Box "hears" as that line and reads. ElevenLabs: the key records while held and the take goes up to be transcribed; each new question is spoken from the clip the Box made (its words are on screen either way). | `createDesignerVoice(status, muted, hooks): { mode, press(), release(session), speak(session), stop() }` |
+| `recorder.ts` | Push-to-talk recording: MediaRecorder on a mic opened at the press and closed at the release (its tracks stopped), one webm/opus blob per take; a take is cut at 15 s, and one under 0.3 s is a tap, not an answer. | `createRecorder()`, `canRecord()`, `MAX_TAKE_MS`, `MIN_TAKE_MS` |
+| `clips.ts` | Plays a spoken clip: fetched with the token (an `<audio src>` can't send it), decoded and played through WebAudio, one at a time; muted (localStorage `gamebox-muted=1`), nothing plays. Never throws: the question stays on screen. | `createClipPlayer(muted): { play(clip), stop() }` |
 
 ## Demo
 

@@ -3,6 +3,8 @@
 // `ctx.link.send`. The Box's own objects (board, core, ports, clock) belong to the machine, not to a view.
 import type { BoxEvent, BoxLink, BoxState } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
+import type { RunOptions } from "../shell/packets.ts";
+import type { TraceName } from "../shell/traces.ts";
 import type { Cue } from "../../core/types.ts";
 
 export interface View {
@@ -26,6 +28,10 @@ export interface Machine {
   coin(): void;
   /** Lights the focused cartridge's feed into the core. */
   feed(slot: number | null): void;
+  /** Runs a packet of light along a trace of the board into the core (out of it with `reverse`); resolves on landing. */
+  run(trace: TraceName, options?: RunOptions): Promise<void>;
+  /** The core's glass swells once: something landed in it. */
+  swell(): void;
 }
 
 export interface Sound {
