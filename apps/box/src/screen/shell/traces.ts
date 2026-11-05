@@ -1,7 +1,7 @@
-// The board's lit wiring for a layout: the named traces packets ride (each port, the clock and each cartridge
+// The Grid's light lines for a layout: the named traces packets ride (each port, the clock and each cartridge
 // housing into the core's collar) and the decorative bundles that run in from the stage's side edges. Routed with
 // 45° bends only, no trace crossing another or running under what is read (the title, facts, Play, the ports' and
-// the clock's modules, the rack), except a port's own module, which its trace must leave. Pure: board.ts draws these,
+// the clock's modules, the rack), except a port's own module, which its trace must leave. Pure: grid.ts draws these,
 // packets.ts runs light along them.
 import type { Layout, Point, Rect } from "./layout.ts";
 import { bus, chamfer, clipCircle, exitRect, join, offset, route, type Poly, type Sample } from "./route.ts";
@@ -10,11 +10,8 @@ export type SlotTrace = "slot0" | "slot1" | "slot2" | "slot3";
 export type TraceName = "port0" | "port1" | "clock" | SlotTrace;
 export const TRACE_NAMES: readonly TraceName[] = ["port0", "port1", "clock", "slot0", "slot1", "slot2", "slot3"];
 
-/** The neon, as tokens.css has it (--p1, --p2, --neon-lav, --neon-gold, --neon-mint): canvas needs the values. */
-export const NEON = { p1: "#ff9b3d", p2: "#3fd9ff", lav: "#ad8fff", gold: "#ffc46b", mint: "#86eec4" } as const;
-
-/** Each cartridge feed's colour, in rack order. */
-const SLOT_COLOURS = [NEON.lav, NEON.gold, NEON.gold, NEON.mint] as const;
+/** The light, as tokens.css has it (--p1, --p2, --sys): a port's trace is its seat's colour, every other the system's. */
+export const LIGHT = { p1: "#ff9b3d", p2: "#3fd9ff", sys: "#cfe8f6" } as const;
 
 export interface Trace {
   /** The named trace, or null for a line that only rides beside one or is decoration. */
@@ -31,7 +28,7 @@ export interface Trace {
 
 export interface Traces {
   readonly named: Readonly<Record<TraceName, Trace>>;
-  /** Every lit line on the board, named ones included. */
+  /** Every light line on the Grid, named ones included. */
   readonly all: readonly Trace[];
 }
 
@@ -62,7 +59,7 @@ function landscape(l: Layout): Trace[] {
     const lane = p.module.y + p.module.h + 36;
     const x = c.x - s * (c.y - lane + 20);
     const centre = join(route(p.ring, { x, y: lane }, { axis: "y", lead: lane - p.ring.y - 24 }), [{ x, y: lane }, { x: x + s * 400, y: lane + 400 }]);
-    out.push(...lit(`port${seat}` as TraceName, bus(centre, 3, 10), seat === 0 ? NEON.p1 : NEON.p2, 4, l, p.module));
+    out.push(...lit(`port${seat}` as TraceName, bus(centre, 3, 10), seat === 0 ? LIGHT.p1 : LIGHT.p2, 4, l, p.module));
   });
 
   out.push(...clockFeed(l));
@@ -79,15 +76,15 @@ function landscape(l: Layout): Trace[] {
         : chamfer(join(route(start, { x: start.x, y: h.y - 60 }), route({ x: start.x, y: h.y - 60 }, target, { axis: "x" })), 18);
     const deeper = extend(centre, 40);
     const name = `slot${i}` as SlotTrace;
-    out.push(...lit(name, [deeper], SLOT_COLOURS[i] ?? NEON.lav, 4.5, l, null, h));
-    out.push(...lit(name, [offset(deeper, -s * 9)], SLOT_COLOURS[i] ?? NEON.lav, 3, l, null, h, false));
+    out.push(...lit(name, [deeper], LIGHT.sys, 4.5, l, null, h));
+    out.push(...lit(name, [offset(deeper, -s * 9)], LIGHT.sys, 3, l, null, h, false));
   });
 
   // Decoration from the side edges: a pair below Play into the collar's lower left and its mirror on the right, and
   // two bundles across the open right side, each stepping once at 45° on its way in.
   const low = l.play.y + l.play.h + 30;
-  out.push(...edge("left-low", fromEdge(-4, low, onCollar(l, 240)), 2, 12, [NEON.mint, NEON.gold], l));
-  out.push(...edge("right-low", fromEdge(l.width + 4, low, onCollar(l, 120)), 2, 12, [NEON.gold, NEON.mint], l));
+  out.push(...edge("left-low", fromEdge(-4, low, onCollar(l, 240)), 2, 12, l));
+  out.push(...edge("right-low", fromEdge(l.width + 4, low, onCollar(l, 120)), 2, 12, l));
   const upper = c.y - 44;
   out.push(
     ...edge(
@@ -95,7 +92,6 @@ function landscape(l: Layout): Trace[] {
       join(route({ x: l.width + 4, y: upper - 38 }, { x: c.x + collar + 60, y: upper }, { axis: "x", lead: 270 }), [{ x: c.x, y: upper }]),
       3,
       11,
-      [NEON.lav, NEON.lav, NEON.lav],
       l,
     ),
   );
@@ -106,7 +102,6 @@ function landscape(l: Layout): Trace[] {
       join(route({ x: l.width + 4, y: mid + 28 }, { x: c.x + collar + 60, y: mid }, { axis: "x", lead: 190 }), [{ x: c.x, y: mid }]),
       2,
       11,
-      [NEON.gold, NEON.mint],
       l,
     ),
   );
@@ -129,7 +124,7 @@ function portrait(l: Layout): Trace[] {
     const k = corner.x - s * corner.y - s * 28;
     const turn = { x: p.ring.x, y: s * (p.ring.x - k) };
     const centre = [p.ring, turn, { x: turn.x + s * 400, y: turn.y + 400 }];
-    out.push(...lit(`port${seat}` as TraceName, bus(centre, 3, 10), seat === 0 ? NEON.p1 : NEON.p2, 4, l, p.module));
+    out.push(...lit(`port${seat}` as TraceName, bus(centre, 3, 10), seat === 0 ? LIGHT.p1 : LIGHT.p2, 4, l, p.module));
   });
 
   out.push(...clockFeed(l));
@@ -147,13 +142,13 @@ function portrait(l: Layout): Trace[] {
     const lane = h.y - 26 - 20 * (rank === 0 ? 1 : 0);
     const tail = [start, { x: start.x, y: lane }, { x: line[0]!.x, y: lane }];
     const path = chamfer(join(tail, line.slice(1)), 10);
-    out.push(...lit(`slot${i}` as SlotTrace, [path], SLOT_COLOURS[i] ?? NEON.lav, 4.5, l, null, h));
+    out.push(...lit(`slot${i}` as SlotTrace, [path], LIGHT.sys, 4.5, l, null, h));
   });
 
   // Decoration: a fine pair in from each side edge, in the narrow arc between the port's dive and the feeds' climb.
   const y = c.y - 37;
-  out.push(...edge("left-mid", route({ x: -4, y: y - 40 }, { x: c.x, y }, { axis: "x", lead: 54 }), 2, 9, [NEON.lav, NEON.mint], l, 3));
-  out.push(...edge("right-mid", route({ x: l.width + 4, y: y - 40 }, { x: c.x, y }, { axis: "x", lead: 54 }), 2, 9, [NEON.mint, NEON.lav], l, 3));
+  out.push(...edge("left-mid", route({ x: -4, y: y - 40 }, { x: c.x, y }, { axis: "x", lead: 54 }), 2, 9, l, 3));
+  out.push(...edge("right-mid", route({ x: l.width + 4, y: y - 40 }, { x: c.x, y }, { axis: "x", lead: 54 }), 2, 9, l, 3));
   return out;
 }
 
@@ -163,7 +158,7 @@ function portrait(l: Layout): Trace[] {
 function clockFeed(l: Layout): Trace[] {
   const start = { x: l.clock.x + l.clock.w / 2, y: l.clock.y + l.clock.h };
   const centre = [start, { x: start.x, y: l.core.centre.y }];
-  return lit("clock", bus(centre, 3, 12), NEON.mint, 3.5, l, null, null, true, true);
+  return lit("clock", bus(centre, 3, 12), LIGHT.sys, 3.5, l, null, null, true, true);
 }
 
 /** Each rack slot, which side of the core it is on (+1 left: toward the core is +x) and its rank there (0 nearest). */
@@ -228,13 +223,13 @@ function lit(
   });
 }
 
-/** A decorative bundle in from the stage's edge: `n` lines `pitch` apart, each its own colour, cut at the collar. */
-function edge(id: string, centre: Point[], n: number, pitch: number, colours: readonly string[], l: Layout, width = 3.5): Trace[] {
-  return bus(extend(centre, 40), n, pitch).map((line, i) => ({
+/** A decorative bundle in from the stage's edge: `n` lines `pitch` apart in the system's light, cut at the collar. */
+function edge(id: string, centre: Point[], n: number, pitch: number, l: Layout, width = 3.5): Trace[] {
+  return bus(extend(centre, 40), n, pitch).map((line) => ({
     name: null,
     bundle: id,
     points: clipCircle(line, l.core.centre, l.core.collar),
-    colour: colours[i] ?? NEON.lav,
+    colour: LIGHT.sys,
     width,
     plug: null,
   }));

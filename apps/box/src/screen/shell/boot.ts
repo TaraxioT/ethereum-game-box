@@ -7,13 +7,13 @@ import type { Layout } from "./layout.ts";
 import { calm, el, play, wait } from "./dom.ts";
 
 export async function boot(machine: MachineView, layout: Layout, sound: Sound): Promise<void> {
-  const { board, core, ports, clock, gauge } = machine.parts;
+  const { grid, core, ports, clock, gauge } = machine.parts;
   const rise = [ports[0], ports[1], clock, gauge];
   const cover = el("div", "boot-cover");
   const { x, y } = layout.core.centre;
   cover.style.setProperty("--cx", `${x}px`);
   cover.style.setProperty("--cy", `${y}px`);
-  board.after(cover);
+  grid.after(cover);
   core.setAttribute("dark", "");
   for (const part of rise) part.style.opacity = "0";
 

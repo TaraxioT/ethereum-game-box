@@ -12,21 +12,21 @@
 .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; contain: layout paint; }
 
 .machine, .machine > * { position: absolute; inset: 0; }
-.board { transition: opacity var(--t-page) var(--ease-out); }
-.board > canvas { position: absolute; left: 0; top: 0; }
-.board-dimmer { background: rgb(9 5 22 / 0.62); opacity: 0; pointer-events: none; transition: opacity var(--t-page) var(--ease-out); }
+.grid { transition: opacity var(--t-page) var(--ease-out); }
+.grid > canvas { position: absolute; left: 0; top: 0; }
+.grid-dimmer { background: var(--void); opacity: 0; pointer-events: none; transition: opacity var(--t-page) var(--ease-out); }
 .core-host { inset: auto; display: grid; place-items: center; pointer-events: none; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 .view-layer { pointer-events: none; }
 .view-layer > .view { position: absolute; inset: 0; pointer-events: auto; }
 .overlay { pointer-events: none; }
 .overlay > * { pointer-events: auto; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 
-/* Page: the board dims and the core sinks back a little; the ports and clock stay up. */
-.machine[data-pose="page"] .board-dimmer { opacity: 1; }
+/* Page: the Grid dims and the core sinks back a little; the ports and clock stay up. */
+.machine[data-pose="page"] .grid-dimmer { opacity: 0.7; }
 .machine[data-pose="page"] .core-host { transform: scale(0.82); }
 
 /* Game: only the thin overlay of the Box stays — ports, clock and the stake. */
-.machine[data-pose="game"] .board, .machine[data-pose="game"] .core-host { opacity: 0; }
+.machine[data-pose="game"] .grid, .machine[data-pose="game"] .core-host { opacity: 0; }
 .machine[data-pose="game"] egb-gauge, .machine[data-pose="game"] egb-txbar { opacity: 0; pointer-events: none; }
 .machine[data-pose="game"] egb-clock { transform: translateY(-14px) scale(0.78); }
 .machine[data-pose="game"] .view-layer { z-index: 0; }
@@ -41,9 +41,9 @@
 .machine[data-pose="game"] .stake-chip:not([hidden]) { opacity: 1; }
 [data-orientation="portrait"] .stake-chip { top: 40px; }
 
-/* The boot's cover: dark with a hole at the core; scaled up, it uncovers the board outward from the core. */
+/* The boot's cover: the void with a hole at the core; scaled up, it uncovers the Grid outward from the core. */
 .boot-cover {
   inset: auto; left: calc(var(--cx) - 1400px); top: calc(var(--cy) - 1400px); width: 2800px; height: 2800px;
-  background: radial-gradient(circle at center, transparent 0 330px, var(--room) 520px);
+  background: radial-gradient(circle at center, transparent 0 330px, var(--void) 520px);
   transform: scale(0.5); pointer-events: none;
 }
