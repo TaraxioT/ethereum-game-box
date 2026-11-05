@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethereum Game Box · Game UI plan</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #141413; --muted: #6F6E68; --line: #DEDCD2; --panel: #F0EEE6;
+    --accent: #3B5BDB; --accent-soft: #E3E8FB; --good: #2F7D4F;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1B1B1A; --ink: #EDEBE4; --muted: #A09E96; --line: #3A3936; --panel: #252523;
+            --accent: #8FA6FF; --accent-soft: #263055; --good: #7CC79A; }
+  }
+  * { box-sizing: border-box }
+  html { scroll-behavior: smooth }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 16px 120px }
+  header .kicker { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent) }
+  h1 { font: 500 44px/1.1 var(--serif); letter-spacing: -.015em; margin: 14px 0 12px }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 620px }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 48px }
+  nav a { font: 13px/1 var(--mono); color: var(--ink); text-decoration: none; padding: 8px 12px;
+          border: 1px solid var(--line); border-radius: 999px }
+  nav a:hover { border-color: var(--accent); color: var(--accent) }
+  section { border-top: 1px solid var(--line); padding-top: 36px; margin-top: 52px }
+  h2 { font: 500 30px/1.2 var(--serif); margin: 0 0 6px }
+  h2 .n { font: 600 13px/1 var(--mono); color: var(--accent); vertical-align: middle; margin-right: 10px }
+  h3 { font-size: 17px; margin: 30px 0 8px }
+  p, li { max-width: 680px }
+  ul, ol { padding-left: 22px }
+  li { margin: 4px 0 }
+  .sub { color: var(--muted); margin-top: 0 }
+  .callout { background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; margin: 22px 0 }
+  .callout p { margin: 0 }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0 }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px }
+  .card h4 { margin: 0 0 4px; font-size: 15px }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted) }
+  .steps { counter-reset: s; list-style: none; padding: 0 }
+  .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 12px 0 }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px;
+                      border-radius: 50%; background: var(--accent); color: var(--bg);
+                      font: 600 13px/26px var(--mono); text-align: center }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 15px }
+  th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 9px 10px; vertical-align: top }
+  th { font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+  .table-scroll { overflow-x: auto }
+  code { font: 13.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+         padding: 1px 5px; overflow-wrap: anywhere }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 20px 0; padding: 0; list-style: none }
+  .flow li { flex: 1 1 120px; max-width: none; margin: 0; background: var(--panel); border: 1px solid var(--line);
+             border-radius: 10px; padding: 10px 12px; font-size: 14px; position: relative }
+  .flow li strong { display: block; font-size: 15px }
+  .flow li span { color: var(--muted) }
+  .flow li:not(:last-child)::after { content: "→"; position: absolute; right: -6px; top: 50%;
+             transform: translate(50%, -50%); color: var(--accent); font-weight: 700; z-index: 1 }
+  footer { margin-top: 72px; color: var(--muted); font-size: 14px }
+  @media (max-width: 560px) {
+    h1 { font-size: 34px } .lede { font-size: 17px } h2 { font-size: 25px }
+    .flow { flex-direction: column; gap: 14px }
+    .flow li { flex: none }
+    .flow li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -7px;
+             transform: translate(-50%, 50%) }
+  }
+  li.todo, li.done { list-style: none; margin-left: -22px }
+  li.done { color: var(--good) }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto }
+  pre code { background: none; border: 0; padding: 0 }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">ETHGlobal Mumbai · Game UI plan</div>
+  <h1>The Game Box UI, with a Demo mode</h1>
+  <div class="lede"><p>The plan for the Box&#39;s touchscreen, built simulated first. Live at
+<a href="https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/</a>.</p>
+</div>
+  <nav>
+    <a href="#s1">Goal</a>
+    <a href="#s2">What exists today</a>
+    <a href="#s3">The look</a>
+    <a href="#s4">Screens</a>
+    <a href="#s5">Games inside the Box</a>
+    <a href="#s6">Architecture</a>
+    <a href="#s7">Demo mode</a>
+    <a href="#s8">Constraints</a>
+    <a href="#s9">Steps</a>
+    <a href="#s10">Done when</a>
+  </nav>
+</header>
+
+<section id="s1">
+<h2><span class="n">01</span>Goal</h2>
+<p>The Box&#39;s touchscreen UI, plus a <strong>Demo mode</strong> of the same UI that runs in any browser with no hardware. The
+hackathon requires a live deployment, and Demo mode is it: anyone with the link can tap a badge, stake and play a
+match against a bot or a friend, and watch the simulated chain settle it.</p>
+<p>This pass is UI only and fully simulated: no contracts, no relayer, no Box server, no chain reads, no hardware
+drivers. The screens talk to one interface, <code>BoxLink</code>, so the real Box plugs in behind it later without a screen
+changing.</p>
+</section>
+
+<section id="s2">
+<h2><span class="n">02</span>What exists today</h2>
+<p><strong>The repo is greenfield.</strong> It has the pnpm workspace (<code>apps/*</code>, <code>packages/*</code>), <code>tsconfig.base.json</code>, the root
+scripts that run <code>typecheck</code>, <code>test</code> and <code>build</code> across packages, <code>CLAUDE.md</code>, a README per folder, and the project
+plan. No package has a <code>package.json</code> yet, so <code>pnpm typecheck</code> runs nothing. <code>deployments/sepolia.json</code> has no
+contracts. There is no screen, no game code and no test.</p>
+<p><strong>This pass adds</strong> <code>@egb/box</code> with its screen (<code>apps/box/src/screen/</code>) and two games&#39; rules and screens
+(<code>apps/box/src/games/</code>), a simulated Box behind <code>BoxLink</code>, the Demo mode build, its tests, and a public deployment on
+Cloudflare Pages. Nothing outside <code>apps/box/</code> changes except this plan and the lockfile.</p>
+<p><strong>The design language it continues</strong>, as plain facts:</p>
+<ul>
+<li>The Box is drawn as a small piece of the world computer: a machine on a circuit board, with the chain&#39;s own
+objects (a core, ports, a block clock, cartridges) as physical parts. Inside a game the Box steps back and the
+game has its own look.</li>
+<li>One locked visual target for Home: ports in the top corners, the clock hanging at the top centre, a black glass
+sphere in the middle, the focused game&#39;s title, facts and a gold Play on the left, and a rack of keycap
+cartridges along the bottom, all on gunmetal plates with neon traces running into the core.</li>
+<li>Earlier attempts failed in known ways, and these are now rules: flat mid-tone boards kill the 3D (brightness must
+come from light); wide blooms look cheap (glows stay on their edges); a spinning logo and a boot that moves
+everything at once look broken; idle cartridges with neon look busy; saturated yellow keys look like a website.</li>
+<li>Text is big and set in a display face in caps, like a console, never tiny letter-spaced labels.</li>
+<li>Stock Duel keeps cards. The hand is a Rolodex with index tabs, so a player always sees their whole hand. The stat
+is picked last, after both cards are down; picking it first hands the round to the second player. No dice, no
+hex-hash visuals, no cards fanned on a table, no tilted cards.</li>
+</ul>
+</section>
+
+<section id="s3">
+<h2><span class="n">03</span>The look</h2>
+<p><strong>World Computer, skeuomorphic.</strong> The Box is drawn as a machine built from real objects with thickness and edges.
+Nothing reads as a flat web panel. One key light from the top left: lit top edges, dark bottom edges, inner shadows.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Object</th>
+<th>How it looks</th>
+<th>When it moves</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Board</strong></td>
+<td>Gunmetal plates with seams, screws and small 3D parts (chips, capacitors, pads). Thick neon traces, each ending in a connector, run from the ports, clock and cartridges into the core.</td>
+<td>Never. Drawn once and cached. Packets ride its copper.</td>
+</tr>
+<tr>
+<td><strong>Core</strong></td>
+<td>A black glass sphere in a thick metal collar on a thin base ring. The real six-facet Ethereum mark inside, front on, lit from behind. A window reflection, a specular point, a Fresnel rim.</td>
+<td>Holds still. Swells when a transaction lands or a block seals. Turns once like a coin when a game loads.</td>
+</tr>
+<tr>
+<td><strong>Ports</strong></td>
+<td>Top corners. A neon ring socket (Player 1 orange, left; Player 2 cyan, right), a blockie tile, the player&#39;s name, and an amber seven-segment balance LCD. Empty: a dark socket and <code>TAP BADGE</code>.</td>
+<td>Lights when its badge taps; the balance digits roll on a payout.</td>
+</tr>
+<tr>
+<td><strong>Chain clock and gas gauge</strong></td>
+<td>A bevelled LCD hanging from the top centre on two short chains: <code>BLOCK n</code>. Beside it an analogue gauge with a needle and a gwei readout.</td>
+<td>The number rolls one digit at a time on each block. The needle eases to each new gas value.</td>
+</tr>
+<tr>
+<td><strong>Facts</strong></td>
+<td>Small IC chip packages with pins on two sides: players, time, stake range.</td>
+<td>Press in one after another when the focused game changes.</td>
+</tr>
+<tr>
+<td><strong>Keys</strong></td>
+<td>Play and every primary key are brass: a bevelled gold frame round a brushed warmer face, engraved letters, a bronze edge under it, real travel. Secondary keys are gunmetal.</td>
+<td>Travel down on press. <code>TAP TO START</code> breathes.</td>
+</tr>
+<tr>
+<td><strong>Cartridges</strong></td>
+<td>Gunmetal keycaps with a dark glass screen, an arcade-caps title across its top and the game&#39;s art standing on the glass, set in clipped housings. Idle: no neon. Unbuilt games are sealed with an engraved <code>SOON</code> plate and no screen.</td>
+<td>The focused one rises out of its housing and only then lights a thin lavender strip at its foot.</td>
+</tr>
+<tr>
+<td><strong>Transaction progress</strong></td>
+<td>A packet of light runs along the copper from the port to the core (or from the core to a port for a payout); the core seals it; an LCD strip steps <code>SIGNED → SENT → IN BLOCK n → PAID</code>, with the hash, or <code>SIMULATED</code>, beside it.</td>
+<td>Each step lights when it happens, at the simulated chain&#39;s real pace.</td>
+</tr>
+</tbody></table></div>
+<p><strong>Palette.</strong> Devcon 8&#39;s night with the lights dimmed. Room <code>#120c24</code>; plates <code>#2d2356 → #211943</code>; deep grooves
+<code>#120c24</code>; ink <code>#07040f</code>, <code>#0e0820</code>, <code>#160b2b</code>. Neon: lavender-violet <code>#ad8fff</code>, marigold <code>#ffc46b</code>, mint <code>#86eec4</code>.
+Devcon hues for accents: violet <code>#7235ed</code>, lavender <code>#c4aaf7</code>, ETH <code>#8c8dfc</code>. Seats: Player 1 orange <code>#ff9b3d</code>,
+Player 2 cyan <code>#3fd9ff</code>. Text <code>#f5f1ff</code>, <code>#d2c9ef</code>, <code>#9d92c4</code>. LCD amber <code>#ffb547</code> on <code>#1a0f04</code>; clock mint on
+dark teal. Money is gold, wins green <code>#7ee08a</code>, losses red <code>#ff6b6b</code>.</p>
+<p><strong>Light.</strong> Every glow is a 1–3 px line with a short glow, at most 10 px. No light spills onto the board. Brightness
+comes from light (lit edges, the core&#39;s centre, neon), never from a flat mid-tone board. Static box-shadows and
+gradients only: no blur filters, no blend modes, no animated shadows.</p>
+<p><strong>Type.</strong> Unbounded for display (titles, keys, labels: caps, big, a console not a website), Bricolage Grotesque for
+body text, JetBrains Mono for numbers. All three self-hosted, bundled with the build. Nothing under 14 px at
+1280×800.</p>
+<p><strong>Motion.</strong> Physical and story-driven: the screen is calm until the story reaches an element, then that element
+comes alive. Boot goes one step at a time: the core lights where it stands, the board powers on round it, the ports
+and clock come up, the cartridges rise, then <code>TAP TO START</code> breathes. Page changes are depth moves (the old page
+sinks, the new one rises). Only transform and opacity animate. Reduced motion (<code>prefers-reduced-motion</code>) shows end
+states with short fades.</p>
+</section>
+
+<section id="s4">
+<h2><span class="n">04</span>Screens</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>What it shows</th>
+<th>How you get there and out</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Attract / boot</strong></td>
+<td>The boot sequence, then the Box idling with a breathing brass <code>TAP TO START</code>.</td>
+<td>Load. Any tap, click or key leads to Home. Home falls back here after a minute idle.</td>
+</tr>
+<tr>
+<td><strong>Home</strong></td>
+<td>The comp: ports, clock and gauge, core, the focused game&#39;s title, facts and Play, the cartridge rack (Quick Draw, Stock Duel, Bet on X sealed, B17 sealed).</td>
+<td>Focus a cartridge by touching it or with the arrow keys. Play opens Join, or Stake if both seats are full.</td>
+</tr>
+<tr>
+<td><strong>Join</strong></td>
+<td>Two big sockets: each player taps a badge to take a seat. A new badge gets 100 test EGB from the faucet (a transaction).</td>
+<td>Both seats full → Stake. Back → Home.</td>
+</tr>
+<tr>
+<td><strong>Stake</strong></td>
+<td>Stake choices on brass keys (5, 10, 25 EGB), the trust tier, and each seat&#39;s <code>TAP TO SIGN</code>. Both taps → the Box opens the match (one transaction, both stakes in).</td>
+<td>Opened → the game. Back → Home before anyone signs.</td>
+</tr>
+<tr>
+<td><strong>Quick Draw</strong></td>
+<td>The game, under the thin Box overlay.</td>
+<td>Ends → Result.</td>
+</tr>
+<tr>
+<td><strong>Stock Duel</strong></td>
+<td>The game, under the thin Box overlay.</td>
+<td>Ends → Result.</td>
+</tr>
+<tr>
+<td><strong>Result</strong></td>
+<td>The winner&#39;s port lit, <code>WINNER</code>, the payout transaction running from the core to their port. A draw returns both stakes.</td>
+<td>Rematch (both seats tap again on Stake) or Home.</td>
+</tr>
+<tr>
+<td><strong>Refund</strong></td>
+<td>Shown when the Box fails to settle in time: the open match, its timeout counted in blocks, then each seat taps to take its stake back (a transaction each).</td>
+<td>In Demo mode, the <code>CUT POWER</code> switch on the DEMO plate makes the Box miss its settle during a game. Both refunded → Home.</td>
+</tr>
+</tbody></table></div>
+</section>
+
+<section id="s5">
+<h2><span class="n">05</span>Games inside the Box</h2>
+<p>Inside a game the Box shrinks to a <strong>thin overlay</strong>: the two ports in the top corners (smaller), the clock at the top
+centre, and the stake between them. Everything else of the Box steps back; the game has its own design language.</p>
+<h3>Quick Draw</h3>
+<p>A western standoff at dusk, drawn in flat silhouette: a long horizon, two seat-coloured figures at the edges, a wooden
+<strong>flip-plate sign</strong> in the middle on a post.</p>
+<ul>
+<li><strong>Wait</strong>: the sign reads <code>WAIT…</code>, the light dims, a heartbeat thuds. The draw comes after a random 2–6 s, from a
+seed both players can&#39;t see.</li>
+<li><strong>Draw</strong>: the sign&#39;s plate flips to <code>DRAW</code>. First tap wins.</li>
+<li><strong>Early tap</strong>: a tap before the flip loses on the spot (<code>TOO EARLY</code>).</li>
+<li>The result shows each player&#39;s reaction time in milliseconds.</li>
+</ul>
+<h3>Stock Duel</h3>
+<p>A painterly <strong>live painting</strong>: a dark study, a warm lamp on Player 1&#39;s side (left), a cyan lamp on Player 2&#39;s
+(right), each pooling light on its player&#39;s half of the desk. Brushed-paper textures from layered gradients.</p>
+<ul>
+<li><strong>The deal.</strong> Each player gets four stocks from a 20-stock deck, with numbers recorded from Robinhood Chain&#39;s stock
+pools, frozen at the deal.</li>
+<li><strong>The hand</strong> is a classic brass-and-card <strong>Rolodex</strong> with index tabs: all four tickers show on the tabs; the front
+card is face up with the company&#39;s name and a draining ring that shows how long it stays in front. Where the stats
+go there is a <code>?</code>. No stats on hand cards before the flip. Cards stay upright: the drum indexes one card at a time,
+turning cards over its top, never tilted on the page.</li>
+<li><strong>The pick.</strong> A tap plays the front card. Once one player has played, the other has one turn of the drum, then their
+front card is played for them.</li>
+<li><strong>The stat</strong> is chosen last, after both picks, on a brass <strong>astrolabe dial</strong>: price, average price, 24-hour move or
+liquidity. It comes from both badges&#39; randomness: <code>(roll1 + roll2) mod 4</code>.</li>
+<li><strong>The flip.</strong> Both cards come out as cream manuscript reveal cards and flip together. The higher number wins; the
+winner&#39;s card gets a green wax seal stamped <code>FINALIZED</code>, the loser&#39;s a red one stamped <code>SLASHED</code>. A tie replays the
+round with the next cards.</li>
+<li><strong>Best of three.</strong> First to two rounds. If the hands run out, the leader wins; level is a draw.</li>
+</ul>
+<p><strong>Bet on X</strong> and <strong>B17</strong> show on Home as sealed cartridges with an engraved <code>SOON</code> plate and no fake screens. They
+can be focused (their title and facts show) but Play stays dark.</p>
+</section>
+
+<section id="s6">
+<h2><span class="n">06</span>Architecture</h2>
+<pre><code>apps/box/
+  package.json            @egb/box: dev, build, typecheck, test
+  vite.config.ts          root src/screen, out dist/screen
+  src/
+    screen/
+      index.html          the one page
+      main.ts             picks the link and the mode, mounts the app
+      tokens.css          palette, type, light, motion tokens
+      fonts.css           the three self-hosted faces
+      README.md           every part, documented
+      parts/              custom elements: &lt;egb-core&gt; &lt;egb-port&gt; &lt;egb-clock&gt; &lt;egb-gauge&gt; &lt;egb-fact&gt;
+                          &lt;egb-key&gt; &lt;egb-cart&gt; &lt;egb-txbar&gt; &lt;egb-lcd&gt;, blockie.ts, eth-mark.ts
+      shell/              board.ts (cached canvas), layout.ts (anchors per orientation), packets.ts,
+                          stage.ts (scale to fit), boot.ts, router.ts (depth moves), overlay.ts, sound.ts
+      views/              attract.ts home.ts join.ts stake.ts result.ts refund.ts, view.ts (the contract)
+      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (the engine)
+      demo/               frame.ts pucks.ts oled.ts badges.ts bot.ts plate.ts intro.ts
+    games/
+      quick-draw/         rules.ts (+ test), screen.ts
+      stock-duel/         rules.ts (+ test), deck.ts, rolodex.ts, dial.ts, reveal.ts, screen.ts
+</code></pre>
+<ul>
+<li><code>apps/box/src/screen/</code> is Vite + TypeScript with small custom elements and no UI framework.</li>
+<li>Every game&#39;s <code>rules.ts</code> is pure, <code>(state, event) → state</code>, with no clock or randomness of its own (time and seeds
+arrive in events), and is unit tested.</li>
+<li><strong>The screen talks only to <code>BoxLink</code>:</strong></li>
+</ul>
+<pre><code class="language-ts">interface BoxLink {
+  state(): BoxState;                                       // the whole Box, as the screen draws it
+  subscribe(fn: (state: BoxState, event: BoxEvent) =&gt; void): () =&gt; void;
+  send(command: ScreenCommand): void;                      // what a touch on the screen asks for
+}
+</code></pre>
+<p>  <code>BoxState</code> holds the phase, both seats (badge, name, balance), the chain (block, gas), the focused game, the open
+  match with its game state, transactions in flight, and what each tap station&#39;s OLED shows. <code>BoxEvent</code> names the
+  moment that changed it (a block, a tap, a transaction step, a buzz, a sound cue), so the screen can animate the
+  moment rather than diff states. <code>ScreenCommand</code> is the touchscreen&#39;s vocabulary: focus, play, choose a stake, back,
+  rematch, home, set the opponent.</p>
+<ul>
+<li><strong><code>SimLink</code></strong> is this pass&#39;s Box: a simulated Box in the browser. It runs the game rules, a fake ledger (EGB
+balances, a faucet, escrow), a block clock at Sepolia&#39;s pace (a block every 12 s, numbered from Sepolia&#39;s real
+height), a gas value that wanders between 0.8 and 4 gwei, the stock deck with recorded prices, and transactions
+with realistic timing (signed at once, sent ~0.4 s later, in the next block, paid ~1 s after it). Tap stations are
+simulated behind it: <code>SimLink.station(seat).tap(badge)</code> is how the drawn hardware taps, and it is not part of
+<code>BoxLink</code>. Every simulated transaction has no hash, and the screen shows <code>SIMULATED</code> wherever a hash is missing.</li>
+<li><strong><code>LiveLink</code></strong>, a WebSocket to the Box server in <code>src/server/</code>, comes later and implements the same interface. Not
+built in this pass.</li>
+</ul>
+</section>
+
+<section id="s7">
+<h2><span class="n">07</span>Demo mode</h2>
+<ul>
+<li><strong>One codebase, one flag</strong>: <code>VITE_EGB_MODE=demo|box</code>. <code>demo</code> adds the drawn hardware, badges and labels. <code>box</code> is
+the bare screen for the Pi&#39;s kiosk browser. Until <code>LiveLink</code> exists, both run on <code>SimLink</code>, and in <code>box</code> mode the
+keyboard taps (A / L) stand in for the stations.</li>
+<li><strong>The missing hardware is drawn</strong>: two tap-station pucks at the bottom corners of the window, each a dark puck with
+a seat-colour NFC ring, a 128×64 monochrome OLED showing what the real station would show (<code>TAP TO JOIN</code>,
+<code>SIGN 10 EGB</code>, <code>GO!</code>, the card in front), and a shake for the buzz motor. The Box screen scales down to leave the
+desk below it.</li>
+<li><strong>Badges are draggable cards</strong> on the desk between the pucks. Tap four ways: drag a badge onto a puck; click or
+touch a puck (it taps with that seat&#39;s badge); press <strong>A</strong> (Player 1) or <strong>L</strong> (Player 2).</li>
+<li><strong>Opponent</strong>: a <code>VS BOT</code> / <code>HOT SEAT</code> switch on the desk. With the bot, Player 2 is the bot&#39;s badge and taps with
+human timing: a 0.6–2.2 s think in Stock Duel, a 220–420 ms reaction in Quick Draw with a rare early tap.</li>
+<li><strong>Labelling</strong>: an engraved <code>DEMO</code> plate is always visible, with the <code>CUT POWER</code> switch for Refund. Simulated
+transaction progress says <code>SIMULATED</code> where a hash would be.</li>
+<li><strong>A one-time brass instruction plate</strong> explains the four ways to tap, then stays dismissed (localStorage
+<code>gamebox-intro=1</code>).</li>
+<li><strong>Sound</strong>: small synthesized cues (tap, block, seal, flip, win) with a mute key on the desk. localStorage
+<code>gamebox-muted=1</code> mutes.</li>
+</ul>
+</section>
+
+<section id="s8">
+<h2><span class="n">08</span>Constraints</h2>
+<ul>
+<li><strong>60 fps</strong> on a Raspberry Pi 5 browser at 1280×800; scales to 1920×1080 and to a 390×844 phone (a portrait layout
+of the same objects).</li>
+<li>The static board is drawn once per layout and cached; packets draw on a separate canvas only while one is running.</li>
+<li>Only transform and opacity animate. No blur filters, blend modes or animated shadows.</li>
+<li>Small typed modules with one job each. Every part documented in <code>apps/box/src/screen/README.md</code>.</li>
+<li>Tests: every game&#39;s rules, the simulated ledger, clock and transaction timing, the bot&#39;s timing bounds, blockies,
+and the layout&#39;s anchors.</li>
+<li><code>pnpm typecheck</code>, <code>pnpm test</code> and <code>pnpm build</code> pass.</li>
+</ul>
+</section>
+
+<section id="s9">
+<h2><span class="n">09</span>Steps</h2>
+<ol>
+<li><strong>Scaffold.</strong> <code>@egb/box</code> with Vite, Vitest and TypeScript, the scripts, an empty page.</li>
+<li><strong>Tokens and parts.</strong> <code>tokens.css</code>, self-hosted fonts, the custom elements and their README, the shared types
+(<code>BoxState</code>, <code>BoxEvent</code>, <code>ScreenCommand</code>, game states, the view contract).</li>
+<li><strong>Home and boot.</strong> The cached board, layout, stage scaling, router, attract, boot and Home.</li>
+<li><strong>Rules with tests.</strong> Quick Draw and Stock Duel rules, the deck, their tests.</li>
+<li><strong>SimLink and Demo mode.</strong> The engine (ledger, clock, gas, transactions), the bot, the pucks, badges, DEMO
+plate, instruction plate, sound.</li>
+<li><strong>Join, Stake, Quick Draw, Result and Refund.</strong> The flow end to end.</li>
+<li><strong>Stock Duel.</strong> Rolodex, astrolabe dial, reveal cards, wax seals.</li>
+<li><strong>Deploy.</strong> The demo build on Cloudflare Pages, this plan ticked, republished.</li>
+</ol>
+</section>
+
+<section id="s10">
+<h2><span class="n">10</span>Done when</h2>
+<ul>
+<li><input disabled="" type="checkbox"> Every §3 object is visible on Home: board, core, ports, chain clock and gas gauge, facts, keys, cartridges,
+transaction progress.</li>
+<li><input disabled="" type="checkbox"> Quick Draw plays end to end against the bot and hot-seat.</li>
+<li><input disabled="" type="checkbox"> Stock Duel plays end to end against the bot and hot-seat.</li>
+<li><input disabled="" type="checkbox"> Refund is reachable and pays both stakes back.</li>
+<li><input disabled="" type="checkbox"> The <code>DEMO</code> plate and <code>SIMULATED</code> labels show.</li>
+<li><input disabled="" type="checkbox"> All four input paths work on the pucks: drag, click, touch, A / L.</li>
+<li><input disabled="" type="checkbox"> Reduced motion shows end states; mute works and <code>gamebox-muted=1</code> mutes.</li>
+<li><input disabled="" type="checkbox"> 1280×800, 1920×1080 and 390×844 all work.</li>
+<li><input disabled="" type="checkbox"> <code>pnpm typecheck</code>, <code>pnpm test</code> and <code>pnpm build</code> pass.</li>
+<li><input disabled="" type="checkbox"> The demo is live at a public URL.</li>
+</ul>
+</section>
+
+<footer>Ethereum Game Box · ETHGlobal Mumbai 2026 · <a href="https://plans.georgekm.com/ethereum-game-box-2026-11-05/">Project plan</a></footer>
+</div>
+</body>
+</html>
