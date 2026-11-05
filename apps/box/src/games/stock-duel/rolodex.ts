@@ -8,6 +8,7 @@ import type { Rect } from "../../screen/shell/layout.ts";
 import type { Sound } from "../../screen/views/view.ts";
 import type { Seat } from "../seat.ts";
 import type { Stock } from "./types.ts";
+import { SHOW_LAG_MS } from "./rules.ts";
 import { calm, el } from "../../screen/shell/dom.ts";
 
 /** The Rolodex's drawn size, before it is scaled onto the stage. */
@@ -25,7 +26,8 @@ const TAB_SLOTS = 4;
 const TAB_W = CARD_W / TAB_SLOTS;
 /** How much darker each card further back is. */
 const SHADE_PER_CARD = 0.2;
-const TURN_MS = 480;
+/** A drum step: the old front card tips over the top for half of it, the new one is in front at SHOW_LAG_MS. */
+const TURN_MS = SHOW_LAG_MS * 2;
 const DROP_MS = 420;
 const LIFT_MS = 320;
 

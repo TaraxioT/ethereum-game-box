@@ -1,10 +1,10 @@
-// The simulated EGB ledger: a balance per badge address, a faucet for badges that can't cover a stake, and the match escrow. Pure: every
+// The simulated EGB ledger: a balance per badge address, a faucet for badges that can't cover a stake, and the match
+// escrow. Pure: every
 // operation returns a new ledger.
 import type { Seat } from "../../../games/seat.ts";
 
+/** The faucet tops a badge that can't cover the stake back up to this. */
 export const FAUCET_EGB = 100;
-/** Below this the faucet tops a badge back up: the smallest stake any game offers. */
-export const FAUCET_BELOW = 5;
 
 export interface Ledger {
   /** Whole EGB per address. An address is here once the faucet has paid it. */
@@ -19,20 +19,9 @@ export function balanceOf(ledger: Ledger, address: string): number {
   return ledger.balances[address] ?? 0;
 }
 
-/** The address holds enough to stake, so the faucet has nothing to give it. */
-export function funded(ledger: Ledger, address: string): boolean {
-  return balanceOf(ledger, address) >= FAUCET_BELOW;
-}
-
-/** Tops a new or nearly empty address up to FAUCET_EGB; a funded one gets nothing. */
-export function faucet(ledger: Ledger, address: string): Ledger {
-  if (funded(ledger, address)) return ledger;
-  return { ...ledger, balances: { ...ledger.balances, [address]: FAUCET_EGB } };
-}
-
-/** What the faucet would pay this address. */
-export function faucetAmount(ledger: Ledger, address: string): number {
-  return funded(ledger, address) ? 0 : FAUCET_EGB - balanceOf(ledger, address);
+/** The faucet pays exactly what its transaction announced. */
+export function faucet(ledger: Ledger, address: string, amount: number): Ledger {
+  return credit(ledger, address, amount);
 }
 
 function credit(ledger: Ledger, address: string, amount: number): Ledger {

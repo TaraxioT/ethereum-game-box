@@ -18,10 +18,10 @@ import type { Seat } from "../../../games/seat.ts";
 import { SEATS } from "../../../games/seat.ts";
 import { hash32, mulberry32 } from "../../../games/random.ts";
 import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
-import { frontIndex, rules as stockDuel } from "../../../games/stock-duel/rules.ts";
+import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../../../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, GAMES, gameInfo } from "./catalogue.ts";
 import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
-import { balanceOf, EMPTY_LEDGER, faucet, faucetAmount, funded, lock, refund, settle, type Ledger } from "./ledger.ts";
+import { balanceOf, EMPTY_LEDGER, faucet, FAUCET_EGB, lock, refund, settle, type Ledger } from "./ledger.ts";
 import { createTxBook } from "./txs.ts";
 import { BOT_BADGE, DESK_BADGES } from "./badges.ts";
 import { stationViews, type StationInput } from "./stations.ts";
@@ -71,7 +71,8 @@ function outcomeOf(play: MatchPlay): Match["outcome"] {
 function fronts(play: MatchPlay, now: number): readonly [number | null, number | null] {
   if (play.game !== "stock-duel" || play.state.phase !== "pick") return [null, null];
   const duel = play.state;
-  const front = (seat: Seat) => (duel.played[seat] === null ? frontIndex(duel, seat, now) : null);
+  const shown = Math.max(duel.phaseAt, now - SHOW_LAG_MS);
+  const front = (seat: Seat) => (duel.played[seat] === null ? frontIndex(duel, seat, shown) : null);
   return [front(0), front(1)];
 }
 
@@ -148,7 +149,9 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   let matchCount = 0;
   let ledger: Ledger = EMPTY_LEDGER;
   /** Faucet payments signed but not yet in a block, by address. */
-  const pendingFaucet = new Map<string, number>();
+  /** EGB on its way to each address: faucet, payout and refund transactions not yet in a block. */
+  const incoming = new Map<string, number>();
+  const fauceting = new Set<string>();
   /** Refund transactions sent and not yet landed, by seat. */
   const refunding: [boolean, boolean] = [false, false];
   let openTxId: number | null = null;
@@ -184,7 +187,12 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
 
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
-    return { badge, signed, balance: badge ? balanceOf(ledger, badge.address) : 0 };
+    return {
+      badge,
+      signed,
+      balance: badge ? balanceOf(ledger, badge.address) : 0,
+      pending: badge ? (incoming.get(badge.address) ?? 0) : 0,
+    };
   }
 
   function snapshot(): BoxState {
@@ -240,12 +248,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     }
     if (to === "home" || to === "stake") match = null;
     if (to === "home") fitSeatsToOpponent();
-    if (to === "stake") {
-      for (const seat of SEATS) {
-        const badge = seats[seat].badge;
-        if (badge) fundIfLow(seat, badge);
-      }
-    }
+    if (to === "stake") fundSeats();
     resetIdle();
     emit({ type: "phase", from, to });
     if (to === "join") maybeLeaveJoin();
@@ -283,16 +286,40 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     }
   }
 
-  /** A badge that can't cover the smallest stake (new, or spent out) gets topped up by the faucet. */
+  function owe(address: string, amount: number): void {
+    incoming.set(address, (incoming.get(address) ?? 0) + amount);
+  }
+
+  function land(address: string, amount: number): void {
+    const left = (incoming.get(address) ?? 0) - amount;
+    if (left > 0) incoming.set(address, left);
+    else incoming.delete(address);
+  }
+
+  /** What a badge can stake: its balance plus the money already on its way to it. */
+  function available(address: string): number {
+    return balanceOf(ledger, address) + (incoming.get(address) ?? 0);
+  }
+
+  /** A seated badge that can't cover the chosen stake (new, or spent out) gets topped up by the faucet. */
   function fundIfLow(seat: Seat, badge: Badge): void {
     const { address } = badge;
-    if (funded(ledger, address) || pendingFaucet.has(address)) return;
-    const amount = faucetAmount(ledger, address);
-    pendingFaucet.set(address, amount);
+    if (available(address) >= stake || fauceting.has(address)) return;
+    const amount = FAUCET_EGB - available(address);
+    fauceting.add(address);
+    owe(address, amount);
     book.submit({ kind: "faucet", seat, direction: "out", amount }, () => {
-      ledger = faucet(ledger, address);
-      pendingFaucet.delete(address);
+      ledger = faucet(ledger, address, amount);
+      land(address, amount);
+      fauceting.delete(address);
     });
+  }
+
+  function fundSeats(): void {
+    for (const seat of SEATS) {
+      const badge = seats[seat].badge;
+      if (badge) fundIfLow(seat, badge);
+    }
   }
 
   function takeSeat(seat: Seat, badge: Badge): TapResult {
@@ -318,8 +345,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   function sign(seat: Seat): TapResult {
     const mine = seats[seat];
     if (!mine.badge || mine.signed) return "ignored";
-    const available = balanceOf(ledger, mine.badge.address) + (pendingFaucet.get(mine.badge.address) ?? 0);
-    if (available < stake) return "refused";
+    if (available(mine.badge.address) < stake) return "refused";
     mine.signed = true;
     emit({ type: "seat", seat });
     if (seats[0].signed && seats[1].signed) {
@@ -354,6 +380,8 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     setPhase("playing");
     cue("boot");
     tickTimer = timers.every(TICK_MS, () => stepGame(null));
+    // The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
+    if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - Date.now()), () => stepGame(null));
   }
 
   // ── Playing ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -406,8 +434,11 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     }
     const both = addresses();
     const amount = match.stake;
+    const payees = winner === null ? both.map((a) => [a, amount] as const) : [[both[winner], amount * 2] as const];
+    for (const [address, sum] of payees) owe(address, sum);
     book.submit({ kind: "settle", seat: winner, direction: "out", amount: amount * 2 }, () => {
       ledger = settle(ledger, both, amount, winner);
+      for (const [address, sum] of payees) land(address, sum);
     });
     setPhase("result");
     if (winner !== null) cue(opponent === "bot" && winner === 1 ? "lose" : "win");
@@ -422,8 +453,10 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     const amount = match.stake;
     const id = match.id;
     refunding[seat] = true;
+    owe(address, amount);
     book.submit({ kind: "refund", seat, direction: "out", amount }, () => {
       ledger = refund(ledger, address, amount);
+      land(address, amount);
       refunding[seat] = false;
       if (!match || match.id !== id) return;
       const refunded: [boolean, boolean] = seat === 0 ? [true, match.refunded[1]] : [match.refunded[0], true];
@@ -514,6 +547,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
         if (!game || !gameInfo(game).stakes.includes(cmd.amount)) return;
         stake = cmd.amount;
         emit({ type: "stake", amount: stake });
+        fundSeats();
         return;
       case "back":
         if (phase === "join" || (phase === "stake" && nobodySigned())) setPhase("home");
@@ -534,6 +568,8 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   function scheduleBlock(): void {
     const now = Date.now();
     timers.after(nextBlockAt(now) - now, () => {
+      // The next block is armed first, so nothing a block sets off can stop the chain.
+      scheduleBlock();
       const sealed = blockAt(Date.now());
       if (sealed.block > chain.block) {
         chain.block = sealed.block;
@@ -546,7 +582,6 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
         if (gasMoved) emit({ type: "gas", gwei: gas });
         book.seal(sealed.block, sealed.at);
       }
-      scheduleBlock();
     });
   }
 

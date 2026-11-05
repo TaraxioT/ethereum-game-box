@@ -1,26 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { balanceOf, EMPTY_LEDGER, faucet, faucetAmount, funded, lock, refund, settle } from "./ledger.ts";
+import { balanceOf, EMPTY_LEDGER, faucet, lock, refund, settle } from "./ledger.ts";
 
 const A = "0xa";
 const B = "0xb";
 const both = [A, B] as const;
-const opened = lock(faucet(faucet(EMPTY_LEDGER, A), B), both, 10);
+const opened = lock(faucet(faucet(EMPTY_LEDGER, A, 100), B, 100), both, 10);
 
 describe("ledger", () => {
-  it("tops a spent-out badge back up to 100 EGB", () => {
-    let low = lock(faucet(faucet(EMPTY_LEDGER, A), B), both, 25);
-    for (let i = 0; i < 3; i++) low = settle(lock(low, both, 25), both, 25, 1);
-    expect(balanceOf(low, A)).toBe(0);
-    expect(faucetAmount(low, A)).toBe(100);
-    expect(balanceOf(faucet(low, A), A)).toBe(100);
-  });
-
-  it("pays a new badge 100 EGB once", () => {
-    const once = faucet(EMPTY_LEDGER, A);
-    expect(funded(EMPTY_LEDGER, A)).toBe(false);
-    expect(balanceOf(once, A)).toBe(100);
-    const spent = lock(faucet(once, B), both, 25);
-    expect(balanceOf(faucet(spent, A), A)).toBe(75);
+  it("pays the faucet exactly what it announced", () => {
+    const paid = faucet(EMPTY_LEDGER, A, 100);
+    expect(balanceOf(paid, A)).toBe(100);
+    expect(balanceOf(faucet(paid, A, 15), A)).toBe(115);
   });
 
   it("locks both stakes in escrow", () => {
@@ -47,7 +37,7 @@ describe("ledger", () => {
   });
 
   it("refuses to lock more than a balance or release more than escrow", () => {
-    expect(() => lock(faucet(EMPTY_LEDGER, A), both, 10)).toThrow(RangeError);
+    expect(() => lock(faucet(EMPTY_LEDGER, A, 100), both, 10)).toThrow(RangeError);
     expect(() => settle(refund(opened, A, 10), both, 10, 0)).toThrow(RangeError);
   });
 

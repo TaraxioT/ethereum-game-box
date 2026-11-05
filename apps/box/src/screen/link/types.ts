@@ -33,6 +33,8 @@ export interface SeatState {
   readonly badge: Badge | null;
   /** EGB, whole tokens. */
   readonly balance: number;
+  /** EGB on its way to this badge: a faucet, payout or refund not yet in a block. */
+  readonly pending: number;
   /** This seat has signed the entry for the match being staked. */
   readonly signed: boolean;
 }

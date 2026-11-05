@@ -8,7 +8,7 @@ import { BIG_CHARS, LINE_CHARS, stationView, type StationInput } from "./station
 
 const NOW = 5_000_000;
 const [NOVA, KITE] = DESK_BADGES as [(typeof DESK_BADGES)[0], (typeof DESK_BADGES)[0]];
-const EMPTY: SeatState = { badge: null, balance: 0, signed: false };
+const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
 
 function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EMPTY], match: Match | null = null): StationInput {
   return {
@@ -24,7 +24,7 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
 }
 
 function seat(badge: typeof NOVA, signed = false, balance = 100): SeatState {
-  return { badge, balance, signed };
+  return { badge, balance, signed, pending: 0 };
 }
 
 function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {

@@ -238,7 +238,7 @@ describe("SimLink", () => {
     expect(link.state().seats[0].signed).toBe(true);
   });
 
-  it("refuses to sign a stake the badge can't cover", () => {
+  it("tops up a seat that can't cover a raised stake, so Stake never deadlocks", () => {
     open();
     link.setOpponent("hotseat");
     toHome();
@@ -247,7 +247,7 @@ describe("SimLink", () => {
     link.send({ type: "focus", game: "quick-draw" });
     link.send({ type: "play" });
     link.send({ type: "stake", amount: 10 });
-    // Player 1 jumps the gun nine times and loses 10 EGB each time, keeping 10: enough to play, short of 25.
+    // Player 1 jumps the gun nine times and loses 10 EGB each time, keeping 10: enough for 10, short of 25.
     for (let match = 0; match < 9; match++) {
       signAndOpen();
       link.tap(0);
@@ -258,16 +258,33 @@ describe("SimLink", () => {
     }
     expect(balances()).toEqual([10, 190]);
     link.send({ type: "stake", amount: 25 });
-    events = [];
+    expect(link.state().seats[0].pending).toBe(90);
+    link.tap(1);
     link.tap(0);
-    expect(link.state().seats[0].signed).toBe(false);
-    expect(events).toEqual(
-      expect.arrayContaining([
-        { type: "tap", seat: 0, accepted: false },
-        { type: "buzz", seat: 0 },
-        { type: "cue", cue: "error" },
-      ]),
-    );
+    expect(link.state().seats.map((s) => s.signed)).toEqual([true, true]);
+    until((s) => s.phase === "playing", 30_000);
+    expect(link.state().seats[0].balance).toBe(75);
+  });
+
+  it("counts a payout still on its way when a rematch is staked at once", () => {
+    open();
+    link.setOpponent("hotseat");
+    toHome();
+    link.tap(0);
+    link.tap(1);
+    link.send({ type: "focus", game: "quick-draw" });
+    link.send({ type: "play" });
+    link.send({ type: "stake", amount: 25 });
+    signAndOpen();
+    link.tap(1);
+    vi.advanceTimersByTime(END_HOLD_MS);
+    link.send({ type: "rematch" });
+    link.tap(0);
+    link.tap(1);
+    until((s) => s.phase === "playing", 40_000);
+    const before = link.state().chain.block;
+    vi.advanceTimersByTime(30_000);
+    expect(link.state().chain.block).toBeGreaterThan(before);
   });
 
   it("steps a transaction signed, sent, in-block on a block boundary, then paid", () => {

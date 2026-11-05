@@ -5,7 +5,7 @@ import type { Seat } from "../../../games/seat.ts";
 import type { QuickDrawState } from "../../../games/quick-draw/types.ts";
 import type { StockDuelState } from "../../../games/stock-duel/types.ts";
 import { reactionMs } from "../../../games/quick-draw/rules.ts";
-import { frontCard } from "../../../games/stock-duel/rules.ts";
+import { frontCard, SHOW_LAG_MS } from "../../../games/stock-duel/rules.ts";
 import { formatStat, STAT_LABEL } from "../../../games/stock-duel/deck.ts";
 import { badgeLabel } from "./badges.ts";
 
@@ -64,7 +64,8 @@ function stockDuel(game: StockDuelState, seat: Seat, name: string, now: number):
       return view(round, "DEAL", "GET READY");
     case "pick":
       if (played) return view(round, "PLAYED", played.ticker);
-      return view(round, frontCard(game, seat, now)?.ticker ?? "", "TAP = PLAY");
+      // The card the big screen shows in front, which is the card a tap plays.
+      return view(round, frontCard(game, seat, Math.max(game.phaseAt, now - SHOW_LAG_MS))?.ticker ?? "", "TAP = PLAY");
     case "dial":
       return view(round, "DIAL", played?.ticker ?? "");
     case "reveal":

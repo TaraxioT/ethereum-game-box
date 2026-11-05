@@ -9,6 +9,9 @@ import type { RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types
 export const DEAL_MS = 3000;
 export const DIAL_MS = 2800;
 export const REVEAL_MS = 4200;
+/** The screen shows a new front card this long after the drum steps (half its turn), so a tap is judged at
+ * `now - SHOW_LAG_MS`: the card the player saw in front is the card they play. */
+export const SHOW_LAG_MS = 240;
 /** How long each card stays at the front of the Rolodex, by round. Later rounds keep the last. */
 export const DWELL_MS: readonly number[] = [2400, 2100, 1800];
 
@@ -121,7 +124,7 @@ function settlePick(state: StockDuelState, now: number): StockDuelState {
 function tap(state: StockDuelState, seat: Seat, now: number, roll: number): StockDuelState {
   const settled = settlePick(state, now);
   if (settled.phase !== "pick" || settled.played[seat] !== null) return settled;
-  const card = frontCard(settled, seat, now);
+  const card = frontCard(settled, seat, Math.max(settled.phaseAt, now - SHOW_LAG_MS));
   if (card === null) return settled;
   return closePick(play(settled, seat, card, now, false, roll), now);
 }

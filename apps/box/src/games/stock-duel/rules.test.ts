@@ -6,6 +6,7 @@ import {
   DIAL_MS,
   DWELL_MS,
   REVEAL_MS,
+  SHOW_LAG_MS,
   dwellForRound,
   frontCard,
   frontIndex,
@@ -133,7 +134,7 @@ describe("the front card", () => {
 
   it("stays on the played card once a seat has played, with no time left", () => {
     const pick = picking();
-    const now = PICK_AT + pick.dwellMs * 2 + 100;
+    const now = PICK_AT + pick.dwellMs * 2 + SHOW_LAG_MS + 100;
     const played = tap(pick, 0, now, 3);
     expect(frontIndex(played, 0, now + 5 * pick.dwellMs)).toBe(2);
     expect(frontRemainingMs(played, 0, now + 50)).toBe(0);
@@ -144,7 +145,7 @@ describe("the front card", () => {
 describe("tapping in the pick", () => {
   it("plays the front card as the drum shows it, with the badge's roll", () => {
     const pick = picking();
-    const now = PICK_AT + pick.dwellMs * 3 + 40;
+    const now = PICK_AT + pick.dwellMs * 3 + SHOW_LAG_MS + 40;
     const front = frontCard(pick, 0, now);
     const next = tap(pick, 0, now, 1234);
     expect(next.played[0]).toBe(front);
@@ -153,6 +154,14 @@ describe("tapping in the pick", () => {
     expect(next.rolls[0]).toBe(1234);
     expect(next.rolls[1]).toBe(pick.rolls[1]);
     expect(next.phase).toBe("pick");
+  });
+
+  it("plays the card still on screen when the tap comes just after a drum step", () => {
+    const pick = picking();
+    const step = PICK_AT + pick.dwellMs * 3;
+    const shown = frontCard(pick, 0, step - 1);
+    expect(tap(pick, 0, step + SHOW_LAG_MS - 20, 7).played[0]).toBe(shown);
+    expect(tap(pick, 0, step + SHOW_LAG_MS + 20, 7).played[0]).toBe(frontCard(pick, 0, step));
   });
 
   it("gives the other seat one full turn of its drum", () => {

@@ -1,5 +1,4 @@
 // The simulated chain: a block every 12 s numbered from Sepolia's real height, and a gas price that wanders.
-import type { ChainState } from "../types.ts";
 
 /** Sepolia's pace. */
 export const BLOCK_MS = 12_000;
@@ -36,9 +35,4 @@ export function nextGas(gwei: number, rnd: () => number, step: number = GAS_STEP
 /** A starting gas price somewhere in the band. */
 export function firstGas(rnd: () => number): number {
   return Math.round((GAS_MIN + rnd() * (GAS_MAX - GAS_MIN)) * 100) / 100;
-}
-
-export function chainAt(now: number, gasGwei: number): ChainState {
-  const head = blockAt(now);
-  return { block: head.block, blockAt: head.at, blockMs: BLOCK_MS, gasGwei };
 }

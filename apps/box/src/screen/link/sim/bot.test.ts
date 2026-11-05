@@ -21,7 +21,7 @@ import {
 
 const NOW = 9_000_000;
 const NOVA = DESK_BADGES[0] ?? BOT_BADGE;
-const EMPTY: SeatState = { badge: null, balance: 0, signed: false };
+const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
 
 function box(patch: Partial<BoxState>): BoxState {
   return {
@@ -41,8 +41,8 @@ function box(patch: Partial<BoxState>): BoxState {
   };
 }
 
-const human = (signed = false): SeatState => ({ badge: NOVA, balance: 100, signed });
-const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, balance: 100, signed });
+const human = (signed = false): SeatState => ({ badge: NOVA, balance: 100, signed, pending: 0 });
+const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, balance: 100, signed, pending: 0 });
 
 function delays(intent: BotIntent, runs = 4_000): (number | null)[] {
   const out: (number | null)[] = [];
@@ -72,7 +72,7 @@ describe("bot intents", () => {
   });
 
   it("sits out while somebody else holds Player 2's seat", () => {
-    const kite: SeatState = { badge: DESK_BADGES[1] ?? NOVA, balance: 100, signed: false };
+    const kite: SeatState = { badge: DESK_BADGES[1] ?? NOVA, balance: 100, signed: false, pending: 0 };
     expect(botIntent(box({ phase: "stake", seats: [human(true), kite] }), NOW, BOT_BADGE)).toBeNull();
   });
 
