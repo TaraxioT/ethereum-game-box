@@ -3,7 +3,7 @@
 A game console you play by tapping a badge. Every match is staked and settled on Ethereum, and nobody at the table
 needs ETH, a wallet app or a single pop-up.
 
-Built at ETHGlobal Mumbai 2026. The project plan: [`plan/index.html`](plan/index.html), also live at
+Built at ETHGlobal Mumbai 2026. The project plan: [`plan/README.md`](plan/README.md), also live at
 https://plans.georgekm.com/ethereum-game-box-2026-11-05/.
 
 ## Team
@@ -24,7 +24,7 @@ https://plans.georgekm.com/ethereum-game-box-2026-11-05/.
 | [`deployments`](deployments/README.md) | Every deployed address, one file per chain |
 | [`firmware/tap-station`](firmware/tap-station/README.md) | The ESP32 tap stations and their receiver |
 | [`deploy/pi`](deploy/pi/README.md) | Turning a Raspberry Pi into a Game Box, and keeping it updated |
-| [`plan`](plan/index.html) | The project plan page |
+| [`plan`](plan/README.md) | The project plan, as Markdown and as a web page |
 
 ## Start
 
