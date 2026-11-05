@@ -32,10 +32,3 @@ export type ToFrame =
   | { readonly t: "update"; readonly state: unknown; readonly event: FrameEvent; readonly now: number };
 
 export type FromFrame = { readonly t: "ready" } | { readonly t: "error"; readonly message: string };
-
-/** A built game's screen module: `screen.ts` default-exports one of these. */
-export interface GameScreen {
-  mount(root: HTMLElement, init: Extract<ToFrame, { t: "init" }>): {
-    update(message: Extract<ToFrame, { t: "update" }>): void;
-  };
-}

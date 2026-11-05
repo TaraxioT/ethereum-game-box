@@ -7,7 +7,7 @@
     "dev:box": "VITE_EGB_MODE=box vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json && tsc -p tsconfig.server.json",
     "test": "vitest run"
   },
   "devDependencies": {
