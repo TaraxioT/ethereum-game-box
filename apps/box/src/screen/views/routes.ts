@@ -1,6 +1,7 @@
 // Which view each phase of the Box shows, and how much of the machine stands behind it.
 import type { Routes } from "../shell/router.ts";
 import { quickDrawScreen } from "../../games/quick-draw/screen.ts";
+import { stockDuelScreen } from "../../games/stock-duel/screen.ts";
 import { attractView } from "./attract.ts";
 import { homeView } from "./home.ts";
 import { joinView } from "./join.ts";
@@ -21,7 +22,9 @@ export const routes: Routes = (state) => {
     case "stake":
       return { key: "stake", pose: "page", view: stakeView };
     case "playing":
-      return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: quickDrawScreen };
+      return state.match?.game === "stock-duel"
+        ? { key: `play-${state.match.id}`, pose: "game", view: stockDuelScreen }
+        : { key: `play-${state.match?.id ?? 0}`, pose: "game", view: quickDrawScreen };
     case "result":
       return { key: "result", pose: "page", view: resultView };
     case "refund":
