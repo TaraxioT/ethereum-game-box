@@ -2,7 +2,7 @@
 // Three stacked layers share the box: the body, the gun arm at the holster and the gun arm drawn, so a pose swap is
 // an opacity change and a recoil is a transform, both on their own layer. A seat-coloured rim on the sun-facing
 // edges, the hat band and the bandana carry the seat.
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import { el, play } from "../../screen/shell/dom.ts";
 
 export interface Figure {

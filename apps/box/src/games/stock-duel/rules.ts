@@ -1,8 +1,8 @@
 // Stock Duel's rules: deal four stocks each, play a card from a spinning Rolodex, let both badges' rolls choose the
 // stat, and the higher number takes the round. First to two rounds; if the hands run out first the leader wins.
-import type { GameRules, Outcome } from "../game.ts";
-import { hash32, shuffle } from "../random.ts";
-import { other, SEATS, type Seat } from "../seat.ts";
+import type { GameRules, Outcome } from "@egb/sdk";
+import { hash32, shuffle } from "@egb/sdk";
+import { other, SEATS, type Seat } from "@egb/sdk";
 import { DECK, STATS } from "./deck.ts";
 import type { RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
 

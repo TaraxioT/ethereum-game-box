@@ -1,6 +1,6 @@
 // The badges on the demo desk and the bot's. Names are invented; addresses are fake but fixed, derived from the name.
 import type { Badge } from "../types.ts";
-import { hash32 } from "../../../games/random.ts";
+import { hash32 } from "@egb/sdk";
 
 /** A 20-byte address from five hashes of the name, so a badge has the same address every visit. */
 function fakeAddress(name: string): `0x${string}` {

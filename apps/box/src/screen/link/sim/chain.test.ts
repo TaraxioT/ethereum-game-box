@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mulberry32 } from "../../../games/random.ts";
+import { mulberry32 } from "@egb/sdk";
 import { ANCHOR_AT, ANCHOR_BLOCK, BLOCK_MS, blockAt, GAS_MAX, GAS_MIN, GAS_STEP, nextBlockAt, nextGas } from "./chain.ts";
 
 describe("blockAt", () => {

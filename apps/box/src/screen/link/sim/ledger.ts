@@ -1,7 +1,7 @@
 // The simulated EGB ledger: a balance per badge address, a faucet for badges that can't cover a stake, and the match
 // escrow. Pure: every
 // operation returns a new ledger.
-import type { Seat } from "../../../games/seat.ts";
+import type { Seat } from "@egb/sdk";
 
 /** The faucet tops a badge that can't cover the stake back up to this. */
 export const FAUCET_EGB = 100;

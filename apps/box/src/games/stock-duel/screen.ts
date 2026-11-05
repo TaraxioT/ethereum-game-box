@@ -8,10 +8,10 @@
 import "./stock-duel.css";
 import type { Layout, Point, Rect } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
 import { el, place } from "../../screen/shell/dom.ts";
-import { SEATS } from "../seat.ts";
+import { SEATS } from "@egb/sdk";
 import { DEAL_MS, frontIndex, frontRemainingMs } from "./rules.ts";
 import { createScene, type ScenePlaces } from "./scene.ts";
 import { createRolodex, type Placement } from "./rolodex.ts";

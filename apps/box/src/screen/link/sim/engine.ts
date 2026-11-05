@@ -14,9 +14,9 @@ import type {
   SeatState,
 } from "../types.ts";
 import type { Opponent, SimLink } from "./control.ts";
-import type { Seat } from "../../../games/seat.ts";
-import { SEATS } from "../../../games/seat.ts";
-import { hash32, mulberry32 } from "../../../games/random.ts";
+import type { Seat } from "@egb/sdk";
+import { SEATS } from "@egb/sdk";
+import { hash32, mulberry32 } from "@egb/sdk";
 import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../../../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, GAMES, gameInfo } from "./catalogue.ts";

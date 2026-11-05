@@ -2,7 +2,7 @@
 // that light in the seat's colour as rounds are won, an engraved plate with the round number, and at the end a big
 // engraved brass banner: PLAYER 1 WINS, PLAYER 2 WINS or DRAW.
 import type { Rect } from "../../screen/shell/layout.ts";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import { el, place, play } from "../../screen/shell/dom.ts";
 
 const PIPS = 3;

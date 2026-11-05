@@ -1,7 +1,7 @@
 // Quick Draw's rules: wait for the sign to flip, then the first tap wins and a tap before it loses.
-import type { GameRules, Outcome } from "../game.ts";
-import { mulberry32 } from "../random.ts";
-import { other, type Seat } from "../seat.ts";
+import type { GameRules, Outcome } from "@egb/sdk";
+import { mulberry32 } from "@egb/sdk";
+import { other, type Seat } from "@egb/sdk";
 import type { QuickDrawEvent, QuickDrawState } from "./types.ts";
 
 /** The shortest and longest wait before the sign flips. */

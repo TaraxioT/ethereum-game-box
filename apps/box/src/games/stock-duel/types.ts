@@ -1,5 +1,5 @@
 // Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events.
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 
 /** The four stats a round can be played on, in roll order: `(roll1 + roll2) % 4` picks one. */
 export type StatKey = "price" | "avgPrice" | "change24h" | "liquidity";

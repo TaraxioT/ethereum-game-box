@@ -2,7 +2,7 @@
 // was sent, paid PAY_MS after that block, then on screen for LINGER_MS more. Blocks come from whoever runs the
 // chain clock, through `seal`.
 import type { Tx, TxKind } from "../types.ts";
-import type { Seat } from "../../../games/seat.ts";
+import type { Seat } from "@egb/sdk";
 
 export const SEND_MS = 400;
 export const PAY_MS = 900;

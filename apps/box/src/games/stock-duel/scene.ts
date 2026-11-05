@@ -3,7 +3,7 @@
 // Layered gradients give the paint and paper texture. A lamp brightens on its player's moments (a play, a won round)
 // by fading in a brighter copy of its light: opacity only.
 import type { Point, Rect } from "../../screen/shell/layout.ts";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import { el, place, play } from "../../screen/shell/dom.ts";
 
 export interface Pool {

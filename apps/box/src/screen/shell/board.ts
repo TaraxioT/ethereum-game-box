@@ -4,7 +4,7 @@
 // the collar's landing pads. Callers put the canvas behind the stage at the stage's own size (stage pixels).
 import type { Layout, Point, Rect } from "./layout.ts";
 import { inflate, rectsOverlap } from "./route.ts";
-import { mulberry32 } from "../../games/random.ts";
+import { mulberry32 } from "@egb/sdk";
 import { tracesFor, type Trace } from "./traces.ts";
 
 const MAX_SIDE = 4096;

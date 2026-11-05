@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import { DECK, STATS } from "./deck.ts";
 import {
   DEAL_MS,

@@ -1,6 +1,6 @@
 // The one interface between the screen and the Box. The screen reads `BoxState`, hears `BoxEvent`s and sends
 // `ScreenCommand`s; whatever runs the Box (the simulated one today, the Box server later) sits behind `BoxLink`.
-import type { Seat } from "../../games/seat.ts";
+import type { Seat } from "@egb/sdk";
 import type { QuickDrawState } from "../../games/quick-draw/types.ts";
 import type { StockDuelState } from "../../games/stock-duel/types.ts";
 

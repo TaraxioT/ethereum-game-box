@@ -1,5 +1,5 @@
 // Quick Draw's state and events. The rules (rules.ts) are pure: time and seeds arrive in events.
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 
 export type QuickDrawPhase = "wait" | "draw" | "done";
 

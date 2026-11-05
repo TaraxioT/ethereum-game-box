@@ -10,7 +10,7 @@ import type { BoxEvent, BoxState } from "../../screen/link/types.ts";
 import type { Orientation, Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
-import { other, type Seat } from "../seat.ts";
+import { other, type Seat } from "@egb/sdk";
 import { MAX_WAIT_MS, MIN_WAIT_MS, reactionMs } from "./rules.ts";
 import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";

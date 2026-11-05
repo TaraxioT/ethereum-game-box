@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoxState, SeatState } from "../types.ts";
-import { mulberry32 } from "../../../games/random.ts";
+import { mulberry32 } from "@egb/sdk";
 import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
 import { DEAL_MS, rules as stockDuel } from "../../../games/stock-duel/rules.ts";
 import { GAMES } from "./catalogue.ts";

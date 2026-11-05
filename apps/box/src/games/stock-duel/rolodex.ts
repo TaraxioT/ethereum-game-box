@@ -6,7 +6,7 @@
 // back, and the next card is at the front. A played card lifts off the rail toward the desk.
 import type { Rect } from "../../screen/shell/layout.ts";
 import type { Sound } from "../../screen/views/view.ts";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import type { Stock } from "./types.ts";
 import { SHOW_LAG_MS } from "./rules.ts";
 import { calm, el } from "../../screen/shell/dom.ts";

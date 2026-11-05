@@ -4,7 +4,7 @@
 // and all four stats with the round's stat set large. Then the winner's card takes a green wax seal stamped FINALIZED
 // and the loser's a red one stamped SLASHED; a tie shows TIE · REPLAY and no seals.
 import type { Rect } from "../../screen/shell/layout.ts";
-import type { Seat } from "../seat.ts";
+import type { Seat } from "@egb/sdk";
 import type { RoundRecord, StatKey, Stock } from "./types.ts";
 import { calm, el, place, play, wait } from "../../screen/shell/dom.ts";
 import { formatStat, STAT_LABEL, STATS } from "./deck.ts";

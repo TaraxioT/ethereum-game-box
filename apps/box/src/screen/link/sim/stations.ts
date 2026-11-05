@@ -1,7 +1,7 @@
 // What each tap station's OLED shows, from the Box's state. Pure. Lines stay inside the 128×64 panel: at most
 // LINE_CHARS on the small lines and BIG_CHARS on the big one.
 import type { BoxState, Match, SeatState, StationView } from "../types.ts";
-import type { Seat } from "../../../games/seat.ts";
+import type { Seat } from "@egb/sdk";
 import type { QuickDrawState } from "../../../games/quick-draw/types.ts";
 import type { StockDuelState } from "../../../games/stock-duel/types.ts";
 import { reactionMs } from "../../../games/quick-draw/rules.ts";
