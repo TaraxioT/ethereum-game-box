@@ -3,7 +3,7 @@
 import type { BoxState, GameInfo, SeatState } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import type { EgbPlate } from "../parts/plate.ts";
+import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
@@ -24,15 +24,14 @@ export function stakeView(ctx: ViewContext): View {
     return panel;
   });
 
-  const plate = document.createElement("egb-plate") as EgbPlate;
-  plate.setAttribute("variant", "metal");
+  const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate");
   place(plate, page.plate);
 
   const keys = el("div", "page-keys");
   place(keys, page.keys);
   const back = document.createElement("egb-key") as EgbKey;
-  back.setAttribute("variant", "metal");
+  back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
   back.addEventListener("click", () => {
     sound.play("tap");

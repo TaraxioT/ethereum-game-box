@@ -82,7 +82,7 @@ interface Plate {
 
 /** The engraved DEMO plate (a metal <egb-plate>) and its three controls. `changed` runs after a control moves. */
 function createPlate(sim: SimLink, sound: Sound, changed: () => void): Plate {
-  const plate = document.createElement("egb-plate");
+  const plate = document.createElement("egb-panel");
   plate.className = "dk-plate";
   plate.setAttribute("variant", "metal");
   const grid = el("div", "dk-plate-grid");

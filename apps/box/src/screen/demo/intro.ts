@@ -33,7 +33,7 @@ function remember(): void {
 export function showIntroOnce(host: HTMLElement): void {
   if (seen()) return;
   const backdrop = el("div", "dk-intro");
-  const plate = document.createElement("egb-plate");
+  const plate = document.createElement("egb-panel");
   plate.className = "dk-intro-plate";
   plate.setAttribute("role", "dialog");
   plate.setAttribute("aria-modal", "true");

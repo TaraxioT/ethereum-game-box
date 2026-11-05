@@ -3,7 +3,7 @@
 import type { BoxState, Seat } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import type { EgbPlate } from "../parts/plate.ts";
+import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
@@ -19,13 +19,12 @@ export function joinView(ctx: ViewContext): View {
     return panel;
   });
 
-  const plate = document.createElement("egb-plate") as EgbPlate;
-  plate.setAttribute("variant", "metal");
+  const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate");
   place(plate, page.plate);
 
   const back = document.createElement("egb-key") as EgbKey;
-  back.setAttribute("variant", "metal");
+  back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
   place(back, { ...page.keys, x: page.keys.x + page.keys.w / 2 - 110, w: 220 });
   back.addEventListener("click", () => {

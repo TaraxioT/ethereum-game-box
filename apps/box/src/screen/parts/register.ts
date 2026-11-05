@@ -5,12 +5,12 @@ import { EgbCore } from "./core.ts";
 import { EgbFact } from "./fact.ts";
 import { EgbGauge } from "./gauge.ts";
 import { EgbKey } from "./key.ts";
-import { EgbPlate } from "./plate.ts";
+import { EgbPanel } from "./panel.ts";
 import { EgbPort } from "./port.ts";
 import { EgbTxbar } from "./txbar.ts";
 
 const PARTS: readonly (readonly [string, CustomElementConstructor])[] = [
-  ["egb-plate", EgbPlate],
+  ["egb-panel", EgbPanel],
   ["egb-core", EgbCore],
   ["egb-port", EgbPort],
   ["egb-clock", EgbClock],
@@ -27,7 +27,7 @@ export function registerParts(): void {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "egb-plate": EgbPlate;
+    "egb-panel": EgbPanel;
     "egb-core": EgbCore;
     "egb-port": EgbPort;
     "egb-clock": EgbClock;

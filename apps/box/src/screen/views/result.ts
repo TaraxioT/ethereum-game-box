@@ -3,7 +3,7 @@
 import type { BoxState } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import type { EgbPlate } from "../parts/plate.ts";
+import type { EgbPanel } from "../parts/panel.ts";
 import { el, place, play } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
@@ -19,15 +19,14 @@ export function resultView(ctx: ViewContext): View {
     return panel;
   });
 
-  const banner = document.createElement("egb-plate") as EgbPlate;
-  banner.setAttribute("variant", "brass");
+  const banner = document.createElement("egb-panel") as EgbPanel;
   banner.classList.add("page-plate", "result-banner");
   place(banner, page.plate);
 
   const keys = el("div", "page-keys");
   place(keys, page.keys);
   const home = document.createElement("egb-key") as EgbKey;
-  home.setAttribute("variant", "metal");
+  home.setAttribute("variant", "ghost");
   home.textContent = "HOME";
   home.addEventListener("click", () => {
     sound.play("tap");

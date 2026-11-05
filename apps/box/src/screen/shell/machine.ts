@@ -70,7 +70,8 @@ export function createMachine(layout: Layout, scale: number): MachineView {
   place(clock, layout.clock);
   const gauge = document.createElement("egb-gauge") as EgbGauge;
   place(gauge, layout.gas);
-  const stakeChip = el("div", "stake-chip");
+  const stakeChip = document.createElement("egb-panel");
+  stakeChip.className = "stake-chip";
   const txbar = document.createElement("egb-txbar") as EgbTxbar;
   place(txbar, layout.txbar);
   overlay.append(clock, gauge, stakeChip, txbar);

@@ -56,7 +56,7 @@ export function homeView(ctx: ViewContext): View {
     void play(titleText, [{ transform: "translateY(100%)", opacity: 0 }, { transform: "none", opacity: 1 }], {
       duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
     });
-    [...facts.children].forEach((chip, i) => (chip as EgbFact).press(120 + i * 90));
+    [...facts.children].forEach((chip, i) => (chip as EgbFact).rez(120 + i * 90));
   }
 
   /** Long titles and fact rows shrink to their column rather than run under the core. */
