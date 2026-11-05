@@ -32,7 +32,7 @@ Cloudflare Pages. Nothing outside `apps/box/` changes except this plan and the l
 - One locked visual target for Home: ports in the top corners, the clock hanging at the top centre, a black glass
   sphere in the middle, the focused game's title, facts and a gold Play on the left, and a rack of keycap
   cartridges along the bottom, all on gunmetal plates with neon traces running into the core.
-- Earlier attempts failed in known ways, and these are now rules: flat mid-tone boards kill the 3D (brightness must
+- The look fails in known ways, and these are rules: flat mid-tone boards kill the 3D (brightness must
   come from light); wide blooms look cheap (glows stay on their edges); a spinning logo and a boot that moves
   everything at once look broken; idle cartridges with neon look busy; saturated yellow keys look like a website.
 - Text is big and set in a display face in caps, like a console, never tiny letter-spaced labels.
@@ -81,7 +81,7 @@ states with short fades.
 | Screen | What it shows | How you get there and out |
 |---|---|---|
 | **Attract / boot** | The boot sequence, then the Box idling with a breathing brass `TAP TO START`. | Load. Any tap, click or key leads to Home. Home falls back here after a minute idle. |
-| **Home** | The comp: ports, clock and gauge, core, the focused game's title, facts and Play, the cartridge rack (Quick Draw, Stock Duel, Bet on X sealed, B17 sealed). | Focus a cartridge by touching it or with the arrow keys. Play opens Join, or Stake if both seats are full. |
+| **Home** | The full machine: ports, clock and gauge, core, the focused game's title, facts and Play, the cartridge rack (Quick Draw, Stock Duel, Bet on X sealed, B17 sealed). | Focus a cartridge by touching it or with the arrow keys. Play opens Join, or Stake if both seats are full. |
 | **Join** | Two big sockets: each player taps a badge to take a seat. A new badge gets 100 test EGB from the faucet (a transaction). | Both seats full → Stake. Back → Home. |
 | **Stake** | Stake choices on brass keys (5, 10, 25 EGB), the trust tier, and each seat's `TAP TO SIGN`. Both taps → the Box opens the match (one transaction, both stakes in). | Opened → the game. Back → Home before anyone signs. |
 | **Quick Draw** | The game, under the thin Box overlay. | Ends → Result. |
