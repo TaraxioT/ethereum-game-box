@@ -45,3 +45,8 @@
   background: radial-gradient(circle at center, transparent 0 330px, var(--void) 520px);
   transform: scale(0.5); pointer-events: none;
 }
+/* The boot's horizon: a hot line drawn out from under the core before the Grid shows. */
+.boot-horizon {
+  inset: auto; left: 0; right: 0; height: 2px; pointer-events: none;
+  background: var(--sys-hot); box-shadow: 0 0 8px var(--sys-bloom), 0 0 20px var(--sys-bloom); transform: scaleX(0);
+}

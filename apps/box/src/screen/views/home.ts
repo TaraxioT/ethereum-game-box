@@ -1,10 +1,12 @@
-// Home: the library. The focused game's title, its facts as IC chips and a brass Play on the left; the cartridge rack
-// along the bottom, fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays.
+// Home: the library. The focused game's title, its facts as data tags and Play on the left; the cartridge rack along
+// the bottom, each fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays. A new focus
+// lifts and lights its cartridge, runs a packet along its feed into the core, and rezzes the new title and facts in.
 import type { BoxState, GameInfo } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";
-import { el, facesReady, fitFont, fitWidth, place, play } from "../shell/dom.ts";
+import { el, facesReady, fitFont, fitWidth, place } from "../shell/dom.ts";
+import { derez, rez } from "../shell/rez.ts";
 import { createRack } from "./rack.ts";
 
 export function homeView(ctx: ViewContext): View {
@@ -23,6 +25,8 @@ export function homeView(ctx: ViewContext): View {
   const playKey = document.createElement("egb-key") as EgbKey;
   playKey.classList.add("home-play");
   place(playKey, layout.play);
+  // The launch: the key flashes, the cartridge flashes and settles, the core turns as every trace flares; then the
+  // router derezzes Home for the game.
   playKey.addEventListener("click", () => {
     if (!current?.ready) return;
     sound.play("tap");
@@ -31,32 +35,38 @@ export function homeView(ctx: ViewContext): View {
     link.send({ type: "play" });
   });
 
-  const rack = createRack(layout, games, (id) => {
-    sound.play("tick");
-    link.send({ type: "focus", game: id });
-  });
+  const rack = createRack(layout, games, (id) => link.send({ type: "focus", game: id }));
 
   root.append(title, facts, playKey, rack.el);
 
   let current: GameInfo | undefined;
+  /** Bumped by each focus change, so a title swap that a newer one overtakes stops. */
+  let turn = 0;
 
   function show(state: BoxState, animate: boolean): void {
     const game = state.games.find((g) => g.id === state.focus);
     if (!game || game === current) return;
     current = game;
-    titleText.textContent = game.title;
     playKey.textContent = game.ready ? "PLAY" : "SOON";
     playKey.toggleAttribute("disabled", !game.ready);
     facts.replaceChildren(...factsFor(game));
-    fit();
     rack.focus(game.id);
     machine.feed(state.games.indexOf(game));
-    if (!animate) return;
-    machine.coin();
-    void play(titleText, [{ transform: "translateY(100%)", opacity: 0 }, { transform: "none", opacity: 1 }], {
-      duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+    if (!animate) {
+      titleText.textContent = game.title;
+      fit();
+      return;
+    }
+    sound.play("tick");
+    fitWidth(facts, layout.facts.w);
+    [...facts.children].forEach((tag, i) => (tag as EgbFact).rez(i * 90));
+    const mine = ++turn;
+    void derez(titleText, { duration: 120 }).then(() => {
+      if (mine !== turn) return;
+      titleText.textContent = game.title;
+      fit();
+      void rez(titleText);
     });
-    [...facts.children].forEach((chip, i) => (chip as EgbFact).rez(120 + i * 90));
   }
 
   /** Long titles and fact rows shrink to their column rather than run under the core. */
@@ -74,6 +84,7 @@ export function homeView(ctx: ViewContext): View {
       const next = games[(i + step + games.length) % games.length];
       if (next) link.send({ type: "focus", game: next.id });
     } else if (e.key === "Enter") {
+      playKey.flash();
       playKey.click();
     }
   }

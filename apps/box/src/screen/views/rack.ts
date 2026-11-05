@@ -1,17 +1,18 @@
-// The cartridge rack: one keycap cartridge per game, standing in its housing along the bottom of the board. Home
-// focuses one; attract shows them idle.
+// The cartridge rack: one program per game, standing on the Grid's floor along the bottom of the stage. Home focuses
+// one; attract shows them idle.
 import type { GameId, GameInfo } from "../link/types.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { EgbCart } from "../parts/cart.ts";
-import { el, place, play } from "../shell/dom.ts";
+import { el, place } from "../shell/dom.ts";
+import { rez } from "../shell/rez.ts";
 
 export interface Rack {
   readonly el: HTMLElement;
   focus(game: GameId | null): void;
   /** The launch: the focused cartridge seats down. */
   press(game: GameId): void;
-  /** Boot and attract: the cartridges rise into their housings one after another. */
-  rise(): Promise<void>;
+  /** Attract: after `delay` ms the cartridges rez in, left to right, 90 ms apart. */
+  rez(delay: number): Promise<void>;
 }
 
 export function createRack(layout: Layout, games: readonly GameInfo[], onPick?: (game: GameId) => void): Rack {
@@ -35,14 +36,8 @@ export function createRack(layout: Layout, games: readonly GameInfo[], onPick?: 
     press(game) {
       carts.forEach((cart, i) => cart.toggleAttribute("pressed", games[i]?.id === game));
     },
-    async rise() {
-      await Promise.all(
-        carts.map((cart, i) =>
-          play(cart, [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }], {
-            duration: 420, delay: i * 90, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "backwards",
-          }),
-        ),
-      );
+    async rez(delay) {
+      await Promise.all(carts.map((cart, i) => rez(cart, { delay: delay + i * 90 })));
     },
   };
 }

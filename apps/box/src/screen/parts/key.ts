@@ -73,9 +73,9 @@ export class EgbKey extends HTMLElement {
     this.#flash = pick(root, ".flash");
     this.#label = pick(root, ".label");
     fitFrame(this.#shape, { chamfer: CHAMFER });
-    this.#button.addEventListener("pointerdown", () => this.#press());
+    this.#button.addEventListener("pointerdown", () => this.flash());
     this.#button.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") this.#press();
+      if (e.key === "Enter" || e.key === " ") this.flash();
     });
     // The label shrinks to fit: when the key is sized, when its words change, and once the face has loaded.
     new ResizeObserver(() => this.#fit()).observe(this.#shape);
@@ -87,7 +87,8 @@ export class EgbKey extends HTMLElement {
     this.#button.disabled = this.hasAttribute("disabled");
   }
 
-  #press(): void {
+  /** The press's flash, for a key pressed from elsewhere (Enter on Home). */
+  flash(): void {
     motion(this.#flash, [{ opacity: 0 }, { opacity: 0.9, offset: 0.4 }, { opacity: 0 }], { duration: 90, easing: "linear" });
   }
 
