@@ -1,6 +1,6 @@
 // The boot: one thing at a time, nothing overlapping. The core lights where it stands; the board powers on outward
 // from it (a dark cover with a hole at the core, scaled up: transform only, see shell.css); the ports come up, then the clock and
-// gauge. Then the Box is ready and attract takes over. Any touch skips to the end state.
+// gas bar. Then the Box is ready and attract takes over. Any touch skips to the end state.
 import type { MachineView } from "./machine.ts";
 import type { Sound } from "../views/view.ts";
 import type { Layout } from "./layout.ts";

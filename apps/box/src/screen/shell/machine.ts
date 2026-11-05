@@ -69,8 +69,7 @@ export function createMachine(layout: Layout, scale: number): MachineView {
   const clock = document.createElement("egb-clock") as EgbClock;
   place(clock, layout.clock);
   const gauge = document.createElement("egb-gauge") as EgbGauge;
-  const g = layout.gauge;
-  place(gauge, { x: g.centre.x - g.radius, y: g.centre.y - g.radius, w: g.radius * 2, h: g.radius * 2 });
+  place(gauge, layout.gas);
   const stakeChip = el("div", "stake-chip");
   const txbar = document.createElement("egb-txbar") as EgbTxbar;
   place(txbar, layout.txbar);
@@ -140,7 +139,10 @@ export function createMachine(layout: Layout, scale: number): MachineView {
       if (event.type === "init" || event.type === "block") clock.block = state.chain.block;
       if (event.type === "init" || event.type === "gas") gauge.gwei = state.chain.gasGwei;
       if (event.type === "block" && pose !== "game") core.swell();
-      if (event.type === "tap" && event.accepted) ports[event.seat].pulse();
+      if (event.type === "tap") {
+        if (event.accepted) ports[event.seat].pulse();
+        else ports[event.seat].refuse();
+      }
       if (event.type === "tx") {
         onTx(event.tx);
         // Balances move when the money does: the port reads the ledger as the tx lands.

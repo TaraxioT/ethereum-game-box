@@ -26,16 +26,16 @@ export interface Layout {
   readonly horizon: number;
   /** Each port's module (ring, blockie, name, LCD) and the ring's centre, where its trace starts. */
   readonly ports: readonly [PortAnchor, PortAnchor];
-  /** The hanging block LCD and the gas gauge beside it. */
+  /** The block readout and the gas bar beside it. */
   readonly clock: Rect;
-  readonly gauge: { readonly centre: Point; readonly radius: number };
+  readonly gas: Rect;
   /** The focused game's title, its fact chips and Play. */
   readonly title: Rect;
   readonly facts: Rect;
   readonly play: Rect;
   /** Four cartridge housings along the bottom, in rack order. */
   readonly rack: readonly Rect[];
-  /** The transaction-progress LCD strip. */
+  /** The transaction strip. */
   readonly txbar: Rect;
 }
 
@@ -57,7 +57,7 @@ export const LANDSCAPE: Layout = {
     { module: { x: 860, y: 28, w: 380, h: 96 }, ring: { x: 1188, y: 76 }, side: "right" },
   ],
   clock: { x: 478, y: 30, w: 276, h: 64 },
-  gauge: { centre: { x: 806, y: 62 }, radius: 40 },
+  gas: { x: 764, y: 40, w: 88, h: 48 },
   title: { x: 60, y: 186, w: 400, h: 80 },
   facts: { x: 60, y: 272, w: 400, h: 44 },
   play: { x: 60, y: 340, w: 200, h: 72 },
@@ -81,7 +81,7 @@ export const PORTRAIT: Layout = {
     { module: { x: 400, y: 24, w: 300, h: 84 }, ring: { x: 656, y: 66 }, side: "right" },
   ],
   clock: { x: 200, y: 146, w: 236, h: 56 },
-  gauge: { centre: { x: 482, y: 174 }, radius: 34 },
+  gas: { x: 448, y: 150, w: 88, h: 48 },
   title: { x: 40, y: 590, w: 640, h: 72 },
   facts: { x: 40, y: 668, w: 640, h: 44 },
   play: { x: 260, y: 728, w: 200, h: 68 },
