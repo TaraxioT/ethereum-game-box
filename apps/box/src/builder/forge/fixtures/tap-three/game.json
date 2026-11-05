@@ -1,0 +1,13 @@
+{
+  "id": "tap-three",
+  "title": "Tap Three",
+  "blurb": "First to tap their badge three times wins.",
+  "players": 2,
+  "minutes": 1,
+  "stakes": [1, 5],
+  "tier": "refereed",
+  "taps": "identify",
+  "kind": "team",
+  "budgetMs": 50,
+  "forge": { "template": true, "label": "Race to three taps", "default": true }
+}
