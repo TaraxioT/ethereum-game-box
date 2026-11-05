@@ -79,8 +79,8 @@
 <header>
   <div class="kicker">ETHGlobal Mumbai · Game UI plan</div>
   <h1>The Game Box UI, with a Demo mode</h1>
-  <div class="lede"><p>The plan for the Box&#39;s touchscreen, built simulated first. Live at
-<a href="https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/</a>.</p>
+  <div class="lede"><p>The plan for the Box&#39;s touchscreen, built simulated first. Plan live at
+<a href="https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/</a>. <strong>Demo live at <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a>.</strong></p>
 </div>
   <nav>
     <a href="#s1">Goal</a>
@@ -123,7 +123,7 @@ game has its own look.</li>
 <li>One locked visual target for Home: ports in the top corners, the clock hanging at the top centre, a black glass
 sphere in the middle, the focused game&#39;s title, facts and a gold Play on the left, and a rack of keycap
 cartridges along the bottom, all on gunmetal plates with neon traces running into the core.</li>
-<li>Earlier attempts failed in known ways, and these are now rules: flat mid-tone boards kill the 3D (brightness must
+<li>The look fails in known ways, and these are rules: flat mid-tone boards kill the 3D (brightness must
 come from light); wide blooms look cheap (glows stay on their edges); a spinning logo and a boot that moves
 everything at once look broken; idle cartridges with neon look busy; saturated yellow keys look like a website.</li>
 <li>Text is big and set in a display face in caps, like a console, never tiny letter-spaced labels.</li>
@@ -221,7 +221,7 @@ states with short fades.</p>
 </tr>
 <tr>
 <td><strong>Home</strong></td>
-<td>The comp: ports, clock and gauge, core, the focused game&#39;s title, facts and Play, the cartridge rack (Quick Draw, Stock Duel, Bet on X sealed, B17 sealed).</td>
+<td>The full machine: ports, clock and gauge, core, the focused game&#39;s title, facts and Play, the cartridge rack (Quick Draw, Stock Duel, Bet on X sealed, B17 sealed).</td>
 <td>Focus a cartridge by touching it or with the arrow keys. Play opens Join, or Stake if both seats are full.</td>
 </tr>
 <tr>
@@ -297,7 +297,7 @@ can be focused (their title and facts show) but Play stays dark.</p>
 <section id="s6">
 <h2><span class="n">06</span>Architecture</h2>
 <pre><code>apps/box/
-  package.json            @egb/box: dev, build, typecheck, test
+  package.json            @egb/box: dev, dev:box, build, typecheck, test
   vite.config.ts          root src/screen, out dist/screen
   src/
     screen/
@@ -306,16 +306,20 @@ can be focused (their title and facts show) but Play stays dark.</p>
       tokens.css          palette, type, light, motion tokens
       fonts.css           the three self-hosted faces
       README.md           every part, documented
-      parts/              custom elements: &lt;egb-core&gt; &lt;egb-port&gt; &lt;egb-clock&gt; &lt;egb-gauge&gt; &lt;egb-fact&gt;
-                          &lt;egb-key&gt; &lt;egb-cart&gt; &lt;egb-txbar&gt; &lt;egb-lcd&gt;, blockie.ts, eth-mark.ts
-      shell/              board.ts (cached canvas), layout.ts (anchors per orientation), packets.ts,
-                          stage.ts (scale to fit), boot.ts, router.ts (depth moves), overlay.ts, sound.ts
-      views/              attract.ts home.ts join.ts stake.ts result.ts refund.ts, view.ts (the contract)
-      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (the engine)
-      demo/               frame.ts pucks.ts oled.ts badges.ts bot.ts plate.ts intro.ts
+      parts/              custom elements: &lt;egb-core&gt; &lt;egb-port&gt; &lt;egb-clock&gt; &lt;egb-gauge&gt; &lt;egb-fact&gt; &lt;egb-key&gt;
+                          &lt;egb-cart&gt; &lt;egb-txbar&gt; &lt;egb-plate&gt; &lt;egb-seg&gt;; blockie.ts, eth-mark.ts, part.ts, register.ts
+      shell/              layout.ts (anchors per orientation), stage.ts, route.ts + traces.ts (geometry),
+                          board.ts (cached canvas), packets.ts, machine.ts, router.ts, boot.ts, app.ts, sound.ts, dom.ts
+      views/              view.ts (the contract), routes.ts, attract.ts, home.ts, rack.ts, join.ts, stake.ts,
+                          result.ts, refund.ts, page-layout.ts, seat-panel.ts
+      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (engine, chain, ledger, txs,
+                          bot, stations, badges, catalogue, control)
+      demo/               desk.ts puck.ts oled.ts oled-font.ts badges.ts keys.ts intro.ts
     games/
-      quick-draw/         rules.ts (+ test), screen.ts
-      stock-duel/         rules.ts (+ test), deck.ts, rolodex.ts, dial.ts, reveal.ts, screen.ts
+      seat.ts game.ts random.ts
+      quick-draw/         types.ts, rules.ts (+ test), screen.ts, scene.ts, sign.ts, figure.ts
+      stock-duel/         types.ts, rules.ts (+ test), deck.ts, screen.ts, scene.ts, rolodex.ts, dial.ts, reveal.ts,
+                          score.ts
 </code></pre>
 <ul>
 <li><code>apps/box/src/screen/</code> is Vite + TypeScript with small custom elements and no UI framework.</li>
@@ -350,8 +354,8 @@ built in this pass.</li>
 <h2><span class="n">07</span>Demo mode</h2>
 <ul>
 <li><strong>One codebase, one flag</strong>: <code>VITE_EGB_MODE=demo|box</code>. <code>demo</code> adds the drawn hardware, badges and labels. <code>box</code> is
-the bare screen for the Pi&#39;s kiosk browser. Until <code>LiveLink</code> exists, both run on <code>SimLink</code>, and in <code>box</code> mode the
-keyboard taps (A / L) stand in for the stations.</li>
+the bare screen for the Pi&#39;s kiosk browser. Until <code>LiveLink</code> exists, both run on <code>SimLink</code>; in <code>box</code> mode both
+seats are people (no bot) and the keyboard taps (A / L) stand in for the stations.</li>
 <li><strong>The missing hardware is drawn</strong>: two tap-station pucks at the bottom corners of the window, each a dark puck with
 a seat-colour NFC ring, a 128×64 monochrome OLED showing what the real station would show (<code>TAP TO JOIN</code>,
 <code>SIGN 10 EGB</code>, <code>GO!</code>, the card in front), and a shake for the buzz motor. The Box screen scales down to leave the
@@ -373,7 +377,8 @@ transaction progress says <code>SIMULATED</code> where a hash would be.</li>
 <h2><span class="n">08</span>Constraints</h2>
 <ul>
 <li><strong>60 fps</strong> on a Raspberry Pi 5 browser at 1280×800; scales to 1920×1080 and to a 390×844 phone (a portrait layout
-of the same objects).</li>
+of the same objects). Checked so far on a laptop browser (no dropped frames on Home); the Pi run comes with the
+hardware.</li>
 <li>The static board is drawn once per layout and cached; packets draw on a separate canvas only while one is running.</li>
 <li>Only transform and opacity animate. No blur filters, blend modes or animated shadows.</li>
 <li>Small typed modules with one job each. Every part documented in <code>apps/box/src/screen/README.md</code>.</li>
@@ -402,17 +407,17 @@ plate, instruction plate, sound.</li>
 <section id="s10">
 <h2><span class="n">10</span>Done when</h2>
 <ul>
-<li><input disabled="" type="checkbox"> Every §3 object is visible on Home: board, core, ports, chain clock and gas gauge, facts, keys, cartridges,
+<li><input checked="" disabled="" type="checkbox"> Every §3 object is visible on Home: board, core, ports, chain clock and gas gauge, facts, keys, cartridges,
 transaction progress.</li>
-<li><input disabled="" type="checkbox"> Quick Draw plays end to end against the bot and hot-seat.</li>
-<li><input disabled="" type="checkbox"> Stock Duel plays end to end against the bot and hot-seat.</li>
-<li><input disabled="" type="checkbox"> Refund is reachable and pays both stakes back.</li>
-<li><input disabled="" type="checkbox"> The <code>DEMO</code> plate and <code>SIMULATED</code> labels show.</li>
-<li><input disabled="" type="checkbox"> All four input paths work on the pucks: drag, click, touch, A / L.</li>
-<li><input disabled="" type="checkbox"> Reduced motion shows end states; mute works and <code>gamebox-muted=1</code> mutes.</li>
-<li><input disabled="" type="checkbox"> 1280×800, 1920×1080 and 390×844 all work.</li>
-<li><input disabled="" type="checkbox"> <code>pnpm typecheck</code>, <code>pnpm test</code> and <code>pnpm build</code> pass.</li>
-<li><input disabled="" type="checkbox"> The demo is live at a public URL.</li>
+<li><input checked="" disabled="" type="checkbox"> Quick Draw plays end to end against the bot and hot-seat.</li>
+<li><input checked="" disabled="" type="checkbox"> Stock Duel plays end to end against the bot and hot-seat.</li>
+<li><input checked="" disabled="" type="checkbox"> Refund is reachable and pays both stakes back.</li>
+<li><input checked="" disabled="" type="checkbox"> The <code>DEMO</code> plate and <code>SIMULATED</code> labels show.</li>
+<li><input checked="" disabled="" type="checkbox"> All four input paths work on the pucks: drag, click, touch, A / L.</li>
+<li><input checked="" disabled="" type="checkbox"> Reduced motion shows end states; mute works and <code>gamebox-muted=1</code> mutes.</li>
+<li><input checked="" disabled="" type="checkbox"> 1280×800, 1920×1080 and 390×844 all work.</li>
+<li><input checked="" disabled="" type="checkbox"> <code>pnpm typecheck</code>, <code>pnpm test</code> and <code>pnpm build</code> pass.</li>
+<li><input checked="" disabled="" type="checkbox"> The demo is live at a public URL: <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a>.</li>
 </ul>
 </section>
 

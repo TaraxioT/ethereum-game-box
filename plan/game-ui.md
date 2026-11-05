@@ -1,7 +1,7 @@
 # The Game Box UI, with a Demo mode
 
-The plan for the Box's touchscreen, built simulated first. Live at
-https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/.
+The plan for the Box's touchscreen, built simulated first. Plan live at
+https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/. **Demo live at https://ethereum-game-box.pages.dev/.**
 
 ## 1. Goal
 
@@ -132,7 +132,7 @@ can be focused (their title and facts show) but Play stays dark.
 
 ```
 apps/box/
-  package.json            @egb/box: dev, build, typecheck, test
+  package.json            @egb/box: dev, dev:box, build, typecheck, test
   vite.config.ts          root src/screen, out dist/screen
   src/
     screen/
@@ -141,16 +141,20 @@ apps/box/
       tokens.css          palette, type, light, motion tokens
       fonts.css           the three self-hosted faces
       README.md           every part, documented
-      parts/              custom elements: <egb-core> <egb-port> <egb-clock> <egb-gauge> <egb-fact>
-                          <egb-key> <egb-cart> <egb-txbar> <egb-lcd>, blockie.ts, eth-mark.ts
-      shell/              board.ts (cached canvas), layout.ts (anchors per orientation), packets.ts,
-                          stage.ts (scale to fit), boot.ts, router.ts (depth moves), overlay.ts, sound.ts
-      views/              attract.ts home.ts join.ts stake.ts result.ts refund.ts, view.ts (the contract)
-      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (the engine)
-      demo/               frame.ts pucks.ts oled.ts badges.ts bot.ts plate.ts intro.ts
+      parts/              custom elements: <egb-core> <egb-port> <egb-clock> <egb-gauge> <egb-fact> <egb-key>
+                          <egb-cart> <egb-txbar> <egb-plate> <egb-seg>; blockie.ts, eth-mark.ts, part.ts, register.ts
+      shell/              layout.ts (anchors per orientation), stage.ts, route.ts + traces.ts (geometry),
+                          board.ts (cached canvas), packets.ts, machine.ts, router.ts, boot.ts, app.ts, sound.ts, dom.ts
+      views/              view.ts (the contract), routes.ts, attract.ts, home.ts, rack.ts, join.ts, stake.ts,
+                          result.ts, refund.ts, page-layout.ts, seat-panel.ts
+      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (engine, chain, ledger, txs,
+                          bot, stations, badges, catalogue, control)
+      demo/               desk.ts puck.ts oled.ts oled-font.ts badges.ts keys.ts intro.ts
     games/
-      quick-draw/         rules.ts (+ test), screen.ts
-      stock-duel/         rules.ts (+ test), deck.ts, rolodex.ts, dial.ts, reveal.ts, screen.ts
+      seat.ts game.ts random.ts
+      quick-draw/         types.ts, rules.ts (+ test), screen.ts, scene.ts, sign.ts, figure.ts
+      stock-duel/         types.ts, rules.ts (+ test), deck.ts, screen.ts, scene.ts, rolodex.ts, dial.ts, reveal.ts,
+                          score.ts
 ```
 
 - `apps/box/src/screen/` is Vite + TypeScript with small custom elements and no UI framework.
@@ -183,8 +187,8 @@ interface BoxLink {
 ## 7. Demo mode
 
 - **One codebase, one flag**: `VITE_EGB_MODE=demo|box`. `demo` adds the drawn hardware, badges and labels. `box` is
-  the bare screen for the Pi's kiosk browser. Until `LiveLink` exists, both run on `SimLink`, and in `box` mode the
-  keyboard taps (A / L) stand in for the stations.
+  the bare screen for the Pi's kiosk browser. Until `LiveLink` exists, both run on `SimLink`; in `box` mode both
+  seats are people (no bot) and the keyboard taps (A / L) stand in for the stations.
 - **The missing hardware is drawn**: two tap-station pucks at the bottom corners of the window, each a dark puck with
   a seat-colour NFC ring, a 128×64 monochrome OLED showing what the real station would show (`TAP TO JOIN`,
   `SIGN 10 EGB`, `GO!`, the card in front), and a shake for the buzz motor. The Box screen scales down to leave the
@@ -203,7 +207,8 @@ interface BoxLink {
 ## 8. Constraints
 
 - **60 fps** on a Raspberry Pi 5 browser at 1280×800; scales to 1920×1080 and to a 390×844 phone (a portrait layout
-  of the same objects).
+  of the same objects). Checked so far on a laptop browser (no dropped frames on Home); the Pi run comes with the
+  hardware.
 - The static board is drawn once per layout and cached; packets draw on a separate canvas only while one is running.
 - Only transform and opacity animate. No blur filters, blend modes or animated shadows.
 - Small typed modules with one job each. Every part documented in `apps/box/src/screen/README.md`.
@@ -226,14 +231,14 @@ interface BoxLink {
 
 ## 10. Done when
 
-- [ ] Every §3 object is visible on Home: board, core, ports, chain clock and gas gauge, facts, keys, cartridges,
+- [x] Every §3 object is visible on Home: board, core, ports, chain clock and gas gauge, facts, keys, cartridges,
       transaction progress.
-- [ ] Quick Draw plays end to end against the bot and hot-seat.
-- [ ] Stock Duel plays end to end against the bot and hot-seat.
-- [ ] Refund is reachable and pays both stakes back.
-- [ ] The `DEMO` plate and `SIMULATED` labels show.
-- [ ] All four input paths work on the pucks: drag, click, touch, A / L.
-- [ ] Reduced motion shows end states; mute works and `gamebox-muted=1` mutes.
-- [ ] 1280×800, 1920×1080 and 390×844 all work.
-- [ ] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
-- [ ] The demo is live at a public URL.
+- [x] Quick Draw plays end to end against the bot and hot-seat.
+- [x] Stock Duel plays end to end against the bot and hot-seat.
+- [x] Refund is reachable and pays both stakes back.
+- [x] The `DEMO` plate and `SIMULATED` labels show.
+- [x] All four input paths work on the pucks: drag, click, touch, A / L.
+- [x] Reduced motion shows end states; mute works and `gamebox-muted=1` mutes.
+- [x] 1280×800, 1920×1080 and 390×844 all work.
+- [x] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
+- [x] The demo is live at a public URL: https://ethereum-game-box.pages.dev/.
