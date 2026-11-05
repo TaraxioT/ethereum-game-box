@@ -1,0 +1,6 @@
+/* The parts' look inside a built game's frame (/parts.css): the Box's three faces and its tokens, and the one element
+   the game's screen draws in, filling the frame. */
+@import "../fonts.css";
+@import "../tokens.css";
+
+#game { position: fixed; inset: 0; overflow: hidden; }
