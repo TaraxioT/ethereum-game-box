@@ -39,7 +39,7 @@
   opacity: 0;
 }
 .machine[data-pose="game"] .stake-chip:not([hidden]) { opacity: 1; }
-[data-orientation="portrait"] .stake-chip { top: 118px; }
+[data-orientation="portrait"] .stake-chip { top: 40px; }
 
 /* The boot's cover: dark with a hole at the core; scaled up, it uncovers the board outward from the core. */
 .boot-cover {

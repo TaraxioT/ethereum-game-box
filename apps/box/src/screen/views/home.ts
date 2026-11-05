@@ -4,7 +4,7 @@ import type { BoxState, GameInfo } from "../link/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";
-import { el, place, play } from "../shell/dom.ts";
+import { el, fitFont, fitWidth, place, play } from "../shell/dom.ts";
 import { createRack } from "./rack.ts";
 
 export function homeView(ctx: ViewContext): View {
@@ -48,6 +48,7 @@ export function homeView(ctx: ViewContext): View {
     playKey.textContent = game.ready ? "PLAY" : "SOON";
     playKey.toggleAttribute("disabled", !game.ready);
     facts.replaceChildren(...factsFor(game));
+    fit();
     rack.focus(game.id);
     machine.feed(state.games.indexOf(game));
     if (!animate) return;
@@ -57,6 +58,13 @@ export function homeView(ctx: ViewContext): View {
     });
     [...facts.children].forEach((chip, i) => (chip as EgbFact).press(120 + i * 90));
   }
+
+  /** Long titles and fact rows shrink to their column rather than run under the core. */
+  function fit(): void {
+    fitFont(titleText, layout.title.w, layout.orientation === "portrait" ? 52 : 64);
+    fitWidth(facts, layout.facts.w);
+  }
+  void document.fonts.ready.then(fit);
 
   function onKey(e: KeyboardEvent): void {
     if (!current) return;

@@ -1,15 +1,15 @@
 /* Home and attract. */
 .home-title { overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
 .home-title-text {
-  margin: 0; font: 900 64px/1 var(--display); letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
+  margin: 0; width: max-content; font: 900 64px/1 var(--display); letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
   color: #fbf8ff;
   /* Lit from the top left: a bright top edge, a violet edge glow kept tight to the letters, a dark drop. */
   text-shadow: 0 -1px 0 #ffffff, 0 0 2px rgb(196 170 247 / 0.9), 0 0 8px rgb(173 143 255 / 0.55), 0 3px 0 #2a1d58, 0 5px 6px rgb(4 2 12 / 0.6);
 }
 [data-orientation="portrait"] .home-title { align-items: center; }
 [data-orientation="portrait"] .home-title-text { font-size: 52px; }
-.home-facts { display: flex; gap: 12px; align-items: center; }
-[data-orientation="portrait"] .home-facts { justify-content: center; }
+.home-facts { display: flex; gap: 10px; align-items: center; transform-origin: left center; }
+[data-orientation="portrait"] .home-facts { justify-content: center; transform-origin: center; }
 .home-facts egb-fact { height: 44px; }
 .home-play, .attract-start { font: 900 30px/1 var(--display); letter-spacing: 0.04em; }
 
@@ -42,7 +42,7 @@
 .seat-panel[data-tone="done"] .seat-panel-status { color: var(--neon-mint); }
 .seat-panel[data-tone="win"] { box-shadow: var(--lit-edge), inset 0 0 0 2px var(--neon-gold), 0 0 0 2px #0b0618, 0 0 10px rgb(255 196 107 / 0.45), var(--plate-shadow); }
 .seat-panel[data-tone="win"] .seat-panel-status { color: var(--neon-gold); font-size: 20px; }
-.seat-panel[data-tone="lose"] { opacity: 0.72; }
+.seat-panel[data-tone="lose"] > * { opacity: 0.6; }
 .seat-panel[data-tone="lose"] .seat-panel-status { color: var(--lose); }
 @keyframes ask-breathe { 50% { opacity: 0.55; } }
 [data-orientation="portrait"] .seat-panel-socket { width: 100px; height: 100px; }
@@ -55,5 +55,5 @@
 .refund-head { font: 900 30px/1 var(--display); color: var(--lose); letter-spacing: 0.06em; }
 .refund-line { font: 700 18px/1.2 var(--mono); color: var(--lcd-amber); }
 .page-keys { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
-.page-keys egb-key { flex: 0 0 168px; font: 900 20px/1 var(--display); }
+.page-keys egb-key { flex: 0 0 auto; width: 200px; height: auto; }
 .page-note { display: grid; place-items: center; text-align: center; font: 600 16px/1.4 var(--display); letter-spacing: 0.06em; color: var(--fg-3); }

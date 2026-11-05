@@ -34,9 +34,11 @@ export function refundView(ctx: ViewContext): View {
     const m = state.match;
     if (!m) return;
     const left = Math.max(0, m.refundBlock - state.chain.block);
-    line.textContent = left > 0 ? `STAKES UNLOCK AT BLOCK ${m.refundBlock.toLocaleString("en-US")} · ${left} TO GO` : "UNLOCKED · TAP YOUR BADGE";
+    line.textContent = left > 0 ? `UNLOCKS AT BLOCK ${m.refundBlock.toLocaleString("en-US")}` : "UNLOCKED · TAP YOUR BADGE";
     state.seats.forEach((s, i) => {
+      const sending = state.txs.some((tx) => tx.kind === "refund" && tx.seat === i && tx.step !== "paid");
       if (m.refunded[i]) panels[i]?.set(s, `REFUNDED · +${m.stake} EGB`, "done");
+      else if (sending) panels[i]?.set(s, "REFUNDING…", "done");
       else if (left > 0) panels[i]?.set(s, `LOCKED · ${left} BLOCK${left === 1 ? "" : "S"}`, "idle");
       else panels[i]?.set(s, "TAP TO REFUND", "ask");
     });

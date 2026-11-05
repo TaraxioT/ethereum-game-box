@@ -2,7 +2,7 @@
 // breathing brass TAP TO START. Any touch, key or badge tap starts.
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import { el, place } from "../shell/dom.ts";
+import { el, fitFont, place } from "../shell/dom.ts";
 import { createRack } from "./rack.ts";
 
 export function attractView(ctx: ViewContext): View {
@@ -17,7 +17,12 @@ export function attractView(ctx: ViewContext): View {
   start.classList.add("attract-start");
   start.setAttribute("breathe", "");
   start.textContent = "TAP TO START";
-  place(start, { ...layout.play, w: layout.play.w + 140 });
+  const startW = layout.play.w + 140;
+  const startX = layout.orientation === "portrait" ? (layout.width - startW) / 2 : layout.play.x;
+  place(start, { ...layout.play, x: startX, w: startW });
+
+  const name = title.lastElementChild as HTMLElement;
+  void document.fonts.ready.then(() => fitFont(name, layout.title.w, layout.orientation === "portrait" ? 52 : 64));
 
   const rack = createRack(layout, link.state().games);
   root.append(title, start, rack.el);

@@ -48,6 +48,9 @@ button {
 .glow { inset: -2px; opacity: 0; box-shadow: 0 0 0 2px rgb(255 226 150 / 0.75), 0 0 10px rgb(255 200 90 / 0.6); pointer-events: none; }
 :host([breathe]) .glow { opacity: 1; animation: breathe 2.6s ease-in-out infinite alternate; }
 @keyframes breathe { from { opacity: 0.12; } to { opacity: 1; } }
+/* Selected (one of a set, like a stake): the key sits pressed in and its rim is lit. */
+:host([selected]) .glow { opacity: 1; }
+:host([selected]) .cap { transform: translateY(4cqh); }
 
 button:active .cap { transform: translateY(7cqh); }
 button:focus-visible .cap { outline: 3px solid var(--neon-lav); outline-offset: 3px; }

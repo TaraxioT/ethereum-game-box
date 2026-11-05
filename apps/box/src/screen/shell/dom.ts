@@ -34,3 +34,17 @@ export function calm(): boolean {
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, calm() ? 0 : ms));
 }
+
+/** Shrinks a node with a transform until it fits `width` stage pixels (text that would run into its neighbours). */
+export function fitWidth(node: HTMLElement, width: number): void {
+  node.style.transform = "";
+  const natural = node.scrollWidth;
+  if (natural > width) node.style.transform = `scale(${width / natural})`;
+}
+
+/** Sets a line of text's font size to the largest up to `max` px at which it fits `width` stage pixels. */
+export function fitFont(node: HTMLElement, width: number, max: number): void {
+  node.style.fontSize = `${max}px`;
+  const natural = node.scrollWidth;
+  if (natural > width) node.style.fontSize = `${Math.floor((max * width) / natural)}px`;
+}
