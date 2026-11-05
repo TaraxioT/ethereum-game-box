@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethereum Game Box · Project plan</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #141413; --muted: #6F6E68; --line: #DEDCD2; --panel: #F0EEE6;
+    --accent: #3B5BDB; --accent-soft: #E3E8FB; --good: #2F7D4F;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1B1B1A; --ink: #EDEBE4; --muted: #A09E96; --line: #3A3936; --panel: #252523;
+            --accent: #8FA6FF; --accent-soft: #263055; --good: #7CC79A; }
+  }
+  * { box-sizing: border-box }
+  html { scroll-behavior: smooth }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 16px 120px }
+  header .kicker { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent) }
+  h1 { font: 500 44px/1.1 var(--serif); letter-spacing: -.015em; margin: 14px 0 12px }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 620px }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 48px }
+  nav a { font: 13px/1 var(--mono); color: var(--ink); text-decoration: none; padding: 8px 12px;
+          border: 1px solid var(--line); border-radius: 999px }
+  nav a:hover { border-color: var(--accent); color: var(--accent) }
+  section { border-top: 1px solid var(--line); padding-top: 36px; margin-top: 52px }
+  h2 { font: 500 30px/1.2 var(--serif); margin: 0 0 6px }
+  h2 .n { font: 600 13px/1 var(--mono); color: var(--accent); vertical-align: middle; margin-right: 10px }
+  h3 { font-size: 17px; margin: 30px 0 8px }
+  p, li { max-width: 680px }
+  ul, ol { padding-left: 22px }
+  li { margin: 4px 0 }
+  .sub { color: var(--muted); margin-top: 0 }
+  .callout { background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; margin: 22px 0 }
+  .callout p { margin: 0 }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0 }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px }
+  .card h4 { margin: 0 0 4px; font-size: 15px }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted) }
+  .steps { counter-reset: s; list-style: none; padding: 0 }
+  .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 12px 0 }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px;
+                      border-radius: 50%; background: var(--accent); color: var(--bg);
+                      font: 600 13px/26px var(--mono); text-align: center }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 15px }
+  th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 9px 10px; vertical-align: top }
+  th { font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+  .table-scroll { overflow-x: auto }
+  code { font: 13.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+         padding: 1px 5px; overflow-wrap: anywhere }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 20px 0; padding: 0; list-style: none }
+  .flow li { flex: 1 1 120px; max-width: none; margin: 0; background: var(--panel); border: 1px solid var(--line);
+             border-radius: 10px; padding: 10px 12px; font-size: 14px; position: relative }
+  .flow li strong { display: block; font-size: 15px }
+  .flow li span { color: var(--muted) }
+  .flow li:not(:last-child)::after { content: "→"; position: absolute; right: -6px; top: 50%;
+             transform: translate(50%, -50%); color: var(--accent); font-weight: 700; z-index: 1 }
+  footer { margin-top: 72px; color: var(--muted); font-size: 14px }
+  @media (max-width: 560px) {
+    h1 { font-size: 34px } .lede { font-size: 17px } h2 { font-size: 25px }
+    .flow { flex-direction: column; gap: 14px }
+    .flow li { flex: none }
+    .flow li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -7px;
+             transform: translate(-50%, 50%) }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">ETHGlobal Mumbai · Project plan</div>
+  <h1>Ethereum Game Box</h1>
+  <p class="lede">A game console you play by tapping a badge. Every match is staked and settled on Ethereum, and
+    nobody at the table needs ETH, a wallet app or a single pop-up.</p>
+  <nav>
+    <a href="#what">What it is</a>
+    <a href="#how">How it works</a>
+    <a href="#games">Games and the token</a>
+    <a href="#partners">Partner tracks</a>
+    <a href="#build">How we get there</a>
+  </nav>
+</header>
+
+<section id="what">
+  <h2><span class="n">01</span>What it is</h2>
+  <p class="sub">The problem, the idea, and what a player actually does.</p>
+
+  <h3>The problem</h3>
+  <p>On-chain games ask too much before the fun starts: install a wallet, buy gas, approve a token, sign a prompt
+    you can't read. That works for one person at a desk. It doesn't work for four friends around a table, a booth at
+    an event, or a bar on a Friday night.</p>
+
+  <h3>The idea</h3>
+  <p>The Game Box is a small console: a Raspberry Pi with a screen and a speaker, tap stations for the players, and
+    a hardware key inside that gives the Box its own identity on chain. Players carry NFC badges, each one a wallet
+    whose key never leaves the chip. Tap to join, tap to stake, tap to play.</p>
+  <div class="callout"><p><strong>One sentence:</strong> the badge is the wallet, the Box is the referee, and
+    Ethereum is the bank.</p></div>
+
+  <h3>What a player does</h3>
+  <ol class="steps">
+    <li><strong>Walks up and taps.</strong> The Box reads the badge's wallet and sends it test tokens. No ETH needed,
+      ever: the Box pays the gas.</li>
+    <li><strong>Gets a name.</strong> One more tap claims <code>name.gamebox.eth</code>, which follows the player
+      from Box to Box.</li>
+    <li><strong>Picks a game and stakes.</strong> A single tap signs the entry and moves the stake into the game
+      contract. The screen shows who is in and what is at stake.</li>
+    <li><strong>Plays.</strong> Taps are the controls: first to tap, pick a card, lock in a choice.</li>
+    <li><strong>Gets paid.</strong> The Box signs the result, the chain checks it and pays the winner, all in about
+      ten seconds. Big wins move titles like <code>champion.stockduel.gamebox.eth</code>.</li>
+  </ol>
+
+  <h3>Who it's for</h3>
+  <div class="grid">
+    <div class="card"><h4>Players</h4><p>Real stakes and real ownership, with nothing to install and nothing to
+      learn beyond "tap here".</p></div>
+    <div class="card"><h4>Operators</h4><p>Anyone can run a Box at a café, an event or at home, stake to it, and earn
+      a share of every game played on it.</p></div>
+    <div class="card"><h4>Game makers</h4><p>One game interface: open, settle, refund. Write the rules, and the Box
+      handles badges, stakes and payouts.</p></div>
+  </div>
+
+  <h3>What we're building this weekend</h3>
+  <ul>
+    <li>One working Box on the table, with two tap stations and a handful of badges.</li>
+    <li>Real games with real stakes on Sepolia, settled in seconds.</li>
+    <li>A token launched on Uniswap, whose fees feed back into the games.</li>
+    <li>Names for every Box and every player on ENS, and a public site that reads them.</li>
+  </ul>
+</section>
+
+<section id="how">
+  <h2><span class="n">02</span>How it works</h2>
+  <p class="sub">The pieces on the table, the pieces on chain, and the path one match takes between them.</p>
+
+  <h3>On the table</h3>
+  <div class="grid">
+    <div class="card"><h4>The Box</h4><p>A Raspberry Pi 5 with a touchscreen and a speaker. It runs the games, the
+      screen and the sound, and talks to the chain.</p></div>
+    <div class="card"><h4>The Box key</h4><p>A HYP2003 USB token. Its P-256 key is made on the chip and never leaves
+      it. Every result, entry and heartbeat the Box sends is signed by it.</p></div>
+    <div class="card"><h4>Tap stations</h4><p>One per player: an ESP32-S3 with an NFC reader, a tiny screen and a
+      buzz motor, linked to the Box wirelessly.</p></div>
+    <div class="card"><h4>Badges</h4><p>Arx HaLo NFC chips. Each holds a wallet key that can sign typed messages
+      (EIP-712) but can never be copied out.</p></div>
+  </div>
+
+  <h3>In the cloud and on chain</h3>
+  <div class="grid">
+    <div class="card"><h4>Relayer</h4><p>A Cloudflare Worker that pays the gas. It sends only what the Box key
+      signed, one transaction at a time per chain, and refuses anything else before spending a wei.</p></div>
+    <div class="card"><h4>Contracts on Sepolia</h4><p>The Box registry, the games, the token and its Uniswap pool,
+      staking, and the names. All on one chain, so everything can call everything.</p></div>
+    <div class="card"><h4>ENS</h4><p><code>gamebox.eth</code> names every Box and every player, and carries live
+      titles like the current champion.</p></div>
+    <div class="card"><h4>Public site</h4><p>Reads ENS and the contracts to show Boxes, players and champions. No
+      backend of its own.</p></div>
+  </div>
+
+  <h3>Why the Box key matters</h3>
+  <p>Ethereum can now check P-256 signatures natively (the <code>P256VERIFY</code> precompile, about 7,000 gas). So the
+    Box doesn't need a seed phrase or a hot wallet: a cheap hardware token, the same kind used for digital signatures in
+    India, becomes an on-chain identity. Contracts know which Box sent a result, and an operator can rotate or revoke
+    that key at any time.</p>
+
+  <h3>One match, end to end</h3>
+  <ul class="flow">
+    <li><strong>Badge</strong><span>signs the entry</span></li>
+    <li><strong>Tap station</strong><span>carries the tap</span></li>
+    <li><strong>Box</strong><span>checks it, signs with its key</span></li>
+    <li><strong>Relayer</strong><span>checks the Box, pays gas</span></li>
+    <li><strong>Sepolia</strong><span>moves stakes, pays out</span></li>
+  </ul>
+  <ol class="steps">
+    <li><strong>Entry.</strong> The badge signs one Permit2 message whose payload is the game entry. The game contract
+      is the only spender, and it rebuilds the message from the entry, so nobody in between can change a thing.</li>
+    <li><strong>Open.</strong> The Box wraps both entries in a request signed by its key. The relayer checks that
+      signature against the registry, then sends it. The game contract pulls both stakes.</li>
+    <li><strong>Play.</strong> Taps drive the game. Where a game needs chance, both badges add their own signed
+      randomness, so neither the Box nor a player picks the outcome.</li>
+    <li><strong>Settle.</strong> The Box signs the result. The contract checks the signature, the round and the
+      expiry, then pays the winner in the token they staked.</li>
+    <li><strong>Safety net.</strong> If the Box never settles, both players take their stakes back after a timeout.</li>
+  </ol>
+
+  <h3>What you have to trust</h3>
+  <p>Every game declares one of two tiers, and the Box shows it before anyone stakes.</p>
+  <div class="grid">
+    <div class="card"><h4>Verified</h4><p>The chain can check the result itself. Pots can be large, and a challenge
+      window lets anyone prove a Box cheated and take its stake.</p></div>
+    <div class="card"><h4>Refereed</h4><p>Only the Box saw what happened, like who tapped first. Pots are capped, and
+      the Box's stake backs its word.</p></div>
+  </div>
+</section>
+
+<section id="games">
+  <h2><span class="n">03</span>Games and the token</h2>
+  <p class="sub">Four games to start with, and the token that ties the games, the Boxes and Uniswap together.</p>
+
+  <h3>The games</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Game</th><th>How it plays</th><th>Tier</th></tr>
+    <tr><td><strong>Quick Draw</strong></td><td>The screen says "draw". First tap wins. The simplest game, and the
+      first one we build end to end.</td><td>Refereed</td></tr>
+    <tr><td><strong>Stock Duel</strong></td><td>Best of three. Each player picks a stock; the two badges' randomness
+      picks the stat (price, average price, 24-hour move or liquidity), read live from Robinhood Chain's stock pools.
+      Cards flip together; a timer picks for a slow player.</td><td>Refereed, with a public replay proof</td></tr>
+    <tr><td><strong>Bet on X</strong></td><td>Two players state a claim the chain can check ("gas is under 2 gwei at
+      block N"), offer odds, and both tap. A checker contract settles it from chain state.</td><td>Verified</td></tr>
+    <tr><td><strong>B17</strong></td><td>A heist on a vault. A bot keeps sending transactions; players buy ranges of
+      its future nonce. Wider ranges cost more (width squared), and the narrowest range holding the live nonce takes
+      the vault.</td><td>Verified</td></tr>
+  </table>
+  </div>
+  <p>Stock Duel is the main game. Its replay proof is the Robinhood block number and the exact pool reads for each
+    round, so anyone can recheck the result.</p>
+
+  <h3>The token</h3>
+  <p>Games are staked in the Game Box token. It launches through Uniswap's Continuous Clearing Auction, which sets a
+    fair opening price and then seeds a Uniswap v4 pool. That pool carries our own hook, with three fee levels:</p>
+  <div class="grid">
+    <div class="card"><h4>1%</h4><p>Any normal swap.</p></div>
+    <div class="card"><h4>0.25%</h4><p>A swap made with a badge tap at a Box, up to a daily cap tied to that Box's
+      stake. Playing in person earns the discount.</p></div>
+    <div class="card"><h4>0%</h4><p>Swaps made by the game contract itself, so the buyback costs nothing.</p></div>
+  </div>
+  <p>The hook also keeps a time-weighted price, which v4 doesn't provide. The buyback and the operator auction use it,
+    so neither can be pushed around by one big trade.</p>
+
+  <h3>Where the fees go</h3>
+  <p>Every settled game pays a small fee, split in half:</p>
+  <ul>
+    <li><strong>Half buys the token back and burns it,</strong> through the pool at zero fee. More games, less
+      supply.</li>
+    <li><strong>Half goes to the Box,</strong> shared between its operator and the people who staked to it.</li>
+  </ul>
+
+  <h3>Boxes, operators and stakers</h3>
+  <ul>
+    <li><strong>Operators</strong> win the right to run a Box through an operator auction, priced from the pool's
+      time-weighted price. The tokens they bid become the Box's stake.</li>
+    <li><strong>Stakers</strong> back a Box they trust and earn from its games. The operator sets a commission between
+      10% and 90%, and a change only takes effect after a delay.</li>
+    <li><strong>Cheating costs stake.</strong> Unstaking waits out a delay, and until it ends, a proven cheat can take
+      the Box's stake.</li>
+    <li><strong>The lobby</strong> lets a player swap USDC for the token with one tap, at the tap fee, and stake to
+      the Box in the same tap.</li>
+  </ul>
+</section>
+
+<section id="partners">
+  <h2><span class="n">04</span>Partner tracks</h2>
+  <p class="sub">Where each partner's technology carries real weight in the product, and what a judge will see.</p>
+
+  <h3>Uniswap</h3>
+  <ul>
+    <li><strong>Launch:</strong> the token launches through the Continuous Clearing Auction into a v4 pool.</li>
+    <li><strong>Hook:</strong> our v4 hook sets the fee per swap: 1%, 0.25% with a badge tap and the Box's signature,
+      0% for the game contract. It also keeps the time-weighted price.</li>
+    <li><strong>Buyback and burn:</strong> every settled game swaps half its fee into the token and burns it.</li>
+    <li><strong>Operator auction:</strong> a second auction sells the right to run a Box, priced from the hook's
+      time-weighted price.</li>
+    <li><strong>Judges see:</strong> a tap-discount swap at the Box, then a game settling and the burn landing on
+      chain. We keep <code>FEEDBACK.md</code> as we go, as the track asks.</li>
+  </ul>
+
+  <h3>ENS</h3>
+  <ul>
+    <li><strong>Box names</strong> like <code>mumbai-01.gamebox.eth</code> carry the Box's key and status, and expire
+      with its licence.</li>
+    <li><strong>Player names</strong> are claimed with a tap and never expire. The badge owns its records, and the
+      game may only write its stats.</li>
+    <li><strong>Live titles:</strong> <code>champion.stockduel.gamebox.eth</code> moves to each new winner, only after
+      a signed win.</li>
+    <li><strong>The site</strong> reads everything from ENS: no database behind it.</li>
+    <li><strong>Judges see:</strong> they claim a name with their own tap, win a round, and watch the title move to
+      them on the site.</li>
+  </ul>
+
+  <h3>0G</h3>
+  <ul>
+    <li><strong>Voice:</strong> players speak a bet, and 0G turns it into terms the chain can check.</li>
+    <li><strong>Practice opponent:</strong> an AI player to learn against.</li>
+    <li><strong>Decision log:</strong> every AI decision is stored on 0G Storage with its request ID, so it can be
+      audited.</li>
+    <li><strong>Safe stop:</strong> if 0G doesn't answer, the Box refuses. It never guesses.</li>
+    <li>We add this once our 0G credits arrive; the rest of the plan doesn't depend on it.</li>
+  </ul>
+
+  <h3>Chains</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Chain</th><th>What for</th></tr>
+    <tr><td><strong>Sepolia</strong></td><td>Every contract: Boxes, games, the token and its pool, staking, and the
+      ENS names.</td></tr>
+    <tr><td><strong>Robinhood Chain</strong></td><td>Read only: the stock pools whose live prices drive Stock
+      Duel.</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="build">
+  <h2><span class="n">05</span>How we get there</h2>
+  <p class="sub">The order we build in, how we work, and what the demo and submission look like.</p>
+
+  <h3>How we work</h3>
+  <ul>
+    <li><strong>One feature at a time, finished.</strong> Contracts, the Box, the screen and the tests, then a run on
+      the real Box with real badges. Only then does the next one start.</li>
+    <li><strong>The demo always works.</strong> Each milestone leaves something we could show. If time runs out, we cut
+      from the end of the list, never from the middle.</li>
+    <li><strong>A test page on the Box</strong> gets a button for every new chain call, tap and signature, so each
+      piece is checked on the hardware before it goes into a game.</li>
+    <li><strong>Split where it's safe.</strong> Once the first game works, the token, the names and staking touch
+      separate contracts and can be built side by side.</li>
+  </ul>
+
+  <h3>Milestones</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>#</th><th>Milestone</th><th>What it adds</th><th>Done when</th></tr>
+    <tr><td>1</td><td><strong>The Box on chain</strong></td><td>The monorepo and deploy pipeline, the Box registry
+      with its P-256 key, and the relayer.</td><td>The Box's token signs a heartbeat on the Pi, the relayer sends it,
+      and a forged one is refused.</td></tr>
+    <tr><td>2</td><td><strong>First game</strong></td><td>Badges join and get tokens, one-tap staked entry, the game
+      escrow with refunds, and Quick Draw.</td><td>Two badges play Quick Draw for stakes without holding any ETH, and
+      the winner is paid.</td></tr>
+    <tr><td>3</td><td><strong>Stock Duel</strong></td><td>Live Robinhood Chain prices, two-badge randomness, best of
+      three, and the replay proof.</td><td>A staked match runs on the Box with live prices, and its proof checks
+      out.</td></tr>
+    <tr><td>4</td><td><strong>The token</strong></td><td>The auction launch, the fee hook, buyback and burn, lobby
+      swaps, and staking to Boxes.</td><td>Each fee level shows on a real swap, and a settled game burns tokens and
+      pays its stakers.</td></tr>
+    <tr><td>5</td><td><strong>Names</strong></td><td>Box and player names, the champion title, and the public
+      site.</td><td>A new player claims a name, wins, and the site shows the title move.</td></tr>
+    <tr><td>6</td><td><strong>The network</strong></td><td>The operator auction, Bet on X, B17, and 0G once credits
+      arrive.</td><td>An operator wins a licence and registers a Box; both new games play a round.</td></tr>
+  </table>
+  </div>
+
+  <h3>The demo</h3>
+  <p>About four minutes, at the table:</p>
+  <ol class="steps">
+    <li>A judge taps a badge, gets tokens and claims a name.</li>
+    <li>They swap at the tap discount in the lobby and stake into a Stock Duel.</li>
+    <li>They play best of three against one of us, with live stock prices.</li>
+    <li>The winner is paid in seconds, the fee is burned on chain, and the champion title moves on the site.</li>
+  </ol>
+  <p>Before judging: the token, pool and hook are live, the badges are charged, the Box is on stable Wi-Fi, and the
+    relayer is funded.</p>
+
+  <h3>Submission</h3>
+  <ul>
+    <li>This repo, public, with a README that points to the exact Uniswap contracts and lines.</li>
+    <li><code>FEEDBACK.md</code> and the Uniswap feedback form.</li>
+    <li>The live site's link for ENS, and every contract address.</li>
+    <li>A demo video under three minutes.</li>
+  </ul>
+
+  <h3>Team</h3>
+  <p><a href="https://github.com/beingentangled">beingentangled</a> ·
+    <a href="https://github.com/saithyasivadas">saithyasivadas</a> ·
+    <a href="https://github.com/Athuli7">Athuli7</a> ·
+    <a href="https://github.com/lizgeorge1">lizgeorge1</a> ·
+    <a href="https://github.com/0xgeorgemathew">0xgeorgemathew</a></p>
+</section>
+
+<footer>Ethereum Game Box · ETHGlobal Mumbai 2026</footer>
+
+</div>
+</body>
+</html>
