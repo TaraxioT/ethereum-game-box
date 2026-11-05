@@ -75,7 +75,7 @@
 [data-orientation="portrait"] .seat-panel-status { font-size: 15px; }
 
 .page-plate { display: grid; place-items: center; text-align: center; padding: 0 28px; font: 600 19px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); }
-.result-banner-text { white-space: nowrap; font: 700 40px/1.1 var(--hud-display); letter-spacing: 0.02em; color: var(--sys); text-shadow: 0 0 4px rgb(207 232 246 / 0.9), 0 0 14px rgb(207 232 246 / 0.4); }
+.result-banner-text { display: inline-block; white-space: nowrap; font: 700 40px/1.1 var(--hud-display); letter-spacing: 0.02em; color: var(--sys); text-shadow: 0 0 4px rgb(207 232 246 / 0.9), 0 0 14px rgb(207 232 246 / 0.4); }
 .result-banner-text.seat-0 { color: var(--p1); text-shadow: 0 0 4px rgb(255 155 61 / 0.9), 0 0 14px rgb(255 155 61 / 0.4); }
 .result-banner-text.seat-1 { color: var(--p2); text-shadow: 0 0 4px rgb(63 217 255 / 0.9), 0 0 14px rgb(63 217 255 / 0.4); }
 .refund-plate { --frame-tone: var(--alert); --panel-line: 0.6; }
@@ -84,7 +84,7 @@
 .refund-line { font: 700 18px/1.2 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: var(--fg-2); }
 .refund-count { color: var(--alert); }
 .page-keys { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
-.page-keys egb-key { flex: 0 0 auto; width: 200px; height: auto; }
+.page-keys egb-key { flex: 0 1 200px; min-width: 0; height: auto; }
 .page-note { display: grid; place-items: center; text-align: center; font: 600 16px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); }
 .refund-keys { align-items: center; gap: 24px; }
 .refund-keys .page-note { flex: 1 1 auto; justify-items: start; text-align: left; }
