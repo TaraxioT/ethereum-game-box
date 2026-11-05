@@ -3,6 +3,15 @@
 Build a new game on the Box: the Designer asks one question at a time and settles a `GameBrief`; the Forge builds
 the game from it. Shared types are in `types.ts`.
 
+## Routes and screens
+
+The Box server mounts the builder (`server/builder-host.ts`): one Forge and one Designer on a shared edit lock, a
+confirmed design built at once on `EGB_FORGE_PROVIDER` (`claude`, or `sim`, shown SIMULATED), and their routes under
+`/api/builder` behind the launcher token, with one Server-Sent Events stream carrying every `DesignerState` change and
+every `ForgeEvent` (a late screen gets the running build's replay first). The routes are in `server/README.md`; their
+wire types in `server/builder-wire.ts`. On the screen, Home's NEW GAME cartridge opens the Box's `build` phase: the
+Designer and the Build screen (`screen/README.md`), and the voice client (`screen/voice/`).
+
 ## Designer
 
 `designer/`: one question at a time, ending in a `GameBrief`. The steps are template, mechanic, theme, twist, stakes,
