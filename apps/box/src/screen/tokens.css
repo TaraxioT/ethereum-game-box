@@ -1,6 +1,25 @@
 /* The Box's design tokens: World Computer, skeuomorphic. Devcon 8's night with the lights dimmed; one key light from
    the top left; glows stay on their edges (1–3 px lines, at most 10 px of glow). Only transform and opacity animate. */
 :root {
+  /* The Grid: the launcher's look. A near-black world where all light comes from thin emissive lines: cool white-blue
+     for the system, orange and cyan for the two sides, red only when something is wrong. */
+  --void: #010409;
+  --void-2: #030a12;
+  --deep: #061522;
+  --sys: #cfe8f6;
+  --sys-hot: #ffffff;
+  --sys-bloom: rgb(150 200 230 / 0.42);
+  --p1-bloom: rgb(255 155 61 / 0.45);
+  --p2-bloom: rgb(63 217 255 / 0.45);
+  --alert: #ff2d3d;
+  --hud-display: "Syncopate", system-ui, sans-serif;
+  --hud-body: "Oxanium Variable", system-ui, sans-serif;
+  --ease-rez: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-derez: cubic-bezier(0.7, 0, 0.84, 0);
+  --t-rez: 380ms;
+  --t-derez: 220ms;
+  --t-flicker: 90ms;
+
   /* Room and plates */
   --room: #120c24;
   --ink-0: #07040f;
