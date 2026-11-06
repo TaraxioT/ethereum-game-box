@@ -6,20 +6,11 @@
 import "./demo.css";
 import type { Opponent, SimLink } from "../link/control.ts";
 import type { Sound } from "../views/view.ts";
-import { chamferClip, fitFrame } from "../parts/frame.ts";
+import { framed } from "../parts/frame.ts";
 import { el } from "../shell/dom.ts";
 import { derez, rez } from "../shell/rez.ts";
 
 const CHAMFER = 10;
-
-/** A chamfered box: its dark fill, then a frame of light kept to its size. */
-function framed<T extends HTMLElement>(node: T): T {
-  const fill = el("i", "frame-fill");
-  fill.style.clipPath = chamferClip(CHAMFER);
-  node.prepend(fill);
-  fitFrame(node, { chamfer: CHAMFER, ticks: true });
-  return node;
-}
 
 /** A light switch: a pill track with a sliding knob. */
 function lightSwitch(label: string, onChange: (on: boolean) => void): { row: HTMLElement; set(on: boolean): void } {
@@ -39,7 +30,7 @@ export function mountDemoTag(host: HTMLElement, sim: SimLink, sound: Sound): voi
   tag.setAttribute("role", "group");
   tag.setAttribute("aria-label", "Demo controls");
 
-  const panel = framed(el("div", "demo-panel"));
+  const panel = framed(el("div", "demo-panel"), CHAMFER);
   panel.id = "demo-panel";
   panel.hidden = true;
 
@@ -71,7 +62,7 @@ export function mountDemoTag(host: HTMLElement, sim: SimLink, sound: Sound): voi
   });
   panel.append(power.row, opponentRow, soundSwitch.row);
 
-  const head = framed(el("button", "demo-head"));
+  const head = framed(el("button", "demo-head"), CHAMFER);
   head.type = "button";
   head.setAttribute("aria-expanded", "false");
   head.setAttribute("aria-controls", panel.id);

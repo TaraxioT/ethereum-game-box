@@ -3,18 +3,18 @@
 # able to sudo, from any tree that holds deploy/pi (the repo, or a copy of just that folder):
 #   [NODE_MAJOR=26] deploy/pi/setup.sh [--boot]
 # What it does, and what it leaves alone:
-# - apt: uhubctl and the tools the deploy scripts use, only the ones that are missing (nothing is upgraded)
+# - apt: uhubctl and the tools the deploy scripts use, only the ones that are missing (nothing is upgraded), and rtkit
 # - Node.js NODE_MAJOR (default 26) from the official tarball into ~/.local, ahead of the system's Node on PATH;
 #   pnpm through corepack, at the version the repo pins
-# - the user in dialout (the receiver's serial port) and plugdev (USB hubs for uhubctl)
+# - the user in dialout (the receiver's serial port), plugdev (USB hubs for uhubctl) and pipewire (realtime audio)
 # - a udev rule that names the receiver /dev/egb-receiver by its USB id, and one that gives plugdev the USB hubs
-# - the nice limit a user unit needs to run the server at Nice=-5 (see egb-server.service)
+# - the nice and realtime limits the server (Nice=-5, see egb-server.service) and PipeWire's audio threads need
 # - ~/.config/egb/env from env.example, only if it does not exist yet (never overwritten)
 # - loginctl linger, so the user's units run from boot with nobody logged in
 # - a read-only ssh deploy key (~/.ssh/egb_deploy) for the updater, if there is none; the public half is printed
 # - the egb-* systemd user units and the deploy scripts in ~/egb/bin. Nothing is enabled or started, except with --boot
 #   (egb-server and egb-kiosk start at boot). The updater's timer stays off until the repo accepts the deploy key.
-# It never touches audio: no sink, volume or Bluetooth setting.
+# It sets no sink, volume or Bluetooth setting.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=SCRIPTDIR/lib.sh
@@ -29,8 +29,9 @@ need_relogin=0
 
 # --- apt ------------------------------------------------------------------------------------------------------------
 # Fonts: game covers and tiles use emoji, and Raspberry Pi OS ships without a colour emoji font.
+# rtkit: Chromium's audio threads ask it for realtime priority (PipeWire gets its own from the pipewire group, below).
 missing=()
-for pkg in uhubctl curl rsync git xz-utils ca-certificates fonts-noto-color-emoji chromium; do
+for pkg in uhubctl curl rsync git xz-utils ca-certificates fonts-noto-color-emoji chromium rtkit; do
   dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
 done
 if [ ${#missing[@]} -gt 0 ]; then
@@ -77,7 +78,7 @@ if [ -f "$here/../../package.json" ]; then
 fi
 
 # --- groups, udev -----------------------------------------------------------------------------------------------------
-for group in dialout plugdev; do
+for group in dialout plugdev pipewire; do
   if ! id -nG | tr ' ' '\n' | grep -qx "$group"; then
     log "adding $user to $group"
     sudo usermod -aG "$group" "$user"
@@ -104,22 +105,28 @@ else
   log "udev: /dev/egb-receiver is not there yet; it appears when the receiver (ESP32-C3, serial 7C:DF:A1:D5:04:CC) is plugged in"
 fi
 
-# --- nice -------------------------------------------------------------------------------------------------------------
-# RLIMIT_NICE 25 means "may lower nice down to -5" (the limit is 20 minus the lowest nice). limits.d is read by the user
+# --- nice and realtime ------------------------------------------------------------------------------------------------
+# Two units need raised limits. egb-server runs at Nice=-5. PipeWire's audio threads need realtime priority, or they run
+# as ordinary threads below the server and the speaker crackles whenever the Box is busy: its limits.d file grants the
+# pipewire group rtprio 95, but PipeWire takes realtime only when it may also renice itself to -11 (else it falls back
+# to xdg-desktop-portal, which fails on this Pi: "Could not get pidns"). A user's own line beats a group's, so ours says
+# -11. RLIMIT_NICE 31 means "may lower nice down to -11" (20 minus the lowest nice). limits.d is read by the user
 # manager's PAM session, so it holds from the next start of that manager; prlimit applies it to the running one now,
-# which is what lets the very next `systemctl --user restart egb-server` run at Nice=-5.
+# which is what lets the very next restart of egb-server or pipewire take it up.
 nice_conf=$(mktemp)
-printf '%s - nice -5\n' "$user" >"$nice_conf"
+printf '%s - nice -11\n' "$user" >"$nice_conf"
 sudo_install "$nice_conf" /etc/security/limits.d/60-egb-nice.conf || true
 rm -f "$nice_conf"
+limit() { awk -v name="Max $2 priority" 'index($0, name) == 1 {print $4}' "/proc/$1/limits"; } # pid nice|realtime
 manager_pid=$(systemctl show -p MainPID --value "user@$(id -u).service" 2>/dev/null || echo 0)
 if [ "${manager_pid:-0}" -gt 0 ]; then
-  [ "$(awk '/^Max nice priority/ {print $4}' "/proc/$manager_pid/limits")" = 25 ] || sudo prlimit --pid "$manager_pid" --nice=25:25
-  [ "$(awk '/^Max nice priority/ {print $4}' "/proc/$manager_pid/limits")" = 25 ] ||
+  [ "$(limit "$manager_pid" nice)" = 31 ] || sudo prlimit --pid "$manager_pid" --nice=31:31
+  [ "$(limit "$manager_pid" realtime)" = 95 ] || sudo prlimit --pid "$manager_pid" --rtprio=95:95
+  [ "$(limit "$manager_pid" nice)" = 31 ] ||
     die "could not raise the nice limit of the user manager (pid $manager_pid): egb-server's Nice=-5 would fail"
-  log "nice: the user manager may run units down to nice -5"
+  log "nice: the user manager may run units down to nice -11, and give PipeWire realtime priority"
 else
-  log "nice: no user manager is running; the limit applies when it starts"
+  log "nice: no user manager is running; the limits apply when it starts"
 fi
 
 # --- settings, data, linger --------------------------------------------------------------------------------------------

@@ -44,7 +44,7 @@ export async function flush(rounds = 6): Promise<void> {
 export const TEST_BUILDER_ENV = { EGB_MODEL: "off", EGB_FORGE_PROVIDER: "sim", PATH: process.env.PATH, HOME: process.env.HOME };
 
 export async function startTestBox(
-  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"]; chain?: BoxOptions["chain"] } = {},
+  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"]; chain?: BoxOptions["chain"]; exitScreen?: BoxOptions["exitScreen"] } = {},
 ): Promise<TestBox> {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "egb-box-")));
   await mkdir(join(dir, "screen", "assets"), { recursive: true });
@@ -69,6 +69,8 @@ export async function startTestBox(
     ...(options.chain ? { chain: options.chain } : {}),
     log: (text) => logs.push(text),
     builder: { env: TEST_BUILDER_ENV, simSpeed: 0, ...options.builder },
+    // Never the real kiosk: a test would close the developer's own unit.
+    exitScreen: options.exitScreen ?? (() => Promise.reject(new Error("no kiosk in tests"))),
   });
   return {
     box,

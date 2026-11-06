@@ -16,6 +16,17 @@ const PAN = 0.55;
 const DEDUPE_MS = 25;
 /** A sound whose context took longer than this to start is stale: it isn't played late. */
 const LATE_MS = 200;
+/**
+ * How far ahead of `currentTime` a sound starts, in seconds. Chromium renders a whole output buffer (baseLatency) at
+ * a time; a sound posted later than that lands with its attack already past and starts at full gain, a click. So it
+ * starts one buffer ahead, at least 10 ms and at most 40 ms.
+ */
+const MIN_LEAD = 0.01;
+const MAX_LEAD = 0.04;
+
+function lead(ctx: AudioContext): number {
+  return Math.min(MAX_LEAD, Math.max(MIN_LEAD, ctx.baseLatency || 0));
+}
 
 function readMuted(): boolean {
   try {
@@ -64,7 +75,7 @@ export function createSound(): Sound {
         pan.pan.value = options.seat === 0 ? -PAN : PAN;
         out.connect(pan).connect(s.bus);
       } else out.connect(s.bus);
-      entry.play(s, out, s.ctx.currentTime + 0.005, options);
+      entry.play(s, out, s.ctx.currentTime + lead(s.ctx), options);
     } catch {
       // A sound that can't play is silence, never an error on screen.
     }

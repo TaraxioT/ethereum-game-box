@@ -191,4 +191,22 @@ describe("the API", () => {
     expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: "short" } })).status).toBe(403);
     expect((await fetch(`${box.url}/api/builder`, { headers: { [LAUNCHER_HEADER]: box.token } })).status).toBe(200);
   });
+
+  it("closes the screen only for the kiosk's own page, and says why when it can't", async () => {
+    let exits = 0;
+    tb = await startTestBox({ exitScreen: async () => void exits++ });
+    const { box } = tb;
+    expect((await post(box, "/api/box/exit", {})).status).toBe(403);
+    expect((await post(box, "/api/box/exit", {}, { [LAUNCHER_HEADER]: box.token, origin: "http://127.0.0.1:5999" })).status).toBe(403);
+    expect(exits).toBe(0);
+    expect((await post(box, "/api/box/exit", {}, { [LAUNCHER_HEADER]: box.token })).status).toBe(204);
+    expect(exits).toBe(1);
+    expect((await fetch(`${box.url}/api/state`)).status).toBe(200);
+    await tb.stop();
+
+    tb = await startTestBox();
+    const refused = await post(tb.box, "/api/box/exit", {}, { [LAUNCHER_HEADER]: tb.box.token });
+    expect(refused.status).toBe(409);
+    expect(await refused.text()).toContain("no kiosk in tests");
+  });
 });

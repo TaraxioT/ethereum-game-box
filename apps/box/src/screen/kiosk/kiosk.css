@@ -1,0 +1,20 @@
+/* The kiosk's own pieces: the EXIT tag in the window's bottom-left corner, clear of the rack. Dim until it is
+   touched; armed, it turns alert red, since a second tap closes the screen. */
+.exit-tag {
+  position: fixed; left: 16px; bottom: 16px; z-index: 10; height: 36px; display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; margin: 0; border: 0; background: none; cursor: pointer; opacity: 0.55;
+  font: 600 15px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-2);
+}
+.exit-tag > :not(svg, .frame-fill) { position: relative; }
+.exit-tag .frame-fill { position: absolute; inset: 0; background: var(--glass); }
+.exit-tag .frame-line { opacity: 0.45; }
+.exit-tag .frame-bloom { opacity: 0; }
+.exit-tag:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
+
+/* A power mark: a broken ring with a stroke through its gap. */
+.exit-icon { position: relative; width: 12px; height: 12px; border: 1.5px solid currentColor; border-top-color: transparent; border-radius: 50%; }
+.exit-icon::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1.5px; height: 7px; margin-left: -0.75px; background: currentColor; }
+
+.exit-tag:is([data-step="armed"], [data-step="closing"], [data-step="refused"]) { opacity: 1; --frame-tone: var(--alert); color: var(--alert); }
+.exit-tag:is([data-step="armed"], [data-step="refused"]) .frame-line { opacity: 1; }
+.exit-tag[data-step="armed"] .frame-bloom { opacity: 1; }

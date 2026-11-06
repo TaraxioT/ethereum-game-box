@@ -39,11 +39,13 @@ export interface ApiOptions {
   readonly records: () => Readonly<Record<string, BadgeRecord>>;
   /** A game is queued or being built. */
   readonly building: () => boolean;
+  /** Closes the kiosk's browser (kiosk.ts), for the screen's EXIT key. */
+  readonly exitScreen: () => Promise<void>;
 }
 
 const noContent = (res: Parameters<Route["handle"]>[1]): void => void res.writeHead(204).end();
 
-export function apiRoutes({ core, commit, uptimeMs, roster, records, building }: ApiOptions): Route[] {
+export function apiRoutes({ core, commit, uptimeMs, roster, records, building, exitScreen }: ApiOptions): Route[] {
   return [
     {
       method: "GET",
@@ -87,6 +89,21 @@ export function apiRoutes({ core, commit, uptimeMs, roster, records, building }:
         const body = (await readJson(req)) as { on?: unknown } | null;
         if (typeof body?.on !== "boolean") throw new HttpError(400, "the body must be { on: boolean }");
         core.setPower(body.on);
+        noContent(res);
+      },
+    },
+    {
+      // The screen's EXIT key: the kiosk's browser closes and the Pi's desktop shows. The Box itself keeps running, so
+      // a match in play goes on as it would with the screen off.
+      method: "POST",
+      path: "/api/box/exit",
+      launcher: true,
+      async handle(_req, res) {
+        try {
+          await exitScreen();
+        } catch (error) {
+          throw new HttpError(409, `the screen can't close here: ${error instanceof Error ? error.message : String(error)}`);
+        }
         noContent(res);
       },
     },

@@ -7,7 +7,7 @@ switching to it (and back), the updater, a push from a laptop, and the systemd u
 
 | Path | Holds |
 |---|---|
-| `setup.sh` | One-time, idempotent setup on the Pi: Node, pnpm, `uhubctl`, groups, udev, the nice limit, the env file, linger, the units |
+| `setup.sh` | One-time, idempotent setup on the Pi: Node, pnpm, `uhubctl`, `rtkit` (realtime audio), groups, udev, the nice and realtime limits, the env file, linger, the units |
 | `lib.sh` | Shared by the Pi scripts: the layout, `log`, `setting` and `setting_int`, the health, receiver and idle waits, the deploy lock, pruning |
 | `release.sh` | `release.sh <source dir> <commit>`: copies a tree to `~/egb/releases/`, installs, builds, smoke-tests; removes it on failure |
 | `activate.sh` | `activate.sh [--force] <release>`: waits for an idle Box, switches `current`, restarts, checks health and the receiver, rolls back on failure or interruption, prunes |
@@ -148,13 +148,20 @@ All are systemd user units in `~/.config/systemd/user/`; linger keeps them runni
   flags the Pi's working kiosk uses, plus `--autoplay-policy` and `--use-fake-ui-for-media-stream` for sounds and
   push-to-talk. It touches no audio setting. `kiosk-prestart.sh` runs first (server up, display socket there, stale
   placement cleared). It restarts forever, so it waits out the desktop at boot.
+  The screen's EXIT tag stops it (`POST /api/box/exit`), leaving the desktop and the server running; it comes back
+  with the next deploy, a reboot or `systemctl --user start egb-kiosk`.
 - **`egb-update.service`** and **`egb-update.timer`**: see above.
 
-**`Nice=-5` needs a raised limit.** On this Pi a user manager's `Max nice priority` is 0 (see
+**`Nice=-5` and realtime audio need raised limits.** On this Pi a user manager's `Max nice priority` is 0 (see
 `/proc/<pid of systemd --user>/limits`), so a user unit with `Nice=-5` fails with status 201/NICE, and
-`AmbientCapabilities=CAP_SYS_NICE` can't help (the user manager has no capability to hand on). `setup.sh` therefore
-writes `/etc/security/limits.d/60-egb-nice.conf` (`pi - nice -5`, read by the user manager's PAM session on its next
-start) and applies the same limit to the running manager with `prlimit`, then checks it.
+`AmbientCapabilities=CAP_SYS_NICE` can't help (the user manager has no capability to hand on). PipeWire's audio threads
+need realtime priority too, or they run below the server and the speaker crackles whenever the Box is busy. PipeWire
+takes it only when it may both renice itself to -11 and use rtprio 88; otherwise it asks xdg-desktop-portal, which
+fails here ("Could not get pidns"). `setup.sh` therefore puts `pi` in the `pipewire` group (PipeWire's own limits.d file
+grants that group rtprio 95), writes `/etc/security/limits.d/60-egb-nice.conf` (`pi - nice -11`, read by the user
+manager's PAM session on its next start), and applies both limits to the running manager with `prlimit`. It also
+installs `rtkit`, which gives Chromium's audio threads realtime priority. Check with
+`ps -eL -o cls,rtprio,comm | grep -E 'data-loop|AudioOutput'`: `FF 88`, `FF 83` and `RR` lines.
 
 ## Rolling back by hand
 

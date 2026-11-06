@@ -45,6 +45,7 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `GET /api/box` | anyone | The test page's Box tab: `{ state, power, records }` (the whole `BoxState`, the power switch, each badge's counted wins, losses and draws by address). |
 | `POST /api/box/reset` | same origin | Back to Home now: the stakes of a match that hasn't settled go back to their badges. 204. |
 | `POST /api/box/power` | same origin | `{ on: boolean }`. Off: the Box misses its settle and the match goes to Refund. 204. |
+| `POST /api/box/exit` | launcher token | The screen's EXIT key: `systemctl --user stop --no-block egb-kiosk.service` (`kiosk.ts`), so the Pi's desktop shows. The Box keeps running; the kiosk comes back with the next deploy, a reboot or `systemctl --user start egb-kiosk`. 204, or 409 with systemd's words where there's no kiosk to stop. |
 | `GET /api/taps` | anyone | Everything the Stations and Badges tabs draw: `{ receiver, stations, status, stats, roster, fake }` (`status` and `stats` null with `EGB_RECEIVER=none`; `fake` only with the fake receiver). |
 | `POST /api/taps/inject` | same origin | `{ seat: 0 \| 1, badge: "NOVA" \| "0x…" }`: a whole tap by that badge (a roster label, any case, or an address) at that seat, straight into the core, never touching a chip; a roll from `crypto` when the plan is `random`. Not a tap the Box saw: it never makes a result count. Answers `{ tap, plan, badge, accepted }`; an unknown label is 404. |
 | `POST /api/taps/buzz` | same origin | `{ seat, kind: "ok" \| "no" }`: the seat's station buzzes once, or twice. |

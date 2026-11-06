@@ -24,6 +24,7 @@ import { relayerAt } from "../chain/relayer.ts";
 import { roundsFile } from "../chain/rounds.ts";
 import { createSepoliaChain, SWEEP_MS, type SepoliaChain } from "../chain/port.ts";
 import { processSigner } from "../signer/hyp2003.ts";
+import { stopKiosk } from "./kiosk.ts";
 import { createLogFile } from "./log-file.ts";
 import { attachLink } from "./link.ts";
 import { readCommit } from "./release.ts";
@@ -49,6 +50,8 @@ export interface BoxOptions {
   readonly chain?: (clock: Clock) => ChainPort & { stop?(): void };
   /** The game builder's settings: its environment (default: process.env), its shelf's folders, the sim's pace. */
   readonly builder?: Partial<Pick<BuilderOptions, "env" | "gameRoots" | "simSpeed">>;
+  /** Closes the kiosk's browser (default: stops its systemd unit; tests: a stand-in). */
+  readonly exitScreen?: () => Promise<void>;
 }
 
 /** The team games: the Forge's templates. */
@@ -143,6 +146,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       roster: () => taps?.roster().map(badgeOf) ?? [],
       records: () => sessions.records(),
       building: () => builder?.building() ?? false,
+      exitScreen: options.exitScreen ?? stopKiosk,
     }),
     ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, stations: settings.stations }),
     ...adminRoutes(settings.admin ? adminOnSepolia(settings.admin, log) : null),

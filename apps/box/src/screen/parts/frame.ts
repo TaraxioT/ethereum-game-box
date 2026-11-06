@@ -144,3 +144,14 @@ export function fitFrame(box: HTMLElement, options: FrameOptions): Frame {
   }).observe(box);
   return frame;
 }
+
+/** Makes `node` a chamfered box: a dark `.frame-fill` cut to the shape under its content, then a frame of light kept to
+ * its size. The fill's colour is the caller's CSS (`--glass`). */
+export function framed<T extends HTMLElement>(node: T, chamfer: number): T {
+  const fill = document.createElement("i");
+  fill.className = "frame-fill";
+  fill.style.clipPath = chamferClip(chamfer);
+  node.prepend(fill);
+  fitFrame(node, { chamfer, ticks: true });
+  return node;
+}

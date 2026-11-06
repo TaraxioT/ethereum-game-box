@@ -211,6 +211,15 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 | `recorder.ts` | Push-to-talk recording: MediaRecorder on a mic opened at the press and closed at the release (its tracks stopped), one webm/opus blob per take; a take is cut at 15 s, and one under 0.3 s is a tap, not an answer. | `createRecorder()`, `canRecord()`, `MAX_TAKE_MS`, `MIN_TAKE_MS` |
 | `clips.ts` | Plays a spoken clip: fetched with the token (an `<audio src>` can't send it), decoded and played through WebAudio, one at a time, with the music sunk under it (`sound.duck`); muted (localStorage `gamebox-muted=1`), nothing plays. Never throws: the question stays on screen. | `createClipPlayer(sound): { play(clip), stop() }` |
 
+## Kiosk
+
+`kiosk/` is what the kiosk's own page adds in box mode, shown only to the page that got the launcher token.
+
+| Module | What it is | API |
+|---|---|---|
+| `exit-tag.ts` | The EXIT tag, fixed to the window's bottom-left corner (clear of the rack), dim until touched. A tap arms it (`TAP AGAIN TO EXIT`, alert red, 4 s); a second tap posts `/api/box/exit` with the token, which closes the kiosk's browser so the Pi's desktop shows. A refusal shows `CAN'T EXIT` with the Box's words as its title. Its pointer and key events never reach the stage. | `mountExitTag(host)` |
+| `kiosk.css` | The tag's styles. | |
+
 ## Sound
 
 `sound/` is everything the Box says by ear. Every tap has its own sound, so a player knows what their tap did without
