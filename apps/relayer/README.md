@@ -1,8 +1,9 @@
 # apps/relayer
 
 `@egb/relayer`: a Cloudflare Worker that pays the gas for requests that are already signed (a badge's name claim, a
-`P256Account`'s call, a new account's deploy, a Box-signed match result, stake or seat, a pop-up licence, and a badge's
-one drip), for the lobby's test-USDC top-ups and for closing a championship that has ended, and for nothing else. Live at **https://gamebox-relayer.mathew.workers.dev**.
+`P256Account`'s call, a new account's deploy, a Box-signed match result, stake or seat, a verifier-signed verdict or
+void, a pop-up licence, and a badge's one drip), for the lobby's test-USDC top-ups, for refunding a pot nobody ended and
+for closing a championship that has ended, and for nothing else. Live at **https://gamebox-relayer.mathew.workers.dev**.
 
 ## Routes
 
@@ -14,8 +15,13 @@ one drip), for the lobby's test-USDC top-ups and for closing a championship that
 | `POST /box/result` | `{ result, r, s }` | the Box is registered, its licence unexpired and its status `Active`; the P-256 signature over `Result` is its key's (from `GameBoxNames`); the round is new; no `/duel/open` (or refund) for the same round is pending, since a result mined before its pot leaves the pot to a refund; `eth_call` (which also names a pot that doesn't match, `PotMismatch`) | `BoxResults.submit`, which crowns the winner, records both players' stats, settles the round's pot if it has one and scores the game's open championship |
 | `POST /duel/open` | `{ stake, r, s }` | the labels; `a` and `b` differ; a non-zero amount; an unexpired deadline; the Box and its signature over `Stake`, as for a result; `(box, round)` never had a pot; both players hold a player name (or the result could never settle it) and the stake in USDC; `eth_call` | `DuelPot.open`, which pulls the stake from both players |
 | `POST /duel/refund` | `{ box, round }` | the label; `(box, round)` has an open pot; it opened at least `REFUND_DELAY` (an hour) ago; `eth_call` | `DuelPot.refund`, both stakes back |
+| `POST /store/open` | `{ stake, r, s }`, the stake being `{ box, bundle, round, players, amount, deadline }` | the label; 2 to 4 players, none twice and none `StorePot`; a non-zero amount; an unexpired deadline; the Box and its signature over `StorePot`'s `Stake`, as for a result; the bundle is listed; `(box, round)` never had a pot; each player holds the stake in Store USDC; `eth_call` | `StorePot.open`, which pulls the stake from each player |
+| `POST /store/settle` | `{ verdict, signature }`, the verdict being `{ box, round, payouts, record, deadline }` | the label; 2 to 4 payouts; an unexpired deadline; the signature over `Verdict` recovers the way OpenZeppelin's `ECDSA` recovers it (65 bytes, low `s`, `v` of 27 or 28); its signer holds `VERIFIER_ROLE` now; `(box, round)` has an open pot; a payout for each of its players, adding up to exactly the pot; `eth_call` | `StorePot.settle`, which pays `payouts[i]` to the pot's `players[i]` |
+| `POST /store/void` | `{ void, signature }`, the void being `{ box, round, record, deadline }` | the label; an unexpired deadline; the signature over `Void` and its signer, as for a verdict; `(box, round)` has an open pot; `eth_call` | `StorePot.voidPot`, every stake back |
+| `POST /store/refund` | `{ box, round }` | as `/duel/refund`, on `StorePot`; anyone may ask | `StorePot.refund`, every stake back |
 | `POST /players/box-claim` | `{ seat, r, s }` | the labels; an unexpired deadline; the Box and its signature over `Seat`, as for a result; the badge has no name, the label is free and was never a Box (as for a claim); `eth_call` | `BoxSeats.claim`, which claims `<label>.gamebox.eth` for the badge (`claimPlayerFor`) |
 | `POST /usdc/topup` | `{ player }`: an address, or an ENS name (resolved with stock viem through the Universal Resolver) | the name resolves; the player holds less than 25 USDC; `eth_call` | `FakeUSDC.mint` of 100 USDC to the player |
+| `POST /store/topup` | `{ player }`, as `/usdc/topup` | as `/usdc/topup`, on Store USDC | Store USDC's `mint` of 100 USDC to the player |
 | `POST /cup/close` | `{ game }` | the label; the game has an open championship; its `ends` has passed; `eth_call` | `Championships.close`: the prize to the winner, the name to the winner for good, the records frozen |
 | `POST /box/popup` | `{ label }` | the label rule; `popup-<label>` is not live (`getPopup`); `eth_call` | `DemoLicences.openPopup` |
 | `POST /names/drip` | `{ badge }` | the badge holds a player name, has no code (an account acts through `/account/execute` instead), never had a drip, and holds less than the drip | 0.0003 ETH to the badge |
@@ -26,9 +32,14 @@ The request and response types are `@egb/shared/names` `api.ts`. A POST answers 
 refusal is a 4xx `{ error, revert? }`, where `revert` names the contract error the call would revert with, decoded with
 the ABIs: `400` a malformed field, label, key, amount or deadline; `401` a bad signature (including a high `s`, a wrong
 passkey challenge or type, or no user verification); `403` outside the allowlist, not a factory account, not a known,
-live and active Box, or not a player; `404` an ENS name that doesn't resolve; `409` taken, replayed, a used nonce, a
-pot that exists or isn't open, too early, too little USDC, or already pending; `422` the `eth_call` reverts; `429` a
-rate limit.
+live and active Box, not a player, an unlisted bundle or a signer without `VERIFIER_ROLE`; `404` an ENS name that
+doesn't resolve, or a store route before its contract is deployed; `409` taken, replayed, a used nonce, a pot that exists
+or isn't open, payouts that don't fit the pot, too early, too little USDC, or already pending; `422` the `eth_call`
+reverts; `429` a rate limit.
+
+The store routes answer `404` until `deployments/sepolia.json` holds `StorePot` (and Store USDC, for `/store/open` and
+`/store/topup`). A round has one transaction in flight: its pot's lock is held by `/store/open`, `/store/settle`,
+`/store/void` and `/store/refund`, and by the `/duel` routes and `/box/result` of the same round.
 
 ### The account allowlist
 
@@ -54,6 +65,7 @@ No call may send ETH. Whatever the call, its `eth_call` must succeed.
 | result | `BoxResults.submit` (the title moves, both players' stats, the pot, the championship's records under a 3M cap) | estimate + 50%, or 2^24 + 4M if the estimate is above 1M (a v3 result's always is) |
 | Box-vouched name | `BoxSeats.claim` (a new resolver) | 2^24 + 4M |
 | stake, refund, top-up | `DuelPot.open`, `DuelPot.refund`, `FakeUSDC.mint` | estimate + 50% |
+| store pot, store top-up | `StorePot.open`, `settle`, `voidPot`, `refund`, Store USDC's `mint` | estimate + 50% |
 | championship close | `Championships.close` (the name unregistered and registered again) | 2^24 + 4M |
 
 The live smoke test prints the gas each request used, with its Etherscan link.
@@ -64,10 +76,10 @@ The live smoke test prints the gas each request used, with its Etherscan link.
 |---|---|
 | `src/index.ts` | The Worker: builds the routes' context from the environment |
 | `src/routes.ts` | The routes and CORS (`src/cors.ts`) |
-| `src/requests/` | One file per POST route (`duel.ts` holds both pot routes): its checks, ending in the exact call and its gas limit. `primary-name.ts` is the claim's optional second call |
+| `src/requests/` | One file per POST route (`duel.ts` holds both pot routes, `store-pot.ts` the five store routes): its checks, ending in the exact call and its gas limit. `primary-name.ts` is the claim's optional second call |
 | `src/request.ts` | What the routes share: the addresses, the `eth_call`, the gas limits, the deadline check |
 | `src/box.ts` | The check every Box-signed request makes: a registered, live, `Active` Box, and its key's P-256 signature |
-| `src/verify.ts` | P-256 over the raw digest with a low `s`, a passkey's WebAuthn assertion, and the badge's ECDSA or ERC-1271 signature |
+| `src/verify.ts` | P-256 over the raw digest with a low `s`, a passkey's WebAuthn assertion, the badge's ECDSA or ERC-1271 signature, and a verifier's ECDSA signer |
 | `src/account.ts` | Whether an account is a `P256Account` the factory made, and its current key |
 | `src/allowlist.ts` | The only calls an account may have relayed through `execute` |
 | `src/targets.ts` | Every address in `deployments/sepolia.json` |
@@ -89,11 +101,13 @@ The live smoke test prints the gas each request used, with its Etherscan link.
   from the chain and retries once.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one
   per badge and 50 per day; account calls 30 per account per hour and 1,500 per day in all; account deploys 3 per IP
-  per hour and 30 per day; top-ups one per player per 10 minutes and 300 per day; Box-vouched names 200 per day.
-  Results and stakes come from known Box keys only, and a refund or a close can succeed only once.
+  per hour and 30 per day; top-ups one per player per 10 minutes and 300 per day, on each token apart; Box-vouched
+  names 200 per day. Results and stakes come from known Box keys only, verdicts and voids from a key with
+  `VERIFIER_ROLE`, and a refund or a close can succeed only once.
 - **Done** means the head is a block past the receipt's; read at the receipt's block (`TxView.block`).
-- The wallet is the deployer's (`sepolia-deployer`). It pays gas, and it is `FakeUSDC`'s minter, for the top-ups.
-  Once the admin hand-over is done it holds no other role. Deploy scripts send from the same wallet and share its nonce, so the relayer is paused while a
+- The wallet is the deployer's (`sepolia-deployer`). It pays gas, and it is the minter of `FakeUSDC` and Store USDC, for
+  the top-ups. Once the admin hand-over is done it holds no other role, but for `StorePot`'s admin and lister roles,
+  which `DeployStorePot` gives it. Deploy scripts send from the same wallet and share its nonce, so the relayer is paused while a
   script broadcasts.
 - Errors never echo the RPC URL: it carries the API key. Every URL in an error becomes `<rpc>`.
 - CORS allows only the names site `https://gamebox-names.pages.dev` and the operator site `https://gamebox-operator.pages.dev` (and `http://localhost:*` in dev). Requests without an
