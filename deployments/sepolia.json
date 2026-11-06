@@ -8,31 +8,31 @@
       "address": "0xb090ae6dD89b25d1B79718853c439D1354Bf62c5",
       "deployBlock": 12075390,
       "txHash": "0xcfdbc18db2242855faced12948dec204d0b971542db69e9c5310440583985ce1",
-      "verified": false
+      "verified": true
     },
     "PlayerStats": {
       "address": "0xed859863f70358e66E5B5e90dF7da43a047c7e14",
       "deployBlock": 12075391,
       "txHash": "0x66e031ed203520748a90eb0a380396d9f99dcd2ad0b0e2f810ede2c6f99bb1a3",
-      "verified": false
+      "verified": true
     },
     "BoxResults": {
       "address": "0x925Fe55Fb22bbe7666eC0Fe14d7d0f3CaEF7ccdA",
       "deployBlock": 12075392,
       "txHash": "0xe9056c7cf008866364a53284955b1e60e9b2ab6c53883bc263422a102d0aada7",
-      "verified": false
+      "verified": true
     },
     "DemoBoxAccount": {
       "address": "0x3dfbC6D78B0D28134178a03041468D0E9A18d082",
       "deployBlock": 12075393,
       "txHash": "0xf3036a19289aae9eb9614103171ba300d8cdd463479d761ef2d0855d55b97133",
-      "verified": false
+      "verified": true
     },
     "DemoLicences": {
       "address": "0x22609BB56f41EA3a995560536d249e5b46c12830",
       "deployBlock": 12075394,
       "txHash": "0x4ae926d95c6476be92c23d846265ed5241b497fb0cd33a654033768dcdccc326",
-      "verified": false
+      "verified": true
     }
   },
   "ens": {
