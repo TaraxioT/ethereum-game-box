@@ -27,7 +27,7 @@ export interface BundleManifest {
   readonly blurb: string;
   /** How many may join: `min` at least 2, `max` at most 4. */
   readonly players: { readonly min: number; readonly max: number };
-  /** The match's time limit, in minutes. */
+  /** The match's time limit, 1 to 30 minutes. */
   readonly minutes: number;
   /** The stakes the Box offers, in whole USDC, ascending. */
   readonly stakes: readonly number[];
@@ -90,6 +90,8 @@ export function bundleManifestProblems(value: unknown): string[] {
   const stray = strayKey(value, MANIFEST_KEYS);
   if (stray !== undefined) problems.push(`${JSON.stringify(stray.slice(0, 60))} isn't a field a manifest may set`);
   if (value.format !== BUNDLE_FORMAT) problems.push(`format must be ${BUNDLE_FORMAT}`);
+  // The Box closes the match when this runs out, so it must leave time to play.
+  if (typeof value.minutes !== "number" || !(value.minutes >= 1 && value.minutes <= 30)) problems.push("minutes must be 1–30");
   for (const problem of [playersProblem(value.players), verifierProblem(value.verifier)]) {
     if (problem) problems.push(problem);
   }

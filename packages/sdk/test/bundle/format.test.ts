@@ -18,6 +18,12 @@ describe("bundleManifestProblems", () => {
     expect(problemsWith({ stakes: [1, 2, 3, 4] })).toEqual([]);
   });
 
+  it("takes a time limit from 1 to 30 minutes", () => {
+    expect(problemsWith({ minutes: 1 })).toEqual([]);
+    expect(problemsWith({ minutes: 1.5 })).toEqual([]);
+    expect(problemsWith({ minutes: 30 })).toEqual([]);
+  });
+
   it("takes instructions of exactly 16 KB", () => {
     expect(problemsWith({ verifier: { instructions: "x".repeat(BUNDLE_LIMITS.instructionsBytes) } })).toEqual([]);
   });
@@ -48,6 +54,9 @@ describe("bundleManifestProblems", () => {
     ["string players", { ...MANIFEST, players: { min: "2", max: 4 } }, /players must be whole/],
     ["no minutes", without("minutes"), /minutes must be/],
     ["no time at all", { ...MANIFEST, minutes: 0 }, /minutes must be/],
+    ["just under a minute", { ...MANIFEST, minutes: 0.99 }, /minutes must be/],
+    ["a limit nobody could play", { ...MANIFEST, minutes: 0.0001 }, /minutes must be/],
+    ["next to no time", { ...MANIFEST, minutes: 1e-300 }, /minutes must be/],
     ["an hour", { ...MANIFEST, minutes: 31 }, /minutes must be/],
     ["no stakes", without("stakes"), /stakes must list/],
     ["an empty stake list", { ...MANIFEST, stakes: [] }, /stakes must list/],
