@@ -11,6 +11,7 @@ import { createRouter, type Router, type Routes } from "./router.ts";
 import { boot } from "./boot.ts";
 import { calm, el, play } from "./dom.ts";
 import { musicFor, soundsFor } from "../sound/event-sounds.ts";
+import { bindBoardHold } from "../sound/board.ts";
 
 export interface AppOptions {
   readonly link: BoxLink;
@@ -92,6 +93,8 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
     tap(seat);
   }
   area.addEventListener("pointerdown", seatTap, { capture: true });
+  // A developer's way to the sound board: hold the block clock.
+  bindBoardHold(area);
 
   let pending: ReturnType<typeof setTimeout> | undefined;
   window.addEventListener("resize", () => {

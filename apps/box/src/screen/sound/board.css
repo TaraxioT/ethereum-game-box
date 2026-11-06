@@ -1,0 +1,36 @@
+/* The sound board: a plain scrolling page in the Grid's light. */
+body:has(.board) { overflow: auto; }
+.board {
+  min-height: 100vh; box-sizing: border-box; padding: 0 24px 48px; background: var(--void); color: var(--fg);
+  font-family: var(--body); max-width: 980px; margin: 0 auto;
+}
+.board-head {
+  position: sticky; top: 0; z-index: 1; padding: 20px 0 14px; background: var(--void);
+  border-bottom: 1px solid color-mix(in srgb, var(--sys) 30%, transparent);
+}
+.board-title { margin: 0; font-family: var(--display); font-size: 28px; letter-spacing: 0.12em; color: var(--sys-hot); text-shadow: var(--glow-text); }
+.board-now { margin: 8px 0 12px; font-family: var(--mono); font-size: 18px; color: var(--sys); min-height: 1.3em; }
+.board-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.board-key {
+  font: inherit; font-family: var(--hud-display, var(--display)); font-size: 14px; letter-spacing: 0.1em; padding: 12px 18px;
+  color: var(--sys-hot); background: var(--glass); border: 1px solid color-mix(in srgb, var(--sys) 55%, transparent); cursor: pointer;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.board-key.primary { border-color: var(--sys); }
+.board-key.ghost { color: var(--fg-2); }
+.board-key.on { background: color-mix(in srgb, var(--sys) 25%, var(--glass)); border-color: var(--sys-hot); }
+.board-key.alert { color: var(--alert); border-color: var(--alert); }
+.board-group-title { margin: 28px 0 10px; font-family: var(--display); font-size: 15px; letter-spacing: 0.14em; color: var(--fg-2); }
+.board-sound {
+  display: grid; grid-template-columns: 200px 1fr; gap: 2px 16px; width: 100%; text-align: left; padding: 12px 14px; margin: 0 0 6px;
+  font: inherit; color: inherit; background: var(--glass); border: 1px solid color-mix(in srgb, var(--sys) 18%, transparent); cursor: pointer;
+}
+.board-sound.playing { border-color: var(--sys-hot); box-shadow: 0 0 14px color-mix(in srgb, var(--sys) 45%, transparent); }
+.board-sound-label { font-size: 17px; color: var(--sys-hot); }
+.board-sound-name { grid-row: 2; font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+.board-sound-meaning { grid-column: 2; grid-row: 1; font-size: 15px; color: var(--fg); }
+.board-sound-like { grid-column: 2; grid-row: 2; font-size: 13px; color: var(--fg-2); }
+@media (max-width: 640px) {
+  .board-sound { grid-template-columns: 1fr; }
+  .board-sound-name, .board-sound-meaning, .board-sound-like { grid-column: 1; grid-row: auto; }
+}
