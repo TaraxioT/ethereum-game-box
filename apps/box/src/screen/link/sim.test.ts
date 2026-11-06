@@ -50,6 +50,20 @@ async function toHome(): Promise<void> {
   expect(link.state().phase).toBe("home");
 }
 
+const quick = (state: BoxState) => (state.match?.play.game === "quick-draw" ? state.match.play.state : null);
+
+/** Taps `seat` once in each round of the running Quick Draw, as soon as its sign reads `phase` (on WAIT… is a foul),
+ *  until the match is over. */
+async function tapEachRound(seat: 0 | 1, phase: "wait" | "draw"): Promise<void> {
+  let last = 0;
+  while (!link.state().match?.outcome) {
+    await until((state) => state.match?.outcome != null || (quick(state)?.phase === phase && (quick(state)?.standoff ?? 0) > last), 20_000);
+    if (link.state().match?.outcome) return;
+    last = quick(link.state())?.standoff ?? last;
+    link.tap(seat);
+  }
+}
+
 /** Both sign: the match opens at once, its pot on the way. */
 async function signAndOpen(): Promise<void> {
   await until((state) => state.seats.every((s) => s.balance !== null));
@@ -93,8 +107,7 @@ describe("SimLink on the demo chain", () => {
     expect(link.state().txs.find((tx) => tx.kind === "open")).toMatchObject({ seat: null, amount: 50, hash: null });
     expect(cues()).toContain("round");
 
-    await until((state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase !== "wait", 7_000);
-    link.tap(0);
+    await tapEachRound(0, "draw");
     await until((state) => state.match?.outcome != null, 1_000);
     const winner = link.state().match?.outcome?.winner;
 
@@ -163,7 +176,7 @@ describe("SimLink on the demo chain", () => {
     link.send({ type: "focus", game: "quick-draw" });
     link.send({ type: "play" });
     await signAndOpen();
-    link.tap(0);
+    await tapEachRound(0, "wait");
     await vi.advanceTimersByTimeAsync(END_HOLD_MS);
     expect(link.state().phase).toBe("result");
     expect(link.state().match?.outcome).toEqual({ winner: null });
@@ -183,15 +196,18 @@ describe("SimLink on the demo chain", () => {
     link.send({ type: "focus", game: "quick-draw" });
     link.send({ type: "play" });
     await signAndOpen();
+    const opened = Date.now();
     link.setPower(false);
-    await until((state) => state.match?.outcome != null, 7_000);
+    await until((state) => state.match?.outcome != null, 60_000);
     await vi.advanceTimersByTimeAsync(END_HOLD_MS);
     const state = link.state();
     expect(state.phase).toBe("refund");
     expect(state.txs.some((tx) => tx.kind === "settle")).toBe(false);
     const match = state.match;
     if (!match) throw new Error("no match");
-    expect(match.refundAt - Date.now()).toBeGreaterThan(DEMO_REFUND_MS - 20_000);
+    // The pot's refund delay runs from the match's open.
+    expect(match.refundAt - opened).toBeGreaterThan(DEMO_REFUND_MS - 1_000);
+    expect(match.refundAt).toBeGreaterThan(Date.now());
     expect(state.stations[0].big).toBe("OFFLINE");
 
     link.tap(0);
@@ -222,10 +238,10 @@ describe("SimLink on the demo chain", () => {
     link.send({ type: "focus", game: "quick-draw" });
     link.send({ type: "play" });
     link.send({ type: "stake", amount: 25 });
-    // Player 1 jumps the gun four times, losing 25 each time: nothing left.
+    // Player 1 jumps the gun in every round of four matches, losing 25 each time: nothing left.
     for (let match = 0; match < 4; match++) {
       await signAndOpen();
-      link.tap(0);
+      await tapEachRound(0, "wait");
       expect(link.state().match?.outcome).toEqual({ winner: 1 });
       await vi.advanceTimersByTimeAsync(END_HOLD_MS);
       await until((state) => state.txs.some((tx) => tx.kind === "settle") && paidAll(state), 30_000);

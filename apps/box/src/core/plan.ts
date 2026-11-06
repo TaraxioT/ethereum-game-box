@@ -19,8 +19,11 @@ function gamePlan(state: PlanInput, match: Match | null, seat: Seat): TapPlan {
   const { play } = match;
   // A built game's rules decide what a tap means: every tap asks what its game.json says.
   if (play.game === "built") return state.games.find((g) => g.id === play.id)?.manifest?.taps ?? "identify";
-  // Quick Draw judges by the touch: who touched, and when.
-  if (play.game === "quick-draw") return play.state.phase !== "done" && play.state.taps[seat] === null ? "identify" : "none";
+  // Quick Draw judges by the touch: who touched, and when. Between rounds a tap means nothing.
+  if (play.game === "quick-draw") {
+    const live = play.state.phase === "count" || play.state.phase === "wait" || play.state.phase === "draw";
+    return live && play.state.taps[seat] === null ? "identify" : "none";
+  }
   // Stock Duel's tap plays a card, and its roll picks the stat.
   return play.state.phase === "pick" && play.state.played[seat] === null ? "random" : "none";
 }

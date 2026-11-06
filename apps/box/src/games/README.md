@@ -7,25 +7,32 @@ module shape (game.json, BLUEPRINT.md, a frame screen) comes with the rules runn
 
 ## Quick Draw (`quick-draw/`)
 
-A standoff: the sign flips to DRAW 2–6 s after it starts (from the seed); the first chip to touch after the flip wins,
-and a touch before it loses. Its taps are `identify`.
+Best of three standoffs; the first to take two rounds takes the match. Each standoff is counted in (`COUNT_MS`, 3 s:
+3, 2, 1), then the sign reads WAIT… and flips to DRAW 2–6 s later (from the seed and the standoff's number); the
+first chip to touch after the flip takes the round. A touch before it, on WAIT… or on a decoy, is a foul: the round
+goes to the other seat. A decided round is held `ROUND_MS` (3.2 s), then the next is counted in. Its taps are
+`identify`.
 
+- **Decoys.** Some standoffs (about half) flash one or two red decoy words on the sign during the wait (`DRAG`,
+  `DRAT`, `DREW`, `DRIP`, `DRUM`), each `DECOY_MS` (700 ms), never in the first 700 ms nor in the 800 ms before DRAW.
+  They are only pictures: any touch before `drawAt` is the same foul. `decoyAt(state, now)` says which shows.
 - **Judged by touch time**, never by the order taps arrive in: each event carries `at` (when the chip touched) and
-  `now` (when the Box hears of it). An early touch is early by `at < drawAt`, even when the Box hears of it after the
-  flip.
+  `now` (when the Box hears of it). A foul is a foul by `at < drawAt`, even when the Box hears of it after the flip.
+  A touch in the countdown (`at < startedAt`) or between rounds changes nothing.
 - **Waiting for certainty.** A good tap waits `SETTLE_MS` (450 ms) from its touch for the other station's touch, which
-  may still arrive with an earlier time; with both taps in it is judged at once. A false start is judged at once. A chip
+  may still arrive with an earlier time; with both taps in it is judged at once. A foul is judged at once. A chip
   still being read (`touch`, before its `tap` or `release`) that touched earlier than the first tap is waited for, at
   most `READ_WAIT_MS` (1500 ms) from its touch.
-- **Too slow.** Nobody touching within `TOO_SLOW_MS` (4000 ms) of the draw stands the standoff again with a new draw
-  time; a touch from the last standoff doesn't count in the new one.
-- A dead heat to the millisecond is a draw (both stakes back). Nothing changes once it is done.
-- The speaker never says GO (it lags): DRAW is a picture.
+- **Rounds nobody takes.** A dead heat to the millisecond, or nobody touching within `TOO_SLOW_MS` (4000 ms) of the
+  draw, gives nobody the round and it is played again.
+- **An end.** After `MAX_STANDOFFS` (6) standoffs the match ends anyway: the one ahead wins, level is a draw (both
+  stakes back). Nothing changes once it is done.
+- The speaker never says GO (it lags): DRAW is a picture. The countdown is to the start of the wait, never the draw.
 
 | Module | What it is |
 |---|---|
-| `types.ts` | `QuickDrawState` (phase, standoff, draw time, each seat's tap and pending touch, the winner and why), `QuickDrawEvent` (`tick`, `touch`, `tap`, `release`). |
-| `rules.ts` | `rules`, `reactionMs`, the timings. Tested in `rules.test.ts`. |
+| `types.ts` | `QuickDrawState` (phase `count`/`wait`/`draw`/`round`/`done`, standoff, round, score, the count, start and draw times, the decoys, each seat's tap and pending touch, who took the last standoff and how, the match's winner), `QuickDrawEvent` (`tick`, `touch`, `tap`, `release`). |
+| `rules.ts` | `rules`, `reactionMs`, `decoyAt`, `fouler`, the timings. Tested in `rules.test.ts`. |
 
 ## Stock Duel (`stock-duel/`)
 

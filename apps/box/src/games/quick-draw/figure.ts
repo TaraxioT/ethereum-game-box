@@ -4,6 +4,8 @@
 // holster, gun raised to cock, gun out level), and the hat. Player 1 wears a long duster and a pinched cattleman's
 // hat, Player 2 a short jacket, fringed chaps and a flat-crowned hat. A seat-coloured rim on the sun-facing edges, the
 // hat band and the bandana carry the seat; brass catches the light on the buckle, the cartridge loops and the spurs.
+// A figure that fouls (draws before DRAW) has its gun blow up in its hand: a blast, flying shards, soot, a scorched
+// rim and a stagger, until the next round stands it up again.
 import type { Seat } from "@egb/sdk";
 import { el, play, wait } from "../../screen/shell/dom.ts";
 
@@ -33,7 +35,15 @@ export interface Figure {
   win(): Promise<void>;
   /** Hit: rocks back, the hat flies, the knees go and the figure falls forward. */
   lose(): void;
+  /** A foul: the gun comes up and blows up in the hand. Blast, shards, soot, a scorched rim and a stagger back. */
+  explode(): Promise<void>;
 }
+
+/** The shards a blown-up gun throws: angle (degrees, 0 is forward), distance and spin. */
+const SHARDS: readonly { readonly a: number; readonly d: number; readonly spin: number }[] = [
+  { a: -70, d: 90, spin: 540 }, { a: -35, d: 120, spin: -420 }, { a: -5, d: 110, spin: 380 }, { a: 25, d: 80, spin: -300 },
+  { a: -110, d: 70, spin: 460 }, { a: -150, d: 60, spin: -520 }, { a: 60, d: 60, spin: 260 },
+];
 
 const NS = "http://www.w3.org/2000/svg";
 const VIEWBOX = "0 0 200 300";
@@ -223,6 +233,30 @@ function spark(): SVGSVGElement {
   return svg;
 }
 
+/** A ragged blast for the gun blowing up: a red-orange star round a white-hot core. */
+function blastMark(): SVGSVGElement {
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "-60 -60 120 120");
+  svg.setAttribute("class", "qd-fig-blast");
+  svg.setAttribute("aria-hidden", "true");
+  const ring = (count: number, long: number, short: number, cls: string): SVGPolygonElement => {
+    const points = Array.from({ length: count * 2 }, (_, i) => {
+      const a = (i / (count * 2)) * Math.PI * 2;
+      const r = i % 2 === 0 ? long * (0.8 + ((i * 37) % 10) / 40) : short;
+      return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
+    }).join(" ");
+    const poly = document.createElementNS(NS, "polygon");
+    poly.setAttribute("points", points);
+    poly.setAttribute("class", cls);
+    return poly;
+  };
+  const core = document.createElementNS(NS, "circle");
+  core.setAttribute("r", "13");
+  core.setAttribute("class", "qd-fig-blast-core");
+  svg.append(ring(11, 58, 24, "qd-fig-blast-outer"), ring(9, 38, 16, "qd-fig-blast-inner"), core);
+  return svg;
+}
+
 /** How far a leg swings each way from straight down, at the hip, in a pace. */
 const SWING = 17;
 
@@ -245,7 +279,13 @@ export function createFigure(seat: Seat): Figure {
   const flash = spark();
   const smoke = el("div", "qd-fig-smoke");
   for (let i = 0; i < 3; i++) smoke.append(el("i", `qd-fig-puff qd-fig-puff--${i}`));
-  pose.append(legFar, legNear, body, armIdle, armCheck, armDrawn, flash, smoke);
+  // The foul: where the gun hand is when drawn, a blast, shards and soot.
+  const blown = el("div", "qd-fig-blown");
+  const blast = blastMark();
+  const shards = SHARDS.map(() => el("i", "qd-fig-shard"));
+  const soot = [0, 1, 2, 3].map((i) => el("i", `qd-fig-soot qd-fig-soot--${i}`));
+  blown.append(...soot, blast, ...shards);
+  pose.append(legFar, legNear, body, armIdle, armCheck, armDrawn, flash, smoke, blown);
   // The hat rides on the turn, not the pose, so when the figure falls it flies off on its own.
   turnEl.append(pose, hat);
   art.append(turnEl);
@@ -379,9 +419,10 @@ export function createFigure(seat: Seat): Figure {
     idle() {
       moves++;
       stopBreathing();
-      for (const node of [root, walk, turnEl, pose, ...legs, armIdle, armCheck, armDrawn, hat, flash, smoke]) cancelAll(node);
+      for (const node of [root, walk, turnEl, pose, ...legs, armIdle, armCheck, armDrawn, hat, flash, smoke, blast, ...shards, ...soot]) cancelAll(node);
       if (hammer) cancelAll(hammer);
       for (const puff of smoke.children) cancelAll(puff);
+      root.classList.remove("is-blown");
     },
 
     twitch() {
@@ -447,6 +488,61 @@ export function createFigure(seat: Seat): Figure {
         { transform: "translate(-58px, 286px) rotate(-190deg)", opacity: 1, offset: 0.92 },
         { transform: "translate(-60px, 278px) rotate(-184deg)", opacity: 1 },
       ], { duration: 1200, delay: 40, easing: "cubic-bezier(0.3, 0.5, 0.6, 1)", fill: "forwards" });
+    },
+
+    async explode() {
+      moves++;
+      stopBreathing();
+      void play(armIdle, [{ opacity: 1 }, { opacity: 0 }], { duration: 60, fill: "forwards" });
+      // Too soon: the gun comes up fast…
+      await play(armDrawn, [
+        { opacity: 0, transform: "rotate(68deg)" },
+        { opacity: 1, transform: "rotate(-4deg)" },
+      ], { duration: 140, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" });
+      // …and blows up in the hand.
+      root.classList.add("is-blown");
+      void play(blast, [
+        { opacity: 1, transform: "scale(0.2) rotate(0deg)" },
+        { opacity: 1, transform: "scale(1.7) rotate(14deg)", offset: 0.3 },
+        { opacity: 0, transform: "scale(2.3) rotate(24deg)" },
+      ], { duration: 560, easing: "ease-out" });
+      shards.forEach((shard, i) => {
+        const { a, d, spin } = SHARDS[i] ?? { a: 0, d: 80, spin: 360 };
+        const x = Math.cos((a * Math.PI) / 180) * d;
+        const y = Math.sin((a * Math.PI) / 180) * d;
+        void play(shard, [
+          { opacity: 1, transform: "translate(0, 0) rotate(0deg)" },
+          { opacity: 1, transform: `translate(${x}px, ${y}px) rotate(${spin * 0.6}deg)`, offset: 0.45 },
+          { opacity: 0, transform: `translate(${x * 1.3}px, ${y + 160}px) rotate(${spin}deg)` },
+        ], { duration: 1000 + i * 60, easing: "cubic-bezier(0.2, 0.6, 0.5, 1)" });
+      });
+      soot.forEach((puff, i) => {
+        void play(puff, [
+          { opacity: 0, transform: "translate(0, 0) scale(0.5)" },
+          { opacity: 0.9, transform: `translate(${(i - 1.5) * 10}px, ${-14 - i * 6}px) scale(1.3)`, offset: 0.15 },
+          { opacity: 0.35, transform: `translate(${(i - 1.5) * 18 - 10}px, ${-70 - i * 22}px) scale(${2.4 + i * 0.4})`, offset: 0.7 },
+          { opacity: 0, transform: `translate(${(i - 1.5) * 22 - 16}px, ${-110 - i * 30}px) scale(${3 + i * 0.4})` },
+        ], { duration: 2400 + i * 300, delay: i * 90, easing: "ease-out", fill: "forwards" });
+      });
+      // The gun is gone: the arm jerks back and drops to the side, scorched.
+      void play(armDrawn, [
+        { opacity: 1, transform: "none" },
+        { opacity: 1, transform: "rotate(-48deg) translate(-8px, 0)", offset: 0.2 },
+        { opacity: 0, transform: "rotate(-30deg) translate(-10px, 4px)" },
+      ], { duration: 420, easing: "ease-out", fill: "forwards" });
+      void play(armIdle, [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }], { duration: 360, fill: "forwards" });
+      // The figure staggers back, hunched over the hand; the hat jumps and lands askew.
+      void play(hat, [
+        { transform: "none" },
+        { transform: "translate(-6px, -38px) rotate(-24deg)", offset: 0.35 },
+        { transform: "translate(-7px, 2px) rotate(-11deg)" },
+      ], { duration: 760, easing: "cubic-bezier(0.3, 0.6, 0.5, 1)", fill: "forwards" });
+      await play(pose, [
+        { transform: "none" },
+        { transform: "translateX(-16px) rotate(-9deg)", offset: 0.2 },
+        { transform: "translate(-8px, 4px) rotate(4deg) scaleY(0.96)", offset: 0.55 },
+        { transform: "translate(-10px, 6px) rotate(6deg) scaleY(0.95)" },
+      ], { duration: 900, easing: "ease-out", fill: "forwards" });
     },
   };
 }

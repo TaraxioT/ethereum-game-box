@@ -63,18 +63,23 @@ async function settled(tb: TestBox, screen: TestScreen): Promise<BoxState> {
 describe("whole matches over the link", () => {
   it("plays a Quick Draw by injected taps, judged at the touch, to a paid result", async () => {
     const { tb, screen } = await seatedAtStake("quick-draw");
-    tb.until(() => {
+    const quick = () => {
       const play = tb.box.core.state().match?.play;
-      return play?.game === "quick-draw" && play.state.phase === "draw";
-    });
-    tb.advance(230);
-    expect(await inject(tb, 1, KITE)).toEqual({ tap: expect.any(Number), plan: "identify", badge: KITE, accepted: true });
-    tb.advance(SETTLE_MS + 50);
-    expect(await inject(tb, 0, NOVA)).toMatchObject({ plan: "none", accepted: false });
-    const match = tb.box.core.state().match;
-    if (match?.play.game !== "quick-draw") throw new Error("no Quick Draw");
-    expect(match.outcome).toEqual({ winner: 1 });
-    expect(reactionMs(match.play.state, 1)).toBeGreaterThanOrEqual(230);
+      return play?.game === "quick-draw" ? play.state : null;
+    };
+    // Best of three: Player 2 draws first in two rounds.
+    for (const round of [1, 2]) {
+      tb.until(() => quick()?.phase === "draw");
+      tb.advance(230);
+      expect(await inject(tb, 1, KITE)).toEqual({ tap: expect.any(Number), plan: "identify", badge: KITE, accepted: true });
+      tb.advance(SETTLE_MS + 50);
+      expect(await inject(tb, 0, NOVA)).toMatchObject({ plan: "none", accepted: false });
+      const state = quick();
+      if (!state) throw new Error("no Quick Draw");
+      expect(state).toMatchObject({ took: 1, score: [0, round] });
+      expect(reactionMs(state, 1)).toBeGreaterThanOrEqual(230);
+    }
+    expect(tb.box.core.state().match?.outcome).toEqual({ winner: 1 });
     tb.advance(END_HOLD_MS);
 
     const final = await settled(tb, screen);

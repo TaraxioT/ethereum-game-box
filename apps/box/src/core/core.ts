@@ -43,7 +43,7 @@ import type {
   Tx,
 } from "./types.ts";
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
-import type { QuickDrawEvent } from "../games/quick-draw/types.ts";
+import type { QuickDrawEvent, QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame, stakeOf } from "./catalogue.ts";
@@ -183,13 +183,17 @@ function playCues(before: MatchPlay, after: MatchPlay, frontsBefore: readonly (n
   const add = (cue: Cue, seat: Seat | null = null) => moments.push({ cue, seat });
   if (before.game === "quick-draw" && after.game === "quick-draw") {
     const [was, is] = [before.state, after.state];
-    if (was.phase === "wait" && is.phase !== "wait" && is.reason !== "early") add("draw");
-    if (was.phase !== "done" && is.phase === "done") {
-      if (is.winner === null) add("tie");
-      else if (is.reason === "early") add("false-start", other(is.winner));
-      else add("shot", is.winner);
+    const decided = (s: QuickDrawState) => s.phase === "round" || s.phase === "done";
+    // The sign turned to DRAW: the phase says so, or the standoff was decided by a good draw in the same step.
+    const turned = (s: QuickDrawState) => s.phase === "draw" || (decided(s) && s.reason !== "early" && (s.taps[0] ?? s.taps[1] ?? s.drawAt) >= s.drawAt);
+    if ((was.phase === "count" || was.phase === "wait") && was.standoff === is.standoff && turned(is)) add("draw");
+    if (!decided(was) && decided(is)) {
+      if (is.took === null) add("tie");
+      else if (is.reason === "early") add("false-start", other(is.took));
+      else add("shot", is.took);
     }
-    if (is.standoff > was.standoff) add("tie");
+    // The next round is counted in.
+    if (was.phase === "round" && is.phase === "count") add("round");
   }
   if (before.game === "stock-duel" && after.game === "stock-duel") {
     const frontsAfter = fronts(after, now);
@@ -612,8 +616,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     setPhase("playing");
     cue("round");
     tickTimer = timers.every(TICK_MS, () => stepGame(null));
-    // The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
-    if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - now), () => stepGame(null));
+    if (play.game === "quick-draw") drawTimer(play.state, now);
+  }
+
+  /** The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond. */
+  function drawTimer(standoff: QuickDrawState, now: number): void {
+    timers.after(Math.max(0, standoff.drawAt - now), () => stepGame(null));
   }
 
   /** Reads a badge's balance again, after money moved. */
@@ -745,6 +753,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (changed) match = { ...match, play: after, outcome, endedAt: outcome ? now : null };
     const cues = playCues(before, after, lastFronts, now);
     lastFronts = fronts(after, now);
+    // Each standoff's draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
+    if (after.game === "quick-draw" && before.game === "quick-draw" && after.state.standoff !== before.state.standoff) drawTimer(after.state, now);
     if (changed) emit({ type: "game" });
     // The Rolodex turns with the clock, so the stations can change while the game state does not.
     else if (JSON.stringify(snapshot().stations) !== JSON.stringify(state.stations)) emit({ type: "stations" });

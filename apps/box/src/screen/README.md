@@ -315,7 +315,7 @@ The sounds, for the Box's views, its games and a Forge-built game's designer, by
 |---|---|---|
 | `draw` | Quick Draw: the sign turns to DRAW | A card-flip whoosh up into a sharp crack of an accent |
 | `shot` (seat) | Quick Draw: the winner's good draw | A gunshot: a crack of noise over a fast thump, and its echo. Player 1 deeper, Player 2 higher |
-| `false-start` (seat) | Quick Draw: a tap before the draw | A sour, detuned falling tone: clearly a mistake |
+| `false-start` (seat) | Quick Draw: a tap before DRAW, and the fouler's gun blows up in the hand | A muffled bang and a burst of crackle, then a sour, detuned fall: clearly a mistake |
 | `tie` | Quick Draw: a dead heat, or nobody drew; a Stock Duel round tied; a drawn match | A neutral falling fourth on soft triangles |
 | `step` (seat) | Stock Duel: a seat's spotlight steps to its next card | A tiny soft blip, quiet enough to run for minutes. Player 1 lower, Player 2 higher |
 | `play` (seat) | Stock Duel: a seat's card goes down | A card slammed on the desk: a thunk, a slap of noise and a chime (E for Player 1, A for Player 2) |
@@ -324,7 +324,7 @@ The sounds, for the Box's views, its games and a Forge-built game's designer, by
 | `reel` | Stock Duel: the dial's pointer passes a mark as it turns | One slot-reel click |
 | `land` | Stock Duel: the dial settles on the round's stat | A boom and a bell |
 | `flip` | Stock Duel: both cards turn over | A paper whoosh |
-| `count` (pitch) | Stock Duel: the round's number counts up on the cards | A blip that rises with the value (A4 to A6) |
+| `count` (pitch) | Stock Duel: the round's number counts up on the cards. Quick Draw: each beat of the 3-2-1 before a round | A blip that rises with the value (A4 to A6) |
 | `round-won` (seat) | A round won (and a game built) | A short major brass fanfare from the winner's side: Player 1 in C, Player 2 a step up in D |
 | `over` (seat) | The match is over: the winner's sound | An arpeggio up into a held chord, with a boom and sparkles. Player 1 in C, Player 2 in D |
 | `round` | A match opens, or a new Stock Duel round begins | A noise riser into a hit |
@@ -375,32 +375,38 @@ figures lower-left and lower-right.
 
 | Module | What it is | API |
 |---|---|---|
-| `screen.ts` | The view: places the parts, runs the standoff from the game's phase and the Box's events. | `quickDrawScreen: ViewFactory` |
+| `screen.ts` | The view: places the parts, runs each round from the game's phase and the Box's events, and says what to do on the round plate, the call strip and the bubbles. | `quickDrawScreen: ViewFactory` |
 | `scene.ts` | The static landscape, drawn once: a graded dusk sky, a big low sun on a long horizon, three ranges of flat-topped mesas with sun-lit ridges, scrub, rocks and two saguaros, a dust haze and a band of drifting motes. | `createScene(spec): { el, sun }` |
-| `sign.ts` | The flip-plate sign on its post: planked wood from layered gradients, nail heads, two iron pins, a plate with a dark painted `WAIT…` face and a bright `DRAW` face, hand-painted letters a little off square, paint wear over them. | `createSign(): { el, flip(instant?), reset(), rattle() }` |
-| `figure.ts` | One gunslinger in silhouette (SVG, facing right; Player 2 mirrored), a seat-coloured rim on its sun-facing edges, hat band and bandana. Body, holstered arm and drawn arm are separate layers. | `createFigure(seat): { el, idle(), twitch(), win(), lose() }` |
+| `sign.ts` | The flip-plate sign on its post: planked wood from layered gradients, nail heads, two iron pins, a plate with a dark painted `WAIT…` face and a bright `DRAW` face, hand-painted letters a little off square, paint wear over them. A decoy (or a foul) paints the dark face red with its word. | `createSign(): { el, flip(instant?), reset(), say(word), rattle(), decoy(word) }` |
+| `figure.ts` | One gunslinger in silhouette (SVG, facing right; Player 2 mirrored), a seat-coloured rim on its sun-facing edges, hat band and bandana. Body, holstered arm and drawn arm are separate layers. A foul blows its gun up in the hand. | `createFigure(seat): { el, idle(), twitch(), win(), lose(), explode(), … }` |
 | `quick-draw.css` | All its styles, imported by `screen.ts`. | |
 
-How it moves:
+How it moves (best of three):
 
-- **Wait**: the sign reads `WAIT…`. A dark layer fades in from the standoff's start over the longest possible wait
-  (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette beat like a heart, and the
-  beat quickens once the shortest wait has passed. The figures hold. All of this is the same for every match, timed
-  from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A remounted view
-  picks the dimming up where it has got to.
-- **Draw** (the phase turns to `draw`, or a `cue: draw` event): the plate turns over on its pins (rotateX) with a
-  swing that settles. The horizon flashes and the light comes back up.
-- **Done**: the winner's arm comes up out of the holster and fires (a muzzle-flash spark, a recoil); the loser sags
-  back on its heels. A brass plate drops in under each figure with its reaction time (`reactionMs`, JetBrains Mono)
-  or `TOO EARLY`. A player who never tapped reads `TOO SLOW` (the other drew first) or `HELD FIRE` (the other jumped
-  the gun). The winner's plate is ringed in its seat colour. A carved plank with `PLAYER 1 WINS` / `PLAYER 2 WINS` in
-  seat paint swings in across the post. After an early tap the sign stays on `WAIT…` and rattles on its pins. The
-  whole sequence is done in about a second, inside the ~2.4 s the Box holds it before Result.
-- **Stood again**: when nobody draws within 4 s of the flip, the rules stand the standoff again (the phase goes back
-  to `wait` with a new start), and the view runs the standoff from the top.
+- **Saying what to do**: a brass round plate up top reads `ROUND n` over `BEST OF 3` with each player's two pips (a
+  pip fills in seat paint as a round is won, `FINAL` at the end). A call strip under the sign says what to do now:
+  cream while counting and waiting, red on a decoy and a foul, green on DRAW. Over each gunslinger a bubble says
+  `TAP!` (green, bouncing) on DRAW and `DON'T!` (red) on a decoy.
+- **Count**: everyone back on their marks (a fallen or scorched figure stands up again); the sign counts `3`, `2`,
+  `1` on the Box's clock with a rising blip, the strip reads `ROUND n · GET READY · TAP YOUR BADGE ON DRAW!`.
+- **Wait**: the sign reads `WAIT…`, the strip `DON'T TAP YET`. A dark layer fades in from the standoff's start over
+  the longest possible wait (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette
+  beat like a heart, and the beat quickens once the shortest wait has passed. All of this is the same every round,
+  timed from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A decoy
+  paints the sign red with its word, the strip says `NOT YET!` and the vignette flares red, then it is WAIT… again.
+- **Draw** (the phase turns to `draw`, or a `cue: draw` event): the plate turns over on its pins to its gold DRAW
+  face, the horizon flashes, gold rays fan out from behind the sign, the strip goes green with `DRAW! TAP NOW!`.
+- **Round decided**: a good draw fires (a muzzle flash, smoke) and the other falls; a foul paints `FOUL` on the sign
+  in red, blows the fouler's gun up in the hand (a blast, shards, soot, a scorched rim, a stagger) and shakes the
+  stage. The strip names who took the round (`PLAYER 2 TAKES ROUND 1`, `FOUL! GUN BLEW UP`, `DEAD HEAT`, `NOBODY
+  DREW`), a brass plate drops in under each figure with its reaction time or `FOUL!`, `HELD FIRE`, `TOO SLOW`,
+  `NO DRAW`, and the winner's pip pops. The next round is counted in after `ROUND_MS`.
+- **Done**: the deciding round as above, then a carved plank with `PLAYER 1 WINS 2–1` (or `NO WINNER`) in seat paint
+  swings in over the strip, inside the ~2.4 s the Box holds it before Result.
 - **Taps**: each accepted `tap` event jolts that seat's figure a few pixels back, so the player feels it land.
-- Sounds: the Box cues `draw` as the sign turns, `shot` from the winner's seat, `false-start` from the seat that
-  jumped, and `tie` for a dead heat or a standoff nobody drew.
+- Sounds: the Box cues `round` as each later round is counted in, `draw` as the sign turns, `shot` from the round
+  winner's seat, `false-start` (a bang and crackle, then a sour fall) from the seat that fouled, and `tie` for a dead
+  heat or a round nobody drew. The screen plays the countdown's `count` blips itself.
 - Only transform and opacity animate; every shadow and glow is static. Under reduced motion it shows end states: a
   fixed dim during the wait, no heartbeat, the plate already turned, the poses, plates and plank in place.
 

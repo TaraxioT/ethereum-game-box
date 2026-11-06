@@ -1,25 +1,52 @@
 // Quick Draw's state and events. The rules (rules.ts) are pure: time and seeds arrive in events.
 import type { Seat } from "@egb/sdk";
 
-export type QuickDrawPhase = "wait" | "draw" | "done";
+/**
+ * `count`: 3-2-1 before a standoff (taps change nothing). `wait`: the sign reads WAIT…, decoys may show, a tap is a
+ * foul. `draw`: the sign reads DRAW, the first tap takes the round. `round`: a round was decided (or nobody took it)
+ * and the next one is about to be counted in. `done`: the match is over.
+ */
+export type QuickDrawPhase = "count" | "wait" | "draw" | "round" | "done";
+
+/** A decoy: from `at` for DECOY_MS the sign shows `word` instead of WAIT…. Tapping on it is a foul like any early tap. */
+export interface Decoy {
+  readonly at: number;
+  readonly word: string;
+}
+
+/** How a standoff ended. `first`: a good draw took it. `early`: the other seat tapped before DRAW (a foul). `heat`:
+ *  both drew on the same millisecond. `slow`: nobody drew in time. The last two give nobody the round. */
+export type QuickDrawReason = "first" | "early" | "heat" | "slow";
 
 export interface QuickDrawState {
   readonly phase: QuickDrawPhase;
   readonly seed: number;
-  /** 1 for the first standoff; a standoff nobody drew in is stood again with the next number. */
+  /** 1 for the first standoff, counting every one stood (a replayed round is a new standoff). */
   readonly standoff: number;
-  /** When this standoff began (ms since the epoch). */
+  /** The round being played (1 to 3); a round nobody took is played again under the same number. */
+  readonly round: number;
+  /** Rounds won by each seat: the first to ROUNDS_TO_WIN takes the match. */
+  readonly score: readonly [number, number];
+  /** When this standoff's countdown began (ms since the epoch). */
+  readonly countAt: number;
+  /** When the countdown ends and the standoff begins: touches before it change nothing. */
   readonly startedAt: number;
   /** When the sign flips to DRAW: 2–6 s after the standoff began, from the seed and the standoff. */
   readonly drawAt: number;
+  /** The fake signs shown during the wait, in time order: never tap on these. */
+  readonly decoys: readonly Decoy[];
   /** Each seat's tap: when the seated player's chip touched the reader, or null. */
   readonly taps: readonly [number | null, number | null];
   /** A chip that touched a seat's reader and is still being read (who it is isn't known yet): its touch time. */
   readonly pending: readonly [number | null, number | null];
-  /** Set when phase is `done`: null is a dead heat (both stakes go back). */
+  /** When phase is `round`: who took the round (null: nobody). When `done`: who took the match (null: a draw). */
   readonly winner: Seat | null;
-  /** `first`: the winner touched first after the draw. `early`: the loser touched before it. */
-  readonly reason: "first" | "early" | null;
+  /** Who took the last standoff, from `round` on (null: nobody, or none decided yet). */
+  readonly took: Seat | null;
+  /** How the last standoff ended, from `round` on; null before. */
+  readonly reason: QuickDrawReason | null;
+  /** When the last standoff was decided, from `round` on; null before. */
+  readonly decidedAt: number | null;
 }
 
 /**

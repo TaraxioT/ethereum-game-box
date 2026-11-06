@@ -2,11 +2,11 @@
 // (≤ 32 characters) and a small one (≤ 40), scrolling when too wide, the overrides for a tap in progress, and its mode:
 // what a tap means now, from the seat's tap plan. `@egb/sdk`'s `stationView` cuts each line to what the station holds.
 import type { Seat, StationMode, StationView } from "@egb/sdk";
-import { stationView as fitView } from "@egb/sdk";
+import { other, stationView as fitView } from "@egb/sdk";
 import type { Match, SeatState } from "./types.ts";
 import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelState } from "../games/stock-duel/types.ts";
-import { reactionMs } from "../games/quick-draw/rules.ts";
+import { decoyAt, fouler, reactionMs } from "../games/quick-draw/rules.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { formatStat, STAT_LABEL } from "../games/stock-duel/deck.ts";
 import { playerName } from "./badges.ts";
@@ -51,15 +51,28 @@ function staking(input: StationInput, seat: Seat): Lines {
   return lines("SIGNED", bothSigned ? "opening" : "waiting");
 }
 
-function quickDraw(game: QuickDrawState, seat: Seat): Lines {
-  if (game.phase === "wait") return lines("WAIT", "tap on DRAW");
-  if (game.phase === "draw") {
-    const tapped = game.taps[seat];
-    return tapped === null ? lines("DRAW!", "tap now") : lines("DRAW!", `${Math.round(tapped - game.drawAt)} ms`);
+function quickDraw(game: QuickDrawState, seat: Seat, now: number): Lines {
+  const score = `${game.score[seat]}-${game.score[other(seat)]}`;
+  switch (game.phase) {
+    case "count":
+      return lines(String(Math.max(1, Math.ceil((game.startedAt - now) / 1000))), `round ${game.round}  ${score}`);
+    case "wait": {
+      const decoy = decoyAt(game, now);
+      return decoy ? lines(decoy.word, "don't tap!") : lines("WAIT", "tap on DRAW");
+    }
+    case "draw": {
+      const tapped = game.taps[seat];
+      return tapped === null ? lines("DRAW!", "tap now") : lines("DRAW!", `${Math.round(tapped - game.drawAt)} ms`);
+    }
+    case "round":
+    case "done": {
+      const ms = reactionMs(game, seat);
+      const held = game.reason === "early" ? "held fire" : game.reason === "slow" ? "no tap" : "too slow";
+      const detail = ms !== null ? `${Math.round(ms)} ms` : fouler(game) === seat ? "foul: too early" : held;
+      if (game.phase === "done") return lines(game.winner === null ? "DRAW" : game.winner === seat ? "WIN" : "LOSE", detail);
+      return lines(game.took === null ? "AGAIN" : game.took === seat ? "POINT" : "MISSED", detail);
+    }
   }
-  const ms = reactionMs(game, seat);
-  const detail = ms !== null ? `${Math.round(ms)} ms` : game.taps[seat] !== null ? "too early" : "no tap";
-  return lines(game.winner === seat ? "WIN" : "LOSE", detail);
 }
 
 function stockDuel(game: StockDuelState, seat: Seat, now: number): Lines {
@@ -111,7 +124,7 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
       if (match.voided) return lines("VOID", "stakes back");
       if (match.calledOff) return lines("CALLED OFF", "stakes back");
       if (match.play.game === "built") return lines(match.play.stations[seat].big, match.play.stations[seat].small);
-      return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat) : stockDuel(match.play.state, seat, now);
+      return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat, now) : stockDuel(match.play.state, seat, now);
     case "refund":
       return match ? refunding(match, seat, now) : seated(mine);
     case "lobby":

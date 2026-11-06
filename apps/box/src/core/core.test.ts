@@ -14,6 +14,7 @@ import { chainLabel, TEAM_GAMES, teamLibrary } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
 import { instantTap } from "./instant-tap.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
+import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
 
@@ -188,10 +189,16 @@ async function potConfirmed<C extends ChainPort>(r: Rig<C>): Promise<void> {
   } else await until(r, (state) => state.phase === "playing");
 }
 
-/** Plays the running Quick Draw to a win for `seat` and waits out the end hold. */
+/** The running Quick Draw's state, or null. */
+const qd = (state: BoxState): QuickDrawState | null => (state.match?.play.game === "quick-draw" ? state.match.play.state : null);
+
+/** Plays the running Quick Draw until `seat` takes the match, drawing first in every round, and waits out the end hold. */
 async function quickWin<C extends ChainPort>(r: Rig<C>, seat: Seat): Promise<void> {
-  await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-  instantTap(r.core, seat, seat === 0 ? NOVA : KITE, 1);
+  while (!r.core.state().match?.outcome) {
+    await until(r, (state) => qd(state)?.phase === "draw");
+    instantTap(r.core, seat, seat === 0 ? NOVA : KITE, 1);
+    await until(r, (state) => qd(state)?.phase !== "draw");
+  }
   await until(r, (state) => state.phase === "result");
 }
 
@@ -304,20 +311,25 @@ describe("the core on its ports", () => {
     // It waits SETTLE_MS from the touch for the other station, then judges.
     expect(core.state().match?.outcome).toBeNull();
     clock.advance(400);
-    const after = core.state().match;
-    if (after?.play.game !== "quick-draw") throw new Error("no Quick Draw");
-    expect(after.outcome).toEqual({ winner: 1 });
-    expect(reactionMs(after.play.state, 1)).toBe(180);
+    const after = qd(core.state());
+    // Player 2 takes the first round; the match goes on to the best of three.
+    expect(after).toMatchObject({ phase: "round", took: 1, score: [0, 1] });
+    expect(core.state().match?.outcome).toBeNull();
+    if (after) expect(reactionMs(after, 1)).toBe(180);
     expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true, meaning: "play" });
     expect(r.buzzes.at(-1)).toEqual([1, "ok"]);
-    expect(core.plan(1)).toBe("none");
+    expect([core.plan(0), core.plan(1)]).toEqual(["none", "none"]);
     // The chip's answer arrives afterwards and changes nothing.
     const count = r.events.length;
     core.tap({ phase: "done", tap, seat: 1, at: drawAt + 180, badge: KITE, roll: null });
     expect(r.events.length).toBe(count);
 
-    clock.advance(END_HOLD_MS);
-    expect(core.state().phase).toBe("result");
+    // The next round is counted in, and Player 2 takes it and the match.
+    await until(r, (state) => qd(state)?.phase === "count");
+    expect(qd(core.state())).toMatchObject({ round: 2, score: [0, 1] });
+    expect([core.plan(0), core.plan(1)]).toEqual(["identify", "identify"]);
+    await quickWin(r, 1);
+    expect(core.state().match?.outcome).toEqual({ winner: 1 });
     // The pot lands in the next head; the result goes then, and its lines come from the chain once it is paid.
     await until(r, (state) => state.match?.lines !== null);
     expect(r.chain.sent).toEqual(["open 1", "settle 1"]);
@@ -486,7 +498,7 @@ describe("the core on its ports", () => {
     expect(core.state().match?.outcome).toBeNull();
     core.tap({ phase: "done", tap: unknown, seat: 0, at: drawAt + 120, badge: NOVA, roll: null });
     clock.advance(50);
-    expect(core.state().match?.outcome).toEqual({ winner: 0 });
+    expect(qd(core.state())).toMatchObject({ phase: "round", took: 0 });
   });
 
   it("freezes the Stock Duel card a touch saw, and lets it go when the tap fails", async () => {
@@ -522,22 +534,24 @@ describe("the core on its ports", () => {
     stationTap(core, 1, KITE);
     await until(r, (state) => state.phase === "playing");
     clock.advance(12_000);
-    await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-    stationTap(core, 1, KITE);
+    while (!core.state().match?.outcome) {
+      await until(r, (state) => qd(state)?.phase === "draw");
+      stationTap(core, 1, KITE);
+      await until(r, (state) => qd(state)?.phase !== "draw");
+    }
     await until(r, (state) => state.phase === "result");
     expect(r.logged).toHaveLength(1);
     const [t] = r.logged;
     expect(t).toMatchObject({ v: 1, game: "quick-draw", badges: [NOVA.address, KITE.address], stake: 10, result: { winner: 1 }, counts: true });
-    expect(t?.taps).toEqual([{ seat: 1, at: expect.any(Number), roll: null, accepted: true }]);
+    const good = { seat: 1, at: expect.any(Number), roll: null, accepted: true };
+    expect(t?.taps).toEqual([good, good]);
     expect(t?.endedAt).toBe(core.state().match?.endedAt);
 
     // The same match from injected taps is played, logged, and doesn't count.
     const injected = rig();
     await toPlaying(injected, "quick-draw");
     injected.clock.advance(15_000);
-    await until(injected, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-    instantTap(injected.core, 0, NOVA, 1);
-    await until(injected, (state) => state.phase === "result");
+    await quickWin(injected, 0);
     expect(injected.logged[0]?.counts).toBe(false);
   });
 
@@ -545,8 +559,7 @@ describe("the core on its ports", () => {
     const r = rig();
     const { core, clock } = r;
     await toPlaying(r, "quick-draw");
-    instantTap(core, 0, NOVA, 1);
-    await until(r, (state) => state.phase === "result");
+    await quickWin(r, 0);
     const endedAt = core.state().match?.endedAt ?? 0;
     expect(core.plan(0)).toBe("none");
     instantTap(core, 0, NOVA, 1);
@@ -613,13 +626,19 @@ describe("what the screen hears", () => {
     expect(moments(r)).toEqual(expect.arrayContaining([["draw", null], ["shot", 1], ["over", 1]]));
   });
 
-  it("marks a false start with the seat that jumped", async () => {
+  it("marks a foul with the seat that jumped, and counts the next round in", async () => {
     const r = rig();
     await toPlaying(r, "quick-draw");
+    // A tap in the countdown is ignored; one on WAIT… is a foul.
     instantTap(r.core, 0, NOVA, 1);
-    await until(r, (state) => state.match?.outcome != null);
+    expect(meanings(r).at(-1)).toBe("ignored");
+    await until(r, (state) => qd(state)?.phase === "wait");
+    instantTap(r.core, 0, NOVA, 1);
+    expect(qd(r.core.state())).toMatchObject({ phase: "round", took: 1, reason: "early" });
     expect(moments(r)).toContainEqual(["false-start", 0]);
     expect(moments(r).map(([cue]) => cue)).not.toContain("draw");
+    await until(r, (state) => qd(state)?.phase === "count");
+    expect(moments(r).filter(([cue]) => cue === "round")).toHaveLength(2);
   });
 
   it("marks each Stock Duel card going down with its seat", async () => {
@@ -888,7 +907,11 @@ describe("refund", () => {
     const began = r.core.now();
     r.core.setPower(false);
     await until(r, (state) => state.txs[0]?.step === "paid");
-    instantTap(r.core, 0, NOVA, 1);
+    while (!r.core.state().match?.outcome) {
+      await until(r, (state) => qd(state)?.phase === "draw");
+      instantTap(r.core, 0, NOVA, 1);
+      await until(r, (state) => qd(state)?.phase !== "draw");
+    }
     await until(r, (state) => state.phase === "refund");
     return { ...r, began };
   }

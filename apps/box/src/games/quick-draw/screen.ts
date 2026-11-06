@@ -1,19 +1,26 @@
-// Quick Draw's screen: a western standoff at dusk. Two seat-coloured gunslingers face each other across a long
-// horizon with a flip-plate sign on a post between them. While the sign reads WAIT… the light slowly dims and the
-// sun and the vignette beat like a heart; when it turns to DRAW the horizon flashes; at the end the winner fires, the
-// loser sags, a brass plate under each shows the reaction time and a carved plank names the winner.
+// Quick Draw's screen: a western standoff at dusk, best of three. Two seat-coloured gunslingers face each other across
+// a long horizon with a flip-plate sign on a post between them.
 //
-// The dimming runs from the standoff's start over the longest possible wait, and the heartbeat quickens once the
-// shortest wait has passed. Both are the same for every match, so neither gives away when the draw comes.
+// Every round says plainly what to do. A brass plate up top keeps the round and each player's rounds won (two pips
+// each). The sign counts each round in (3, 2, 1) while a call strip under it reads ROUND n · GET READY; then the sign
+// reads WAIT… and the strip DON'T TAP YET. A decoy may flash on the sign in red (DRAG, DRAT…): the strip turns red
+// with NOT YET! and a red DON'T! hangs over both gunslingers. When the sign turns over to its gold DRAW face the land
+// flashes, rays burst behind the sign, the strip turns green with TAP NOW! and a green TAP! bounces over both heads.
+// A good draw fires and the other falls; a foul (a tap before DRAW) blows up the fouler's gun in the hand and the
+// round goes to the other player. The strip then names who took the round, the plates under the figures show the
+// reaction times, and the next round is counted in. The first to two rounds wins: a carved plank names them.
+//
+// While the sign reads WAIT… the light slowly dims and the sun and the vignette beat like a heart. The dimming runs
+// over the longest possible wait and the heartbeat quickens once the shortest has passed, the same every round, so
+// neither gives away when the draw comes. The countdown is to the start of the wait, never to the draw.
 //
 // Before that, while both stakes go into the pot (the routes bring this screen up on the second signature), the two
 // stand back to back by the sign, pace ten paces apart as the sign counts them, turn, and each raises a revolver and
 // thumbs its hammer back. A brass wire plate over the sign follows the transaction. If the stakes are still on their
 // way after that (on Sepolia they take longer than the walk), the two keep moving on their marks: a slow step back and
 // in again, a gun checked, a hat touched, a tumbleweed now and then while the sun sinks; the sign holds a word that
-// follows the transaction (HOLD…, SENT…, BLOCK), never READY. The standoff begins when the stakes are confirmed on
-// chain, never before: the sign says READY for a moment, then WAIT…; if the stakes land before the walk is done, the
-// two hurry to their marks.
+// follows the transaction (HOLD…, SENT…, BLOCK). The first round is counted in when the stakes are confirmed on chain,
+// never before; if they land before the walk is done, the two hurry to their marks.
 import { stakeOf } from "../../core/catalogue.ts";
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
@@ -21,7 +28,7 @@ import { shiftRect, type Layout, type Orientation, type Rect } from "../../scree
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
 import { other, type Seat } from "@egb/sdk";
-import { MAX_WAIT_MS, MIN_WAIT_MS, reactionMs } from "./rules.ts";
+import { DECOY_MS, fouler, MAX_WAIT_MS, MIN_WAIT_MS, reactionMs, ROUNDS_TO_WIN } from "./rules.ts";
 import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";
 import { createSign } from "./sign.ts";
@@ -38,6 +45,12 @@ interface Geometry {
   readonly banner: Rect;
   /** The wire plate that follows the stakes going in, over the sign. */
   readonly wire: Rect;
+  /** The round and the rounds won, up top (where the wire was). */
+  readonly hud: Rect;
+  /** The call strip: what to do now, in words. */
+  readonly call: Rect;
+  /** Over each gunslinger's head: TAP! on the draw, DON'T! on a decoy. */
+  readonly bubbles: readonly [Rect, Rect];
 }
 
 // The Box's overlay holds the top ~130 px (landscape) / ~150 px (portrait); everything here stands below it.
@@ -49,6 +62,9 @@ const GEOMETRY: Record<Orientation, Geometry> = {
     plates: [{ x: 40, y: 712, w: 240, h: 66 }, { x: 1000, y: 712, w: 240, h: 66 }],
     banner: { x: 340, y: 594, w: 600, h: 92 },
     wire: { x: 400, y: 136, w: 480, h: 64 },
+    hud: { x: 430, y: 148, w: 420, h: 54 },
+    call: { x: 290, y: 596, w: 700, h: 96 },
+    bubbles: [{ x: 70, y: 226, w: 180, h: 80 }, { x: 1030, y: 226, w: 180, h: 80 }],
   },
   portrait: {
     scene: { width: 720, height: 1080, horizon: 720, sun: { x: 360, y: 734, r: 232 } },
@@ -57,6 +73,9 @@ const GEOMETRY: Record<Orientation, Geometry> = {
     plates: [{ x: 12, y: 994, w: 200, h: 66 }, { x: 508, y: 994, w: 200, h: 66 }],
     banner: { x: 40, y: 560, w: 640, h: 92 },
     wire: { x: 110, y: 256, w: 500, h: 64 },
+    hud: { x: 150, y: 160, w: 420, h: 60 },
+    call: { x: 20, y: 232, w: 680, h: 96 },
+    bubbles: [{ x: 20, y: 576, w: 180, h: 80 }, { x: 520, y: 576, w: 180, h: 80 }],
   },
 };
 
@@ -72,6 +91,9 @@ function geometryFor(layout: Layout): Geometry {
     plates: [shiftRect(g.plates[0], dx), shiftRect(g.plates[1], dx)],
     banner: shiftRect(g.banner, dx),
     wire: shiftRect(g.wire, dx),
+    hud: shiftRect(g.hud, dx),
+    call: shiftRect(g.call, dx),
+    bubbles: [shiftRect(g.bubbles[0], dx), shiftRect(g.bubbles[1], dx)],
   };
 }
 
@@ -125,18 +147,24 @@ const MILL_WEED_EVERY = 8;
 /** How far the sun sinks over a long wait (stage pixels), and over how long. */
 const SUN_SINK = 26;
 const SUN_SINK_MS = 40_000;
-/** How long the sign says READY once the stakes are in, before the standoff's WAIT… (well inside the shortest wait). */
-const READY_MS = 900;
+/** The rays behind the sign's board: how far out from its middle they reach. */
+const RAYS = 860;
 
-/** What a seat's plate reads at the end. */
+/** The call strip's tones: neutral while counting and waiting, red on a decoy, green on the draw. */
+type Tone = "count" | "wait" | "decoy" | "draw" | "won" | "foul" | "again";
+
+/** What a seat's plate reads once a round is decided. */
 function verdict(s: QuickDrawState, seat: Seat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
   const tap = s.taps[seat];
-  if (tap !== null && tap < s.drawAt) return { word: "TOO EARLY", early: true };
+  if (tap !== null && tap < s.drawAt) return { word: "FOUL!", early: true };
   const ms = reactionMs(s, seat);
   if (ms !== null) return { ms };
-  // No tap: the other player either jumped the gun (this one held) or drew first (this one was too slow).
-  return { word: s.reason === "early" ? "HELD FIRE" : "TOO SLOW", early: false };
+  // No tap: the other player fouled (this one held), nobody drew, or the other drew first (this one was too slow).
+  return { word: s.reason === "early" ? "HELD FIRE" : s.reason === "slow" ? "NO DRAW" : "TOO SLOW", early: false };
 }
+
+/** The phase, standoff by standoff: a new standoff is a new scene even when its phase name repeats. */
+const keyOf = (s: QuickDrawState): string => `${s.standoff}:${s.phase}`;
 
 function quickDraw(state: BoxState): QuickDrawState | null {
   const playing = state.match?.play;
@@ -187,15 +215,56 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   const wireLine = el("span", "qd-wire-line");
   wire.append(wireHead, wireSteps, wireLine);
 
+  // The round and the rounds won: PLAYER 1's pips, ROUND n / BEST OF 3, PLAYER 2's pips.
+  const hud = el("div", "qd-hud");
+  place(hud, g.hud);
+  /** Each seat's pips, in the order they fill: outward from the seat's tag. */
+  const pipRow = (seat: Seat): { readonly row: HTMLElement; readonly dots: readonly HTMLElement[] } => {
+    const row = el("span", `qd-hud-pips qd-hud-pips--p${seat + 1}`);
+    const dots = Array.from({ length: ROUNDS_TO_WIN }, () => el("i", "qd-hud-pip"));
+    const tag = el("span", "qd-hud-tag", `P${seat + 1}`);
+    if (seat === 0) row.append(tag, ...dots);
+    else row.append(...[...dots].reverse(), tag);
+    return { row, dots };
+  };
+  const pips = [pipRow(0), pipRow(1)] as const;
+  const hudRound = el("span", "qd-hud-round");
+  const hudBest = el("span", "qd-hud-best", "BEST OF 3");
+  const hudMiddle = el("span", "qd-hud-middle");
+  hudMiddle.append(hudRound, hudBest);
+  hud.append(pips[0].row, hudMiddle, pips[1].row);
+
+  // The call: what to do now, in big words, coloured by what it means.
+  const call = el("div", "qd-call");
+  place(call, g.call);
+  const callBig = el("span", "qd-call-big");
+  const callSmall = el("span", "qd-call-small");
+  call.append(callBig, callSmall);
+
+  // Over each head: TAP! on the draw, DON'T! on a decoy.
+  const bubbles = ([0, 1] as const).map((seat) => {
+    const bubble = el("div", `qd-bubble qd-bubble--p${seat + 1}`);
+    place(bubble, g.bubbles[seat]);
+    return bubble;
+  });
+
+  // Rays burst behind the sign's board when it turns to DRAW.
+  const rays = el("div", "qd-rays");
+  place(rays, { x: g.sign.x + g.sign.w / 2 - RAYS, y: g.sign.y + 88 - RAYS, w: RAYS * 2, h: RAYS * 2 });
+
   // A tumbleweed blows across behind the walk, once.
   const weed = el("div", "qd-weed");
   place(weed, { x: -80, y: g.scene.horizon + 18, w: 56, h: 56 });
 
   // The figures stand in front of the sign: they start back to back at its post.
-  root.append(scene.el, weed, dim, vignette, flash, flashLine, sign.el, ...figures.map((f) => f.el), ...plates, banner, wire);
+  root.append(scene.el, weed, dim, vignette, flash, flashLine, rays, sign.el, ...figures.map((f) => f.el), ...plates, call, ...bubbles, banner, wire, hud);
 
+  /** The standoff and phase on screen (`keyOf`), and its phase. */
+  let shownKey = "";
   let shown: QuickDrawPhase | null = null;
   let drawn = false;
+  /** Timers for the moments inside a phase (the count's beats, the decoys): cleared when the phase moves on. */
+  let later: ReturnType<typeof setTimeout>[] = [];
   let alive = true;
   let heart: Animation[] = [];
   let quicken: ReturnType<typeof setTimeout> | undefined;
@@ -208,7 +277,6 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   let holding = false;
   let held = "";
   let sinking: Animation | null = null;
-  let readyTimer: ReturnType<typeof setTimeout> | undefined;
   let wireTx: Tx | null = null;
   let wireSince = 0;
   let wireTicker: ReturnType<typeof setInterval> | null = null;
@@ -371,6 +439,18 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     heart = [];
   }
 
+  /** Runs `fn` when the Box's clock reaches `time` (at once if it has), unless the phase has moved on by then. */
+  function at(time: number, fn: () => void): void {
+    later.push(setTimeout(() => {
+      if (alive) fn();
+    }, Math.max(0, time - ctx.link.now())));
+  }
+
+  function clearLater(): void {
+    for (const t of later) clearTimeout(t);
+    later = [];
+  }
+
   /** Eases the light to `to`, from wherever the dimming has got to. */
   function light(to: number, ms: number): void {
     const from = Number(getComputedStyle(dim).opacity);
@@ -379,28 +459,139 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     dimming = ctx.calm ? null : dim.animate([{ opacity: from }, { opacity: to }], { duration: ms, easing: "ease-out" });
   }
 
-  function standoff(s: QuickDrawState): void {
-    drawn = false;
-    // On this screen the stakes just landed: the sign says READY for a moment before WAIT….
-    const landed = walked;
-    sign.reset();
-    if (landed) {
-      sign.say("READY");
-      readyTimer = setTimeout(() => {
-        if (alive && shown === "wait" && !drawn) sign.reset();
-      }, READY_MS);
+  /** The call strip says `big` and `small` in `tone`, with a knock when the words change. */
+  function say(tone: Tone, big: string, small: string): void {
+    const same = call.dataset["tone"] === tone && callBig.textContent === big && callSmall.textContent === small;
+    call.dataset["tone"] = tone;
+    callBig.textContent = big;
+    callSmall.textContent = small;
+    if (!call.classList.contains("is-up")) {
+      call.classList.add("is-up");
+      void play(call, [{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }], { duration: 240, easing: "ease-out" });
+    } else if (!same) {
+      void play(call, [{ transform: "scale(1)" }, { transform: "scale(1.06)", offset: 0.35 }, { transform: "scale(1)" }], { duration: 260, easing: "ease-out" });
     }
-    void endWalk().then(() => {
-      if (!alive || shown !== "wait") return;
+  }
+
+  function hideCall(): void {
+    if (!call.classList.contains("is-up")) return;
+    call.classList.remove("is-up");
+    void play(call, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "ease-in" });
+  }
+
+  /** Both bubbles show `word` in `tone` (bouncing), or go away. */
+  function bubble(tone: "draw" | "decoy" | null, word = ""): void {
+    for (const b of bubbles) {
+      for (const a of b.getAnimations()) a.cancel();
+      b.dataset["tone"] = tone ?? "";
+      b.textContent = word;
+      b.classList.toggle("is-up", tone !== null);
+      if (tone && !ctx.calm) {
+        b.animate([
+          { transform: "translateY(10px) scale(0.6)" },
+          { transform: "translateY(-6px) scale(1.12)", offset: 0.4 },
+          { transform: "none" },
+        ], { duration: 260, easing: "ease-out" });
+        if (tone === "draw") {
+          b.animate([{ transform: "none" }, { transform: "translateY(-8px) scale(1.06)" }, { transform: "none" }], { duration: 420, delay: 260, iterations: Infinity, easing: "ease-in-out" });
+        }
+      }
+    }
+  }
+
+  /** The round and each seat's rounds won; a pip just won pops. */
+  function showHud(s: QuickDrawState): void {
+    hudRound.textContent = s.phase === "done" ? "FINAL" : `ROUND ${s.round}`;
+    ([0, 1] as const).forEach((seat) => {
+      pips[seat].dots.forEach((dot, i) => {
+        const won = i < s.score[seat];
+        if (won && !dot.classList.contains("is-won") && !ctx.calm) {
+          void play(dot, [{ transform: "scale(0.2)" }, { transform: "scale(1.7)", offset: 0.5 }, { transform: "none" }], { duration: 480, easing: "ease-out" });
+        }
+        dot.classList.toggle("is-won", won);
+      });
+    });
+    if (!hud.classList.contains("is-up")) {
+      hud.classList.add("is-up");
+      void play(hud, [{ opacity: 0, transform: "translateY(-14px)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "ease-out" });
+    }
+  }
+
+  function clearPlates(): void {
+    for (const node of [...plates, banner]) for (const a of node.getAnimations()) a.cancel();
+  }
+
+  /** A round is counted in: everyone back on their marks, the sign counts 3, 2, 1, the call says get ready. */
+  function countIn(s: QuickDrawState): void {
+    drawn = false;
+    stopHeart();
+    clearPlates();
+    bubble(null);
+    for (const a of rays.getAnimations()) a.cancel();
+    sign.reset();
+    showHud(s);
+    say("count", `ROUND ${s.round}`, "GET READY · TAP YOUR BADGE ON DRAW!");
+    if (s.standoff === 1) {
+      // The first round: the walk-out (or the wait after it) ends and the two take their marks.
+      void endWalk().then(() => {
+        if (!alive || shown !== "count") return;
+        for (const f of figures) {
+          f.idle();
+          f.breathe();
+        }
+      });
+    } else {
+      // A later round: the fallen and the scorched stand up on their marks again.
       for (const f of figures) {
         f.idle();
         f.breathe();
+        if (!ctx.calm) void play(f.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
       }
-    });
-    for (const node of [...plates, banner]) for (const a of node.getAnimations()) a.cancel();
+    }
+    light(0, 500);
+    for (const n of [3, 2, 1]) {
+      const beat = s.startedAt - n * 1000;
+      if (ctx.link.now() >= beat + 1000) continue;
+      at(beat, () => {
+        if (shown !== "count") return;
+        sign.say(String(n));
+        ctx.sound.play("count", { pitch: (3 - n) / 2 });
+      });
+    }
+  }
+
+  /** The wait: WAIT… on the sign, DON'T TAP on the strip, the light dimming, the heartbeat, and any decoys. */
+  function standoff(s: QuickDrawState): void {
+    drawn = false;
+    sign.reset();
+    showHud(s);
+    say("wait", "WAIT…", "DON'T TAP YET · ONLY ON DRAW");
+    // Joined in the middle of a match (the screen reloaded): the two stand on their marks.
+    if (!walked) for (const f of figures) {
+      f.idle();
+      f.breathe();
+    }
+    clearPlates();
     stopHeart();
     dimming?.cancel();
-    const elapsed = Math.min(Math.max(ctx.link.now() - s.startedAt, 0), MAX_WAIT_MS);
+    const now = ctx.link.now();
+    for (const decoy of s.decoys) {
+      if (now >= decoy.at + DECOY_MS) continue;
+      at(decoy.at, () => {
+        if (shown !== "wait" || drawn) return;
+        sign.decoy(decoy.word);
+        say("decoy", "NOT YET!", `${decoy.word} IS NOT DRAW · DON'T TAP`);
+        bubble("decoy", "DON'T!");
+        if (!ctx.calm) void play(vignette, [{ opacity: 0.5 }, { opacity: 1, offset: 0.2 }, { opacity: 0.5 }], { duration: DECOY_MS, easing: "ease-out" });
+      });
+      at(decoy.at + DECOY_MS, () => {
+        if (shown !== "wait" || drawn) return;
+        sign.reset();
+        say("wait", "WAIT…", "DON'T TAP YET · ONLY ON DRAW");
+        bubble(null);
+      });
+    }
+    const elapsed = Math.min(Math.max(now - s.startedAt, 0), MAX_WAIT_MS);
     if (ctx.calm) {
       dimming = null;
       dim.style.opacity = String(DIM_AT_MIN);
@@ -423,18 +614,29 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     else quicken = setTimeout(quick, MIN_WAIT_MS - elapsed);
   }
 
+  /** DRAW: the sign turns to gold, the land flashes, rays burst, the strip goes green and TAP! bounces overhead. */
   async function draw(instant: boolean): Promise<void> {
     if (drawn) return;
     drawn = true;
     stopHeart();
+    clearLater();
     light(DIM_DRAWN, 140);
-    if (!instant) {
+    say("draw", "DRAW! TAP NOW!", "FIRST BADGE TO TAP WINS THE ROUND");
+    bubble("draw", "TAP!");
+    if (!instant && !ctx.calm) {
       void play(flash, [{ opacity: 0 }, { opacity: 0.85, offset: 0.12 }, { opacity: 0 }], { duration: 620, easing: "ease-out" });
       void play(flashLine, [
         { opacity: 0, transform: "scaleX(0.12)" },
         { opacity: 1, transform: "scaleX(1)", offset: 0.25 },
         { opacity: 0, transform: "scaleX(1)" },
       ], { duration: 760, easing: "ease-out" });
+      rays.animate([
+        { opacity: 0, transform: "scale(0.3) rotate(0deg)" },
+        { opacity: 1, transform: "scale(1) rotate(8deg)", offset: 0.2 },
+        { opacity: 0.75, transform: "scale(1.05) rotate(40deg)" },
+      ], { duration: 4000, easing: "ease-out", fill: "forwards" });
+    } else {
+      rays.animate([{ opacity: 0.75 }], { duration: 1, fill: "forwards" });
     }
     await sign.flip(instant);
   }
@@ -446,31 +648,52 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     if ("ms" in v) value.append(el("span", "qd-plate-ms", String(Math.round(v.ms))), el("span", "qd-plate-unit", "MS"));
     else value.append(el("span", `qd-plate-word${v.early ? " is-early" : ""}`, v.word));
     plate.replaceChildren(el("span", "qd-plate-label", `PLAYER ${seat + 1}`), value);
-    plate.classList.toggle("is-winner", s.winner === seat);
+    plate.classList.toggle("is-winner", s.took === seat);
   }
 
-  async function finish(s: QuickDrawState, instant: boolean): Promise<void> {
+  /** What the strip says once the standoff is decided. */
+  function sayDecided(s: QuickDrawState): void {
+    const foul = fouler(s);
+    const took = s.took;
+    if (foul !== null && took !== null) say("foul", "FOUL! GUN BLEW UP", `PLAYER ${foul + 1} TAPPED BEFORE DRAW · ROUND TO PLAYER ${took + 1}`);
+    else if (took !== null) say("won", `PLAYER ${took + 1} TAKES ROUND ${s.round}`, `${Math.round(reactionMs(s, took) ?? 0)} MS · FIRST TO 2 WINS`);
+    else if (s.reason === "heat") say("again", "DEAD HEAT", "SAME MILLISECOND · ROUND AGAIN");
+    else say("again", "NOBODY DREW", "ROUND AGAIN");
+  }
+
+  /** A standoff is decided: the shot or the blown-up gun, the plates, the strip, the pips; at the end, the plank. */
+  async function decided(s: QuickDrawState, instant: boolean): Promise<void> {
     stopHeart();
-    if (s.reason === "first") await draw(instant);
+    clearLater();
+    const foul = fouler(s);
+    const turned = s.reason === "first" || s.reason === "slow" || (s.reason === "heat" && (s.taps[0] ?? 0) >= s.drawAt);
+    if (turned) await draw(instant);
     else {
       light(DIM_DONE, 360);
-      if (!instant) sign.rattle();
+      // A foul says so on the sign, in red.
+      if (foul !== null) sign.decoy("FOUL");
+      else if (!instant) sign.rattle();
     }
     if (!alive) return;
+    bubble(null);
+    sayDecided(s);
+    showHud(s);
     fillPlate(0, s);
     fillPlate(1, s);
-    const w = s.winner;
-    if (w !== null) {
-      banner.classList.toggle("qd-banner--p1", w === 0);
-      banner.classList.toggle("qd-banner--p2", w === 1);
-      bannerText.textContent = `PLAYER ${w + 1} WINS`;
-    }
     if (!instant) await wait(120);
     if (!alive) return;
-    if (s.reason === "first") light(DIM_DONE, 600);
-    if (w !== null) {
-      void figures[w].win();
-      figures[other(w)].lose();
+    if (turned) light(DIM_DONE, 600);
+    if (foul !== null) {
+      void figures[foul].explode();
+      if (!instant && !ctx.calm) {
+        void play(root, [
+          { transform: "none" }, { transform: "translate(-9px, 4px)", offset: 0.15 }, { transform: "translate(8px, -5px)", offset: 0.3 },
+          { transform: "translate(-5px, 3px)", offset: 0.5 }, { transform: "translate(3px, -1px)", offset: 0.7 }, { transform: "none" },
+        ], { duration: 460, delay: 100, easing: "ease-out" });
+      }
+    } else if (s.took !== null && s.reason === "first") {
+      void figures[s.took].win();
+      figures[other(s.took)].lose();
     }
     plates.forEach((plate, i) => {
       void play(plate, [
@@ -478,21 +701,41 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
         { opacity: 1, transform: "none" },
       ], { duration: 420, delay: 260 + i * 90, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "forwards" });
     });
-    if (w !== null) {
-      void play(banner, [
-        { opacity: 0, transform: "translateY(-56px) rotate(-5deg)" },
-        { opacity: 1, transform: "translateY(4px) rotate(0.8deg)", offset: 0.7 },
-        { opacity: 1, transform: "none" },
-      ], { duration: 560, delay: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" });
-    }
+    if (s.phase !== "done") return;
+    // The match is over: the plank names the winner over the strip.
+    const w = s.winner;
+    banner.classList.toggle("qd-banner--p1", w === 0);
+    banner.classList.toggle("qd-banner--p2", w === 1);
+    banner.classList.toggle("qd-banner--none", w === null);
+    bannerText.textContent = w === null ? `NO WINNER ${s.score[0]}–${s.score[1]}` : `PLAYER ${w + 1} WINS ${s.score[w]}–${s.score[other(w)]}`;
+    if (!instant) await wait(1100);
+    if (!alive) return;
+    hideCall();
+    void play(banner, [
+      { opacity: 0, transform: "translateY(-56px) rotate(-5deg)" },
+      { opacity: 1, transform: "translateY(4px) rotate(0.8deg)", offset: 0.7 },
+      { opacity: 1, transform: "none" },
+    ], { duration: 560, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" });
   }
 
   function show(s: QuickDrawState, instant: boolean): void {
-    if (s.phase === shown) return;
+    const key = keyOf(s);
+    if (key === shownKey) return;
+    shownKey = key;
     shown = s.phase;
-    if (s.phase === "wait") standoff(s);
-    else if (s.phase === "draw") void draw(instant);
-    else void finish(s, instant);
+    clearLater();
+    switch (s.phase) {
+      case "count":
+        return countIn(s);
+      case "wait":
+        return standoff(s);
+      case "draw":
+        void draw(instant);
+        return;
+      case "round":
+      case "done":
+        void decided(s, instant);
+    }
   }
 
   return {
@@ -511,6 +754,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
       if (!s) return;
       if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
       if (event.type === "cue" && event.cue === "draw" && shown === "wait") {
+        shownKey = `${s.standoff}:draw`;
         shown = "draw";
         void draw(false);
       }
@@ -520,7 +764,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     dispose() {
       alive = false;
       walking = false;
-      clearTimeout(readyTimer);
+      clearLater();
       if (wireTicker !== null) clearInterval(wireTicker);
       stopHeart();
       for (const a of root.getAnimations({ subtree: true })) a.cancel();

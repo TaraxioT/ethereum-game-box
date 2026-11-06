@@ -48,8 +48,9 @@ export function botIntent(state: BoxState, now: number, bot: Badge): BotIntent |
       // The demo's bot plays the team games only (the demo runs no built games).
       if (play.game === "built") return null;
       if (play.game === "quick-draw") {
-        if (play.state.phase === "done" || play.state.taps[BOT_SEAT] !== null) return null;
-        return { kind: "draw", key: `draw:${match.id}`, untilDraw: play.state.drawAt - now };
+        const standing = play.state.phase === "wait" || play.state.phase === "draw";
+        if (!standing || play.state.taps[BOT_SEAT] !== null) return null;
+        return { kind: "draw", key: `draw:${match.id}:${play.state.standoff}`, untilDraw: play.state.drawAt - now };
       }
       const duel = play.state;
       if (duel.phase !== "pick" || duel.played[BOT_SEAT] !== null) return null;
