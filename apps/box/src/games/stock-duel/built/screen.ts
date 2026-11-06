@@ -42,7 +42,7 @@ const STYLE = `
 .sd-stat { font-size: clamp(14px, 3vmin, 26px); }
 .sd-duel { display: flex; gap: 3vmin; }
 .sd-duel .sd-card { opacity: 1; min-width: 26vmin; grid-template-rows: auto auto auto; }
-.sd-duel .sd-card em { grid-column: 2; font: 700 clamp(14px, 3.2vmin, 28px) var(--mono); font-style: normal; color: var(--lcd-amber); }
+.sd-duel .sd-card em { grid-column: 2; font: 700 clamp(14px, 3.2vmin, 28px) var(--mono); font-style: normal; color: #ffb547; }
 .sd-duel .sd-card.won::after { opacity: 1; }
 .sd-duel .sd-card.p1 { --seat: var(--p1); } .sd-duel .sd-card.p2 { --seat: var(--p2); }
 .sd-call { font-size: clamp(13px, 2.6vmin, 22px); }

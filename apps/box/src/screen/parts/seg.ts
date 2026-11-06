@@ -1,119 +1,47 @@
-// <egb-seg>: a seven-segment LCD readout. Every cell shows its unlit ghost segments under the lit ones, as a real LCD
-// does; a point or comma lights the decimal mark of the cell before it. When the value changes, each changed digit
-// rolls in turn, left to right, 70 ms apart (the old digit rolls up and out, the new one up and in).
+// <egb-seg>: a number readout in light: mono digits glowing over a row of unlit ghost cells (an `8` in each, at 10 %),
+// so a short value still shows the readout's width. When the value changes its changed characters flicker in, left to
+// right (`digits.ts`). The Build screen's clock, and a built game's scores, counts and timers.
 //
-// Size: `font-size` is the cell height. Attributes: `tone` (amber, the default, or mint), `digits` (the fewest cells
-// it shows; the value is right-aligned and blank cells stay ghosts). Property: `value` (the text: digits, space, '-',
-// '.' and ',').
-import { motion, pick, shadow, sheet } from "./part.ts";
-
-type Segment = "a" | "b" | "c" | "d" | "e" | "f" | "g";
-
-/** One cell on a 16.5 × 24 grid: segment thickness, the gap at each joint, and the digit's frame. */
-const T = 2.1;
-const H = T / 2;
-const GAP = 0.45;
-const LEFT = 2.2;
-const RIGHT = 11.2;
-const TOP = 2;
-const MID = 11;
-const BOTTOM = 20;
-
-const n = (x: number): string => String(Math.round(x * 100) / 100);
-const across = (y: number, x0: number, x1: number): string =>
-  `${n(x0)},${n(y)} ${n(x0 + H)},${n(y - H)} ${n(x1 - H)},${n(y - H)} ${n(x1)},${n(y)} ${n(x1 - H)},${n(y + H)} ${n(x0 + H)},${n(y + H)}`;
-const down = (x: number, y0: number, y1: number): string =>
-  `${n(x)},${n(y0)} ${n(x + H)},${n(y0 + H)} ${n(x + H)},${n(y1 - H)} ${n(x)},${n(y1)} ${n(x - H)},${n(y1 - H)} ${n(x - H)},${n(y0 + H)}`;
-
-const SEGMENTS: Record<Segment, string> = {
-  a: across(TOP, LEFT + GAP, RIGHT - GAP),
-  b: down(RIGHT, TOP + GAP, MID - GAP),
-  c: down(RIGHT, MID + GAP, BOTTOM - GAP),
-  d: across(BOTTOM, LEFT + GAP, RIGHT - GAP),
-  e: down(LEFT, MID + GAP, BOTTOM - GAP),
-  f: down(LEFT, TOP + GAP, MID - GAP),
-  g: across(MID, LEFT + GAP, RIGHT - GAP),
-};
-
-const GLYPHS: Record<string, string> = {
-  "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
-  "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg", "-": "g", " ": "",
-};
-
-const DOT = `<rect x="13" y="18.9" width="2.2" height="2.2" rx=".5"/>`;
-const TAIL = `<path d="M14.6 21.1 13.5 23.4h-1.1l.9-2.3z"/>`;
-
-type Mark = "" | "." | ",";
-
-interface Cell {
-  readonly glyph: string;
-  readonly mark: Mark;
-}
-
-const polys = (segments: string): string =>
-  [...segments].map((s) => `<polygon points="${SEGMENTS[s as Segment]}"/>`).join("");
-
-/** Slanted a little, like a real LCD: the top leans right. */
-const cellSvg = (cls: string, body: string): string =>
-  `<svg class="${cls}" viewBox="0 0 16.5 24" aria-hidden="true"><g transform="translate(2.1 0) skewX(-6)">${body}</g></svg>`;
-
-const GHOST = cellSvg("ghost", polys("abcdefg") + DOT);
-
-function litSvg(cell: Cell): string {
-  const shape = polys(GLYPHS[cell.glyph] ?? "") + (cell.mark ? DOT : "") + (cell.mark === "," ? TAIL : "");
-  return cellSvg("on", `<g class="halo">${shape}</g><g class="core">${shape}</g>`);
-}
-
-function cellsOf(text: string): Cell[] {
-  const cells: Cell[] = [];
-  for (const ch of text) {
-    if (ch === "." || ch === ",") {
-      const last = cells[cells.length - 1];
-      if (last && !last.mark) cells[cells.length - 1] = { glyph: last.glyph, mark: ch };
-      else cells.push({ glyph: " ", mark: ch });
-    } else cells.push({ glyph: ch in GLYPHS ? ch : " ", mark: "" });
-  }
-  return cells;
-}
-
-const STEP_MS = 70;
+// Size: `font-size` is the digits' height. Attributes: `tone` (`sys`, the default: the system's light; `p1` or `p2`, a
+// seat's; `amber` or `mint`, warm or green light for a game's own look), `digits` (the fewest cells; the value is
+// right-aligned), `value` (the text: digits, space, `-`, `.`, `,` and `:`; also a property).
+import { setDigits } from "./digits.ts";
+import { pick, shadow, sheet } from "./part.ts";
 
 const styles = sheet(`
-:host { display: inline-flex; vertical-align: middle; height: 1em; font-size: 24px; line-height: 1; color: var(--lcd-amber); }
-:host([tone="mint"]) { color: var(--lcd-mint); }
-.row { display: flex; height: 100%; }
-.cell { position: relative; width: .69em; height: 1em; overflow: hidden; margin-right: -.04em; }
-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.ghost { fill: currentColor; opacity: .1; }
-.lit { position: absolute; inset: 0; }
-.halo { fill: currentColor; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; opacity: .3; }
-.core { fill: color-mix(in srgb, currentColor 76%, #fff); }
+:host { --ink: var(--sys); --bloom: var(--sys-bloom); display: inline-block; position: relative; vertical-align: middle; font-size: 32px; line-height: 1; }
+:host([tone="p1"]) { --ink: var(--p1); --bloom: var(--p1-bloom); }
+:host([tone="p2"]) { --ink: var(--p2); --bloom: var(--p2-bloom); }
+:host([tone="amber"]) { --ink: #ffb547; --bloom: rgb(255 181 71 / 0.45); }
+:host([tone="mint"]) { --ink: #86eec4; --bloom: rgb(134 238 196 / 0.45); }
+.row { display: block; font: 700 1em / 1 var(--mono); font-variant-numeric: tabular-nums; white-space: pre; text-align: right; }
+.ghost { color: var(--ink); opacity: 0.1; }
+/* The digits lie over the ghosts, right-aligned with them. They keep a layer of their own: a changed digit flickers
+   in, and a part lifted onto a layer only while it animates makes the Pi's GPU raster round it as it starts and ends. */
+.lit { position: absolute; inset: 0; color: var(--ink); text-shadow: 0 0 2px rgb(255 255 255 / 0.6), 0 0 8px var(--bloom); will-change: transform; }
 `);
 
-interface Slot {
-  readonly el: HTMLElement;
-  lit: HTMLElement;
-  key: string;
-}
-
 export class EgbSeg extends HTMLElement {
-  static readonly observedAttributes = ["digits"];
-  readonly #row: HTMLElement;
-  #slots: Slot[] = [];
+  static readonly observedAttributes = ["digits", "value"];
+  readonly #ghost: HTMLElement;
+  readonly #lit: HTMLElement;
   #text = "";
 
   constructor() {
     super();
-    this.#row = pick(shadow(this, styles, `<span class="row"></span>`), ".row");
+    const root = shadow(this, styles, `<span class="row ghost" aria-hidden="true"></span><span class="row lit" aria-hidden="true"></span>`);
+    this.#ghost = pick(root, ".ghost");
+    this.#lit = pick(root, ".lit");
   }
 
   connectedCallback(): void {
     if (!this.hasAttribute("role")) this.setAttribute("role", "img");
-    this.#render(false);
+    this.#draw(false);
   }
 
-  attributeChangedCallback(): void {
-    this.#render(false);
+  attributeChangedCallback(name: string, _old: string | null, value: string | null): void {
+    if (name === "value") this.value = value ?? "";
+    else this.#draw(false);
   }
 
   get value(): string {
@@ -124,64 +52,12 @@ export class EgbSeg extends HTMLElement {
     if (text === this.#text) return;
     this.#text = text;
     this.setAttribute("aria-label", text.trim());
-    this.#render(true);
+    this.#draw(true);
   }
 
-  #render(roll: boolean): void {
-    const cells = cellsOf(this.#text);
-    const want = Math.max(Number(this.getAttribute("digits")) || 0, cells.length);
-    while (cells.length < want) cells.unshift({ glyph: " ", mark: "" });
-    if (want !== this.#slots.length) {
-      this.#slots = cells.map((cell) => this.#cell(cell));
-      this.#row.replaceChildren(...this.#slots.map((s) => s.el));
-      return;
-    }
-    let order = 0;
-    cells.forEach((cell, i) => {
-      const slot = this.#slots[i];
-      const key = cell.glyph + cell.mark;
-      if (!slot || slot.key === key) return;
-      slot.key = key;
-      this.#swap(slot, cell, roll ? order++ * STEP_MS : null);
-    });
-  }
-
-  #cell(cell: Cell): Slot {
-    const el = document.createElement("span");
-    el.className = "cell";
-    el.innerHTML = GHOST;
-    const lit = this.#lit(cell);
-    el.append(lit);
-    return { el, lit, key: cell.glyph + cell.mark };
-  }
-
-  #lit(cell: Cell): HTMLElement {
-    const lit = document.createElement("span");
-    lit.className = "lit";
-    lit.innerHTML = litSvg(cell);
-    return lit;
-  }
-
-  /** Puts the cell's new digit in; with a delay, the old one rolls out and the new one rolls in after it. */
-  #swap(slot: Slot, cell: Cell, delay: number | null): void {
-    const old = slot.lit;
-    const fresh = this.#lit(cell);
-    slot.lit = fresh;
-    slot.el.append(fresh);
-    for (const a of old.getAnimations()) a.finish();
-    const out =
-      delay === null
-        ? null
-        : motion(old, [{ transform: "none", opacity: 1 }, { transform: "translateY(-46%)", opacity: 0 }], {
-            duration: 170, delay, easing: "cubic-bezier(0.5, 0, 0.75, 0)", fill: "forwards",
-          });
-    if (!out || delay === null) {
-      old.remove();
-      return;
-    }
-    void out.finished.then(() => old.remove(), () => old.remove());
-    motion(fresh, [{ transform: "translateY(46%)", opacity: 0 }, { transform: "none", opacity: 1 }], {
-      duration: 210, delay: delay + 60, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "backwards",
-    });
+  #draw(animate: boolean): void {
+    const cells = Math.max(Number(this.getAttribute("digits")) || 0, this.#text.length);
+    this.#ghost.textContent = "8".repeat(cells);
+    setDigits(this.#lit, this.#text, animate);
   }
 }

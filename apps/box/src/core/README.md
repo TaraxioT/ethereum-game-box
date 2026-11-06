@@ -21,8 +21,8 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 ## Taps
 
 A tap comes in as a `TapEvent` (`ports.ts`): a `touch`, then exactly one `done` or `fail`, sharing an id, with its
-source: `station` (the taps library, which numbers them) or `injected` (the test page, the demo's desk and bot, which
-take ids from `core.nextTap()`). Only station taps are evidence for a counted result.
+source: `station` (the taps library, which numbers them) or `injected` (the test page, Demo mode's screen taps and
+bot, which take ids from `core.nextTap()`). Only station taps are evidence for a counted result.
 
 - `core.plan(seat)` says what a tap at that seat should ask of the badge now: `identify` (who), `random` (a verified
   roll, only when the game uses it: Stock Duel's pick) or `none` (the tap means nothing now). The taps library asks
@@ -96,8 +96,8 @@ whose effect throws still goes into its block, so it can't hold up every transac
 | `ledger.ts` | The simulated EGB ledger (faucet, escrow kept per badge, settle, refund, every stake back). Pure. | `faucet`, `canLock`, `lock`, `settle`, `refund`, `returnAll`, `escrowTotal`, `memoryLedgerStore()` |
 | `txs.ts` | Simulated transactions and their timing on the core's clock: signed, sent 0.4 s later, in the next block, paid 0.9 s after it. A block takes every transaction due even when one's effect throws (the first throw is rethrown after). | `createTxBook(hooks, clock)` |
 | `bot.ts` | The demo's bot on Player 2: a pure planner (what it waits to tap, and how long a person would take) and a scheduler on the core's clock. | `botIntent`, `botDelay`, `createBot` |
-| `badges.ts` | The demo desk's badges and the bot's; how a station or port prints a badge; when two are the same. | `DESK_BADGES`, `BOT_BADGE`, `badgeLabel`, `sameBadge` |
-| `instant-tap.ts` | A whole injected tap at once (touch, then done, with the roll only if the plan asks): the desk, the bot and the server's injected taps. | `instantTap(core, seat, badge, roll)` |
+| `badges.ts` | The badges Demo mode taps with and the bot's; how a station or port prints a badge; when two are the same. | `DEMO_BADGES`, `BOT_BADGE`, `badgeLabel`, `sameBadge` |
+| `instant-tap.ts` | A whole injected tap at once (touch, then done, with the roll only if the plan asks): Demo mode's screen taps, the bot and the server's injected taps. | `instantTap(core, seat, badge, roll)` |
 | `timers.ts` | Timers on the core's clock that one call cancels together. | `createTimers(clock)` |
 | `fake-clock.ts` | A clock moved by hand, for tests: timers fire in due order, each at its own time. | `createFakeClock(start)` |
 | `system-clock.ts` | The real clocks, for the hosts. `monotonicClock()` (the server, the taps, the bench): the wall time at start, then monotonic, so an NTP step never moves touch times against the game's timers. `systemClock()` (SimLink): the wall clock. Left out of the core's own check, and never imported by the core. | `monotonicClock()`, `systemClock()` |

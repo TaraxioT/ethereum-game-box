@@ -1,37 +1,43 @@
-// <egb-lcd>: a text LCD in a bevelled gunmetal frame (the clock's and the transaction strip's frame and glass): the
-// agent's words while a game builds, the Designer's status and captions. The newest line sits at the foot of the glass;
-// a new one slides the others up and fades in, and the oldest scroll off under the bezel. Lines wrap.
+// <egb-lcd>: a log of light: a chamfered panel of glass holding lines of mono text in the system's light, the newest at
+// its foot, bright and glowing, the older ones dimmer above it; the oldest scroll off under a dark band at its top.
+// The agent's words while a game builds, the Designer's status and captions. A new line steps the others up and fades
+// in. Lines wrap.
 //
-// Size: it fills its box; `font-size` sets the text. Attributes: `tone` (mint, the default, or amber), `caret` (a
-// block cursor blinking after the last line: the machine is working). API: `push(text, mark?)` adds a line (`bad`
-// in red, `ok` in bright mint), `set(lines)` replaces them all without moving, `clear()`.
+// Size: it fills its box; `font-size` sets the text. Attribute: `caret` (a block cursor blinking after the last
+// line: the machine is working). API: `push(text, mark?)` adds a line (`bad` in the alert red, `ok` hot white),
+// `set(lines)` replaces them all without moving, `clear()`.
+import { chamferClip, fitFrame } from "./frame.ts";
 import { motion, pick, shadow, sheet } from "./part.ts";
 
-/** Lines kept on the glass; more than ever fit, so the oldest leave under the bezel rather than vanish. */
+/** Lines kept; more than ever fit, so the oldest leave under the top band rather than vanish. */
 const KEEP = 24;
+const CHAMFER = 12;
 
 export type LcdMark = "bad" | "ok";
 
 const styles = sheet(`
 :host { display: block; position: relative; width: 380px; height: 120px; font-size: 16px; }
-.lcd-frame { border-radius: 12px; }
-.lcd-glass {
-  --lcd-glass: var(--lcd-mint-bg); --ink: var(--lcd-mint); --glow: rgb(143 240 216 / 0.45);
-  inset: 7px; border-radius: 7px; padding: .5em .8em;
+.box { position: absolute; inset: 0; }
+.frame-fill { position: absolute; inset: 0; background: var(--glass); clip-path: ${chamferClip(CHAMFER)}; }
+.frame-line { opacity: 0.45; }
+.frame-bloom { opacity: 0; }
+.glass {
+  position: absolute; inset: 8px 10px; overflow: hidden; padding: .3em .5em;
   display: flex; flex-direction: column; justify-content: flex-end;
 }
-:host([tone="amber"]) .lcd-glass { --lcd-glass: var(--lcd-amber-bg); --ink: var(--lcd-amber); --glow: rgb(255 181 71 / 0.45); }
-.lines { display: flex; flex-direction: column; gap: .3em; font: 600 1em / 1.3 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
-.line { opacity: .5; }
-.line:last-of-type { opacity: 1; text-shadow: 0 0 6px var(--glow); }
-.line.bad { color: var(--lose); opacity: 1; }
-.line.ok { color: #d9fff3; opacity: 1; }
-/* The cursor: a block after the last line, blinking by opacity alone. */
-.caret { display: none; width: .6em; height: 1.05em; margin-top: .2em; background: var(--ink); box-shadow: 0 0 6px var(--glow); }
+/* The lines step up as one block: it keeps its layer, so a new line doesn't make the Pi's GPU raster the screen
+   round the log as the step starts and ends. */
+.lines { display: flex; flex-direction: column; gap: .3em; font: 600 1em / 1.3 var(--mono); color: var(--sys); overflow-wrap: anywhere; will-change: transform; }
+.line { opacity: .45; }
+.line:last-of-type { opacity: 1; color: var(--fg); text-shadow: 0 0 2px rgb(255 255 255 / 0.6), 0 0 8px var(--sys-bloom); }
+.line.bad { color: var(--alert); opacity: 1; text-shadow: 0 0 8px rgb(255 45 61 / 0.4); }
+.line.ok { color: var(--sys-hot); opacity: 1; text-shadow: var(--glow-text); }
+/* The cursor: a block of light after the last line, blinking by opacity alone on a layer of its own. */
+.caret { display: none; width: .6em; height: 1.05em; margin-top: .2em; background: var(--sys-hot); box-shadow: 0 0 6px var(--sys-bloom); will-change: opacity; }
 :host([caret]) .caret { display: block; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-/* The bezel's shadow falls on the glass's top: old lines go under it. */
-.shade { position: absolute; inset: 0 0 auto; height: 1.6em; background: linear-gradient(180deg, var(--lcd-glass), transparent); pointer-events: none; }
+/* Old lines go under a dark band along the top. */
+.shade { position: absolute; inset: 0 0 auto; height: 1.6em; background: linear-gradient(180deg, rgb(3 10 18), transparent); pointer-events: none; }
 `);
 
 export class EgbLcd extends HTMLElement {
@@ -42,9 +48,10 @@ export class EgbLcd extends HTMLElement {
     const root = shadow(
       this,
       styles,
-      `<div class="lcd-frame"></div><div class="lcd-glass" role="log" aria-live="polite"><div class="lines"></div><i class="caret"></i><i class="shade"></i></div>`,
+      `<div class="box"><i class="frame-fill"></i></div><div class="glass" role="log" aria-live="polite"><div class="lines"></div><i class="caret"></i><i class="shade"></i></div>`,
     );
     this.#lines = pick(root, ".lines");
+    fitFrame(pick(root, ".box"), { chamfer: CHAMFER, ticks: true });
   }
 
   push(text: string, mark?: LcdMark): void {

@@ -30,8 +30,7 @@ export function frameView(source: FrameSource): ViewFactory {
     const showFault = (why: string) => {
       console.warn(`frame: ${why}`);
       if (fault) return;
-      fault = el("egb-plate", "frame-fault", "SCREEN FAULT · PLAY ON");
-      fault.setAttribute("variant", "metal");
+      fault = el("egb-panel", "frame-fault", "SCREEN FAULT · PLAY ON");
       root.append(fault);
     };
 

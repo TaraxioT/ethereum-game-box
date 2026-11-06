@@ -1,9 +1,9 @@
-// The router: mounts the view the Box's phase calls for and moves between views in depth — the old one sinks back,
-// the new one rises toward the glass. State changes reach the mounted view; the new view starts from the current
+// The router: mounts the view the Box's phase calls for and moves between views by derez and rez: the old view
+// folds into a line of light and goes out, the new one opens out of a line. State changes reach the mounted view; the new view starts from the current
 // state, so nothing that happened during a move is lost.
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Pose, View, ViewContext, ViewFactory } from "../views/view.ts";
-import { play } from "./dom.ts";
+import { derez, rez } from "./rez.ts";
 
 export interface Route {
   /** A key that changes when a different view is needed (phase, plus the game while playing). */
@@ -28,11 +28,9 @@ export function createRouter(ctx: ViewContext, host: HTMLElement, routes: Routes
     const old = view;
     view = null;
     if (old) {
-      // Its timers and listeners stop at once; only its picture sinks away.
+      // Its timers and listeners stop at once; only its picture derezzes.
       old.dispose?.();
-      await play(old.el, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.94)" }], {
-        duration: 240, easing: "cubic-bezier(0.5, 0, 0.75, 0)", fill: "forwards",
-      });
+      await derez(old.el);
       old.el.remove();
     }
     // A newer move, or a rebuilt stage, has taken over while this one waited.
@@ -44,9 +42,7 @@ export function createRouter(ctx: ViewContext, host: HTMLElement, routes: Routes
     next.el.classList.add("view");
     host.append(next.el);
     next.update(ctx.link.state(), { type: "init" });
-    void play(next.el, [{ opacity: 0, transform: "scale(1.05)" }, { opacity: 1, transform: "none" }], {
-      duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
-    });
+    void rez(next.el);
   }
 
   return {

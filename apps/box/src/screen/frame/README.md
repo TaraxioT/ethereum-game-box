@@ -10,7 +10,7 @@ Vite passes `/games`, `/parts…` and `/frame.js` through to the Box server.
 `frameView(source)` is the `ViewFactory`: the iframe fills the stage below
 the Box's overlay (130 px landscape, 150 px portrait). When the frame says `ready` it gets `init` with the state as it
 is then; after that, an `update` for each moment (the match ending, an accepted tap, a new rules state) and nothing for
-the Box's own business. A frame that errors, or isn't ready within 8 s, gets a quiet `SCREEN FAULT · PLAY ON` plate:
+the Box's own business. A frame that errors, or isn't ready within 8 s, gets a quiet `SCREEN FAULT · PLAY ON` panel:
 the rules run on the server and the stations show the game, so the match goes on.
 
 **The channel.** Out: `postMessage(message, "*")`, since no origin can name an opaque frame. In: only from that
@@ -18,7 +18,7 @@ frame's window, only from the opaque origin `null`, only `{ t: "ready" }` or `{ 
 `MAX_MESSAGE`, 300 characters, from `@egb/sdk`). Only while the frame shows its own page: `allow-scripts` lets a
 frame navigate itself, and the page it lands on (the kiosk's `frame-src 'self'` keeps it on the Box's own) is out
 from under the frame's CSP. The iframe's first `load` is its page; a second closes the channel for good (nothing
-more goes out or comes in), and the view removes the frame and shows the fault plate.
+more goes out or comes in), and the view removes the frame and shows the fault panel.
 
 **The frame's side** (`/frame.js`, built by the server): loads the game's `screen.js` beside the page, posts `ready`,
 mounts the `GameScreen` on `init` (again on a second `init`), hands it each `update`, and reports errors from mount,
@@ -32,9 +32,9 @@ and posts only to it.
 | `channel.ts` | The kiosk's end of the channel and the iframe's attributes. | `openFrameChannel(host, frame, { message, left })`, `parseFromFrame`, `frameAttributes(id, title)` |
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
-| `parts.ts` | `/parts.js`: defines the parts a built screen may use by tag. | entry |
-| `parts.css` | `/parts.css`: the tokens, the three faces, the frame's one element. | entry |
-| `frame.css` | The view's iframe and fault plate. | |
+| `parts.ts` | `/parts.js`: defines the parts a built screen may use by tag (`<egb-key>`, `<egb-fact>`, `<egb-seg>`, and `<egb-plate>`, a panel lit unless `metal`), in the Grid look; games written before the Grid keep working. | entry |
+| `parts.css` | `/parts.css`: the Grid tokens, the faces, the frame's one element. | entry |
+| `frame.css` | The view's iframe and fault panel. | |
 
 Tests: `frame.test.ts` (the sandbox attribute, the channel dropping anything but ready and error and anything from
 another window or a non-opaque origin, closing for good on the frame's second load, the runtime's mount, updates and capped errors, the feed's events).

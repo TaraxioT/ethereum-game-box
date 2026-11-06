@@ -1,4 +1,4 @@
-// The badges on the demo desk and the bot's (names invented; addresses fake but fixed, derived from the name), how a
+// The badges Demo mode taps with and the bot's (names invented; addresses fake but fixed, derived from the name), how a
 // station or port prints any badge, and when two are the same badge.
 import type { Badge } from "./types.ts";
 import { hash32 } from "@egb/sdk";
@@ -14,8 +14,8 @@ function badge(label: string): Badge {
   return { name, address: fakeAddress(name) };
 }
 
-/** The player badges lying on the desk. */
-export const DESK_BADGES: readonly Badge[] = [badge("nova"), badge("kite"), badge("juno")];
+/** The badges Demo mode taps with: an empty seat takes the next one that isn't seated. */
+export const DEMO_BADGES: readonly Badge[] = [badge("nova"), badge("kite"), badge("juno")];
 
 export const BOT_BADGE: Badge = badge("bot");
 

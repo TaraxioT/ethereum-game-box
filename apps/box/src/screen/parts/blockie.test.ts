@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockie, blockieLedSvg, blockieSvg } from "./blockie.ts";
+import { blockie, blockieLedSvg } from "./blockie.ts";
 
 const ADDRESS = "0x8ba1f109551bd432803012645ac136ddd64dba72";
 
@@ -15,7 +15,7 @@ describe("blockie", () => {
   it("is deterministic and ignores the address's case", () => {
     expect(blockie(ADDRESS)).toEqual(blockie(ADDRESS));
     expect(blockie(ADDRESS.toUpperCase().replace("0X", "0x"))).toEqual(blockie(ADDRESS));
-    expect(blockieSvg(ADDRESS, 48)).toBe(blockieSvg(ADDRESS, 48));
+    expect(blockieLedSvg(ADDRESS, 40)).toBe(blockieLedSvg(ADDRESS, 40));
   });
 
   it("mirrors every row and uses only the three colours", () => {
@@ -34,11 +34,9 @@ describe("blockie", () => {
     expect(blockie("0x0000000000000000000000000000000000000001").cells).not.toEqual(blockie("0x0000000000000000000000000000000000000002").cells);
   });
 
-  it("renders as an SVG of the asked size", () => {
-    const svg = blockieSvg(ADDRESS, 48);
-    expect(svg).toMatch(/^<svg [^>]*width="48" height="48" viewBox="0 0 8 8"/);
-    expect(svg).toContain(`fill="${blockie(ADDRESS).bg}"`);
+  it("renders as an LED grid of the asked size, one LED per cell", () => {
     const leds = blockieLedSvg(ADDRESS, 40);
+    expect(leds).toMatch(/^<svg [^>]*width="40" height="40" viewBox="0 0 8 8"/);
     expect(leds.match(/<rect /g)).toHaveLength(64);
     expect(leds.match(/class="c2"/g)).toHaveLength(blockie(ADDRESS).cells.filter((c) => c === 2).length);
   });

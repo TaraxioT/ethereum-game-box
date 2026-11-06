@@ -1,14 +1,15 @@
 // The game builder's view, mounted while the Box is in its `build` phase: the Designer, or the Build screen while a
-// build runs and once it has ended, moving between them in depth as the router moves between views. It holds the
+// build runs and once it has ended, moving between them by derez and rez as the router moves between views. It holds the
 // builder's event stream: `hello` says where things stand (and comes again after a reconnect), `designer` events
 // redraw the Designer, `forge` events drive the Build screen, and a newly queued build takes the screen.
 //
-// The Designer sits on a page round the sunken core (pose `page`); the Build screen on the whole lit board (pose
+// The Designer sits on a page round the dimmed core (pose `page`); the Build screen on the whole lit Grid (pose
 // `home`), where its packets run. While the player works, and while a build streams in, it tells the Box someone is
 // still here (`build`), so the builder only times out back to Home when left alone.
 import type { DesignerState, ForgeEvent, ForgeJob } from "../../builder/types.ts";
 import { BUILDER, type BuilderStatus, type HelloEvent } from "../../server/builder-wire.ts";
-import { el, play } from "../shell/dom.ts";
+import { el } from "../shell/dom.ts";
+import { derez, rez } from "../shell/rez.ts";
 import { createBuildScreen, type BuildScreen } from "./build.ts";
 import { getJson, openBuilderStream, postJson } from "./builder-link.ts";
 import { createDesignerScreen, type DesignerScreen } from "./designer.ts";
@@ -36,13 +37,13 @@ export function builderView(ctx: ViewContext): View {
     link.send({ type: "build" });
   }
 
-  /** The old screen sinks, the new one rises toward the glass (the router's move). */
+  /** The old screen derezzes, the new one rezzes in (the router's move). */
   function swap(next: HTMLElement, pose: "page" | "home"): void {
     const old = root.firstElementChild as HTMLElement | null;
     machine.pose(pose);
     root.append(next);
-    void play(next, [{ opacity: 0, transform: "scale(1.04)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
-    if (old) void play(old, [{ opacity: 1 }, { opacity: 0, transform: "scale(0.96)" }], { duration: 220, fill: "forwards" }).then(() => old.remove());
+    void rez(next);
+    if (old) void derez(old).then(() => old.remove());
   }
 
   function showDesigner(): void {

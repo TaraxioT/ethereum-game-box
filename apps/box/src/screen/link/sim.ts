@@ -1,6 +1,7 @@
 // SimLink: the whole Box in the browser, for the demo. A thin host round the core: the browser's clock, a ledger
-// kept in memory, the team games, stations that are drawn on the desk (from BoxState, so their port does nothing),
-// and the bot on Player 2's seat. The desk taps with a whole tap at once (touch, then done with a fresh roll).
+// kept in memory, the team games, stations that aren't there (the screen stands in for them, so their port does
+// nothing), and the bot on Player 2's seat. The screen taps with a whole tap at once (touch, then done with a fresh
+// roll).
 import type { Seat } from "@egb/sdk";
 import { hash32, mulberry32 } from "@egb/sdk";
 import type { CorePorts } from "../../core/ports.ts";
@@ -8,7 +9,7 @@ import type { Badge } from "../../core/types.ts";
 import type { SimLink } from "./control.ts";
 import { createCore } from "../../core/core.ts";
 import { createBot } from "../../core/bot.ts";
-import { BOT_BADGE, DESK_BADGES, sameBadge } from "../../core/badges.ts";
+import { BOT_BADGE, DEMO_BADGES, sameBadge } from "../../core/badges.ts";
 import { teamLibrary } from "../../core/catalogue.ts";
 import { memoryLedgerStore } from "../../core/ledger.ts";
 import { instantTap } from "../../core/instant-tap.ts";
@@ -49,15 +50,15 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     return badge === null || sameBadge(badge, BOT_BADGE);
   }
 
-  function deskBadgeFor(seat: Seat): Badge | null {
+  function demoBadgeFor(seat: Seat): Badge | null {
     const seats = core.state().seats;
     const seated = seats[seat].badge;
     if (seated) return seated;
-    return DESK_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
+    return DEMO_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
   }
 
   return {
-    badges: [...DESK_BADGES, BOT_BADGE],
+    badges: [...DEMO_BADGES, BOT_BADGE],
     botBadge: BOT_BADGE,
     state: core.state,
     now: core.now,
@@ -65,7 +66,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     send: core.send,
     tap(seat, badge) {
       if (botHolds(seat)) return;
-      const chosen = badge ?? deskBadgeFor(seat);
+      const chosen = badge ?? demoBadgeFor(seat);
       if (chosen) tapNow(seat, chosen);
     },
     opponent: core.opponent,

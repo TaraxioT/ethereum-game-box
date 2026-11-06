@@ -1,18 +1,20 @@
-// The Designer: a new game's brief, one question at a time, on a page round the sunken core. The step and its question
-// on the left with the step's brass keys under it; the brief so far as engraved plates on the right; under the core a
-// status LCD (the model reading an answer, what was heard, a refusal in the Box's words); along the bottom HOME, BACK,
-// a big typed-answer field with SEND, and the push-to-talk key. Every answer goes to the Box (server/builder-api.ts),
+// The Designer: a new game's brief, one question at a time, on a page round the dimmed core. The step and its question
+// on the left with the step's keys under it; the brief so far as panels of light on the right; under the core a status
+// log (the model reading an answer, what was heard, a refusal in the Box's words); along the bottom HOME, BACK, a big
+// typed-answer field with SEND, and the push-to-talk key. Every answer goes to the Box (server/builder-api.ts),
 // which answers with the design as it now stands; the same states also stream in, so a second screen keeps up.
 //
-// Moments: a new question's keys rise in one after another; a field that fills presses its plate in and runs a
-// packet up its trace into the core, which swells; while the model reads, the LCD's cursor blinks and a packet runs
-// into the core every so often. Locked (a build is running): nothing can change, and the LCD says so.
+// Moments: a new question's keys rez in one after another; a field that fills flickers its panel and runs a packet up
+// its trace into the core, which swells; while the model reads, the log's cursor blinks and a packet runs into the
+// core every so often. Locked (a build is running): nothing can change, and the log says so.
 import type { DesignerState } from "../../builder/types.ts";
 import { BUILDER, type BuilderStatus } from "../../server/builder-wire.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbLcd } from "../parts/lcd.ts";
-import { el, fitFont, place, play } from "../shell/dom.ts";
-import type { SlotTrace } from "../shell/traces.ts";
+import { chamferClip, fitFrame } from "../parts/frame.ts";
+import { el, fitFont, place } from "../shell/dom.ts";
+import { rez } from "../shell/rez.ts";
+import { LIGHT, type SlotTrace } from "../shell/traces.ts";
 import { createDesignerVoice } from "../voice/designer-voice.ts";
 import { createBriefPlates } from "./brief-plates.ts";
 import { designerLayout } from "./builder-layout.ts";
@@ -29,6 +31,9 @@ const STEP_NAME: Record<DesignerState["step"], string> = {
   title: "THE TITLE",
   confirm: "READY TO BUILD",
 };
+
+/** The typed answer's frame is cut like a key's. */
+const FIELD_CHAMFER = 14;
 
 /** While the model reads an answer, a packet runs into the core this often. */
 const THINK_PULSE_MS = 1_100;
@@ -64,7 +69,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   const plates = createBriefPlates();
   place(plates.el, at.brief);
 
-  // ---- the status LCD -----------------------------------------------------------------------------------------
+  // ---- the status log -----------------------------------------------------------------------------------------
   const lcd = document.createElement("egb-lcd") as EgbLcd;
   lcd.classList.add("designer-lcd");
   place(lcd, at.status);
@@ -72,15 +77,15 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   // ---- the answer bar -----------------------------------------------------------------------------------------
   const bar = el("div", "designer-bar");
   place(bar, at.bar);
-  const metal = (label: string, className: string): EgbKey => {
+  const ghost = (label: string, className: string): EgbKey => {
     const key = document.createElement("egb-key") as EgbKey;
-    key.setAttribute("variant", "metal");
+    key.setAttribute("variant", "ghost");
     key.classList.add(className);
     key.textContent = label;
     return key;
   };
-  const home = metal("HOME", "designer-home");
-  const back = metal("BACK", "designer-back");
+  const home = ghost("HOME", "designer-home");
+  const back = ghost("BACK", "designer-back");
   const field = el("form", "designer-field");
   const input = el("input", "designer-input");
   input.type = "text";
@@ -92,8 +97,12 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   const send = document.createElement("egb-key") as EgbKey;
   send.classList.add("designer-send");
   send.textContent = "SEND";
-  field.append(input);
-  const talk = metal("HOLD TO TALK", "designer-talk");
+  // The field is glass in a frame of light, like a key's.
+  const fill = el("i", "frame-fill");
+  fill.style.clipPath = chamferClip(FIELD_CHAMFER);
+  field.append(fill, input);
+  fitFrame(field, { chamfer: FIELD_CHAMFER });
+  const talk = ghost("HOLD TO TALK", "designer-talk");
   bar.append(home, back, field, send, talk);
 
   root.append(ask, keys, plates.el, lcd, bar);
@@ -112,7 +121,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
     onListening: (on) => talk.toggleAttribute("selected", on),
   });
 
-  /** Sends one edit; its answer (the design now) is drawn, a refusal goes on the LCD. */
+  /** Sends one edit; its answer (the design now) is drawn, a refusal goes on the log. */
   async function act(run: () => Promise<DesignerState | null>): Promise<void> {
     if (busy || !state) return;
     busy = true;
@@ -192,23 +201,19 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   function drawKeys(s: DesignerState): void {
     const sig = `${s.session}|${s.step}|${s.choices.map((c) => c.id).join(",")}`;
     if (sig === keysFor) return;
-    const rise = keysFor !== "";
+    const fresh = keysFor !== "";
     keysFor = sig;
-    keys.replaceChildren(
-      ...s.choices.map((choice, i) => {
-        const key = document.createElement("egb-key") as EgbKey;
-        key.dataset.choice = choice.id;
-        key.textContent = choice.label;
-        key.addEventListener("click", () => choose(choice.id));
-        if (rise) {
-          void play(key, [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }], {
-            duration: 300, delay: i * 60, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "backwards",
-          });
-        }
-        return key;
-      }),
-    );
+    const made = s.choices.map((choice) => {
+      const key = document.createElement("egb-key") as EgbKey;
+      key.dataset.choice = choice.id;
+      key.textContent = choice.label;
+      key.addEventListener("click", () => choose(choice.id));
+      return key;
+    });
+    keys.replaceChildren(...made);
     keys.dataset.count = String(s.choices.length);
+    // A new question's keys rez in one after another (in place, so each draws its line where it stands).
+    if (fresh) made.forEach((key, i) => void rez(key, { delay: i * 90 }));
   }
 
   function drawControls(): void {
@@ -242,7 +247,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
     readFrom = sigOf(next);
     lcd.push("READING YOUR ANSWER…");
     // The answer goes into the machine while it is read: a packet down the clock's feed into the core.
-    const pulse = (): void => void machine.run("clock", { colour: "#d6c6ff" }).then(() => machine.swell());
+    const pulse = (): void => void machine.run("clock", { colour: LIGHT.sys }).then(() => machine.swell());
     pulse();
     thinkTimer = setInterval(pulse, THINK_PULSE_MS);
   }

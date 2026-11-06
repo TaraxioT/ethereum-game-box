@@ -1,18 +1,18 @@
-// Where the game builder's pieces stand, in stage pixels. The Designer is a page round the sunken core (the board
-// dimmed): the question and its keys on the left, the brief on the right, the status LCD under the core, the answer
-// bar along the bottom. The Build screen stands on the whole lit board: the words on the left, the brief on the right,
-// the core in the middle taking packets, and the four compile plates where the rack's housings are, each on the trace
-// that feeds its housing into the core.
+// Where the game builder's pieces stand, in stage pixels. The Designer is a page round the dimmed core: the question
+// and its keys on the left, the brief on the right, the status log under the core, the answer bar along the bottom.
+// The Build screen stands on the whole lit Grid: the words on the left, the brief on the right, the core in the middle
+// taking packets, and the four compile checks where the rack's programs stand, each on the trace that feeds its slot
+// into the core.
 import type { Layout, Rect } from "../shell/layout.ts";
 
 export interface DesignerLayout {
   /** The step's name and the question. */
   readonly question: Rect;
-  /** The step's brass keys (at most four). */
+  /** The step's keys (at most four). */
   readonly keys: Rect;
-  /** The brief so far, as engraved plates. */
+  /** The brief so far, as panels of light. */
   readonly brief: Rect;
-  /** The status LCD: thinking, what was heard, refusals. */
+  /** The status log: thinking, what was heard, refusals. */
   readonly status: Rect;
   /** HOME, BACK, the typed answer and SEND, push-to-talk. */
   readonly bar: Rect;
@@ -63,8 +63,8 @@ export const designerLayout = (layout: Layout): DesignerLayout => (layout.orient
 
 export const buildLayout = (layout: Layout): BuildLayout => (layout.orientation === "portrait" ? BUILD_PORTRAIT : BUILD_LANDSCAPE);
 
-/** A compile plate stands in a rack housing, its top on the housing's connector. */
-export function compileSlot(housing: Rect): Rect {
-  const h = Math.round(housing.h * 0.62);
-  return { x: housing.x, y: housing.y + 28, w: housing.w, h };
+/** A compile check stands in a rack slot, its top a little under the slot's top, where the slot's trace ends. */
+export function compileSlot(slot: Rect): Rect {
+  const h = Math.round(slot.h * 0.62);
+  return { x: slot.x, y: slot.y + 28, w: slot.w, h };
 }

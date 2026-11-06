@@ -86,7 +86,7 @@ export interface Core extends BoxLink {
   tap(event: TapEvent, source?: TapSource): void;
   /** What the next tap at this seat should ask of the badge. */
   plan(seat: Seat): TapPlan;
-  /** A fresh id for an injected tap (the test page, the demo's desk and bot). */
+  /** A fresh id for an injected tap (the test page, Demo mode's screen taps and bot). */
   nextTap(): number;
   opponent(): Opponent;
   setOpponent(opponent: Opponent): void;

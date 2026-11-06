@@ -50,3 +50,12 @@ export function fitFont(node: HTMLElement, width: number, max: number): void {
   const natural = node.scrollWidth;
   if (natural > width) node.style.fontSize = `${Math.floor((max * width) / natural)}px`;
 }
+
+/** Resolves once the launcher's faces have loaded: text fitted to a width before then is measured in a fallback. */
+export function facesReady(): Promise<void> {
+  const faces = ['700 16px "Syncopate"', '600 16px "Oxanium Variable"', '700 16px "JetBrains Mono"'];
+  return Promise.all(faces.map((f) => document.fonts.load(f))).then(
+    () => undefined,
+    () => undefined,
+  );
+}

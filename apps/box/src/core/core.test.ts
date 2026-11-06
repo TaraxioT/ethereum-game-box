@@ -10,7 +10,7 @@ import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
 import { memoryLedgerStore } from "./ledger.ts";
 import { TEAM_GAMES, teamLibrary } from "./catalogue.ts";
-import { DESK_BADGES } from "./badges.ts";
+import { DEMO_BADGES } from "./badges.ts";
 import { ANCHOR_AT, BLOCK_MS } from "./chain.ts";
 import { instantTap } from "./instant-tap.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
@@ -18,7 +18,7 @@ import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
 
 const START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
-const [NOVA, KITE] = DESK_BADGES as [Badge, Badge];
+const [NOVA, KITE] = DEMO_BADGES as [Badge, Badge];
 
 interface Rig {
   readonly core: Core;
@@ -294,7 +294,7 @@ describe("the core on its ports", () => {
     // A stranger's chip at a seat is let go as soon as it is read.
     const stranger = touch(core, 0, null);
     expect(held()?.[0]).not.toBeNull();
-    core.tap({ phase: "done", tap: stranger, seat: 0, at: core.now(), badge: DESK_BADGES[2] as Badge, roll: 7 });
+    core.tap({ phase: "done", tap: stranger, seat: 0, at: core.now(), badge: DEMO_BADGES[2] as Badge, roll: 7 });
     expect(held()).toEqual([null, null]);
   });
 
