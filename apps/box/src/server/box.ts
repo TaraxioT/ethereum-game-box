@@ -15,6 +15,7 @@ import { badgeOf } from "../taps/roster.ts";
 import { createTaps, type Taps } from "../taps/taps.ts";
 import type { Settings } from "./settings.ts";
 import { adminOnSepolia, adminRoutes } from "./admin.ts";
+import { boardRoutes } from "./board.ts";
 import { apiRoutes } from "./api.ts";
 import { builderRoutes } from "./builder-api.ts";
 import { forgeProvider, startBuilder, type Builder, type BuilderOptions } from "./builder-host.ts";
@@ -150,6 +151,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     }),
     ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, stations: settings.stations }),
     ...adminRoutes(settings.admin ? adminOnSepolia(settings.admin, log) : null),
+    ...boardRoutes(settings.chain.kind === "sepolia" ? settings.chain.rpcUrl : (settings.admin?.rpcUrl ?? null)),
   ];
   const games = createGameRoutes({
     built(id) {

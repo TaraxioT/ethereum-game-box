@@ -37,6 +37,8 @@ export interface Layout {
   readonly rack: readonly Rect[];
   /** The transaction strip. */
   readonly txbar: Rect;
+  /** Home's and Attract's board of champions and championships, right of the core; none in portrait. */
+  readonly board: Rect | null;
 }
 
 export interface PortAnchor {
@@ -68,6 +70,7 @@ export const LANDSCAPE: Layout = {
     { x: 868, y: 580, w: 176, h: 186 },
   ],
   txbar: { x: 452, y: 102, w: 376, h: 46 },
+  board: { x: 836, y: 176, w: 404, h: 300 },
 };
 
 export const PORTRAIT: Layout = {
@@ -92,6 +95,7 @@ export const PORTRAIT: Layout = {
     { x: 544, y: 862, w: 160, h: 172 },
   ],
   txbar: { x: 170, y: 208, w: 380, h: 40 },
+  board: null,
 };
 
 export function layoutFor(orientation: Orientation): Layout {

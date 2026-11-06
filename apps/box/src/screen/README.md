@@ -136,8 +136,14 @@ on `BoxEvent`s and acts only through `link.send`.
 
 - `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`; a Stock
   Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
-- `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes.
-- `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, and the rack (`rack.ts`). Touch or arrow keys focus: the
+- `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes; the
+  board right of the core.
+- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel of the live champions
+  (each game's title holder, streak and time left) and the championships (the open ones with their leader, prize and
+  time left, else the last one closed and its winner), read from `GET /api/board` every 15 s and counted down every
+  second. Hidden where there's no board (the simulator in a browser). `boardRows(board, now)` is its words, tested.
+- `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, the board (`board.ts`)
+  right of the core, and the rack (`rack.ts`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
   derezzes and rezzes, the facts rez in turn and the `ui-focus` tick plays. Enter or Play launches: the key and program flash,
   the core turns and every trace flares. On the Box (`build:box`) the rack ends in the blank NEW GAME program: it
@@ -217,8 +223,8 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 
 | Module | What it is | API |
 |---|---|---|
-| `exit-tag.ts` | The EXIT tag, fixed to the window's bottom-left corner (clear of the rack), dim until touched. A tap arms it (`TAP AGAIN TO EXIT`, alert red, 4 s); a second tap posts `/api/box/exit` with the token, which closes the kiosk's browser so the Pi's desktop shows. A refusal shows `CAN'T EXIT` with the Box's words as its title. Its pointer and key events never reach the stage. | `mountExitTag(host)` |
-| `kiosk.css` | The tag's styles. | |
+| `settings.ts` | The SETTINGS tag, fixed to the window's bottom-left corner (clear of the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`): CHAMPIONSHIPS (pick the game, how long it runs, the prize, a made-up name; OPEN; each championship with its leader or winner, and CLOSE & PAY once one has ended), GAMES AND TITLES (each game's champion and term; a title term and ADD GAME) and the latest jobs. Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
+| `kiosk.css` | The tag's and the page's styles. | |
 
 ## Sound
 

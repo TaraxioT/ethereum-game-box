@@ -1,7 +1,7 @@
-// The admin panel on the Box: with `EGB_ADMIN_KEY` (gamebox.eth's admin) the test page's Admin tab adds games and
+// The admin panel on the Box: with `EGB_ADMIN_KEY` (gamebox.eth's admin) the screen's Settings page adds games and
 // opens and closes championships, sent from that key over SEPOLIA_RPC_URL (`@egb/shared/admin` builds, checks and
 // sends every call). A request is checked before it answers (a bad label is a 400); its transactions then run as a
-// job in the background, one job at a time, and the tab follows them on `GET /api/admin`. The key and the RPC URL are
+// job in the background, one job at a time, and the page follows them on `GET /api/admin`. The key and the RPC URL are
 // never logged or answered: every error that leaves here has its URLs replaced by `<rpc>`.
 import type http from "node:http";
 import {
@@ -24,6 +24,7 @@ import { type Address, type PublicClient, createWalletClient, formatEther, http 
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { redact } from "../chain/reads.ts";
+import { wireBoard } from "./board.ts";
 import { ADMIN, type AdminJob, type AdminReply, type AdminStep, type AdminView } from "./admin-wire.ts";
 import { HttpError, readJson, sendJson } from "./http.ts";
 import type { Route } from "./routes.ts";
@@ -60,7 +61,7 @@ export function adminOnSepolia(setting: AdminSetting, log: (text: string) => voi
   const client: PublicClient = sepoliaClient([setting.rpcUrl]);
   const wallet = createWalletClient({ account, chain: sepolia, transport: rpc(setting.rpcUrl, { timeout: 15_000 }) });
   const token = { address: contractAddress("FakeUSDC"), abi: fakeUsdcAbi } as const;
-  log(`admin: ${account.address} (EGB_ADMIN_KEY) on the test page's Admin tab`);
+  log(`admin: ${account.address} (EGB_ADMIN_KEY) on the screen's Settings page`);
   return createAdmin({
     address: account.address,
     reads: adminReads(client, account.address),
@@ -81,15 +82,7 @@ const reason = (error: unknown): string =>
   redact(error instanceof AdminRefused ? error.message : error instanceof Error ? error.message.split("\n")[0] ?? "" : String(error));
 
 function wireView(view: ChainView): AdminView {
-  return {
-    block: view.block.toString(),
-    now: view.now,
-    eth: formatEther(view.eth),
-    usdc: formatUsdc(view.usdc),
-    roles: view.roles,
-    games: view.games.map((g) => ({ ...g, openCup: g.openCup?.toString() ?? null })),
-    cups: view.cups.map((c) => ({ ...c, id: c.id.toString(), prize: formatUsdc(c.prize) })),
-  };
+  return { ...wireBoard(view), eth: formatEther(view.eth), usdc: formatUsdc(view.usdc), roles: view.roles };
 }
 
 function object(value: unknown): Record<string, unknown> {

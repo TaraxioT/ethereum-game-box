@@ -155,3 +155,17 @@
 [data-orientation="portrait"] .lobby-name { font-size: 22px; }
 [data-orientation="portrait"] .lobby-balance { font-size: 26px; }
 [data-orientation="portrait"] .lobby-standings { font-size: 12px; }
+
+/* The board, right of the core on Home and Attract: two short lists in a glass panel, each line the game or
+   championship, who holds or leads it, and the time left. */
+.home-board { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; font-size: 15px; }
+.home-board[hidden] { display: none; }
+.home-board-head { margin-top: 6px; font: 700 13px/1 var(--hud-display); letter-spacing: 0.14em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
+.home-board-head:first-child { margin-top: 0; }
+.home-board-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.home-board-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "game when" "who who"; gap: 2px 12px; padding: 6px 0; border-bottom: 1px solid rgb(207 232 246 / 0.08); }
+.home-board-line:last-child { border-bottom: 0; }
+.home-board-game { grid-area: game; font: 700 15px/1.2 var(--hud-display); letter-spacing: 0.04em; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-who { grid-area: who; font: 600 15px/1.2 var(--hud-body); letter-spacing: 0.08em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-when { grid-area: when; font: 600 14px/1.2 var(--mono); color: var(--fg-2); white-space: nowrap; }
+.home-board-none { grid-column: 1 / -1; font: 600 14px/1.2 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); }

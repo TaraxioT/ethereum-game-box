@@ -18,7 +18,7 @@ export type ChainSetting =
   | { readonly kind: "sepolia"; readonly signerCmd: string; readonly relayerUrl: string; readonly rpcUrl: string; readonly box: string }
   | { readonly kind: "demo" };
 
-/** `gamebox.eth`'s admin key (`EGB_ADMIN_KEY`): the test page's Admin tab adds games and opens and closes
+/** `gamebox.eth`'s admin key (`EGB_ADMIN_KEY`): the screen's Settings page adds games and opens and closes
  *  championships with it, read and sent over `SEPOLIA_RPC_URL`. Null without the key. */
 export interface AdminSetting {
   readonly key: `0x${string}`;

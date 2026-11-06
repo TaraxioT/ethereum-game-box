@@ -148,7 +148,7 @@ All are systemd user units in `~/.config/systemd/user/`; linger keeps them runni
   flags the Pi's working kiosk uses, plus `--autoplay-policy` and `--use-fake-ui-for-media-stream` for sounds and
   push-to-talk. It touches no audio setting. `kiosk-prestart.sh` runs first (server up, display socket there, stale
   placement cleared). It restarts forever, so it waits out the desktop at boot.
-  The screen's EXIT tag stops it (`POST /api/box/exit`), leaving the desktop and the server running; it comes back
+  The Settings page's EXIT TO DESKTOP stops it (`POST /api/box/exit`), leaving the desktop and the server running; it comes back
   with the next deploy, a reboot or `systemctl --user start egb-kiosk`.
 - **`egb-update.service`** and **`egb-update.timer`**: see above.
 

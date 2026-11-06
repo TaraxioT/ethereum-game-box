@@ -5,7 +5,7 @@
 // focus is always a game), and its key opens the game builder. Built games' cartridges stand before it, each with its
 // art from the Box; one that can't load is sealed, and focusing it says why. A game the Forge installs rezzes into the
 // rack. LOBBY, beside Play, opens the lobby: a badge's player name, its USDC and a top-up, the title and the
-// championship.
+// championship. Right of the core, the board shows the live champions and championships (board.ts).
 import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
@@ -13,6 +13,7 @@ import type { EgbKey } from "../parts/key.ts";
 import { el, facesReady, fitFont, fitWidth, place } from "../shell/dom.ts";
 import { derez, rez } from "../shell/rez.ts";
 import { createRack, NEW_GAME, rackOf } from "./rack.ts";
+import { createBoardPanel } from "./board.ts";
 
 /** The rack's cartridges when Home last stood: a game installed since (on the Build screen) slides in on return. */
 let racked: ReadonlySet<string> | null = null;
@@ -84,7 +85,8 @@ export function homeView(ctx: ViewContext): View {
     link.send({ type: "lobby" });
   });
 
-  root.append(title, facts, playKey, lobbyKey, rack.el);
+  const board = createBoardPanel(layout);
+  root.append(title, facts, playKey, lobbyKey, rack.el, ...(board ? [board.el] : []));
   for (const entry of arrived) rack.arrive(entry.id);
 
   let current: GameInfo | undefined;
@@ -184,6 +186,7 @@ export function homeView(ctx: ViewContext): View {
     },
     dispose() {
       window.removeEventListener("keydown", onKey);
+      board?.dispose();
     },
   };
 }

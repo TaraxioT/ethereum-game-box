@@ -27,7 +27,7 @@ const VIEW: AdminView = {
       openCup: 3n,
     },
   ],
-  cups: [{ id: 3n, game: "quickdraw", label: "demo-cup", name: "demo-cup.quickdraw.gamebox.eth", ends: NOW_MS / 1000 + 60, prize: usdc(5), closed: false, winner: null, winnerName: null }],
+  cups: [{ id: 3n, game: "quickdraw", label: "demo-cup", name: "demo-cup.quickdraw.gamebox.eth", ends: NOW_MS / 1000 + 60, prize: usdc(5), closed: false, winner: null, winnerName: null, leader: null }],
 };
 
 /** Ports in memory: reads that count, and a sender that records each batch and answers from `outcome`. */

@@ -1,20 +1,66 @@
-/* The kiosk's own pieces: the EXIT tag in the window's bottom-left corner, clear of the rack. Dim until it is
-   touched; armed, it turns alert red, since a second tap closes the screen. */
-.exit-tag {
+/* The kiosk's own pieces: the SETTINGS tag in the window's bottom-left corner, clear of the rack, and the Settings page
+   it opens over the stage: glass rows of light keys, alert red only for EXIT. */
+.set-tag {
   position: fixed; left: 16px; bottom: 16px; z-index: 10; height: 36px; display: flex; align-items: center; gap: 10px;
   padding: 0 14px; margin: 0; border: 0; background: none; cursor: pointer; opacity: 0.55;
   font: 600 15px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-2);
 }
-.exit-tag > :not(svg, .frame-fill) { position: relative; }
-.exit-tag .frame-fill { position: absolute; inset: 0; background: var(--glass); }
-.exit-tag .frame-line { opacity: 0.45; }
-.exit-tag .frame-bloom { opacity: 0; }
-.exit-tag:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
+.set-tag > :not(svg, .frame-fill) { position: relative; }
+.set-tag .frame-fill, .set-panel .frame-fill { position: absolute; inset: 0; background: var(--glass); }
+.set-tag .frame-line { opacity: 0.45; }
+.set-tag .frame-bloom { opacity: 0; }
+.set-tag[aria-expanded="true"] { opacity: 1; }
+.set-tag:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
 
-/* A power mark: a broken ring with a stroke through its gap. */
-.exit-icon { position: relative; width: 12px; height: 12px; border: 1.5px solid currentColor; border-top-color: transparent; border-radius: 50%; }
-.exit-icon::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1.5px; height: 7px; margin-left: -0.75px; background: currentColor; }
+/* A gear: a ring with a dashed rim of teeth. */
+.set-gear { position: relative; width: 14px; height: 14px; border: 2px dotted currentColor; border-radius: 50%; }
+.set-gear::after { content: ""; position: absolute; inset: 2px; border: 1.5px solid currentColor; border-radius: 50%; }
 
-.exit-tag:is([data-step="armed"], [data-step="closing"], [data-step="refused"]) { opacity: 1; --frame-tone: var(--alert); color: var(--alert); }
-.exit-tag:is([data-step="armed"], [data-step="refused"]) .frame-line { opacity: 1; }
-.exit-tag[data-step="armed"] .frame-bloom { opacity: 1; }
+.set-page {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: start center; padding: 24px 16px 72px; overflow: auto;
+  background: rgb(1 4 9 / 0.82); user-select: none;
+}
+.set-page[hidden] { display: none; }
+.set-panel { position: relative; width: min(1040px, 100%); padding: 22px 28px 28px; }
+.set-panel > :not(svg, .frame-fill) { position: relative; }
+.set-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.set-heading { margin: 0; font: 700 30px/1 var(--hud-display); letter-spacing: 0.06em; color: var(--fg); text-shadow: var(--glow-text); }
+.set-status { margin: 10px 0 0; font: 600 14px/1.4 var(--mono); color: var(--fg-3); overflow-wrap: anywhere; }
+.set-out { margin: 6px 0 0; min-height: 1.4em; font: 600 15px/1.4 var(--mono); color: var(--sys-hot); overflow-wrap: anywhere; }
+.set-out.bad { color: var(--alert); }
+
+.set-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgb(207 232 246 / 0.12); }
+.set-section[hidden] { display: none; }
+.set-title { margin: 0 0 10px; font: 700 15px/1 var(--hud-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
+.set-hint { margin: 0 0 12px; font: 600 14px/1.4 var(--hud-body); letter-spacing: 0.04em; color: var(--fg-3); }
+.set-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
+.set-label { min-width: 110px; font: 600 14px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-2); }
+
+/* Keys and choices: big enough for a finger. */
+.set-key, .set-segment {
+  min-height: 52px; padding: 0 20px; margin: 0; border: 1.5px solid rgb(207 232 246 / 0.4); background: rgb(207 232 246 / 0.04);
+  cursor: pointer; font: 700 15px/1 var(--hud-display); letter-spacing: 0.06em; color: var(--fg); white-space: nowrap;
+}
+.set-key:active, .set-segment:active { transform: scale(0.97); }
+.set-key[aria-pressed="true"], .set-segment[aria-pressed="true"] { border-color: var(--sys); background: var(--sys); color: var(--void); box-shadow: 0 0 8px var(--sys-bloom); }
+.set-go { border-color: var(--sys); color: var(--sys-hot); box-shadow: 0 0 6px var(--sys-bloom); }
+.set-alert { border-color: rgb(255 45 61 / 0.6); color: var(--alert); }
+.set-alert:is([data-step="armed"], [data-step="closing"]) { background: var(--alert); color: var(--void); box-shadow: 0 0 10px rgb(255 45 61 / 0.6); }
+.set-segments { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-input {
+  min-height: 52px; width: 240px; padding: 0 14px; border: 1.5px solid rgb(207 232 246 / 0.3); background: rgb(1 4 9 / 0.6);
+  font: 600 17px/1 var(--mono); color: var(--fg); user-select: text;
+}
+.set-input:focus { outline: none; border-color: var(--sys); box-shadow: 0 0 6px var(--sys-bloom); }
+
+/* Lists: a game or championship per line, its holder or leader, the time left, and an action. */
+.set-list { margin: 10px 0 0; padding: 0; list-style: none; }
+.set-item {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  min-height: 52px; padding: 6px 0; border-bottom: 1px solid rgb(207 232 246 / 0.08);
+}
+.set-name { font: 700 15px/1.2 var(--hud-display); letter-spacing: 0.04em; color: var(--fg); overflow-wrap: anywhere; }
+.set-who { font: 600 15px/1.2 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); overflow-wrap: anywhere; }
+.set-when { font: 600 14px/1.2 var(--mono); color: var(--fg-2); }
+.set-jobs .set-item[data-status="failed"] .set-who { color: var(--alert); }
+.set-jobs .set-item[data-status="running"] .set-who { color: var(--fg-2); }

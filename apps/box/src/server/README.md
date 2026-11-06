@@ -45,7 +45,7 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `GET /api/box` | anyone | The test page's Box tab: `{ state, power, records }` (the whole `BoxState`, the power switch, each badge's counted wins, losses and draws by address). |
 | `POST /api/box/reset` | same origin | Back to Home now: the stakes of a match that hasn't settled go back to their badges. 204. |
 | `POST /api/box/power` | same origin | `{ on: boolean }`. Off: the Box misses its settle and the match goes to Refund. 204. |
-| `POST /api/box/exit` | launcher token | The screen's EXIT key: `systemctl --user stop --no-block egb-kiosk.service` (`kiosk.ts`), so the Pi's desktop shows. The Box keeps running; the kiosk comes back with the next deploy, a reboot or `systemctl --user start egb-kiosk`. 204, or 409 with systemd's words where there's no kiosk to stop. |
+| `POST /api/box/exit` | launcher token | The Settings page's EXIT TO DESKTOP: `systemctl --user stop --no-block egb-kiosk.service` (`kiosk.ts`), so the Pi's desktop shows. The Box keeps running; the kiosk comes back with the next deploy, a reboot or `systemctl --user start egb-kiosk`. 204, or 409 with systemd's words where there's no kiosk to stop. |
 | `GET /api/taps` | anyone | Everything the Stations and Badges tabs draw: `{ receiver, stations, status, stats, roster, fake }` (`status` and `stats` null with `EGB_RECEIVER=none`; `fake` only with the fake receiver). |
 | `POST /api/taps/inject` | same origin | `{ seat: 0 \| 1, badge: "NOVA" \| "0x…" }`: a whole tap by that badge (a roster label, any case, or an address) at that seat, straight into the core, never touching a chip; a roll from `crypto` when the plan is `random`. Not a tap the Box saw: it never makes a result count. Answers `{ tap, plan, badge, accepted }`; an unknown label is 404. |
 | `POST /api/taps/buzz` | same origin | `{ seat, kind: "ok" \| "no" }`: the seat's station buzzes once, or twice. |
@@ -56,6 +56,7 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `POST /api/taps/fake` | same origin | The fake receiver's hands: `{ op: "place", badge, st }`, `{ op: "lift", badge }`, `{ op: "linkDown" \| "linkUp", st }`, `{ op: "unplug" \| "plug" }`. 409 on real hardware. |
 | `/api/builder/…` | launcher token | The game builder: below. |
 | `/api/admin/…` | launcher token | The admin panel: below. |
+| `GET /api/board` | anyone | The board Attract and Home show: `{ available: false }` without an RPC; else `{ available, board, error }`, every game with its title and open championship and the latest championships with an open one's leader (`board.ts`, read at most every 10 s). |
 | `GET /games/<id>/icon.svg`, `screen.js`, `frame.html` | anyone | A built game's cartridge art, screen module and sandboxed frame page, under the frame's own CSP (`games/`). |
 | `GET /parts.js`, `/parts.css`, `/parts/…`, `/frame.js` | anyone | What every frame loads besides the game: the parts, their look and fonts, the frame's program. |
 | `GET /`, `/index.html` | anyone | The screen's page, never cached; the launcher token is written into it only for a top-level navigation. |
@@ -119,7 +120,7 @@ A Designer refusal is its own status (`no-session` 404, `stale` 409, `locked` 40
 
 ## The admin panel
 
-With `EGB_ADMIN_KEY`, the test page's Admin tab acts as `gamebox.eth`'s admin on Sepolia (`admin.ts`): it adds a game
+With `EGB_ADMIN_KEY`, the screen's Settings page (and the test page's Admin tab) acts as `gamebox.eth`'s admin on Sepolia (`admin.ts`): it adds a game
 with its champion title, opens a championship (a prize in test USDC is minted to the admin and approved first when it
 is short) and closes one that has ended. `@egb/shared/admin` builds and checks every call, runs it with `eth_call`
 first (a refusal names the contract's error and costs nothing) and sends one transaction at a time from the key. A
@@ -174,7 +175,8 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `rules/` | The rules runner host and the sandbox's proof (its own README). | `createRulesHost` |
 | `games/` | Built games over HTTP: cartridges, frames, the frames' shared assets (its own README). | `createGameRoutes`, `createFrameAssets` |
 | `admin.ts` | The admin panel: the key's account over the RPC, the jobs, the routes. | `adminOnSepolia(setting, log)`, `createAdmin(ports)`, `adminRoutes(admin)` |
-| `admin-wire.ts` | The admin routes' paths, bodies and replies. No Node, no DOM. | `ADMIN`, types |
+| `admin-wire.ts` | The admin routes' and the board's paths, bodies and replies. No Node, no DOM. | `ADMIN`, `BOARD_PATH`, types |
+| `board.ts` | The board: the chain's titles and championships, cached 10 s, for anyone. | `boardRoutes(rpcUrl)`, `createBoard(reads)`, `wireBoard` |
 | `api.ts` | The Box's routes: health, state, injected taps, the Box tab. | `apiRoutes`, `busy(state, building)` |
 | `builder-host.ts` | The game builder on the server: the Forge and the Designer on one lock, a confirmed design built on `EGB_FORGE_PROVIDER`, every change fanned out to the stream. | `startBuilder(options): Builder`, `forgeProvider(env)` |
 | `builder-api.ts` | The builder's routes, refusals as their codes. | `builderRoutes(builder)`, `AUDIO_LIMIT` |
@@ -195,7 +197,7 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `release.ts` | The running commit. | `readCommit(repoRoot)` |
 | `testing.ts` | For tests: a whole Box on a free port with its core (and taps) on a fake clock, a recording screen. | `startTestBox`, `openScreen`, `post`, `flush` |
 
-Tests: `env`, `settings` (the chain's three settings, all or none, never echoed; the admin key only with an RPC, never echoed), `admin` (the view cached, a job to done, bad input a 400 before any job, a championship's prize minted and approved first, a refusal by its error name with no RPC URL; the routes behind the token and a 409 without the key), `files` (atomic writes), `http` (the loopback Host on every request and
+Tests: `env`, `settings` (the chain's three settings, all or none, never echoed; the admin key only with an RPC, never echoed), `board` (cached 10 s, a failed read keeps the last board with no RPC URL, unavailable without an RPC), `admin` (the view cached, a job to done, bad input a 400 before any job, a championship's prize minted and approved first, a refusal by its error name with no RPC URL; the routes behind the token and a 409 without the key), `files` (atomic writes), `http` (the loopback Host on every request and
 upgrade, the same origin port and all, CSP, the token, the body cap, the guard), `builder-frames` (the stream's
 reader), `link` (state first, events in order, coalescing, commands), `match` (a whole Quick Draw and Stock
 Duel over the link with injected taps), `live-link` (the screen's `LiveLink` against a real server), `sessions` (the

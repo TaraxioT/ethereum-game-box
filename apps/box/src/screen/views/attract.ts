@@ -1,10 +1,12 @@
 // Attract: the Box idling after boot. Its name where a game's title goes, then the cartridges, then a breathing TAP TO
-// START, each rezzing in once the view has. Any touch, key or badge tap starts.
+// START, each rezzing in once the view has; right of the core, the board of champions and championships. Any touch,
+// key or badge tap starts.
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import { el, facesReady, fitFont, place } from "../shell/dom.ts";
 import { createRack, rackOf } from "./rack.ts";
 import { REZ_MS, rez } from "../shell/rez.ts";
+import { createBoardPanel } from "./board.ts";
 
 export function attractView(ctx: ViewContext): View {
   const { layout, link, machine, sound } = ctx;
@@ -28,7 +30,8 @@ export function attractView(ctx: ViewContext): View {
 
   const entries = rackOf(link.state().games);
   const rack = createRack(layout, entries);
-  root.append(title, start, rack.el);
+  const board = createBoardPanel(layout);
+  root.append(title, start, rack.el, ...(board ? [board.el] : []));
   // In order, after the router's rez of the view: the title, the cartridges, then TAP TO START, which then breathes.
   void rez(title, { delay: REZ_MS });
   void rack.rez(REZ_MS + 300);
@@ -53,6 +56,7 @@ export function attractView(ctx: ViewContext): View {
     update() {},
     dispose() {
       window.removeEventListener("keydown", onKey);
+      board?.dispose();
     },
   };
 }
