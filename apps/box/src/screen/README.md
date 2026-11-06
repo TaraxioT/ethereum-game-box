@@ -173,21 +173,23 @@ on `BoxEvent`s and acts only through `link.send`.
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
   loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
-  `4W 1L 0D · 90 USDC`, its record in the focused game and its balance, read from chain, popping in on its tap), a
+  `4W 1L 0D · STREAK 3 · 90 USDC`, its stats over every game from its name's `stats` record (the streak while it runs)
+  and its balance, read from chain, popping in on its tap), a
   panel under the core and keys at the bottom. Stakes are USDC on Sepolia for the team games; a built game isn't on
   chain and plays for nothing (`FREE PLAY`). Once both seats sign, Stake's panel shows the pot opening
   (`LOCKING 20 USDC IN THE POT`, SIGNED › SENT › IN BLOCK with the next step breathing, the hash and the seconds) until
   it is in a block and the match begins; an open that fails turns the panel red and both sign again. Result's banner names the winner by their player name in the winner's colour (a draw in system
   light), and under it the lines the Box read from chain after the result's receipt (the payout, the title, the
-  championship), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
+  cup, and each player's new stats from their name's `stats` record), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
   pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,
   and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
   rules failed.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
   shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
-  `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
-  name) and its open championship (the prize, a countdown to the close, the top five with points and W-D-L), from the
-  Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
+  `CLAIM`; its `STATS` from its name's `stats` record (streak, wins, losses, played, best and its rank on the
+  leaderboard); its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
+  name), its open cup (the prize, a countdown to the close, the top five with points and W-D-L) and the leaderboard
+  over every game (`gamebox.eth`'s `leaderboard` record, the top five), from the Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
 - Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
   frame (`frame/`, its own README), which gives it `<egb-key>`, `<egb-fact>`, `<egb-seg>` and `<egb-plate>` (a panel,
   lit unless `metal`; a `metal` key draws as `ghost`, so games written before the Grid keep working).

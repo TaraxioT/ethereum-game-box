@@ -25,9 +25,10 @@ any round the chain has seen. The file also keeps each pot the Box opened until 
 minutes the server refunds any past its delay (a match lost to a restart or a reset).
 
 Reads go to `SEPOLIA_RPC_URL`: USDC balances, `GameBoxNames.nameOf`, the pot and rounds, the head for the block clock,
-and a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`) and open championship (`Championships.openCup`, then
-its name's `standings`) through the Universal Resolver. After a result is paid, its lines are read at the receipt's
-block: the `PotSettled` payout, whether the winner now holds the title, and each player's place in the championship.
+and through the Universal Resolver a player's `stats`, a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`),
+its open cup (`Championships.openCup`, then its name's `standings`) and `gamebox.eth`'s `leaderboard`. After a result is
+paid, its lines are read at the receipt's block: the `PotSettled` payout, whether the winner now holds the title, each
+player's place in the cup, and each player's new `stats`.
 The RPC URL carries the node's key, so every error that leaves `reads.ts` has its URLs replaced by `<rpc>`.
 
 ## Modules

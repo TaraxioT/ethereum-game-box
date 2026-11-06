@@ -98,7 +98,7 @@ describe("a match with its stakes on Sepolia", () => {
     expect(result.body.result).toMatchObject({ box: "mumbai-01", game: "quickdraw", round: "1", winner: KITE, loser: NOVA, draw: false });
 
     // Paid: the lines come from the receipt, and the balances are read again.
-    reads.settledAs = { block: 1n, pot: 10, names: ["nova.gamebox.eth", "kite.gamebox.eth"], title: { name: "champion.quickdraw.gamebox.eth", holder: KITE, streak: 1 }, cup: null };
+    reads.settledAs = { block: 1n, pot: 10, names: ["nova.gamebox.eth", "kite.gamebox.eth"], stats: [null, null], title: { name: "champion.quickdraw.gamebox.eth", holder: KITE, streak: 1 }, cup: null };
     reads.balances.set(KITE, 110);
     relayer.advance(relayer.ids()[1]!, "done");
     await tb.settle(() => core.state().match?.lines !== null, POLL_MS * 2, 100);

@@ -6,7 +6,7 @@
 // - With EGB_ADMIN_KEY on the Box (gamebox.eth's admin, `/api/admin/…`), two columns. LIVE NOW: game by game, who
 //   holds its title and for how long, and its championship (the leader, the prize and a countdown; CLOSE & PAY once
 //   it has ended; OPENING… while its job runs), then the championships closed lately. On the right: OPEN A
-//   CHAMPIONSHIP on a game for a few minutes with a prize, the ACTIVITY of every job as its transactions go, and ADD A
+//   CUP on a game for a few minutes with a prize, the ACTIVITY of every job as its transactions go, and ADD A
 //   GAME. Presets for every choice, since the kiosk has no keyboard; the labels are made up and can be typed over.
 // It reads the Box every 3 s while open, and its clocks count down every second in between.
 // None of its pointer or key events reach the stage.
@@ -161,12 +161,12 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   // --- Open a championship ---
   const cupGame = el("div", "set-segments");
   let pickedGame = "";
-  const cupName = field("championship label", cupLabel());
+  const cupName = field("cup label", cupLabel());
   const run = segments(RUNS, 300);
   const prize = segments(PRIZES.map((p) => [p === "0" ? "NONE" : `${p} USDC`, p] as const), "0");
   const openKey = key("OPEN", () => void act(openCup), "set-key set-go");
   const openSection = section(
-    "Open a championship",
+    "Open a cup",
     el("p", "set-hint", "Only that game's results score it (win 3, draw 1). Players pick CUP on the Stake screen; every result counts."),
     row(el("span", "set-label", "GAME"), cupGame),
     row(el("span", "set-label", "RUNS"), run.row),
@@ -298,7 +298,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
         }, "set-segment");
         b.setAttribute("aria-pressed", String(g.label === pickedGame));
         b.disabled = !free(g);
-        if (!free(g)) b.title = "A championship is open on this game";
+        if (!free(g)) b.title = "A cup is open on this game";
         return b;
       }),
     );
@@ -345,7 +345,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
       const reply = await getJson<AdminReply>(ADMIN.status);
       if (!reply.enabled) {
         cols.hidden = true;
-        status.textContent = "No admin key on this Box (EGB_ADMIN_KEY): championships and games can't be changed here.";
+        status.textContent = "No admin key on this Box (EGB_ADMIN_KEY): cups and games can't be changed here.";
         return;
       }
       cols.hidden = false;

@@ -49,16 +49,24 @@ export interface SeatState {
   readonly pending: number;
   /** This seat has signed the entry for the match being staked. */
   readonly signed: boolean;
-  /** The badge's record in the focused game, read from chain; null until read, or for a game not on chain. */
+  /** The badge's stats over every game, from its name's `stats` record; null until read, or with no name or no stats. */
   readonly record: PlayerRecord | null;
 }
 
-/** A badge's wins, losses and draws in one game, as `PlayerStats` holds them. */
+/** A player's stats over every game, as `PlayerStats` writes them to its name's `stats` record. `streak` is its run of
+ *  wins up to now, in any game (a loss or a draw ends it); `best` is the longest. */
 export interface PlayerRecord {
-  readonly game: GameId;
+  readonly played: number;
   readonly wins: number;
   readonly losses: number;
   readonly draws: number;
+  readonly streak: number;
+  readonly best: number;
+}
+
+/** A row of `gamebox.eth`'s `leaderboard`: a player by name, and its stats. */
+export interface Leader extends PlayerRecord {
+  readonly name: string;
 }
 
 /** Sepolia's head, as the Box last read it (block 0 before the first read). */
@@ -159,7 +167,7 @@ export interface PlayerCard {
   readonly name: string | null;
   /** USDC. */
   readonly balance: number;
-  /** Its record in the game it was read for, or null for a game not on chain. */
+  /** Its stats over every game, from its name's `stats` record, or null: no name, or no stats yet. */
   readonly record: PlayerRecord | null;
 }
 
@@ -172,11 +180,11 @@ export interface Standing {
   readonly losses: number;
 }
 
-/** A game's title and its open championship, read through the Universal Resolver. */
+/** A game's title and its open cup, and the leaderboard over every game, read through the Universal Resolver. */
 export interface Board {
   /** `champion.<game>.gamebox.eth`: its holder's name and streak, or null while nobody holds it. */
   readonly title: { readonly name: string; readonly holder: string; readonly streak: number } | null;
-  /** The open championship (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
+  /** The open cup (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
   readonly cup: {
     readonly name: string;
     /** When scoring stops (ms since the epoch). */
@@ -185,6 +193,9 @@ export interface Board {
     readonly prize: number;
     readonly standings: readonly Standing[];
   } | null;
+  /** `gamebox.eth`'s `leaderboard`: the top players over every game, in rank order (most wins, then who reached them
+   *  first). */
+  readonly leaders: readonly Leader[];
 }
 
 /** The lobby: whoever tapped last, their card and a label to claim. */

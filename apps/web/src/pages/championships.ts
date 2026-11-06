@@ -65,7 +65,7 @@ function liveCup(cup: CupView): HTMLElement {
   return h(
     "div.panel.cup",
     { "data-focus": "cups cup-live" },
-    h("div.kind", {}, "championship", tag("live records", "ok"), tag(cup.entry.game)),
+    h("div.kind", {}, "cup", tag("live records", "ok"), tag(cup.entry.game)),
     h("a.cn", { href: `#/name/${cup.entry.name}` }, nameParts(cup.entry.name)),
     h("span.big", {}, countdownEl(ends)),
     h(
@@ -93,7 +93,7 @@ async function frozenCup(d: Directory, cup: CupView): Promise<HTMLElement> {
   const panel = h(
     "div.panel.cup.frozen",
     { "data-focus": "cups cup-frozen" },
-    h("div.kind", {}, "championship", tag("closed"), tag("records frozen", "warn")),
+    h("div.kind", {}, "cup", tag("closed"), tag("records frozen", "warn")),
     h("a.cn", { href: `#/name/${name}` }, nameParts(name)),
     h(
       "dl.dl",
@@ -111,7 +111,7 @@ async function frozenCup(d: Directory, cup: CupView): Promise<HTMLElement> {
         "span",
         {},
         h("b", {}, "The records are frozen, and the winner holds the name with no expiry. "),
-        "At close, Championships gave up every role it held on this name's resolver, and nobody else held one, so no account can change these records again. Championships keeps its registrar roles on the game's registry, because it needs them to open the next championship; it has no function that touches a closed one.",
+        "At close, Championships gave up every role it held on this name's resolver, and nobody else held one, so no account can change these records again. Championships keeps its registrar roles on the game's registry, because it needs them to open the next cup; it has no function that touches a closed one.",
       ),
     ),
   );
@@ -164,7 +164,7 @@ export async function championshipsPage(): Promise<HTMLElement> {
     h(
       "p.intro",
       {},
-      "A championship is a time-boxed competition: points across many matches, and a USDC prize. Each one is an ENS name in its game's registry, ",
+      "A cup is a time-boxed competition: points across many matches, and a USDC prize. Each one is an ENS name in its game's registry, ",
       h("code", {}, "<label>.<game>.gamebox.eth"),
       ", with ",
       h("b", {}, "its own resolver"),
@@ -186,7 +186,7 @@ export async function championshipsPage(): Promise<HTMLElement> {
   append(
     page,
     h("h2", {}, "OPEN NOW"),
-    ...(live.length ? live.map(liveCup) : [h("p", {}, "No championship is open right now. The next one opens at the booth.")]),
+    ...(live.length ? live.map(liveCup) : [h("p", {}, "No cup is open right now. The next one opens at the booth.")]),
     h("h2", {}, "CLOSED, FROZEN FOR GOOD"),
     last ? await frozenCup(d, last) : h("p", {}, "None has closed with a winner yet."),
     h("h2", {}, "EVERY CHAMPIONSHIP"),

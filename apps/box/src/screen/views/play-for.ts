@@ -43,7 +43,7 @@ export function onTheLine(state: Pick<BoxState, "stake" | "playFor" | "board">, 
     case "title":
       return { head: `${pot} + THE ${game.toUpperCase()} TITLE`, detail: `${each} USDC EACH · ${titleMap(board)}` };
     case "cup": {
-      if (!cup) return { head: "THE CHAMPIONSHIP HAS CLOSED", detail: "PICK THE TITLE OR A USDC STAKE" };
+      if (!cup) return { head: "THE CUP HAS CLOSED", detail: "PICK THE TITLE OR A USDC STAKE" };
       const leader = cup.standings[0];
       const lead = leader ? `${cup.name} → ${leader.name} · ${leader.points} PTS` : `${cup.name} · NO RESULTS YET`;
       const prize = cup.prize > 0 ? ` · ${cup.prize} USDC PRIZE` : "";

@@ -86,14 +86,16 @@ export function createSeatPanel(seat: Seat): SeatPanel {
 }
 
 const statsKey = (s: SeatState): string =>
-  s.record === null && s.balance === null ? "" : `${s.record?.wins}/${s.record?.losses}/${s.record?.draws}/${s.balance}`;
+  s.record === null && s.balance === null ? "" : `${JSON.stringify(s.record)}/${s.balance}`;
 
-/** `4W 1L 0D · 90 USDC`: the record once it is read (none for a game not on chain), then the balance. */
+/** `4W 1L 0D · STREAK 3 · 90 USDC`: the player's stats over every game from its name's `stats` record, once read (the
+ *  streak only while it runs), then the balance. */
 function drawStats(root: HTMLElement, s: SeatState): void {
   const parts: HTMLElement[] = [];
   if (s.badge && s.record) {
-    const { wins, losses, draws } = s.record;
+    const { wins, losses, draws, streak } = s.record;
     parts.push(el("span", "seat-stat win", `${wins}W`), el("span", "seat-stat", `${losses}L`), el("span", "seat-stat", `${draws}D`));
+    if (streak > 0) parts.push(el("span", "seat-stat streak", `STREAK ${streak}`));
   }
   if (s.badge && s.balance !== null) parts.push(el("span", "seat-stat usdc", `${s.balance} USDC`));
   root.replaceChildren(...parts);

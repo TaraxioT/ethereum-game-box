@@ -1,7 +1,8 @@
-// Players: every player name, with its address, its `stats` and the title it holds. "Claim a name": pick a badge (a
-// wallet, or a test badge made in this browser), type a label (checked as you type), sign `ClaimName`, and the
+// Players: the leaderboard (`gamebox.eth`'s `leaderboard` record), then every player name, with its address, its
+// `stats` (the totals over every game, the win streak, and each game) and the title it holds. "Claim a name": pick a
+// badge (a wallet, or a test badge made in this browser), type a label (checked as you type), sign `ClaimName`, and the
 // relayer sends it. Afterwards the badge sees what it controls and can take `stats` away from the game.
-import { fullName } from "@egb/shared/names";
+import { type LeaderRow, PARENT_NAME, fullName } from "@egb/shared/names";
 
 import { type FreeAnswer, availability, claim, freeAnswer, freshLabel } from "../actions.ts";
 import { explainAnswer } from "../answer.ts";
@@ -9,13 +10,19 @@ import { dir, go, render, state } from "../app.ts";
 import { connectWallet, hasInjectedWallet, newTestBadge } from "../badge.ts";
 import { client } from "../chain.ts";
 import { AGENT_LABEL } from "../config.ts";
-import { type PlayerView, readHolders, readPlayer } from "../model.ts";
+import { type PlayerView, readHolders, readLeaderboard, readPlayer } from "../model.ts";
 import { TxFailed } from "../txs.ts";
 import { addressLink, append, h, key, nameParts, tag } from "../ui/dom.ts";
 
 export function statsLine(view: PlayerView): string {
   if (!view.stats) return view.statsText ?? "no games yet";
-  return Object.entries(view.stats)
+  const s = view.stats;
+  const streak = s.streak > 0 ? ` · streak ${s.streak}` : "";
+  return `${s.played} played · ${s.wins}W ${s.losses}L${s.draws ? ` ${s.draws}D` : ""}${streak} · best ${s.best} — ${gamesLine(s.games)}`;
+}
+
+function gamesLine(games: NonNullable<PlayerView["stats"]>["games"]): string {
+  return Object.entries(games)
     .map(([game, s]) => `${game} ${s.wins}W ${s.losses}L${s.draws ? ` ${s.draws}D` : ""}`)
     .join(" · ");
 }
@@ -141,6 +148,25 @@ function claimPanel(): HTMLElement {
   return panel;
 }
 
+function leaderboardTable(rows: readonly LeaderRow[]): HTMLElement {
+  if (rows.length === 0) return h("p", {}, "No results yet.");
+  const head = ["#", "player", "W", "L", "D", "played", "streak", "best"];
+  return h(
+    "table.roles.ledger",
+    {},
+    h("tr", {}, ...head.map((cell) => h("th", {}, cell))),
+    ...rows.map((row, i) =>
+      h(
+        i === 0 ? "tr.on" : "tr",
+        {},
+        h("td.num", {}, String(i + 1)),
+        h("td", {}, h("a.nm", { href: `#/name/${row.name}` }, row.name)),
+        ...[row.wins, row.losses, row.draws, row.played, row.streak, row.best].map((n) => h("td.num", {}, String(n))),
+      ),
+    ),
+  );
+}
+
 export async function playersPage(): Promise<HTMLElement> {
   const d = await dir();
   const holders = await readHolders(client);
@@ -157,6 +183,9 @@ export async function playersPage(): Promise<HTMLElement> {
       ? h("div.callout.sys", {}, h("span", {}, "Your badge holds ", h("b", {}, fullName(mine)), ". One name per badge."), key("Inspect it", () => void go(`#/name/${fullName(mine)}`), true))
       : claimPanel(),
     mine ? h("div.actions", {}, key("Use a new test badge", () => ((state.badge = newTestBadge()), void render()))) : null,
+    h("h2", {}, "LEADERBOARD"),
+    h("p", {}, "The top ten over every game, by wins, then who reached them first. It is a text record on ", h("a.nm", { href: `#/name/${PARENT_NAME}` }, PARENT_NAME), ", ", h("code", {}, "leaderboard"), ": PlayerStats rewrites it after every result, and that one key is all it may write there."),
+    leaderboardTable(await readLeaderboard(client)),
     h("h2", {}, "EVERY PLAYER"),
     views.length ? h("div.cards", {}, ...views.map(playerCard)) : h("p", {}, "No players yet."),
   );

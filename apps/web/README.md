@@ -33,7 +33,7 @@ pnpm --filter @egb/web deploy   # builds and deploys to the gamebox-names Pages 
 | `src/relayer.ts` | The relayer and demo Box over HTTP, with the types from `@egb/shared/names` |
 | `src/txs.ts` | Every write's progress for the transaction strip, relayed (`/tx/:id`) or direct (the receipt) |
 | `src/story.ts`, `src/story-steps.ts` | The Story's step machine, and its five steps |
-| `src/pages/` | The tree (home), Players (with the claim), Lobby, Champions (the titles), Championships, Boxes, Agent, and the inspector |
+| `src/pages/` | The tree (home), Players (the leaderboard and the claim), Lobby, Titles (`champions.ts`), Cups (`championships.ts`), Boxes, Agent, and the inspector |
 | `src/ui/` | The element builder, live countdowns, the Sepolia tag, the transaction strip, the Try grid, the Story rail, the resolver answer, the record watch and the QR code |
 | `src/config.ts` | The RPCs, the relayer, the demo Box (`demo-01`), the Box pop-ups link to (`mumbai-01`), the Story's game, the operator site (`https://gamebox-operator.pages.dev`) and the ENS app |
 | `src/site.css` | The look: the Box's Grid as a document. Tokens and fonts come from `@egb/box` |
@@ -55,13 +55,13 @@ again and again; Reset only resets the walkthrough.
 
 Pop-ups, the operator site and the agent are out of the story; their pages stay.
 
-## The lobby and championships
+## The lobby and cups
 
 - **Lobby** (`#/lobby/<name>`): pick a player or type a name; it resolves through ENS, and the page reads its test
   USDC. "Top up 100 USDC" calls the relayer's `POST /usdc/topup { player }`, which mints when the balance is under 25.
   Every player is listed with their balance.
-- **Championships** (`#/championships`): an open championship's standings, leader, countdown and prize, read from
-  its name's records; the latest closed one, frozen, with its winner, role table and Try grid; and every championship
+- **Cups** (`#/championships`): an open cup's standings, leader, countdown and prize, read from
+  its name's records; the latest closed one, frozen, with its winner, role table and Try grid; and every cup
   from `CupOpened` and `CupClosed`. Once `ends` passes, "Close it" calls `POST /cup/close { game }` (the demo Box's
   alarm closes it too).
 

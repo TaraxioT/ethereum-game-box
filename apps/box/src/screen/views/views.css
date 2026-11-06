@@ -141,7 +141,7 @@
 .refund-keys egb-key[variant="ghost"] { width: 130px; }
 [data-orientation="portrait"] .refund-keys .page-note { font-size: 14px; }
 
-/* The lobby: a badge's card on the left, the title and championship on the right. Names keep their case. */
+/* The lobby: a badge's card on the left, the title, the cup and the leaderboard on the right. Names keep their case. */
 .lobby-card, .lobby-board { display: block; padding: 18px 22px; text-align: left; }
 .lobby-card[lit] { --frame-tone: var(--sys); }
 .lobby-kicker { font: 600 13px/1.2 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); margin-top: 6px; }
@@ -164,12 +164,21 @@
 .lobby-standings li { display: grid; grid-template-columns: 3em 1fr auto; gap: 8px; }
 .lobby-standings li.empty { display: block; color: var(--fg-3); }
 .lobby-standings .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.lobby-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 4px; }
+.lobby-stat { display: flex; flex-direction: column; align-items: center; padding: 6px 2px 5px; border: 1px solid var(--fg-4); }
+.lobby-stat b { font: 700 24px/1.05 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.lobby-stat span { font: 600 10px/1.2 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-3); margin-top: 2px; }
+.lobby-stat.hot { border-color: var(--sys); }
+.lobby-stat.hot b { color: var(--sys-hot); text-shadow: var(--glow-text); }
+.lobby-stat.none { grid-column: 1 / -1; font: 600 14px/1.3 var(--hud-body); letter-spacing: 0.1em; color: var(--fg-3); }
+.lobby-leaders li.you .who { color: var(--sys-hot); }
 .lobby-keys egb-key { flex: 0 1 150px; }
 .lobby-keys egb-key:last-child { flex-basis: 220px; }
 [data-orientation="portrait"] .lobby-card, [data-orientation="portrait"] .lobby-board { padding: 12px 14px; }
 [data-orientation="portrait"] .lobby-name { font-size: 22px; }
 [data-orientation="portrait"] .lobby-balance { font-size: 26px; }
 [data-orientation="portrait"] .lobby-standings { font-size: 12px; }
+[data-orientation="portrait"] .lobby-stat b { font-size: 18px; }
 
 /* The board, right of the core on Home and Attract: game by game, its title and its championship, each a line with
    a kind (TITLE, CUP), what (the holder, the championship and its leader) and when (the time left). Lit while live,

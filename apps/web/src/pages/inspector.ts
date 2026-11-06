@@ -24,14 +24,14 @@ import { agoEl, countdownEl } from "../ui/live.ts";
 import { when } from "../time.ts";
 
 const LEDE: Record<NameKind, string> = {
-  parent: "The .eth name everything hangs from. Its subregistry is a UserRegistry we deployed, so every name below lives in our own registry.",
+  parent: "The .eth name everything hangs from. Its subregistry is a UserRegistry we deployed, so every name below lives in our own registry. Its own record holds the leaderboard: PlayerStats rewrites it after every result, and that one key is all it may write.",
   box: "A Box name. Its licence is its expiry. GameBoxNames writes boxKey and status, the operator writes its four keys from the operator site, and the Box itself writes lastSeen and game: each on its own keys and nothing else.",
   popup: "A pop-up Box. It has no resolver or record of its own: it is linked to its Box's record on its Box's resolver, so it serves exactly the Box's records while its 10-minute licence lasts. Then it falls back to gamebox.eth's default record.",
   player: "A player name. The badge that claimed it holds every role on its own resolver, and the parent kept none. The game's PlayerStats may write stats, and nothing else, until the badge takes that away.",
   agent: "The practice opponent's name. The agent holds every role on its own resolver and keeps its ENSIP-26 records there; the game may write its stats and nothing else.",
   game: "A game name, with its own title registry. Only GameBoxNames writes it.",
   title: "A champion title. It moves to each new winner (the old token is unregistered and a new one minted), lapses a term after the last win, and can't be transferred.",
-  cup: "A championship. While it runs, Championships rewrites its standings, leader and addr after every result. At close it is registered to the winner with no expiry, and Championships gives up every role on its resolver: the records are frozen, and nobody can write them again.",
+  cup: "A cup. While it runs, Championships rewrites its standings, leader and addr after every result. At close it is registered to the winner with no expiry, and Championships gives up every role on its resolver: the records are frozen, and nobody can write them again.",
   other: "A name under gamebox.eth.",
 };
 

@@ -1,10 +1,12 @@
 // The lobby: a badge tapped on either station shows its card, read from chain: its player name, or (with none yet) a
 // proposed name with ANOTHER and CLAIM (the Box vouches for the badge with its own key: a badge can't sign a claim);
-// its USDC and TOP UP 100 USDC. Beside it, the game's title (`champion.<game>.gamebox.eth`, its holder and streak)
-// and its open championship (the standings, the prize and a countdown to the close), read through the Universal
-// Resolver every few seconds while the lobby shows. The transaction bar follows each claim and top-up. BACK returns Home, or to Stake when a short balance
-// sent the player here.
-import type { Board, BoxState, Lobby } from "../../core/types.ts";
+// its stats over every game, from its name's `stats` record (the win streak, wins, losses, played, the best streak and
+// its place on the leaderboard); its USDC and TOP UP 100 USDC. Beside it, the game's title
+// (`champion.<game>.gamebox.eth`, its holder and streak), its open cup (the standings, the prize and a countdown to the
+// close) and the leaderboard over every game (`gamebox.eth`'s `leaderboard` record), read through the Universal
+// Resolver every few seconds while the lobby shows. The transaction bar follows each claim and top-up. BACK returns
+// Home, or to Stake when a short balance sent the player here.
+import type { Board, BoxState, Leader, Lobby, PlayerRecord } from "../../core/types.ts";
 import { DEFAULT_FOCUS } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -16,6 +18,8 @@ import { cupLabel, shortName } from "./play-for.ts";
 import { honoursOf } from "../../core/honours.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
+/** Leaderboard rows the board shows. */
+const LEADERS_SHOWN = 5;
 
 const usdc = (amount: number): string => `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`;
 
@@ -32,7 +36,10 @@ export function lobbyView(ctx: ViewContext): View {
   const proposal = el("div", "lobby-proposal");
   const balance = el("div", "lobby-balance");
   const held = el("div", "lobby-honours");
-  card.append(kicker, name, proposal, held, balance);
+  const statsHead = el("div", "lobby-kicker", "STATS");
+  const stats = el("div", "lobby-stats");
+  const statsNote = el("div", "lobby-ens");
+  card.append(kicker, name, proposal, held, statsHead, stats, statsNote, balance);
 
   const board = document.createElement("egb-panel") as EgbPanel;
   board.classList.add("lobby-board");
@@ -42,7 +49,18 @@ export function lobbyView(ctx: ViewContext): View {
   const titleName = el("div", "lobby-ens");
   const cup = el("div", "lobby-cup");
   const standings = el("ol", "lobby-standings");
-  board.append(gameHead, el("div", "lobby-kicker", "TITLE"), title, titleName, el("div", "lobby-kicker", "CHAMPIONSHIP"), cup, standings);
+  const leaders = el("ol", "lobby-standings lobby-leaders");
+  board.append(
+    gameHead,
+    el("div", "lobby-kicker", "TITLE"),
+    title,
+    titleName,
+    el("div", "lobby-kicker", "CUP"),
+    cup,
+    standings,
+    el("div", "lobby-kicker", "LEADERBOARD · GAMEBOX.ETH"),
+    leaders,
+  );
 
   const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate");
@@ -90,6 +108,7 @@ export function lobbyView(ctx: ViewContext): View {
         return row;
       }),
     );
+    drawStats(c?.name ?? null, c?.record ?? null, state.board?.leaders ?? []);
     const canClaim = Boolean(c && !c.name && lobby.proposal) && !claiming;
     another.toggleAttribute("disabled", !canClaim);
     claim.toggleAttribute("disabled", !canClaim);
@@ -105,6 +124,52 @@ export function lobbyView(ctx: ViewContext): View {
             : "TAP ANOTHER BADGE TO SEE IT";
   }
 
+  /** The player's stats from its name's `stats` record, and its place on the leaderboard. */
+  function drawStats(ens: string | null, r: PlayerRecord | null, top: readonly Leader[]): void {
+    statsHead.hidden = ens === null;
+    if (!ens) {
+      stats.replaceChildren();
+      statsNote.textContent = "";
+      return;
+    }
+    if (!r) {
+      stats.replaceChildren(el("div", "lobby-stat none", "NO RESULTS YET"));
+      statsNote.textContent = `play a match: it writes ${ens}'s stats record`;
+      return;
+    }
+    const rank = top.findIndex((row) => row.name === ens);
+    const tile = (label: string, value: string, tone = ""): HTMLElement => {
+      const t = el("div", `lobby-stat ${tone}`);
+      t.append(el("b", "", value), el("span", "", label));
+      return t;
+    };
+    stats.replaceChildren(
+      tile("STREAK", String(r.streak), r.streak > 0 ? "hot" : ""),
+      tile("WINS", String(r.wins)),
+      tile("LOSSES", String(r.losses)),
+      tile("PLAYED", String(r.played)),
+      tile("BEST", String(r.best)),
+      tile("RANK", rank < 0 ? "—" : `#${rank + 1}`, rank === 0 ? "hot" : ""),
+    );
+    statsNote.textContent = `${ens} · stats record${r.draws > 0 ? ` · ${r.draws} draw${r.draws > 1 ? "s" : ""}` : ""}`;
+  }
+
+  function drawLeaders(top: readonly Leader[], you: string | null): void {
+    leaders.replaceChildren(
+      ...(top.length === 0
+        ? [el("li", "empty", "no results yet · every match counts")]
+        : top.slice(0, LEADERS_SHOWN).map((row, i) => {
+            const li = el("li", row.name === you ? "you" : "");
+            li.append(
+              el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
+              el("span", "who", row.name),
+              el("span", "pts", `${row.wins}W ${row.losses}L${row.streak > 0 ? ` · STREAK ${row.streak}` : ""}`),
+            );
+            return li;
+          })),
+    );
+  }
+
   function drawBoard(state: BoxState): void {
     const about = state.games.find((g) => g.id === state.focus && g.kind === "team") ?? state.games.find((g) => g.id === DEFAULT_FOCUS);
     gameHead.textContent = about?.title.toUpperCase() ?? "";
@@ -114,8 +179,10 @@ export function lobbyView(ctx: ViewContext): View {
       titleName.textContent = "";
       cup.textContent = "";
       standings.replaceChildren();
+      leaders.replaceChildren();
       return;
     }
+    drawLeaders(b.leaders, state.lobby.card?.name ?? null);
     title.textContent = b.title ? `${shortName(b.title.holder)}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS";
     title.classList.toggle("none", !b.title);
     titleName.textContent = b.title ? `${b.title.name} → ${b.title.holder}` : "win a match to take it";

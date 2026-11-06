@@ -215,7 +215,7 @@ describe("the Sepolia port on a mocked relayer", () => {
 
   it("reads the board and the head through its reads, and stops polling on stop", async () => {
     const r = rig();
-    expect(await r.chain.board("stock-duel")).toEqual({ title: null, cup: null });
+    expect(await r.chain.board("stock-duel")).toEqual({ title: null, cup: null, leaders: [] });
     await expect(r.chain.board("lantern-race")).rejects.toThrow(/isn't on chain/);
     const heads: number[] = [];
     const unwatch = r.chain.watchHead((head) => heads.push(head.block));
@@ -235,6 +235,10 @@ describe("the result's lines", () => {
       block: 1n,
       pot: 10,
       names,
+      stats: [
+        { played: 3, wins: 2, losses: 1, draws: 0, streak: 0, best: 2 },
+        { played: 4, wins: 2, losses: 1, draws: 1, streak: 1, best: 1 },
+      ],
       title: { name: "champion.stockduel.gamebox.eth", holder: B, streak: 2 },
       cup: {
         label: "mumbai-cup",
@@ -249,13 +253,15 @@ describe("the result's lines", () => {
       "kite.gamebox.eth now holds champion.stockduel.gamebox.eth, streak 2",
       "mumbai-cup: nova.gamebox.eth 1st, 6 pts",
       "mumbai-cup: kite.gamebox.eth 2nd, 3 pts",
+      "nova.gamebox.eth stats: 2W 1L",
+      "kite.gamebox.eth stats: 2W 1L 1D, streak 1",
     ]);
   });
 
   it("say only what happened: no pot, no title move, a draw, a badge with no name", () => {
-    expect(outcomeLines(order, { block: 1n, pot: null, names: [null, null], title: { name: "t", holder: A, streak: 1 }, cup: null })).toEqual([
+    expect(outcomeLines(order, { block: 1n, pot: null, names: [null, null], stats: [null, null], title: { name: "t", holder: A, streak: 1 }, cup: null })).toEqual([
       `${B.slice(0, 6)}…${B.slice(-4)} wins`,
     ]);
-    expect(outcomeLines({ ...order, winner: null }, { block: 1n, pot: 10, names, title: null, cup: null })).toEqual(["A draw: 10 USDC back to each"]);
+    expect(outcomeLines({ ...order, winner: null }, { block: 1n, pot: 10, names, stats: [null, null], title: null, cup: null })).toEqual(["A draw: 10 USDC back to each"]);
   });
 });

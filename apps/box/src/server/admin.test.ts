@@ -96,7 +96,7 @@ describe("the admin", () => {
     expect(r.batches).toEqual([]);
   });
 
-  it("opens a championship with its prize minted short and approved first", async () => {
+  it("opens a cup with its prize minted short and approved first", async () => {
     const r = rig();
     const job = await r.admin.openCup({ game: "quickdraw", label: "demo-cup", runSeconds: 300, prize: "5" });
     expect(job.what).toBe("open demo-cup.quickdraw.gamebox.eth for 5m, prize 5 USDC");
@@ -112,7 +112,7 @@ describe("the admin", () => {
   it("fails a refused job with the contract's error, and never shows an RPC URL", async () => {
     let n = 0;
     const r = rig(async () => {
-      if (n++ === 0) throw new AdminRefused("close quickdraw's championship", "NotOver");
+      if (n++ === 0) throw new AdminRefused("close quickdraw's cup", "NotOver");
       throw new Error("HTTP request failed. URL: https://rpc.example/v2/secret-key");
     });
     r.admin.closeCup({ game: "quickdraw" });
@@ -121,7 +121,7 @@ describe("the admin", () => {
     const { jobs } = (await r.admin.reply()) as Extract<AdminReply, { enabled: true }>;
     expect(jobs.map((j: AdminJob) => [j.status, j.error])).toEqual([
       ["failed", "HTTP request failed. URL: <rpc>"],
-      ["failed", "close quickdraw's championship: NotOver"],
+      ["failed", "close quickdraw's cup: NotOver"],
     ]);
     expect(r.logs.join("\n")).not.toContain("secret-key");
   });

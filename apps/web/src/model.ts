@@ -8,14 +8,20 @@ import {
   BOX_STATUS,
   CUP_KEYS,
   DEFAULT_KEYS,
+  GAMEBOX_KEYS,
+  type LeaderRow,
   PARENT_NAME,
+  PLAYER_KEYS,
   POPUP_PREFIX,
+  type PlayerStats,
   TITLE_KEYS,
   agentEndpointKey,
   contractAddress,
   demoLicencesAbi,
   fullName,
   gameBoxNamesAbi,
+  parseLeaderboard,
+  parseStats,
   titleName,
 } from "@egb/shared/names";
 
@@ -88,7 +94,8 @@ export interface PlayerView {
   name: string;
   badge: Address;
   resolves: Address | null;
-  stats: Record<string, { wins: number; losses: number; draws: number }> | null;
+  /** Its `stats` record, or null: none, or one in another shape (`statsText` then holds it as written). */
+  stats: PlayerStats | null;
   statsText: string | null;
   /** The badge's primary name (`getEnsName`), or null if it set none. */
   primary: string | null;
@@ -96,23 +103,33 @@ export interface PlayerView {
   titles: string[];
 }
 
-export function parseStats(text: string | null): PlayerView["stats"] {
+function statsOf(text: string | null): PlayerStats | null {
   if (!text) return null;
   try {
-    return JSON.parse(text) as PlayerView["stats"];
+    return parseStats(text);
   } catch {
     return null;
+  }
+}
+
+/** `gamebox.eth`'s `leaderboard` record: the top players over every game, in rank order. None yet is empty. */
+export async function readLeaderboard(client: PublicClient): Promise<LeaderRow[]> {
+  const text = await readText(client, PARENT_NAME, GAMEBOX_KEYS.leaderboard);
+  try {
+    return parseLeaderboard(text || "[]");
+  } catch {
+    return [];
   }
 }
 
 export async function readPlayer(client: PublicClient, dir: Directory, label: string, holders: Map<string, Address | null>): Promise<PlayerView> {
   const entry = dir.players.get(label);
   const name = fullName(label);
-  const [resolves, statsText] = await Promise.all([readAddress(client, name), readText(client, name, "stats")]);
+  const [resolves, statsText] = await Promise.all([readAddress(client, name), readText(client, name, PLAYER_KEYS.stats)]);
   const badge = entry?.badge ?? resolves ?? zeroAddress;
   const primary = badge === zeroAddress ? null : await readPrimaryName(client, badge).catch(() => null);
   const titles = [...holders].filter(([, holder]) => holder && getAddress(holder) === getAddress(badge)).map(([game]) => game);
-  return { label, name, badge, resolves, stats: parseStats(statsText), statsText, primary, titles };
+  return { label, name, badge, resolves, stats: statsOf(statsText), statsText, primary, titles };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -222,6 +239,8 @@ export function keysFor(kind: NameKind): string[] {
       return [ADDR, ...Object.values(CUP_KEYS)];
     case "game":
       return ["title", "titleTerm", "description"];
+    case "parent":
+      return [ADDR, GAMEBOX_KEYS.leaderboard, DEFAULT_KEYS.description];
     default:
       return [ADDR, "description"];
   }
@@ -284,7 +303,7 @@ export async function accountsFor(client: PublicClient, dir: Directory, name: st
     add(otherPlayer(holder));
   } else {
     add({ label: "GameBoxNames", role: "registrar", address: names });
-    add({ label: "PlayerStats", role: "the game's stats writer", address: stats });
+    add({ label: "PlayerStats", role: kind === "parent" ? "writes the leaderboard, and nothing else" : "the game's stats writer", address: stats });
     add(otherPlayer(null));
   }
   const relayer = knownRelayer();

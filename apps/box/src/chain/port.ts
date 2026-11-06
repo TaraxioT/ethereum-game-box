@@ -22,6 +22,7 @@ import {
 import type { Address, Hex } from "viem";
 import type { ChainHead, ChainPort, ChainTxUpdate, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
+import { recordText } from "../core/stats.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import type { Reads, Settled } from "./reads.ts";
 import type { Relayer, RelayerReply } from "./relayer.ts";
@@ -122,6 +123,10 @@ export function outcomeLines(order: ResultOrder, settled: Settled): string[] {
       if (row) lines.push(`${settled.cup.label}: ${named(seat)} ${ORDINALS[rank] ?? `${rank + 1}th`}, ${row.points} pts`);
     }
   }
+  for (const seat of [0, 1] as const) {
+    const stats = settled.stats[seat];
+    if (stats) lines.push(`${named(seat)} stats: ${recordText(stats)}`);
+  }
   return lines;
 }
 
@@ -212,14 +217,9 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
     balance: (address) => reads.balance(address),
-    async player(address, game) {
-      const onChain = chainLabel(game);
-      const [name, balance, record] = await Promise.all([
-        reads.nameOf(address),
-        reads.balance(address),
-        onChain === null ? null : reads.record(address, onChain),
-      ]);
-      return { address, name, balance, record: record && { game, ...record } };
+    async player(address) {
+      const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);
+      return { address, name, balance, record: name ? await reads.stats(name) : null };
     },
     board: async (game) => reads.board(label(game)),
     open(order, watch) {

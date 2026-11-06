@@ -70,10 +70,10 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 - **Refund.** With the power off the Box misses its settle: Refund opens `refundAfterMs` after the open (an hour on
   Sepolia), and either seat's tap sends one refund for the whole pot, then Home. A pot the players walk away from, or
   one left by a reset, stays on chain until the server refunds it.
-- **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name and
-  USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
+- **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name, its
+  stats over every game (`PlayerRecord`, from its name's `stats` record) and USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
   and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The board
-  shows the focused game's title and championship. It goes Home
+  shows the focused game's title and cup, and the leaderboard over every game (`Board.leaders`). It goes Home
   after `IDLE_MS` alone.
 
 ## Built games

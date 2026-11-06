@@ -63,7 +63,7 @@ function recordingPort(): Recording {
     player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100, record: null }),
     board(game): Promise<Board> {
       boards.push(game);
-      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 }, cup: null });
+      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 }, cup: null, leaders: [] });
     },
     open: take("open"),
     settle: take("settle"),
@@ -554,18 +554,18 @@ describe("what the screen hears", () => {
 });
 
 describe("stakes on chain", () => {
-  it("shows each seat's record in the focused game, read from chain, and the new one after a match", async () => {
+  it("shows each seat's stats, read from chain: none before a first result, then the new ones after a match", async () => {
     const r = rig();
     await toPlaying(r, "quick-draw");
-    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([
-      { game: "quick-draw", wins: 0, losses: 0, draws: 0 },
-      { game: "quick-draw", wins: 0, losses: 0, draws: 0 },
-    ]);
+    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([null, null]);
     await quickWin(r, 1);
     await until(r, (state) => state.txs.some((tx) => tx.kind === "settle" && tx.step === "paid"));
     r.core.send({ type: "rematch" });
     await flush();
-    expect(r.core.state().seats.map((seat) => [seat.record?.wins, seat.record?.losses])).toEqual([[0, 1], [1, 0]]);
+    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([
+      { played: 1, wins: 0, losses: 1, draws: 0, streak: 0, best: 0 },
+      { played: 1, wins: 1, losses: 0, draws: 0, streak: 1, best: 1 },
+    ]);
   });
 
   it("waits on Stake while the pot opens, begins the match once it is in a block, and the bar follows the pot", async () => {
@@ -705,7 +705,7 @@ describe("the lobby", () => {
       instantTap(r.core, seat, badge, 1);
       expect(r.buzzes.at(-1)).toEqual([seat, "ok"]);
       await flush();
-      expect(r.core.state().lobby.card).toEqual({ address: badge.address, name: null, balance: 100, record: { game: "stock-duel", wins: 0, losses: 0, draws: 0 } });
+      expect(r.core.state().lobby.card).toEqual({ address: badge.address, name: null, balance: 100, record: null });
       proposals.push(r.core.state().lobby.proposal);
     }
     expect(proposals).toEqual(["nova", "kite", "juno"]);

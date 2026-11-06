@@ -258,7 +258,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** Each badge's USDC and player name, as last read from chain (absent: not read yet). */
   const balances = new Map<string, number>();
   const names = new Map<string, string | null>();
-  /** Each badge's record in the game it was last read for. */
+  /** Each badge's stats over every game, as last read. */
   const records = new Map<string, PlayerRecord | null>();
   /** USDC on its way to each address: top-ups, payouts and refunds not yet paid. */
   const incoming = new Map<string, number>();
@@ -304,11 +304,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return games.find((info) => info.id === id);
   }
 
-  /** A seated badge's record, while it is the focused game's. */
-  function recordFor(badge: Badge | null): PlayerRecord | null {
-    const record = badge ? records.get(badge.address) : null;
-    return record && record.game === focus ? record : null;
-  }
 
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
@@ -318,7 +313,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       ens: badge ? (names.get(badge.address) ?? null) : null,
       balance: badge ? (balances.get(badge.address) ?? null) : null,
       pending: badge ? (incoming.get(badge.address) ?? 0) : 0,
-      record: recordFor(badge),
+      record: badge ? (records.get(badge.address) ?? null) : null,
     };
   }
 
@@ -461,11 +456,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   }
 
   /**
-   * Reads a badge's balance, player name and record in the focused game from chain; the seats and the lobby show them
-   * when they come back.
+   * Reads a badge's balance, player name and stats from chain; the seats and the lobby show them when they come back.
    */
   function read(badge: Badge): void {
-    port.player(badge.address, focus).then(
+    port.player(badge.address).then(
       (card) => {
         balances.set(card.address, card.balance);
         names.set(card.address, card.name);
@@ -1071,8 +1065,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase !== "home" || cmd.game === focus || !gameOf(cmd.game)) return;
         focus = cmd.game;
         emit({ type: "focus", game: focus });
-        // The seats show their record in the focused game.
-        readSeats();
         return;
       case "play": {
         const info = gameOf(focus);

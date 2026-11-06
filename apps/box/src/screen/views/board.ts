@@ -107,7 +107,7 @@ export function createBoardPanel(layout: Layout, link: BoxLink): BoardPanel | nu
   panel.hidden = true;
   place(panel, layout.board);
   const head = el("div", "home-board-head");
-  head.append(el("span", "", "TITLES & CHAMPIONSHIPS"), el("span", "home-board-live", "LIVE"));
+  head.append(el("span", "", "TITLES & CUPS"), el("span", "home-board-live", "LIVE"));
   const games = el("div", "home-board-games");
   panel.append(head, games);
 

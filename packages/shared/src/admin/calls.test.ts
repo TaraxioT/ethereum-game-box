@@ -35,7 +35,7 @@ describe('the admin calls', () => {
     });
     expect(call.what).toBe('open demo-cup.quickdraw.gamebox.eth for 5m, prize 25 USDC');
     expect(() => openCupCall({ game: 'quickdraw', label: 'champion', ends: NOW + 300, prize: 0n }, NOW)).toThrow(/taken by the title/);
-    expect(() => openCupCall({ game: 'quickdraw', label: 'demo-cup', ends: NOW + 30, prize: 0n }, NOW)).toThrow(/a championship must be/);
+    expect(() => openCupCall({ game: 'quickdraw', label: 'demo-cup', ends: NOW + 30, prize: 0n }, NOW)).toThrow(/a cup must be/);
     expect(() => openCupCall({ game: 'quickdraw', label: 'demo-cup', ends: NOW + 300, prize: -1n }, NOW)).toThrow(/negative/);
   });
 

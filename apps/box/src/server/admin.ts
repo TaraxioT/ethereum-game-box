@@ -193,7 +193,7 @@ export function createAdmin(ports: AdminPorts): Admin {
       const cup = { game: text(body, "game"), label: text(body, "label"), ends: now + seconds(body, "runSeconds"), prize: prize(body) };
       const funds = await ports.funds();
       const calls = built(() => openCupCalls(cup, now, ports.address, funds));
-      return start(calls[calls.length - 1]?.what ?? "open a championship", calls);
+      return start(calls[calls.length - 1]?.what ?? "open a cup", calls);
     },
     closeCup(input) {
       const call = built(() => closeCupCall(text(object(input), "game")));
