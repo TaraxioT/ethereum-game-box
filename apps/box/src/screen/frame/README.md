@@ -38,7 +38,7 @@ at `/store/<hash>/index.html` under its own CSP (`server/games/`), with `/bundle
 
 | Member | What it does |
 |---|---|
-| `players` | `[{ name }, …]` in seat order, there from the page's first line. |
+| `players` | `[{ name }, …]` in seat order, there from the page's first line. A seat left empty at the Box isn't one: the page's seat numbers are places in this list, as in the log and the payouts. |
 | `onTap(fn)` | `fn({ seat, at, roll })` for each tap: `at` is the Box's clock, `roll` null unless the manifest asks for `random` taps. |
 | `event(name, data)` | For the log, labelled as the game's claim. A name is 1 to 40 printable characters; data is at most 1024 bytes of JSON. |
 | `station(seat, text)` | A line for a seat's station, cut to 40 printable characters. |

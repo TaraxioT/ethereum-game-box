@@ -3,8 +3,8 @@
 The plan for games that live online instead of on the Box. A team-published zip holds a game's page and the rules an
 AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G's
 private inference reads the match's log and says who gets paid how much. If it can't, everyone gets their stake back.
-Built and tested on the branch `game-store`, on fakes and two seats: nothing is deployed, 0G hasn't judged a real match,
-it hasn't run on the Pi, and step 7, four seats on the Box, isn't done.
+Built and tested on the branch `game-store`, on fakes and up to four seats: nothing is deployed, 0G hasn't judged a real
+match, and it hasn't run on the Pi or on real badges.
 
 ## 1. Goal
 
@@ -192,10 +192,13 @@ A verdict names players only by position, so it has no way to pay anyone else. I
 
 ## 10. Four players
 
-The Box assumes two players throughout: `Seat` is `0 | 1`, ports use pairs, `EGB_STATIONS` must be exactly two, and
-Join, Stake and Result draw two sides. This pass widens all of it to four.
+`Seat` is `0 | 1 | 2 | 3`, `EGB_STATIONS` takes 2 to 4, a seat each, and Join, Stake, Result, Refund and the ports draw
+two, three or four. A station past the game's seats, or a seat left empty, says so and takes no tap.
 
-- Team games stay two-player. Their rules use `other(seat)`, and a game's manifest sets its own limits.
+- Team games stay two-player. Their rules use `DuelSeat` and `other(seat)`, and a game's manifest sets its own limits.
+- A store game seats its manifest's max, or the Box's stations if fewer. With every seat full Join moves on. With its
+  min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
+  split count players, not seats.
 - The firmware already takes four stations (`MAX_STATIONS`).
 - Refunds and results pay a list of players, not a pair.
 
@@ -211,7 +214,8 @@ Each step ends with tests, and step 1 can stop the plan.
 4. **The contract.** `StorePot`, its forge tests, Store USDC, the deploy and the relayer's routes.
 5. **The verifier.** The Worker, the container, the agent and the failure paths, against a fake 0G.
 6. **The Box, two seats.** The library, the frame's powers, the log and the chain. A full staked match on the Pi.
-7. **Four seats.** The core, the settings, the stations and every screen.
+7. **Four seats.** The core, the settings, the stations and every screen. Done on the fake stations, and every screen
+   rendered with 2, 3 and 4 seats in a real browser. Not yet played on the Pi with real badges.
 8. **Mainnet 0G.** Deploy with the real key and play one match.
 
 ## 12. Build detail

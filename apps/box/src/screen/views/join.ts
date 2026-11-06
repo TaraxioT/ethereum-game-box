@@ -26,9 +26,9 @@ export function joinView(ctx: ViewContext): View {
   back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
   const middle = page.keys.x + page.keys.w / 2;
-  const opening = link.state();
+  const first = link.state();
   /** Fewer than every seat can start, so someone says when. */
-  const start = opening.fewest < opening.seats.length ? (document.createElement("egb-key") as EgbKey) : null;
+  const start = first.fewest < first.seats.length ? (document.createElement("egb-key") as EgbKey) : null;
   place(back, { ...page.keys, x: start ? middle - 230 : middle - 110, w: 220 });
   back.addEventListener("click", () => {
     sound.play("ui-back");

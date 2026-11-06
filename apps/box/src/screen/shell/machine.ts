@@ -137,7 +137,8 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
     const before = shown.get(tx.id);
     if (before === tx.step) return;
     shown.set(tx.id, tx.step);
-    txbar.show(tx, players.length);
+    // An open has two stakes at least, even once its seats have gone.
+    txbar.show(tx, Math.max(players.length, 2));
     clearTimeout(hideTx);
     // A lobby's top-up or name belongs to no seat: it lights the core, and runs no packet to a port.
     const seated = tx.kind !== "topup" && tx.kind !== "claim";

@@ -1,6 +1,6 @@
 /**
  * A seat at the Box, one per tap station: 0 is Player 1 (left, orange), 1 is Player 2 (right, cyan), 2 is Player 3 (left,
- * green) and 3 is Player 4 (right, violet). Only a store game seats more than two.
+ * green) and 3 is Player 4 (right, pink). Only a store game seats more than two.
  */
 export type Seat = 0 | 1 | 2 | 3;
 

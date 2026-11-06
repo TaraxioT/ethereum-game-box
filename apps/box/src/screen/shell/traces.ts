@@ -12,7 +12,7 @@ export const TRACE_NAMES: readonly TraceName[] = ["port0", "port1", "clock", "sl
 
 /** The light, as tokens.css has it (--p1 to --p4, --sys, --alert): a port's trace is its seat's colour, every other the
  * system's; red is for something gone wrong. Players 3 and 4 have no trace of their own: they ride their side's. */
-export const LIGHT = { p1: "#ff9b3d", p2: "#3fd9ff", p3: "#7df26a", p4: "#c79bff", sys: "#cfe8f6", alert: "#ff2d3d" } as const;
+export const LIGHT = { p1: "#ff9b3d", p2: "#3fd9ff", p3: "#7dffa6", p4: "#ff7de0", sys: "#cfe8f6", alert: "#ff2d3d" } as const;
 
 export interface Trace {
   /** The named trace, or null for a line that only rides beside one or is decoration. */

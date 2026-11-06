@@ -46,9 +46,9 @@ export function createSeatRow(root: HTMLElement, layout: Layout): SeatRow {
         const rect = rects[i];
         if (rect) place(panel.el, rect);
         panel.el.toggleAttribute("small", seats.length > 2);
-        // The plate and the keys stay over the panels, as they did when a page built its two first.
-        root.prepend(panel.el);
       });
+      // Ahead of the plate and the keys, which stand over the panels.
+      root.prepend(...seats.flatMap((seat) => panels.get(seat)?.el ?? []));
     },
     panel: (seat) => panels.get(seat),
   };

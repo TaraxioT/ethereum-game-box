@@ -31,6 +31,7 @@ import { flush, openScreen, post, startTestBox, type TestBox } from "./testing.t
 
 const NOVA = `0x${"a1".repeat(20)}` as Address;
 const KITE = `0x${"b2".repeat(20)}` as Address;
+const JUNO = `0x${"c3".repeat(20)}` as Address;
 const TX = `0x${"cd".repeat(32)}` as const;
 const SAMPLE = fileURLToPath(new URL("../../../store/sample/tap-rush/", import.meta.url));
 
@@ -68,15 +69,16 @@ async function standInStore(): Promise<StandInStore> {
   return store;
 }
 
-async function rig() {
+async function rig(stations?: readonly string[]) {
   const relayer = mockRelayer();
   const reads = memoryReads();
   const verifier = mockVerifier();
-  reads.storeBalances.set(NOVA, 100).set(KITE, 100);
-  reads.names.set(NOVA, "nova.gamebox.eth").set(KITE, "kite.gamebox.eth");
+  reads.storeBalances.set(NOVA, 100).set(KITE, 100).set(JUNO, 100);
+  reads.names.set(NOVA, "nova.gamebox.eth").set(KITE, "kite.gamebox.eth").set(JUNO, "juno.gamebox.eth");
   const rounds = roundsFile(join(mkdtempSync(join(tmpdir(), "egb-rounds-")), "rounds.json"));
   const store = await standInStore();
   const tb = await startTestBox({
+    ...(stations ? { stations } : {}),
     chain: (clock) =>
       createSepoliaChain({
         box: "mumbai-01",
@@ -314,5 +316,55 @@ describe.skipIf(!CHROMIUM)("a store game in a real kiosk", () => {
     expect(entries.find((entry) => entry.src === "game")).toMatchObject({ t: "event", name: "score", data: { counts: [heard, 1] } });
     expect(entries.filter((entry) => entry.t === "tap" && entry.seat === 0).length).toBeGreaterThanOrEqual(heard);
     expect(entries.at(-1)).toMatchObject({ src: "box", t: "end", why: "game" });
+  });
+
+  it("plays Tap Rush with three of four seats: the page counts players, and a seat left empty isn't one", { timeout: 120_000 }, async () => {
+    const { tb, relayer, verifier } = await rig(["e4ba70", "df3d88", "df3b9c", "0a0b0c"]);
+    const { core } = tb.box;
+    const lines = () => {
+      const play = core.state().match?.play;
+      return play?.game === "store" ? play.lines : [];
+    };
+    await buildScreen(tb);
+
+    core.send({ type: "booted" });
+    await inject(tb, 0, NOVA);
+    core.send({ type: "focus", game: "tap-rush" });
+    core.send({ type: "play" });
+    await vi.waitFor(() => expect(core.state().fetching).toBe(false));
+    expect(core.state().seats).toHaveLength(4);
+    await inject(tb, 0, NOVA);
+    await inject(tb, 2, KITE);
+    await inject(tb, 3, JUNO);
+    core.send({ type: "begin" });
+    await flush();
+    await inject(tb, 0, NOVA);
+    await inject(tb, 2, KITE);
+    await inject(tb, 3, JUNO);
+    expect(relayer.posted[0]?.body.stake).toMatchObject({ players: [NOVA, KITE, JUNO] });
+    relayer.advance(relayer.ids()[0]!, "done");
+    await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
+
+    openKiosk(tb);
+    await vi.waitFor(() => expect(lines()).toEqual(["TAP!", "TAP!", "TAP!"]), SOON);
+    await vi.waitFor(async () => {
+      await inject(tb, 3, JUNO);
+      expect(lines()[2]).toMatch(/^[1-9][0-9]*$/);
+    }, { ...SOON, interval: 250 });
+    await inject(tb, 2, KITE);
+    await vi.waitFor(() => expect(lines()[1]).toBe("1"), SOON);
+    const heard = Number(lines()[2]);
+    // The station of the Box's fourth seat shows the page's third player.
+    expect(core.state().stations.map((v) => v.big)).toEqual(["TAP!", "NEXT", "1", String(heard)]);
+
+    await vi.waitFor(() => expect(core.state().match?.outcome).not.toBeNull(), SOON);
+    tb.advance(END_HOLD_MS);
+    await flush();
+    await vi.waitFor(() => expect(verifier.requests).toHaveLength(1));
+    const text = verifier.requests[0]?.log ?? "";
+    expect(logTextProblems(text)).toEqual([]);
+    const { header, entries } = JSON.parse(text) as MatchLog;
+    expect(header.players).toEqual([NOVA, KITE, JUNO]);
+    expect(entries.find((entry) => entry.src === "game")).toMatchObject({ t: "event", name: "score", data: { counts: [0, 1, heard] } });
   });
 });

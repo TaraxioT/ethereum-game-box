@@ -23,6 +23,8 @@ export interface Scene {
   readonly players: readonly Seat[];
   /** The verifier's word, on `result`: a split, or a refund. */
   readonly refunded?: boolean;
+  /** A team game's match, for the look that has to stay as it is. A store game's otherwise. */
+  readonly team?: boolean;
 }
 
 /** What a scene found: pairs of things on top of each other, and things sticking out of what holds them. */
@@ -59,10 +61,16 @@ function scenes(): Scene[] {
     { seats: 4, players: [0, 2, 3] },
     { seats: 4, players: [0, 2] },
   ];
-  return [...PAGES.flatMap((phase) => fills.map((fill) => ({ phase, ...fill }))), { phase: "join", seats: 4, players: [] }, { phase: "result", seats: 4, players: [0, 1, 2, 3], refunded: true }];
+  const team: readonly Phase[] = ["join", "stake", "result", "refund", "lobby"];
+  return [
+    ...PAGES.flatMap((phase) => fills.map((fill) => ({ phase, ...fill }))),
+    ...team.map((phase): Scene => ({ phase, seats: 2, players: [0, 1], team: true })),
+    { phase: "join", seats: 4, players: [] },
+    { phase: "result", seats: 4, players: [0, 1, 2, 3], refunded: true },
+  ];
 }
 
-const sceneKey = (scene: Scene): string => `${scene.phase}-${scene.seats}of${scene.players.join("")}${scene.refunded ? "-refunded" : ""}`;
+const sceneKey = (scene: Scene): string => `${scene.phase}-${scene.seats}of${scene.players.join("")}${scene.refunded ? "-refunded" : ""}${scene.team ? "-team" : ""}`;
 
 const tapRush = (seats: number): GameInfo => ({ id: "tap-rush", kind: "store", title: "Tap Rush", players: seats, minPlayers: 2, minutes: 0, stakes: [5, 10, 25], tier: "judged", ready: true, sealed: null, icon: null, manifest: null, bundle: BUNDLE });
 
@@ -88,8 +96,7 @@ function judged(scene: Scene): Judged {
 
 function matchOf(scene: Scene): Match | null {
   if (scene.phase === "join" || scene.phase === "stake") return null;
-  const count = scene.players.length;
-  const play: MatchPlay = {
+  const store: MatchPlay = {
     game: "store",
     id: "tap-rush",
     title: "Tap Rush",
@@ -100,31 +107,32 @@ function matchOf(scene: Scene): Match | null {
     judged: scene.phase === "result" ? judged(scene) : null,
     resultAt: scene.phase === "result" ? NOW : null,
   };
+  const play: MatchPlay = scene.team ? ({ game: "quick-draw", state: {} } as unknown as MatchPlay) : store;
   return {
     id: 1,
-    game: "tap-rush",
+    game: scene.team ? "quick-draw" : "tap-rush",
     playFor: "usdc",
     round: 7,
     stake: 10,
     openedBlock: 100,
     refundAt: FAR,
     play,
-    outcome: scene.phase === "playing" ? null : { winner: null },
+    outcome: scene.phase === "playing" ? null : { winner: scene.team ? 0 : null },
     voided: false,
     endedAt: scene.phase === "playing" ? null : NOW,
     refunded: scene.players.map(() => false),
-    lines: null,
+    lines: scene.team ? ["nova.gamebox.eth +20 USDC"] : null,
   };
 }
 
 function stateOf(scene: Scene): BoxState {
-  const game = tapRush(scene.seats);
+  const game = (scene.team && TEAM_GAMES[0]) || tapRush(scene.seats);
   const seats = Array.from({ length: scene.seats }, (_, seat) => seatOf(scene, seat)) as unknown as Seated<SeatState>;
   const view = stationView("", "", "");
   const open: Tx = { id: 1, kind: "open", seat: null, direction: "in", amount: 10 * scene.players.length, step: "in-block", block: 123, hash: BUNDLE, etherscan: null, error: null, stepAt: NOW };
   return {
     phase: scene.phase,
-    games: [...TEAM_GAMES, game],
+    games: [...TEAM_GAMES, tapRush(scene.seats)],
     focus: game.id,
     seats,
     fewest: Math.min(2, scene.seats),

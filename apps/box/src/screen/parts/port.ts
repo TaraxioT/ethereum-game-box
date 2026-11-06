@@ -1,5 +1,5 @@
 // <egb-port seat="0|1|2|3">: a player's node in a top corner of the Box. A round socket of light in the seat's colour
-// (Player 1 orange, Player 2 cyan, Player 3 green, Player 4 violet) holding the badge's blockie as a lit 8 × 8 LED grid, the badge's name reading away
+// (Player 1 orange, Player 2 cyan, Player 3 green, Player 4 pink) holding the badge's blockie as a lit 8 × 8 LED grid, the badge's name reading away
 // from it, the balance under the name, and a seat-colour underline running out from the socket under both. Seats 0
 // and 2 read rightwards from their sockets at the left; seats 1 and 3 mirror them.
 //
