@@ -1,42 +1,47 @@
 import {
   EXECUTE_VECTOR,
+  type ExecuteRequest,
   P256_VECTOR_KEY,
   RESULT_VECTOR,
+  executeBatchDigest,
   executeDigest,
   fullName,
   permissionedResolverAbi,
   resultDigest,
 } from '@egb/shared/names';
 import { MemoryStore } from '@egb/relayer/test/memory-store';
-import { p256Problem } from '@egb/relayer/verify';
+import { accountSignatureProblem, p256Problem } from '@egb/relayer/verify';
 import { type Address, type Hex, decodeFunctionData, toHex } from 'viem';
 import { packetToBytes } from 'viem/ens';
 import { describe, expect, it } from 'vitest';
 
-import { Box, type Reply } from '../src/box.ts';
+import { Box } from '../src/box.ts';
 import type { BoxChain, BoxInfo } from '../src/chain.ts';
+import type { Reply } from '../src/relayer.ts';
 import { p256Signer } from '../src/signer.ts';
 
 const NOW = 1_800_000_000;
 const ACCOUNT: Address = '0x00000000000000000000000000000000000000B0';
 const RESULTS: Address = '0x00000000000000000000000000000000000000a2';
-const resolverOf = (label: string) => `0x${label.length.toString(16).padStart(40, 'c')}` as Address;
+const RESOLVER: Address = '0x00000000000000000000000000000000000000C0';
 
 const decode = (data: Hex) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args as [Hex, string, string];
 
-function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Record<string, string>; reply?: (path: string, body: unknown) => Reply } = {}) {
+/** The `[key, value]` writes of a `POST /account/execute` body. */
+const writes = (body: Record<string, unknown>) => {
+  const calls = (body.calls ?? [body.call]) as { target: Address; data: Hex }[];
+  return calls.map((call) => decode(call.data).slice(1));
+};
+
+function setup(options: { box?: Partial<BoxInfo>; game?: string; reply?: (path: string, body: unknown) => Reply } = {}) {
   const boxes: Record<string, BoxInfo> = {
-    'mumbai-01': { account: ACCOUNT, resolver: resolverOf('mumbai-01'), expiry: NOW + 86_400, status: 1 },
+    'mumbai-01': { account: ACCOUNT, resolver: RESOLVER, expiry: NOW + 86_400, status: 1, ...options.box },
   };
-  for (const [label, info] of Object.entries(options.popups ?? {})) {
-    boxes[label] = { account: ACCOUNT, resolver: resolverOf(label), expiry: NOW + 300, status: 1, ...info };
-  }
   const usedRounds = new Set<string>();
   const chain: BoxChain = {
     box: async (label) => boxes[label] ?? { account: `0x${'00'.repeat(20)}`, resolver: `0x${'00'.repeat(20)}`, expiry: 0, status: 0 },
-    game: async (_box, label) => options.games?.[label] ?? '',
+    text: async () => options.game ?? '',
     roundUsed: async (box, round) => usedRounds.has(`${box}:${round}`),
-    recentPopups: async () => Object.keys(options.popups ?? {}),
   };
   const posts: { path: string; body: Record<string, unknown> }[] = [];
   const store = new MemoryStore();
@@ -51,9 +56,12 @@ function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Rec
       label: 'mumbai-01',
       defaultGame: 'quickdraw',
       results: RESULTS,
-      post: async (path, body) => {
-        posts.push({ path, body: body as Record<string, unknown> });
-        return options.reply?.(path, body) ?? { status: 202, body: { id: `id-${posts.length}` } };
+      relayer: {
+        post: async (path, body) => {
+          posts.push({ path, body: body as Record<string, unknown> });
+          return options.reply?.(path, body) ?? { status: 202, body: { id: `id-${posts.length}` } };
+        },
+        get: async () => ({ status: 404, body: {} }),
       },
       now: () => NOW,
       nonce: () => nonce++,
@@ -72,52 +80,50 @@ describe('the signer', () => {
       // RFC 6979 on both sides: the same signature the contracts' test made.
       expect({ r, s }).toEqual({ r: vector.r, s: vector.s });
     }
+    expect(signer.raw(EXECUTE_VECTOR.digest)).toBe(EXECUTE_VECTOR.signature);
   });
 });
 
 describe('the heartbeat', () => {
-  it("signs a BoxAccount.execute of lastSeen on mumbai-01's resolver, over the right digest", async () => {
-    const { box, posts, signer } = setup({ games: { 'mumbai-01': 'quickdraw' } });
-    const ids = await box.heartbeat();
-    expect(ids).toEqual(['id-1']);
+  it("signs a P256Account.execute of lastSeen on mumbai-01's resolver, raw, over the right digest", async () => {
+    const { box, posts, signer } = setup({ game: 'quickdraw' });
+    expect(await box.heartbeat()).toEqual(['id-1']);
     expect(posts).toHaveLength(1);
-    const body = posts[0]!.body as Record<string, string>;
-    expect(posts[0]!.path).toBe('/box/execute');
-    expect(body).toMatchObject({ account: ACCOUNT, target: resolverOf('mumbai-01'), value: '0', deadline: String(NOW + 600) });
-    expect(decode(body.data as Hex)).toEqual([toHex(packetToBytes(fullName('mumbai-01'))), 'lastSeen', String(NOW)]);
-    const call = {
-      target: body.target as Address,
-      value: 0n,
-      data: body.data as Hex,
-      nonce: BigInt(body.nonce!),
-      deadline: BigInt(body.deadline!),
-    };
-    expect(p256Problem(executeDigest(call, ACCOUNT), body.r as Hex, body.s as Hex, signer.qx, signer.qy)).toBeNull();
+    expect(posts[0]!.path).toBe('/account/execute');
+    const body = posts[0]!.body as unknown as ExecuteRequest;
+    expect(body).toMatchObject({ account: ACCOUNT, deadline: String(NOW + 600), call: { target: RESOLVER, value: '0' } });
+    expect(decode(body.call!.data)).toEqual([toHex(packetToBytes(fullName('mumbai-01'))), 'lastSeen', String(NOW)]);
+    const digest = executeDigest(
+      { ...body.call!, value: 0n, nonce: BigInt(body.nonce), deadline: BigInt(body.deadline) },
+      ACCOUNT,
+    );
+    expect(accountSignatureProblem(digest, body.signature, signer.qx, signer.qy)).toBeNull();
     expect((await box.view()).lastSeen).toBe(NOW);
   });
 
-  it('writes game only where the record differs, and lastSeen on every beat', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'stockduel' } });
+  it('batches game with lastSeen, under one signature, only where the record differs', async () => {
+    const { box, posts, signer } = setup({ game: 'stockduel' });
     await box.heartbeat();
-    expect(posts.map((p) => decode(p.body.data as Hex).slice(1))).toEqual([
+    expect(posts).toHaveLength(1);
+    const body = posts[0]!.body as unknown as ExecuteRequest;
+    expect(writes(posts[0]!.body)).toEqual([
       ['lastSeen', String(NOW)],
       ['game', 'quickdraw'],
     ]);
+    const calls = body.calls!.map((call) => ({ ...call, value: 0n }));
+    const digest = executeBatchDigest({ calls, nonce: BigInt(body.nonce), deadline: BigInt(body.deadline) }, ACCOUNT);
+    expect(accountSignatureProblem(digest, body.signature, signer.qx, signer.qy)).toBeNull();
   });
 
-  it('beats on every live pop-up it runs, and skips the lapsed and the foreign ones', async () => {
-    const { box, posts } = setup({
-      popups: {
-        'popup-live': {},
-        'popup-gone': { expiry: NOW - 1 },
-        'popup-other': { account: '0x00000000000000000000000000000000000000b1' },
-      },
-    });
-    await box.heartbeat();
-    expect([...new Set(posts.map((p) => p.body.target))]).toEqual([resolverOf('mumbai-01'), resolverOf('popup-live')]);
+  it('skips a Box whose licence has lapsed, or that another account runs', async () => {
+    for (const box of [{ expiry: NOW - 1 }, { account: '0x00000000000000000000000000000000000000b1' as Address }]) {
+      const { box: demo, posts } = setup({ box });
+      expect(await demo.heartbeat()).toEqual([]);
+      expect(posts).toHaveLength(0);
+    }
   });
 
-  it('uses a fresh nonce for every write', async () => {
+  it('uses a fresh nonce for every beat', async () => {
     const { box, posts } = setup();
     await box.heartbeat();
     await box.heartbeat();
@@ -156,10 +162,10 @@ describe('POST /result', () => {
   });
 
   it('shows the game it reported in the next heartbeat', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'quickdraw' } });
+    const { box, posts } = setup({ game: 'quickdraw' });
     await box.report({ ...report, game: 'stockduel' }, 'ip');
     await box.heartbeat();
-    expect(decode(posts.at(-1)!.body.data as Hex).slice(1)).toEqual(['game', 'stockduel']);
+    expect(writes(posts.at(-1)!.body).at(-1)).toEqual(['game', 'stockduel']);
   });
 
   it('refuses a malformed report, and a Box it does not run, without signing', async () => {
