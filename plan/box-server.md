@@ -1,8 +1,8 @@
 # The Box server, the tap stations and the game builder
 
 The plan for the Game Box's own server on the Raspberry Pi, the tap stations that feed it, and the game builder that
-makes new games on the Box. No blockchain yet: money, blocks and transactions stay simulated behind the interface the
-chain plugs into later. Plan live at https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/.
+makes new games on the Box. No blockchain on the Box yet: money, blocks and transactions stay simulated inside the core.
+The contracts and the relayer are live, but the Box has no chain client, and adding one means a new port. Plan live at https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/.
 
 ## 1. Goal
 
@@ -18,8 +18,8 @@ Priorities, in order:
 2. Generated games run.
 3. Code quality at least as high as the UI pass.
 
-**No blockchain yet.** No contracts, RPC, relayer, Box signer or ENS. Money, blocks and transactions stay simulated,
-behind the interface the chain plugs into later. Only what has to wait for the chain is simulated; everything else
+**No blockchain on the Box yet.** This plan adds no contracts, RPC, relayer, Box signer or ENS to the Box. Money,
+blocks and transactions stay simulated, inside the core. Only what has to wait for the chain is simulated; everything else
 (stations, badges, randomness, the server, the builder) is real.
 
 ## 2. What exists today
@@ -106,7 +106,8 @@ behind the interface the chain plugs into later. Only what has to wait for the c
 - **One process owns the serial port**: the Box server. No helper process, bridge or monitor sits between the
   receiver and the server.
 - **The core** (`apps/box/src/core/`) has no DOM and no Node APIs. It reaches the world through ports: clock and
-  timers, stations, badges (tap events in), chain (simulated today), and a rules runner (built games).
+  timers, stations, badges (tap events in), the ledger store, the library, the match log, and a rules runner (built
+  games). The chain has no port yet: it is simulated inside the core.
 - **Two hosts run the core:** `SimLink` in the browser for the demo build, and the Box server on the Pi.
 - **Built games** are refereed by the server: their rules run in a sandboxed child, their screens in a sandboxed
   frame that only draws.
@@ -138,10 +139,11 @@ deploy/pi/     setup.sh, release.sh, activate.sh, update.sh, push.sh, lib.sh, un
 interface CorePorts {
   clock: Clock;                 // now(), after(ms, fn), every(ms, fn), cancel(handle)
   stations: StationsPort;       // show(seat, view), buzz(seat, kind: "ok" | "no")
-  chain: ChainPort;             // the simulated chain today: blocks, gas, transactions
   ledger: LedgerStore;          // load() / save(ledger): in memory in the browser, $EGB_DATA/ledger.json on the Pi
   rules: RulesRunnerPort;       // built games' rules (the server's child processes); absent in the demo
   log: MatchLog;                // transcripts; a no-op in the demo
+  library: LibraryPort;         // the installed games
+  random: () => number;         // seeds and the simulated chain, not game outcomes
 }
 // in: core.tap(event: TapEvent), core.send(command: ScreenCommand); out: BoxLink's state() and subscribe()
 ```
@@ -151,7 +153,7 @@ interface CorePorts {
 - **The ledger.** The server keeps the simulated ledger in `$EGB_DATA/ledger.json`, written atomically (write a temp
   file, fsync, rename). Transactions still have no hash and show `SIMULATED`.
 - **`StationView`** becomes what a real station can show: `tag` (≤ 3 characters), `big` (≤ 10) and `small` (≤ 20),
-  with the optional overrides `hold` / `sign` / `done` / `fail`. The drawn puck draws the same model.
+  with the optional overrides `hold` / `sign` / `done` / `fail`. The demo draws no stations.
 - **Taps carry their phase.** The core takes `touch`, then `done` or `fail`, for each tap. A game that judges by time
   uses the touch time; a game that needs the chip's number waits for `done`.
 - **`LiveLink`** implements `BoxLink` over a WebSocket (`ws` on the server, the browser's own on the screen):
@@ -204,7 +206,7 @@ Pi's clock by a running minimum of (Pi receive time − `at_us`). It is never th
 
 **Stations:**
 
-- Seats map to station ids from `EGB_STATIONS` (default `e4ba70,df3d88`: Player 1, Player 2).
+- Seats map to station ids from `EGB_STATIONS` (default `df3b9c,df3d88`: Player 1, Player 2).
 - Screens go out on change, on relink, and every 5 s with `ttl=15`.
 - A station buzzes on an accepted tap (one short), and gives a "no" buzz (two short) on a refused one.
 - A dropped link gets 2 s of grace before an open tap on it fails.
@@ -235,7 +237,7 @@ Every game's rules run on the Pi, in the server, and the server referees every g
   badge's tap as a rematch only `REMATCH_TAP_MS` (4000 ms) after the result, so a resting chip can't skip it. It never
   says GO on the speaker. Its taps are `identify`.
 - **Stock Duel.** Its taps are `random`. `touch` freezes that seat's Rolodex front card; `done` plays it at the touch
-  time with the chip's roll; `fail` releases it. New rule events (`touch`, `done`, `fail`) with tests.
+  time with the chip's roll; `fail` releases it. Rule events `touch`, `tap` and `release`, with tests.
 
 **Built games run their rules in a child process per game**, started with Node's permission model:
 
@@ -284,7 +286,7 @@ It runs on the Pi, with the Pi's Claude login.
 - **Entry.** A blank `NEW GAME` cartridge at the end of Home's rack opens the Designer (box build only).
 - **The Designer** asks one question at a time:
   - The steps are template, mechanic, theme, twist, stakes, voice, title, confirm. Settled steps are skipped.
-  - Choices are brass keys.
+  - Choices are keys of light.
   - Typed or spoken answers are read by `claude-haiku-5-5`, with a 5 s timeout and a keyword fallback.
   - Edits are locked while a build runs.
   - A late model reply applies to the brief as it is by then, never to the brief it was asked about.
@@ -431,7 +433,7 @@ the kiosk within one frame plus 10 ms of reaching the Pi.
 | Parse a line | 1.8 µs | 2.2 | 2.4 | 2.4 | ≤ 0.1 ms: JSON lines stay |
 | Event-loop delay, idle | 1.05 ms | 1.07 | 1.12 | 1.84 | p99 < 5 ms |
 | Event-loop delay, during a live `claude` build | 1.05 ms | 1.07 | 1.26 | 1.88 | p99 < 5 ms |
-| Kiosk frame time, Home / Quick Draw / Stock Duel, through blocks | 16.7 ms | 16.7 | | 16.8 | 60 fps |
+| Kiosk frame time, Home / Quick Draw / Stock Duel, through blocks (before the Grid merged) | 16.7 ms | 16.7 | | 16.8 | 60 fps |
 
 - `nfc list` with a badge resting on the reader is a field cycle (21 ms, of which the PN532 spends 6.3 ms switching
   the field off) plus listing up to two chips (42.6 ms against 29.1 ms for one); the ~35 ms target was an empty
@@ -546,9 +548,8 @@ The results of the bench are in §9.
   blocks no longer do.
 - The last station firmware (a chip that misses R(NAK) is re-read instead of counted gone) passed its host tests and
   a clean build and was flashed, but the badges had been taken off the readers by then, so it hasn't met a badge.
-- The live demo: `game-ui` moved on to a new look while this branch was built, and the demo at
-  https://ethereum-game-box.pages.dev/ runs it. This branch's demo build was not deployed over it; merging `game-ui`
-  in is the team's call (it removes the demo desk and parts this branch changed).
+- The live demo: `game-ui` is merged into `main`, but the demo at https://ethereum-game-box.pages.dev/ still runs
+  `game-ui`'s build. `main`'s demo build isn't deployed yet.
 
 **What still needs people, or a chain**
 
@@ -558,16 +559,17 @@ The results of the bench are in §9.
   connected).
 - The repo deploy key: `~/.ssh/egb_deploy.pub` on the Pi goes on the repo as a read-only deploy key, then
   `EGB_REPO_URL` in `~/.config/egb/env` and `systemctl --user enable --now egb-update.timer`.
-- The chain: stakes, payouts and blocks are simulated behind the core's ports until the contracts, relayer and Box key
-  land.
+- The chain: the contracts and the relayer are live, but the Box doesn't use them. It has no Box key signer, chain
+  client or relayer client, so stakes, payouts and blocks stay simulated inside the core. The HYP2003 hasn't been set
+  up on the Pi.
 
 ## 14. Done when
 
 **Builds**
 
 - [x] The `box` build runs on the Pi through `LiveLink`.
-- [ ] The demo build still runs on `SimLink` and is live. (It runs on `SimLink` and its tests pass; the live demo now
-      runs `game-ui`'s new look, so this branch's build wasn't deployed over it: §13.)
+- [ ] The demo build still runs on `SimLink` and is live. (It runs on `SimLink` and its tests pass; `game-ui` is merged,
+      but `main`'s build isn't deployed: §13.)
 
 **Firmware and the bench**
 

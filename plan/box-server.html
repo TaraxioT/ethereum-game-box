@@ -80,8 +80,8 @@
   <div class="kicker">ETHGlobal Mumbai · Box server plan</div>
   <h1>The Box server, the tap stations and the game builder</h1>
   <div class="lede"><p>The plan for the Game Box&#39;s own server on the Raspberry Pi, the tap stations that feed it, and the game builder that
-makes new games on the Box. No blockchain yet: money, blocks and transactions stay simulated behind the interface the
-chain plugs into later. Plan live at <a href="https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/</a>.</p>
+makes new games on the Box. No blockchain on the Box yet: money, blocks and transactions stay simulated inside the core.
+The contracts and the relayer are live, but the Box has no chain client, and adding one means a new port. Plan live at <a href="https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/</a>.</p>
 </div>
   <nav>
     <a href="#s1">Goal</a>
@@ -116,8 +116,8 @@ build is the only exception: it runs in any visitor&#39;s browser.</li>
 <li>Generated games run.</li>
 <li>Code quality at least as high as the UI pass.</li>
 </ol>
-<p><strong>No blockchain yet.</strong> No contracts, RPC, relayer, Box signer or ENS. Money, blocks and transactions stay simulated,
-behind the interface the chain plugs into later. Only what has to wait for the chain is simulated; everything else
+<p><strong>No blockchain on the Box yet.</strong> This plan adds no contracts, RPC, relayer, Box signer or ENS to the Box. Money,
+blocks and transactions stay simulated, inside the core. Only what has to wait for the chain is simulated; everything else
 (stations, badges, randomness, the server, the builder) is real.</p>
 </section>
 
@@ -206,7 +206,8 @@ back on failure, prune old releases.</li>
 <li><strong>One process owns the serial port</strong>: the Box server. No helper process, bridge or monitor sits between the
 receiver and the server.</li>
 <li><strong>The core</strong> (<code>apps/box/src/core/</code>) has no DOM and no Node APIs. It reaches the world through ports: clock and
-timers, stations, badges (tap events in), chain (simulated today), and a rules runner (built games).</li>
+timers, stations, badges (tap events in), the ledger store, the library, the match log, and a rules runner (built
+games). The chain has no port yet: it is simulated inside the core.</li>
 <li><strong>Two hosts run the core:</strong> <code>SimLink</code> in the browser for the demo build, and the Box server on the Pi.</li>
 <li><strong>Built games</strong> are refereed by the server: their rules run in a sandboxed child, their screens in a sandboxed
 frame that only draws.</li>
@@ -237,10 +238,11 @@ deploy/pi/     setup.sh, release.sh, activate.sh, update.sh, push.sh, lib.sh, un
 <pre><code class="language-ts">interface CorePorts {
   clock: Clock;                 // now(), after(ms, fn), every(ms, fn), cancel(handle)
   stations: StationsPort;       // show(seat, view), buzz(seat, kind: &quot;ok&quot; | &quot;no&quot;)
-  chain: ChainPort;             // the simulated chain today: blocks, gas, transactions
   ledger: LedgerStore;          // load() / save(ledger): in memory in the browser, $EGB_DATA/ledger.json on the Pi
   rules: RulesRunnerPort;       // built games&#39; rules (the server&#39;s child processes); absent in the demo
   log: MatchLog;                // transcripts; a no-op in the demo
+  library: LibraryPort;         // the installed games
+  random: () => number;         // seeds and the simulated chain, not game outcomes
 }
 // in: core.tap(event: TapEvent), core.send(command: ScreenCommand); out: BoxLink&#39;s state() and subscribe()
 </code></pre>
@@ -250,7 +252,7 @@ keeps working. The Box server, on the Pi.</li>
 <li><strong>The ledger.</strong> The server keeps the simulated ledger in <code>$EGB_DATA/ledger.json</code>, written atomically (write a temp
 file, fsync, rename). Transactions still have no hash and show <code>SIMULATED</code>.</li>
 <li><strong><code>StationView</code></strong> becomes what a real station can show: <code>tag</code> (≤ 3 characters), <code>big</code> (≤ 10) and <code>small</code> (≤ 20),
-with the optional overrides <code>hold</code> / <code>sign</code> / <code>done</code> / <code>fail</code>. The drawn puck draws the same model.</li>
+with the optional overrides <code>hold</code> / <code>sign</code> / <code>done</code> / <code>fail</code>. The demo draws no stations.</li>
 <li><strong>Taps carry their phase.</strong> The core takes <code>touch</code>, then <code>done</code> or <code>fail</code>, for each tap. A game that judges by time
 uses the touch time; a game that needs the chip&#39;s number waits for <code>done</code>.</li>
 <li><strong><code>LiveLink</code></strong> implements <code>BoxLink</code> over a WebSocket (<code>ws</code> on the server, the browser&#39;s own on the screen):<ul>
@@ -305,7 +307,7 @@ whose number the game uses. <strong>Key 1 is never used in this pass.</strong></
 Pi&#39;s clock by a running minimum of (Pi receive time − <code>at_us</code>). It is never the time the reply arrived.</p>
 <p><strong>Stations:</strong></p>
 <ul>
-<li>Seats map to station ids from <code>EGB_STATIONS</code> (default <code>e4ba70,df3d88</code>: Player 1, Player 2).</li>
+<li>Seats map to station ids from <code>EGB_STATIONS</code> (default <code>df3b9c,df3d88</code>: Player 1, Player 2).</li>
 <li>Screens go out on change, on relink, and every 5 s with <code>ttl=15</code>.</li>
 <li>A station buzzes on an accepted tap (one short), and gives a &quot;no&quot; buzz (two short) on a refused one.</li>
 <li>A dropped link gets 2 s of grace before an open tap on it fails.</li>
@@ -335,7 +337,7 @@ touch, reads for up to <code>READ_WAIT_MS</code> (1500 ms), calls <code>TOO_SLOW
 badge&#39;s tap as a rematch only <code>REMATCH_TAP_MS</code> (4000 ms) after the result, so a resting chip can&#39;t skip it. It never
 says GO on the speaker. Its taps are <code>identify</code>.</li>
 <li><strong>Stock Duel.</strong> Its taps are <code>random</code>. <code>touch</code> freezes that seat&#39;s Rolodex front card; <code>done</code> plays it at the touch
-time with the chip&#39;s roll; <code>fail</code> releases it. New rule events (<code>touch</code>, <code>done</code>, <code>fail</code>) with tests.</li>
+time with the chip&#39;s roll; <code>fail</code> releases it. Rule events <code>touch</code>, <code>tap</code> and <code>release</code>, with tests.</li>
 </ul>
 <p><strong>Built games run their rules in a child process per game</strong>, started with Node&#39;s permission model:</p>
 <ul>
@@ -379,7 +381,7 @@ results per pair per hour.</p>
 <li><strong>Entry.</strong> A blank <code>NEW GAME</code> cartridge at the end of Home&#39;s rack opens the Designer (box build only).</li>
 <li><strong>The Designer</strong> asks one question at a time:<ul>
 <li>The steps are template, mechanic, theme, twist, stakes, voice, title, confirm. Settled steps are skipped.</li>
-<li>Choices are brass keys.</li>
+<li>Choices are keys of light.</li>
 <li>Typed or spoken answers are read by <code>claude-haiku-5-5</code>, with a 5 s timeout and a keyword fallback.</li>
 <li>Edits are locked while a build runs.</li>
 <li>A late model reply applies to the brief as it is by then, never to the brief it was asked about.</li>
@@ -676,7 +678,7 @@ the kiosk within one frame plus 10 ms of reaching the Pi.</p>
 <td>p99 &lt; 5 ms</td>
 </tr>
 <tr>
-<td>Kiosk frame time, Home / Quick Draw / Stock Duel, through blocks</td>
+<td>Kiosk frame time, Home / Quick Draw / Stock Duel, through blocks (before the Grid merged)</td>
 <td align="right">16.7 ms</td>
 <td align="right">16.7</td>
 <td align="right"></td>
@@ -855,9 +857,8 @@ on Home and in both games.</li>
 blocks no longer do.</li>
 <li>The last station firmware (a chip that misses R(NAK) is re-read instead of counted gone) passed its host tests and
 a clean build and was flashed, but the badges had been taken off the readers by then, so it hasn&#39;t met a badge.</li>
-<li>The live demo: <code>game-ui</code> moved on to a new look while this branch was built, and the demo at
-<a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a> runs it. This branch&#39;s demo build was not deployed over it; merging <code>game-ui</code>
-in is the team&#39;s call (it removes the demo desk and parts this branch changed).</li>
+<li>The live demo: <code>game-ui</code> is merged into <code>main</code>, but the demo at <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a> still runs
+<code>game-ui</code>&#39;s build. <code>main</code>&#39;s demo build isn&#39;t deployed yet.</li>
 </ul>
 <p><strong>What still needs people, or a chain</strong></p>
 <ul>
@@ -867,8 +868,9 @@ tap both games for real, including Quick Draw&#39;s reaction times and a badge l
 connected).</li>
 <li>The repo deploy key: <code>~/.ssh/egb_deploy.pub</code> on the Pi goes on the repo as a read-only deploy key, then
 <code>EGB_REPO_URL</code> in <code>~/.config/egb/env</code> and <code>systemctl --user enable --now egb-update.timer</code>.</li>
-<li>The chain: stakes, payouts and blocks are simulated behind the core&#39;s ports until the contracts, relayer and Box key
-land.</li>
+<li>The chain: the contracts and the relayer are live, but the Box doesn&#39;t use them. It has no Box key signer, chain
+client or relayer client, so stakes, payouts and blocks stay simulated inside the core. The HYP2003 hasn&#39;t been set
+up on the Pi.</li>
 </ul>
 </section>
 
@@ -877,8 +879,8 @@ land.</li>
 <p><strong>Builds</strong></p>
 <ul>
 <li><input checked="" disabled="" type="checkbox"> The <code>box</code> build runs on the Pi through <code>LiveLink</code>.</li>
-<li><input disabled="" type="checkbox"> The demo build still runs on <code>SimLink</code> and is live. (It runs on <code>SimLink</code> and its tests pass; the live demo now
-runs <code>game-ui</code>&#39;s new look, so this branch&#39;s build wasn&#39;t deployed over it: §13.)</li>
+<li><input disabled="" type="checkbox"> The demo build still runs on <code>SimLink</code> and is live. (It runs on <code>SimLink</code> and its tests pass; <code>game-ui</code> is merged,
+but <code>main</code>&#39;s build isn&#39;t deployed: §13.)</li>
 </ul>
 <p><strong>Firmware and the bench</strong></p>
 <ul>
