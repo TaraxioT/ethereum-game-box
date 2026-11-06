@@ -148,8 +148,10 @@ All are systemd user units in `~/.config/systemd/user/`; linger keeps them runni
   `setup.sh` installed, not the system's.
 - **`egb-kiosk`**: Chromium on Wayland (`--kiosk --app`, full screen, own profile `~/.config/egb-chromium`) with the
   flags the Pi's working kiosk uses, plus `--autoplay-policy` and `--use-fake-ui-for-media-stream` for sounds and
-  push-to-talk. It touches no audio setting. `kiosk-prestart.sh` runs first (server up, display socket there, stale
-  placement cleared). It restarts forever, so it waits out the desktop at boot.
+  push-to-talk. It touches no audio setting. `--host-resolver-rules` and `--webrtc-ip-handling-policy` keep a store
+  game off the network, where its CSP can't: no name resolves but this machine's, and WebRTC has no route out
+  (`apps/box/src/server/games/sandbox.test.ts` runs this line's flags). `kiosk-prestart.sh` runs first (server up,
+  display socket there, stale placement cleared). It restarts forever, so it waits out the desktop at boot.
   The Settings page's EXIT TO DESKTOP stops it (`POST /api/box/exit`), leaving the desktop and the server running; it comes back
   with the next deploy, a reboot or `systemctl --user start egb-kiosk`.
 - **`egb-update.service`** and **`egb-update.timer`**: see above.

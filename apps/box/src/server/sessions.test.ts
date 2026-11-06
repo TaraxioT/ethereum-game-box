@@ -24,6 +24,18 @@ beforeEach(async () => {
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 describe("the session log", () => {
+  it("reads back a match of four, and counts those four as one group", async () => {
+    const D = `0x${"dd".repeat(20)}`;
+    const log = createSessionLog(dir, () => {});
+    log.record(transcript(null, { badges: [A, B, C, D], result: { winner: null } }));
+    await log.flush();
+    const again = createSessionLog(dir, () => {});
+    await again.load();
+    expect(again.records()[D]).toEqual({ wins: 0, losses: 0, draws: 1 });
+    expect(again.countedSince([D, C, B, A], END - 1)).toBe(1);
+    expect(again.countedSince([A, B], END - 1)).toBe(0);
+  });
+
   it("writes one line per match into the day's file, and rebuilds the records from it at start", async () => {
     const log = createSessionLog(dir, () => {});
     log.record(transcript(0));

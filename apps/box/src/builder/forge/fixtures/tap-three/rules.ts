@@ -1,15 +1,15 @@
 // Tap Three's rules: each tap adds one to its seat's count, and the first seat to TARGET wins.
-import { stationView, type BuiltEvent, type BuiltRules, type Outcome, type Seat, type StationView } from "@egb/sdk";
+import { stationView, type BuiltEvent, type BuiltRules, type Outcome, type DuelSeat, type StationView } from "@egb/sdk";
 
 export const TARGET = 3;
 
 export interface TapThreeState {
   readonly startedAt: number;
   readonly taps: readonly [number, number];
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
-function view(state: TapThreeState, seat: Seat): StationView {
+function view(state: TapThreeState, seat: DuelSeat): StationView {
   const small = state.winner === null ? "TAP" : state.winner === seat ? "WIN" : "LOSE";
   return stationView(seat === 0 ? "P1" : "P2", String(state.taps[seat]), small);
 }

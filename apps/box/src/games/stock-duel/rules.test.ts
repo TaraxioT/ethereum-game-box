@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import { DECK, STATS } from "./deck.ts";
 import {
   DEAL_MS,
@@ -32,7 +32,7 @@ function picksWith(h0: readonly Stock[], h1: readonly Stock[]): StockDuelState {
   return { ...picking(), hands: [h0, h1] };
 }
 
-function tap(state: StockDuelState, seat: Seat, now: number, roll: number): StockDuelState {
+function tap(state: StockDuelState, seat: DuelSeat, now: number, roll: number): StockDuelState {
   return rules.step(state, { type: "tap", seat, now, roll });
 }
 
@@ -109,7 +109,7 @@ describe("the front card", () => {
   it("follows the clock, one dwell per card, wrapping round the hand", () => {
     const pick = picking();
     const dwell = pick.dwellMs;
-    const expected = (seat: Seat, steps: number) => (steps + (seat === 1 ? 1 : 0)) % 4;
+    const expected = (seat: DuelSeat, steps: number) => (steps + (seat === 1 ? 1 : 0)) % 4;
     for (let steps = 0; steps < 9; steps++) {
       for (const seat of [0, 1] as const) {
         const now = PICK_AT + steps * dwell + dwell / 2;
@@ -191,8 +191,8 @@ describe("tapping in the pick", () => {
 });
 
 describe("a tap as touch, then done or fail", () => {
-  const touch = (state: StockDuelState, seat: Seat, now: number) => rules.step(state, { type: "touch", seat, now });
-  const release = (state: StockDuelState, seat: Seat) => rules.step(state, { type: "release", seat });
+  const touch = (state: StockDuelState, seat: DuelSeat, now: number) => rules.step(state, { type: "touch", seat, now });
+  const release = (state: StockDuelState, seat: DuelSeat) => rules.step(state, { type: "release", seat });
 
   it("freezes the front card the player saw at the touch, while the chip rolls", () => {
     const pick = picking();
@@ -402,7 +402,7 @@ describe("rounds", () => {
   });
 
   it("ends the match when a seat wins two rounds", () => {
-    // Seat 0 holds only stronger cards than seat 1, whatever the drums show.
+    // DuelSeat 0 holds only stronger cards than seat 1, whatever the drums show.
     const hi = [stock("H0", { price: 90 }), stock("H1", { price: 91 }), stock("H2", { price: 92 }), stock("H3", { price: 93 })];
     const lo = [stock("L0", { price: 10 }), stock("L1", { price: 11 }), stock("L2", { price: 12 }), stock("L3", { price: 13 })];
     const first = playRound(picksWith(hi, lo), PICK_AT, [0, 0]);

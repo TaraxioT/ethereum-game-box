@@ -25,6 +25,11 @@ function titleMap(board: Board | null): string {
   return t ? `${t.name} → ${t.holder}${t.streak > 1 ? ` ×${t.streak}` : ""}` : "NOBODY HOLDS THE TITLE YET";
 }
 
+/** A store game's plate: no title and no championship, and no winner takes all unless the judge says so. */
+export function judgedLine(each: number, seats: number): OnTheLine {
+  return { head: `AN AI JUDGE SPLITS ${each * seats} USDC`, detail: `${each} USDC EACH · STORE USDC · IF IT CAN'T JUDGE, EVERY STAKE GOES BACK` };
+}
+
 export function onTheLine(state: Pick<BoxState, "stake" | "playFor" | "board">, game: string, now: number): OnTheLine {
   const { board } = state;
   const cup = liveCup(board, now);

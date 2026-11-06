@@ -45,8 +45,8 @@ export function botIntent(state: BoxState, now: number, bot: Badge): BotIntent |
     case "playing": {
       if (!match || match.outcome) return null;
       const { play } = match;
-      // The demo's bot plays the team games only (the demo runs no built games).
-      if (play.game === "built") return null;
+      // The demo's bot plays the team games only (the demo runs no built or store games).
+      if (play.game === "built" || play.game === "store") return null;
       if (play.game === "quick-draw") {
         const standing = play.state.phase === "wait" || play.state.phase === "draw";
         if (!standing || play.state.taps[BOT_SEAT] !== null) return null;

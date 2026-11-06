@@ -1,13 +1,15 @@
 // Refund: the Box missed its settle, so the pot's safety net opens. The pot unlocks a while after it opened (an hour on
-// Sepolia); then either player's tap, or REFUND ALL, sends one refund that pays both stakes back to their badges.
-// Both refunded, the Box goes Home. HOME leaves sooner: the Box refunds the pot itself once it unlocks.
+// Sepolia); then any player's tap, or REFUND ALL, sends one refund that pays every stake back to its badge.
+// Refunded, the Box goes Home. HOME leaves sooner: the Box refunds the pot itself once it unlocks. A store match
+// comes here when the verifier never paid its pot, and says so.
 import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
+import { playerSeats } from "../../core/seats.ts";
 import { pageLayout } from "./page-layout.ts";
-import { createSeatPanel } from "./seat-panel.ts";
+import { createSeatRow, seatsInPlay } from "./seat-row.ts";
 
 /** `mm:ss`, or `h:mm:ss` from an hour up. */
 export function clock(ms: number): string {
@@ -19,14 +21,9 @@ export function clock(ms: number): string {
 
 export function refundView(ctx: ViewContext): View {
   const { layout, link, sound } = ctx;
-  const page = pageLayout(layout);
+  const page = pageLayout(layout, seatsInPlay(link.state()));
   const root = el("div", "page refund");
-  const panels = ([0, 1] as const).map((s) => {
-    const panel = createSeatPanel(s);
-    place(panel.el, page.seats[s]);
-    root.append(panel.el);
-    return panel;
-  });
+  const row = createSeatRow(root, layout);
 
   const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate", "refund-plate");
@@ -58,6 +55,10 @@ export function refundView(ctx: ViewContext): View {
   function draw(state: BoxState): void {
     const m = state.match;
     if (!m) return;
+    row.show(seatsInPlay(state));
+    const stakes = playerSeats(state.seats).length > 2 ? "EVERY STAKE" : "BOTH STAKES";
+    note.textContent = `${m.play.game === "store" ? "THE VERIFIER NEVER PAID THIS MATCH" : "THE BOX WENT OFFLINE BEFORE IT SETTLED"}. THE POT ON SEPOLIA HOLDS ${stakes}.`;
+    if (m.play.game === "store") head.textContent = "NOT JUDGED";
     const left = Math.max(0, m.refundAt - link.now());
     if (left > 0) line.replaceChildren("UNLOCKS IN ", el("span", "refund-count", clock(left)));
     else line.textContent = "UNLOCKED · TAP YOUR BADGE";
@@ -65,10 +66,11 @@ export function refundView(ctx: ViewContext): View {
     const owed = !m.refunded.every(Boolean) && !sending;
     both.toggleAttribute("disabled", left > 0 || !owed);
     state.seats.forEach((s, i) => {
-      if (m.refunded[i]) panels[i]?.set(s, m.stake > 0 ? `REFUNDED · +${m.stake} USDC` : "REFUNDED", "done");
-      else if (sending) panels[i]?.set(s, "REFUNDING…", "done");
-      else if (left > 0) panels[i]?.set(s, `LOCKED · ${clock(left)}`, "idle");
-      else panels[i]?.set(s, "TAP TO REFUND", "ask");
+      const panel = row.panel(i);
+      if (m.refunded.every(Boolean)) panel?.set(s, m.stake > 0 ? `REFUNDED · +${m.stake} USDC` : "REFUNDED", "done");
+      else if (sending) panel?.set(s, "REFUNDING…", "done");
+      else if (left > 0) panel?.set(s, `LOCKED · ${clock(left)}`, "idle");
+      else panel?.set(s, "TAP TO REFUND", "ask");
     });
   }
 
@@ -78,7 +80,7 @@ export function refundView(ctx: ViewContext): View {
   return {
     el: root,
     update(state, event) {
-      if (event.type === "tap" && event.accepted) panels[event.seat]?.pulse();
+      if (event.type === "tap" && event.accepted) row.panel(event.seat)?.pulse();
       draw(state);
     },
     dispose() {

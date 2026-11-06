@@ -4,7 +4,7 @@ The Box's touchscreen, drawn from `BoxState` and talking to the Box only through
 TypeScript, small custom elements, no UI framework.
 
 **The look: the Grid.** A near-black world where all brightness comes from thin emissive lines. The system's light is
-cool white-blue (`--sys`), Player 1 is orange and Player 2 cyan, and red (`--alert`) only ever means something is
+cool white-blue (`--sys`), Player 1 is orange, Player 2 cyan, Player 3 green and Player 4 pink, and red (`--alert`) only ever means something is
 wrong; the system's white lines bloom blue (`--sys-glow`). The world has depth: a storm-dark sky lit from the
 horizon, distant ridges and a far city, a glossy floor fading into haze, and every panel, key and tag is glass
 (`--glass`) with a bevelled frame. Shapes are straight runs, 45° bends and chamfered corners, with circles only for
@@ -46,13 +46,13 @@ How they are built:
 | Part | What it is | Attributes and API | When it moves |
 |---|---|---|---|
 | `<egb-core>` | The core: a blue halo behind it, a dial of 144 fine ticks round an outer ring of light with four notches, 24 arc segments with hot centres inside it, a thin inner ring round a glass disc lit from inside (fine rings, a sheen, a ring of printed words), the Ethereum mark in wireframe (near-black facets edged in hot lines), and two broken orbit rings. | `glass`, `collar`: the inner and outer rings' radii in px. It fills its parent and centres there. `dark`: every line at 8 %, the mark hidden. `swell()`, `coin()`, `ignite(): Promise<void>`. | The orbit rings turn slowly in opposite directions, each its own HTML layer so the compositor turns it. `ignite()`: the segments light clockwise from 12 o'clock 20 ms apart, then the rings, then the mark (~900 ms, boot). `swell()`: a copy of the outer ring grows to 1.18 and fades while the segments bloom once (a transaction landed, a block sealed). `coin()`: the mark turns once on its upright axis, 900 ms (a launch). |
-| `<egb-port>` | A player's node in a top corner: a socket of seat-colour light inside a dial of fine ticks, holding the badge's blockie as an LED grid, the name, a mono balance with a `USDC` label (`…` until the seat's balance is read from chain; the name is the player name on chain once read), and a seat-colour underline with a lit lead, ending in a tick. Empty: the socket at 25 % and `TAP BADGE`. | `seat` (`0` reads rightwards from its socket; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `key` (`A`/`L`, Demo mode): a key hint, and hover lifts the socket. `bot`: a `BOT` tag. `set(seat: SeatState)`, `pulse()`, `refuse()`. Designed at 380 × 96; the socket's centre is 52 px in from the outer side, halfway down. | A badge arriving rezzes the socket and name; leaving derezzes the name and dims the socket. Changed balance digits flicker in left to right. `pulse()`: the socket's bloom flashes (a tap). `refuse()`: the module shakes and the socket flashes red (a tap that meant nothing). |
+| `<egb-port>` | A player's node in a top corner: a socket of seat-colour light inside a dial of fine ticks, holding the badge's blockie as an LED grid, the name, a mono balance with a `USDC` label (`…` until the seat's balance is read from chain; the name is the player name on chain once read), and a seat-colour underline with a lit lead, ending in a tick. Empty: the socket at 25 % and `TAP BADGE`. | `seat` (`0` and `2` read rightwards from their sockets; `1` and `3` mirror them). `compact`: drawn at 70 % from its top outer corner (the in-game overlay, with two seats). `key` (`A`, `L`, `Z`, `M`, Demo mode): a key hint, and hover lifts the socket. `bot`: a `BOT` tag. `set(seat: SeatState)`, `pulse()`, `refuse()`. Designed at 380 × 96; the socket's centre is 52 px in from the outer side, halfway down. Everything scales from its height, so at half height two share a corner. | A badge arriving rezzes the socket and name; leaving derezzes the name and dims the socket. Changed balance digits flicker in left to right. `pulse()`: the socket's bloom flashes (a tap). `refuse()`: the module shakes and the socket flashes red (a tap that meant nothing). |
 | `<egb-clock>` | The block readout: four corner brackets round `BLOCK` and the head block in glowing mono, `SEPOLIA` under them. | `block` (number). Designed at 276 × 64. | Changed digits flicker in, 60 ms apart. |
 | `<egb-gauge>` | Gas as a bar: 16 segments of system light for 0–5 gwei (one colour, so never a seat's), a mono `1.8 GWEI` under it. | `gwei` (number). Designed at 88 × 48. | The segments that change switch one at a time from the old end toward the new, 30 ms apart. |
 | `<egb-fact>` | A data tag about the focused game: a chamfered frame at idle brightness round a line icon and a word. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `rez(delayMs)`. 44 px tall, width from the word. | `rez()`: after the delay the tag rezzes in (Home rezzes each in turn on a new focus). |
 | `<egb-key>` | A light key: a chamfered frame round a dark face and a Syncopate label at 0.36 × its height, shrunk to fit its width. A real `<button>` inside. | `variant` (`primary` default, `ghost`, `alert`), `selected` (filled solid with light: the chosen stake), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. `flash()`. Fills its box. | A press flashes the shape white and squeezes it to 0.97. `breathe`: the bloom breathes 0.35 ↔ 1 over 2.4 s (`TAP TO START`; 0.7 under reduced motion). |
 | `<egb-cart>` | A game's program in the rack: a chamfered glass frame with a header (`PRG 01` and three status lights), an art window lit from below with a faint grid and the game's art in light lines (Quick Draw: a hot bolt and sparks; Stock Duel: orange and cyan candlesticks; `new-game`, the Box's blank program: a dashed frame and a plus; a built game: its `icon` filling the window, held still), the title in Syncopate under it. A game without art is sealed: the window hatched, the title dim, a `SOON` tag (`SEALED` for a built game that can't load). | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`, `new-game`, or a built game's id), `title`, `icon` (a built game's art URL, set as an image's `src`), `sealed`, `slot` (its number in the rack), `focused`, `pressed`. A strip of light runs along its foot and its reflection lies on the floor (`-webkit-box-reflect`, static). Designed at 176 × 186. | `focused`: it lifts 12 px on a spring and only then lights its frame (a sealed one to 50 %), its status lights, its foot strip, a hot foot bar and its title. Losing focus it drops and dims. `pressed`: the frame flashes white and it settles 6 px (launch). |
-| `<egb-txbar>` | The transaction strip: a panel-style frame, the kind and amount (`TOP UP +100 USDC`, `NAME`, `STAKE 2×10 USDC`, `PAYOUT 20 USDC`, `RESULT` for a result whose pot never opened, `REFUND 20 USDC`) beside the hash, shortened and linked to its Etherscan page (empty until the relayer has sent it, and always in the demo, which has no hashes), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. A failed transaction turns the strip red and its last step reads `FAILED`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | `show()` on a hidden strip rezzes it; each step lights in system light when reached, and the one just reached flickers once. `hide()` derezzes it, 3.2 s after paid or failed. |
+| `<egb-txbar>` | The transaction strip: a panel-style frame, the kind and amount (`TOP UP +100 USDC`, `NAME`, `STAKE 2×10 USDC` (or 3× or 4×), `PAYOUT 20 USDC`, `RESULT` for a result whose pot never opened, `REFUND 20 USDC`) beside the hash, shortened and linked to its Etherscan page (empty until the relayer has sent it, and always in the demo, which has no hashes), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. A failed transaction turns the strip red and its last step reads `FAILED`. | `show(tx: Tx, players)`, `hide()`. Designed at 380 × 52. | `show()` on a hidden strip rezzes it; each step lights in system light when reached, and the one just reached flickers once. `hide()` derezzes it, 3.2 s after paid or failed. |
 | `<egb-panel>` | A panel of light: a chamfered frame at 45 % with hot ticks on its uncut corners round a nearly opaque dark fill. The page plates, the in-game stake chip, the Demo intro, the brief's fields, `SIMULATED` on a sim build. | Its children are its content; sizes from `font-size`. `lit`: the line full with its bloom and the text glowing (the Designer's question in the brief). `--frame-tone` and `--panel-line` (the line's opacity) restyle it. | Never by itself. |
 | `<egb-lcd>` | A log of light: a chamfered glass panel of mono lines in system light, the newest at its foot bright and glowing, the older dimmer above it, the oldest going under a dark band at the top; lines wrap. The agent's words while a game builds, the Designer's status and captions. | `caret` (a blinking block cursor: the machine is working). `push(text, mark?)` (`bad` red, `ok` hot white), `set(lines)`, `clear()`. Fills its box; `font-size` sets the text. | `push`: the lines step up by the new one's height as it fades in. The caret blinks by opacity. |
 | `<egb-seg>` | A number readout: mono digits glowing over a row of unlit ghost `8`s, so a short value still shows the readout's width. The Build screen's clock, and a built game's scores and timers. | `tone` (`sys` default, `p1`, `p2`, or `amber` / `mint` for a game's own look), `digits` (the fewest cells; the value is right-aligned), `value` (attribute or property). `font-size` is the digits' height. | Changed characters flicker in, left to right. |
@@ -80,7 +80,9 @@ Modules go with them, each pure one tested:
   portrait one (core, horizon, ports, clock, gas, title, facts, Play, the four rack slots, the transaction strip, the
   board). `layoutForArea(w, h)` picks one; Quick Draw and Stock Duel shift their 1280×800 places by `inset` and draw
   their backdrops across the whole width. Everything else places
-  itself from these, so traces always land on the parts they feed.
+  itself from these, so traces always land on the parts they feed. `portBoxes(layout, seats)` gives each port's box: two
+  as the layout has them, and past two, two to a corner at half height, Player 3 under Player 1 and Player 4 under
+  Player 2. `seatAt` is the seat a Demo touch in a game taps.
 - `stage.ts`: `fit(layout, w, h)` scales and centres the stage in the space it gets; `createStage`, `applyFit`.
   Tested in `stage.test.ts`.
 - `route.ts`, `traces.ts`: pure geometry. 45° routing, buses, sampling and clipping; `tracesFor(layout)` gives the
@@ -98,11 +100,12 @@ Modules go with them, each pure one tested:
 - `rez.ts`: `rez(node, { delay })` and `derez(node)`, the launcher's entrance and exit (transform and opacity only,
   a short fade under reduced motion), `flicker(node)` and the flicker budget (three a second at most). The keyframes
   are pure and tested in `rez.test.ts`.
-- `machine.ts`: the objects that stay across views (Grid, packets, core, ports, clock, gas bar, transaction strip,
-  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`, and `full`
+- `machine.ts`: the objects that stay across views (Grid, packets, core, a port per seat on show, clock, gas bar,
+  transaction strip, the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`, and `full`
   for a game that draws the whole stage, its top band included, with none of the machine showing), `coin` (the core turns and
   every trace flares), `feed`, `run` (a packet along a named trace, into the core or out of it) and `swell`. It turns transaction steps into moments: a packet from the port when a stake is sent,
-  a swell when it lands in a block, a packet out to the port for a payout. It shakes a port on a refused tap and runs
+  a swell when it lands in a block, a packet out to the port for a payout. Players 3 and 4 have no trace of their own:
+  their light rides their side's. Once a match has its players, an empty seat's port goes. It shakes a port on a refused tap and runs
   attract's ambience.
 - `router.ts`: mounts the view for the Box's phase; the old view derezzes and the new one rezzes. A move that a newer
   one or a rebuilt stage overtakes never mounts.
@@ -112,8 +115,8 @@ Modules go with them, each pure one tested:
 - `app.ts`: the screen area (the whole window), the stage, the machine and the router; rebuilds the stage when the
   window turns between landscape and portrait. A Box server that restarts and comes back in `boot` under a screen that
   has already booted is sent `booted` at once. With `onSeatTap` (Demo mode) a touch on a `data-seat` element (a port,
-  a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in, with a ring of that
-  seat's light. `isBot` tags the bot's port.
+  a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in (the quarter, with
+  more than two seats), with a ring of that seat's light. `isBot` tags the bot's port.
 - `exit-key.ts`: EXIT, fixed to the window's bottom-left corner while a match runs: a first tap arms it for 4 s (alert
   red, `TAP AGAIN · to call it off · both stakes go back`), a second sends `quit`. Its events never reach the stage.
   `mountExitKey(host, link, sound)`, in both builds.
@@ -129,7 +132,7 @@ the page, at `/link` on the same origin. Views read the Box's clock from `link.n
 
 | Module | What it is | API |
 |---|---|---|
-| `sim.ts` | `SimLink`: the core (`src/core/`) in the browser, on the browser's clock, the demo chain (`core/demo-chain.ts`: USDC, pots, results and names in memory, every badge starting with 100 USDC, a head every 12 s, no hashes) and the team games, with the bot on Player 2. The screen and the A / L keys tap with a whole tap at once (touch, then done with a fresh roll). | `createSimLink({ seed? }): SimLink` |
+| `sim.ts` | `SimLink`: the core (`src/core/`) in the browser, on the browser's clock, the demo chain (`core/demo-chain.ts`: USDC, pots, results and names in memory, every badge starting with 100 USDC, a head every 12 s, no hashes) and the team games, with the bot on Player 2. The screen and the A, L, Z and M keys tap with a whole tap at once (touch, then done with a fresh roll). | `createSimLink({ seed? }): SimLink` |
 | `control.ts` | `SimControl`, what Demo mode drives and BoxLink doesn't have: tap a seat, the opponent switch, the power cut. `SimLink = BoxLink & SimControl`. | types |
 | `live.ts` | `LiveLink`: BoxLink over the WebSocket. The whole state on connect, then each event in order; a `state` message after the first is the stations moving (`stations` event). Commands go up only while connected. Reconnects after 250 ms, doubling to 4 s, and starts over from the whole state (an `init` event). | `connectLive({ url, socket?, localNow? }): Promise<LiveLink>` (resolves on the first state) |
 | `offset.ts` | The link's clock offset: the largest `boxNow − localNow` of the last 10 s (a message only ever arrives late). | `createClockOffset()` |
@@ -186,8 +189,9 @@ on `BoxEvent`s and acts only through `link.send`.
   line (`play-for.ts`, tested): `WINNER TAKES 20 USDC` and that the win also takes the title and scores the
   championship; `FOR THE STOCK DUEL TITLE` and who holds it; `FOR CUP-1921` with its leader, prize and countdown. It
   follows the board live and counts down every second.
-- `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
-  per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
+- `join.ts`, `stake.ts`, `judging.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
+  per player (`seat-row.ts` puts them up: every seat on show at Join, the players after it; with three or four they
+  stand smaller, in a column each side, and that page stands round the core on the wide stage too; `seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
   loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
   `4W 1L 0D · STREAK 3 · 90 USDC`, its stats over every game from its name's `stats` record (the streak while it runs)
   and its balance, read from chain, popping in on its tap), a
@@ -199,7 +203,10 @@ on `BoxEvent`s and acts only through `link.send`.
   cup, and each player's new stats from their name's `stats` record), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
   pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,
   and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
-  rules failed.
+  rules failed. A store game stakes on the amount keys alone, under its tier's plate, `JUDGED BY AI`; Join says
+  `DOWNLOADING THE GAME…` while its bundle is on its way, and has a START key when it can start with fewer than every
+  seat, lit once enough have sat down (`join-words.ts`, tested). Judging waits on the verifier, and Result shows each player's
+  share of the split on their panel, under the plate's line for each with two, or `REFUNDED` with why (`judged.ts`, tested). A verifier that never paid goes to Refund, saying so.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
   shows its card from chain: its player name, or `NO NAME YET` with a name field holding the proposed label (a tap
   on it opens the Box's own keyboard, `name-keys.ts`, since the Pi's touch keyboard opens under the full-screen
@@ -211,6 +218,9 @@ on `BoxEvent`s and acts only through `link.send`.
 - Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
   frame (`frame/`, its own README), which gives it `<egb-key>`, `<egb-fact>`, `<egb-seg>` and `<egb-plate>` (a panel,
   lit unless `metal`; a `metal` key draws as `ghost`, so games written before the Grid keep working).
+
+`seats-kiosk.ts` draws these pages in a real browser on a stand-in link, for `server/games/seats.test.ts`, and by itself at
+`?scene=` for a person to look at. Nothing in the screen imports it.
 
 ## The game builder
 

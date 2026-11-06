@@ -73,12 +73,24 @@ export async function prepareDuelOpen(ctx: Context, input: unknown): Promise<Pre
   };
 }
 
-export async function prepareDuelRefund(ctx: Context, input: unknown): Promise<Prepared> {
+/** A refund's `{ box, round }`, in either pot. */
+export function parseRefund(input: unknown): { box: string; round: bigint } {
   const body = field.object(input);
   const box = field.text(body, 'box');
   requireLabel(box, 'box');
-  const round = field.uint(body, 'round');
+  return { box, round: field.uint(body, 'round') };
+}
 
+/** Throws a 409 until `delay` seconds after a pot `opened`. */
+export function requireRefundable(ctx: Context, opened: bigint, delay: bigint): void {
+  const refundableAt = opened + delay;
+  if (BigInt(ctx.now()) < refundableAt) {
+    throw new Refusal(409, `the pot can be refunded from ${refundableAt} (an hour after it opened)`, 'TooEarly');
+  }
+}
+
+export async function prepareDuelRefund(ctx: Context, input: unknown): Promise<Prepared> {
+  const { box, round } = parseRefund(input);
   const pot = { address: ctx.addresses.pot, abi: duelPotAbi } as const;
   const [entry, delay] = await Promise.all([
     ctx.client.readContract({ ...pot, functionName: 'getPot', args: [box, round] }),
@@ -87,10 +99,7 @@ export async function prepareDuelRefund(ctx: Context, input: unknown): Promise<P
   if (entry.state !== 1) {
     throw new Refusal(409, `round ${round} of ${box} has no open pot (${STATE[entry.state]})`, 'PotNotOpen');
   }
-  const refundableAt = BigInt(entry.opened) + BigInt(delay);
-  if (BigInt(ctx.now()) < refundableAt) {
-    throw new Refusal(409, `the pot can be refunded from ${refundableAt} (an hour after it opened)`, 'TooEarly');
-  }
+  requireRefundable(ctx, BigInt(entry.opened), BigInt(delay));
 
   const call = { to: pot.address, data: encodeFunctionData({ ...pot, functionName: 'refund', args: [box, round] }) };
   await simulate(ctx, call);

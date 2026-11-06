@@ -35,7 +35,7 @@ The Box runs them in a sandboxed child process and referees the match with them,
 - **Events are `BuiltEvent`s**: `{ type: "tick", now }` (the Box ticks while the game runs) and `{ type: "tap", seat,
   now, roll }`. `now` on a tap is when the badge touched the reader, so judge speed by it. `roll` is the badge's
   verified random number when `game.json` says `"taps": "random"`, otherwise `null`. Seat 0 is Player 1, seat 1 is
-  Player 2.
+  Player 2: a built game seats two, so a seat is a `DuelSeat` (`.reference/sdk/seat.ts`), not a `Seat`.
 - **Plain data** for the state: objects, arrays, numbers, strings, booleans, null. It is sent as JSON after every
   step.
 - **Fast**: each step must finish within `budgetMs` (at most 200; 50 is plenty for anything sensible). A step over it,

@@ -5,7 +5,7 @@
 //   A tap is never skipped: it goes into the runner's queue, judged at its touch time.
 // - Once stopped (the match ended, voided, or was overtaken), nothing more is sent and nothing that comes back is
 //   handed on: a snapshot or a failure from an old match never reaches a new one.
-import type { BuiltEvent, Seat } from "@egb/sdk";
+import type { BuiltEvent, DuelSeat } from "@egb/sdk";
 import type { RulesRunnerPort, RulesSnapshot } from "./ports.ts";
 
 export interface BuiltHooks {
@@ -18,7 +18,7 @@ export interface BuiltDriver {
   /** A tick at `now`, unless a step is already out. */
   tick(now: number): void;
   /** A finished tap: touched at `at`, with the badge's verified roll when the game's taps are `random`. */
-  tap(seat: Seat, at: number, roll: number | null): void;
+  tap(seat: DuelSeat, at: number, roll: number | null): void;
   stop(): void;
 }
 

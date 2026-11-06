@@ -45,7 +45,7 @@ describe("the kiosk's end of the channel", () => {
     };
     const received: FromFrame[] = [];
     let left = 0;
-    const channel = openFrameChannel(host, frame, { message: (m) => received.push(m), left: () => left++ });
+    const channel = openFrameChannel(host, frame, parseFromFrame, { message: (m) => received.push(m), left: () => left++ });
     const deliver = (data: unknown, source: unknown = frameWindow, origin = "null") => listener?.({ data, source: source as MessageEventSource, origin });
     return { channel, frameWindow, received, deliver, load: () => onLoad?.(), left: () => left, listening: () => listener !== null || onLoad !== null };
   }

@@ -1,8 +1,9 @@
 // A match's transcript: one JSON line per match in $EGB_DATA/sessions/YYYY-MM-DD.jsonl. Records rebuild from it.
-import type { Seat } from "./seat.ts";
+import type { DuelSeat } from "./seat.ts";
 
 export interface TranscriptTap {
-  readonly seat: Seat;
+  /** Whose tap: a place in `badges`. */
+  readonly seat: number;
   /** When the chip touched the reader (ms since the epoch, the Box's clock). */
   readonly at: number;
   /** The badge's verified roll, for `random` taps. */
@@ -16,14 +17,14 @@ export interface Transcript {
   readonly match: number;
   readonly game: string;
   readonly seed: number;
-  /** Each seat's badge identity (key-2 address). */
-  readonly badges: readonly [string, string];
+  /** Each player's badge identity (key-2 address), in seat order: two, or up to four in a store match. */
+  readonly badges: readonly string[];
   readonly stake: number;
   readonly startedAt: number;
   readonly endedAt: number;
   readonly taps: readonly TranscriptTap[];
-  /** `void`: the rules failed (over budget or crashed) and both stakes went back. */
-  readonly result: { readonly winner: Seat | null } | "void";
-  /** The match counts toward records (free-result rules: both badges tapped, ≥ 12 s, ≤ 12 per pair per hour). */
+  /** `void`: the rules failed (over budget or crashed) and every stake went back; a store match, which has no winner, too. */
+  readonly result: { readonly winner: DuelSeat | null } | "void";
+  /** The match counts toward records (free-result rules: every badge tapped, ≥ 12 s, ≤ 12 per pair per hour). */
   readonly counts: boolean;
 }

@@ -6,7 +6,7 @@
 // hat band and the bandana carry the seat; brass catches the light on the buckle, the cartridge loops and the spurs.
 // A figure that fouls (draws before DRAW) has its gun blow up in its hand: a blast, flying shards, soot, a scorched
 // rim and a stagger, until the next round stands it up again.
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import { el, play, wait } from "../../screen/shell/dom.ts";
 
 export interface Figure {
@@ -84,7 +84,7 @@ function leg(x: number, tone: "ink" | "far", chaps: boolean): Shape[] {
 }
 
 /** The parts both outfits share: the far arm, neck, head and bandana, the gunbelt and the holster. */
-function person(seat: Seat): Shape[] {
+function person(seat: DuelSeat): Shape[] {
   const head: Shape[] = [
     as("far", "M86 64 L95 64 L94 " + (seat === 0 ? "82" : "92") + " L86 " + (seat === 0 ? "78" : "88") + " Z"), // hair at the back
     ink("M94 90 L108 90 L109 104 L93 104 Z"), // neck
@@ -118,7 +118,7 @@ const GUNBELT: Shape[] = [
   as("line", "M131 186 L144 184 M134 207 L147 205"),
 ];
 
-const BODY: Record<Seat, Shape[]> = {
+const BODY: Record<DuelSeat, Shape[]> = {
   // A duster to the knee, open at the front over a lighter shirt and a buttoned vest.
   0: [
     ink("M70 106 Q98 96 130 104 L138 124 L140 176 L148 240 Q134 246 120 241 L114 196 L102 196 L96 241 Q78 246 60 240 L66 176 L68 124 Z"),
@@ -138,7 +138,7 @@ const BODY: Record<Seat, Shape[]> = {
   ],
 };
 
-const HAT: Record<Seat, Shape[]> = {
+const HAT: Record<DuelSeat, Shape[]> = {
   0: [
     ink("M50 62 Q64 68 84 66 L120 66 Q140 68 154 58 Q152 72 128 72 L78 72 Q56 72 50 62 Z"),
     ink("M74 66 L78 36 Q86 26 95 33 Q101 27 107 33 Q115 27 123 36 L127 66 Z"),
@@ -260,7 +260,7 @@ function blastMark(): SVGSVGElement {
 /** How far a leg swings each way from straight down, at the hip, in a pace. */
 const SWING = 17;
 
-export function createFigure(seat: Seat): Figure {
+export function createFigure(seat: DuelSeat): Figure {
   const root = el("div", `qd-fig qd-fig--p${seat + 1}`);
   // From the outside in: the walk (across the stage), the mirror (Player 2 faces left), the turn (facing away), the
   // pose (a breath, a fall). Each moves on its own element, so one never cancels another.

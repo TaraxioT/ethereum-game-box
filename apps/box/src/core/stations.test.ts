@@ -6,7 +6,7 @@ import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import { DEAL_MS, frontCard, rules as stockDuel } from "../games/stock-duel/rules.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
-import { stationView, type StationInput } from "./stations.ts";
+import { stationView, stationViews, type StationInput } from "./stations.ts";
 
 const NOW = 5_000_000;
 const [NOVA, KITE] = DEMO_BADGES as [(typeof DEMO_BADGES)[0], (typeof DEMO_BADGES)[0]];
@@ -18,7 +18,9 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     games: TEAM_GAMES,
     focus: "stock-duel",
     seats,
+    fewest: 2,
     chain: { block: 100, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
+    fetching: false,
     stake: 10,
     playFor: "usdc",
     board: null,
@@ -168,6 +170,17 @@ describe("station views", () => {
     expect(lines(stationView(open, 0, NOW))).toEqual({ tag: "P1", big: "TAP", small: "to refund" });
     const paid = input("refund", both, matchOf(play, { refundAt: NOW, refunded: [true, true] }));
     expect(lines(stationView(paid, 0, NOW))).toEqual({ tag: "P1", big: "REFUNDED", small: "+10 USDC" });
+  });
+
+  it("shows a view for every station the Box has, and says when a seat isn't in play", () => {
+    const home = input("home", [seat(NOVA), seat(KITE)]);
+    expect(stationViews(home, NOW)).toHaveLength(2);
+    const views = stationViews(home, NOW, 4);
+    expect(views).toHaveLength(4);
+    expect(views[3]).toMatchObject({ tag: "P4", big: "NEXT", small: "this game seats 2", mode: "shut" });
+    // Anyone may tap at the lobby and to wake the Box, at any station.
+    expect(stationViews(input("lobby"), NOW, 3)[2]).toMatchObject({ big: "LOBBY", mode: "open" });
+    expect(stationViews(input("attract"), NOW, 3)[2]).toMatchObject({ big: "TAP", mode: "open" });
   });
 
   it("keeps every line inside the station, in printable ASCII, through a whole Stock Duel", () => {

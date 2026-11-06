@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+STORE_PUBLISH_TOKEN=

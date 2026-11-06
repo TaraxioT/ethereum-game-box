@@ -12,7 +12,7 @@
 // MAX_STANDOFFS standoffs the match ends anyway: the one ahead takes it, or it is a draw. The speaker never says GO.
 import type { GameRules, Outcome } from "@egb/sdk";
 import { hash32, mulberry32 } from "@egb/sdk";
-import { other, SEATS, type Seat } from "@egb/sdk";
+import { other, DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import type { Decoy, QuickDrawEvent, QuickDrawReason, QuickDrawState } from "./types.ts";
 
 /** The shortest and longest wait before the sign flips, from the end of the countdown. */
@@ -48,7 +48,7 @@ export const DECOY_WORDS: readonly string[] = ["DRAG", "DRAT", "DREW", "DRIP", "
 
 type Pair<T> = readonly [T, T];
 
-function put<T>(pair: Pair<T>, seat: Seat, value: T): Pair<T> {
+function put<T>(pair: Pair<T>, seat: DuelSeat, value: T): Pair<T> {
   return seat === 0 ? [value, pair[1]] : [pair[0], value];
 }
 
@@ -94,7 +94,7 @@ function advanced(state: QuickDrawState, now: number): QuickDrawState {
 }
 
 /** The standoff is decided: a point to `winner`, then the next round, or the end of the match. */
-function decide(state: QuickDrawState, winner: Seat | null, reason: QuickDrawReason, now: number): QuickDrawState {
+function decide(state: QuickDrawState, winner: DuelSeat | null, reason: QuickDrawReason, now: number): QuickDrawState {
   const score: Pair<number> = winner === null ? state.score : put(state.score, winner, state.score[winner] + 1);
   const base = { ...state, score, took: winner, reason, decidedAt: now, pending: [null, null] as const };
   if (winner !== null && score[winner] >= ROUNDS_TO_WIN) return { ...base, phase: "done", winner };
@@ -109,17 +109,17 @@ function judge(before: QuickDrawState, now: number): QuickDrawState {
     return now >= next ? standoff(before.seed, before.standoff + 1, before.score, now) : before;
   }
   const state = advanced(before, now);
-  const tapped = SEATS.filter((seat) => state.taps[seat] !== null);
+  const tapped = DUEL_SEATS.filter((seat) => state.taps[seat] !== null);
   if (tapped.length === 0) {
     const reading = state.pending.some((at) => at !== null);
     const slow = state.phase === "draw" && now >= state.drawAt + TOO_SLOW_MS && !reading;
     return slow ? decide(state, null, "slow", now) : state;
   }
-  const at = (seat: Seat): number => state.taps[seat] ?? Infinity;
+  const at = (seat: DuelSeat): number => state.taps[seat] ?? Infinity;
   const first = tapped.reduce((a, b) => (at(b) < at(a) ? b : a));
   const firstAt = at(first);
   // A chip still being read that touched earlier may be the first.
-  const earlier = SEATS.some((seat) => {
+  const earlier = DUEL_SEATS.some((seat) => {
     const touched = state.pending[seat];
     return touched !== null && touched < firstAt && now < touched + READ_WAIT_MS;
   });
@@ -133,7 +133,7 @@ function judge(before: QuickDrawState, now: number): QuickDrawState {
 }
 
 /** A touch counts from the end of the countdown, once per seat per standoff, and never between rounds. */
-function counts(state: QuickDrawState, seat: Seat, at: number): boolean {
+function counts(state: QuickDrawState, seat: DuelSeat, at: number): boolean {
   return state.phase !== "round" && at >= state.startedAt && state.taps[seat] === null;
 }
 
@@ -164,7 +164,7 @@ export const rules: GameRules<QuickDrawState, QuickDrawEvent> = {
 
 /** A seat's reaction time in the last standoff: its touch after the draw minus the draw time. null for no tap or a
  *  foul. */
-export function reactionMs(state: QuickDrawState, seat: Seat): number | null {
+export function reactionMs(state: QuickDrawState, seat: DuelSeat): number | null {
   const tap = state.taps[seat];
   return tap !== null && tap >= state.drawAt ? tap - state.drawAt : null;
 }
@@ -176,6 +176,6 @@ export function decoyAt(state: QuickDrawState, now: number): Decoy | null {
 }
 
 /** The seat that fouled in the last standoff, or null. */
-export function fouler(state: QuickDrawState): Seat | null {
+export function fouler(state: QuickDrawState): DuelSeat | null {
   return state.reason === "early" && state.took !== null ? other(state.took) : null;
 }

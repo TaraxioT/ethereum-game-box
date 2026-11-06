@@ -39,13 +39,15 @@
 .machine[data-pose="game"] .stake-chip:not([hidden]) { opacity: 1; }
 [data-orientation="portrait"] .stake-chip { top: 40px; }
 
-/* Demo mode: a touch on a player's half of the screen in a game. */
+/* Demo mode: a touch on a player's part of the screen in a game. */
 .tap-ripple {
   position: absolute; width: 120px; height: 120px; border-radius: 50%; pointer-events: none; opacity: 0;
   --seat: var(--p1); --seat-bloom: var(--p1-bloom);
   border: 2px solid var(--seat); box-shadow: 0 0 8px var(--seat-bloom), 0 0 18px var(--seat-bloom), inset 0 0 8px var(--seat-bloom);
 }
 .tap-ripple.seat-1 { --seat: var(--p2); --seat-bloom: var(--p2-bloom); }
+.tap-ripple.seat-2 { --seat: var(--p3); --seat-bloom: var(--p3-bloom); }
+.tap-ripple.seat-3 { --seat: var(--p4); --seat-bloom: var(--p4-bloom); }
 
 /* The boot's cover: the void with a hole at the core; scaled up, it uncovers the Grid outward from the core. */
 .boot-cover {

@@ -1,6 +1,6 @@
 # The test page
 
-`/test` on the Box server: five tabs to check the Box on the Pi, in the screen's palette and type but plain and dense.
+`/test` on the Box server: five tabs to check the Box on the Pi, with a card for each seat it has, in the screen's palette and type but plain and dense.
 Plain DOM and TypeScript, built with the box build (`pnpm build:box` writes it to `dist/screen/test/`) and served by
 the server like the screen (CSP, the launcher token on a top-level navigation). It polls `GET /api/taps` and
 `GET /api/box` twice a second; every button posts to a route that needs this machine's origin. The Builder tab

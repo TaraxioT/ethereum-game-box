@@ -115,7 +115,7 @@ function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: {
   const chain = chainOf(clock);
   const core = createCore({
     clock,
-    stations: { show: (seat, view) => shows.push([seat, view]), buzz: (seat, kind) => buzzes.push([seat, kind]) },
+    stations: { show: (seat, view) => shows.push([seat, view]), buzz: (seat, kind) => buzzes.push([seat, kind]), inUse: () => {} },
     chain,
     library: options.library ?? teamLibrary(),
     log: { record: (t) => void logged.push(t), countedSince: () => 0 },

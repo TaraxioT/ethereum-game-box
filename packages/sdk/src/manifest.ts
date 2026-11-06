@@ -28,13 +28,19 @@ export interface GameManifest {
 
 export const MANIFEST_LIMITS = { id: 40, title: 24, blurb: 120, budgetMs: 200 } as const;
 
+/** How many a store game may seat, and a match log may name. Team games stay at two. */
+export const PLAYER_LIMITS = { min: 2, max: 4 } as const;
+
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/** Problems with a parsed game.json, in plain words; empty when it is good. */
-export function manifestProblems(value: unknown): string[] {
+/** Whether `value` is a game's id: lower-case words joined by `-`, at most 40 characters. */
+export function isGameId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MANIFEST_LIMITS.id && ID.test(value);
+}
+
+/** Problems with the fields game.json and a store bundle's manifest.json share. `unit` is what the stakes are in. */
+export function sharedManifestProblems(m: Record<string, unknown>, unit: string): string[] {
   const problems: string[] = [];
-  if (typeof value !== "object" || value === null) return ["game.json is not an object"];
-  const m = value as Record<string, unknown>;
   const text = (key: string, max: number) => {
     const v = m[key];
     if (typeof v !== "string" || v.trim() === "") problems.push(`${key} must be a non-empty string`);
@@ -44,14 +50,23 @@ export function manifestProblems(value: unknown): string[] {
   if (typeof m.id === "string" && !ID.test(m.id)) problems.push("id must be lower-case words joined by -");
   text("title", MANIFEST_LIMITS.title);
   text("blurb", MANIFEST_LIMITS.blurb);
-  if (m.players !== 2) problems.push("players must be 2");
-  if (typeof m.minutes !== "number" || !(m.minutes > 0 && m.minutes <= 30)) problems.push("minutes must be 1–30");
   const stakes = m.stakes;
   if (!Array.isArray(stakes) || stakes.length === 0 || stakes.length > 4) problems.push("stakes must list 1–4 amounts");
-  else if (!stakes.every((s, i) => Number.isInteger(s) && s > 0 && (i === 0 || s > (stakes[i - 1] as number))))
-    problems.push("stakes must be whole EGB, ascending");
-  if (m.tier !== "refereed") problems.push("tier must be refereed");
+  else if (!stakes.every((s, i) => Number.isSafeInteger(s) && s > 0 && (i === 0 || s > (stakes[i - 1] as number))))
+    problems.push(`stakes must be whole ${unit}, ascending`);
   if (m.taps !== "identify" && m.taps !== "random") problems.push("taps must be identify or random");
+  return problems;
+}
+
+/** Problems with a parsed game.json, in plain words; empty when it is good. */
+export function manifestProblems(value: unknown): string[] {
+  if (typeof value !== "object" || value === null) return ["game.json is not an object"];
+  const m = value as Record<string, unknown>;
+  const problems = sharedManifestProblems(m, "EGB");
+  // A typical match, not a limit: a built game's agent may well write half a minute.
+  if (typeof m.minutes !== "number" || !(m.minutes > 0 && m.minutes <= 30)) problems.push("minutes must be above 0, at most 30");
+  if (m.players !== 2) problems.push("players must be 2");
+  if (m.tier !== "refereed") problems.push("tier must be refereed");
   if (m.kind !== "team" && m.kind !== "built") problems.push("kind must be team or built");
   if (typeof m.budgetMs !== "number" || !(m.budgetMs > 0 && m.budgetMs <= MANIFEST_LIMITS.budgetMs))
     problems.push(`budgetMs must be 1–${MANIFEST_LIMITS.budgetMs}`);

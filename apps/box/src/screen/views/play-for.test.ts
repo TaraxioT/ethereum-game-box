@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Board } from "../../core/types.ts";
-import { onTheLine } from "./play-for.ts";
+import { judgedLine, onTheLine } from "./play-for.ts";
 
 const NOW = 1_800_000_000_000;
 const title = { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2, expires: 1_800_000_600_000 };
@@ -8,6 +8,10 @@ const cup = { name: "cup-1921.stockduel.gamebox.eth", ends: NOW + 192_000, prize
 const board = (over: Partial<Board> = {}): Board => ({ title, cup, leaders: [], won: [], ...over });
 
 describe("what Stake's plate says is on the line", () => {
+  it("a store game: the pot the judge splits, and no title", () => {
+    expect(judgedLine(10, 2)).toEqual({ head: "AN AI JUDGE SPLITS 20 USDC", detail: "10 USDC EACH · STORE USDC · IF IT CAN'T JUDGE, EVERY STAKE GOES BACK" });
+  });
+
   it("a USDC match: the pot, and the title and championship it also counts for", () => {
     expect(onTheLine({ stake: 10, playFor: "usdc", board: board() }, "Stock Duel", NOW)).toEqual({
       head: "WINNER TAKES 20 USDC",
