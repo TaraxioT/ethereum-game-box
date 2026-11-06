@@ -4,11 +4,8 @@
 // and they stop sooner if the taps have used up the rest: an event always leaves room for one tap and the close. A tap
 // costs under 100 bytes, so with the game held to half the bytes the entries always run out first. When the taps fill
 // the log the match must close, or the judge would miss them. Pure.
-import { LOG_LIMITS, utf8Bytes, type LogEntry, type Seat } from "@egb/sdk";
+import { FRAME_LIMITS, LOG_LIMITS, utf8Bytes, type LogEntry, type Seat } from "@egb/sdk";
 import type { StoreEnd } from "./types.ts";
-
-const GAME_ENTRIES = LOG_LIMITS.entries / 2;
-const GAME_BYTES = LOG_LIMITS.logBytes / 2;
 
 export interface StoreLog {
   tap(seat: Seat, at: number, roll: number | null): void;
@@ -33,7 +30,7 @@ export function createStoreLog(): StoreLog {
     event(name, data, at) {
       const entry: LogEntry = { src: "game", t: "event", at, name, data };
       const cost = utf8Bytes(JSON.stringify(entry));
-      if (!room(3) || gameEntries >= GAME_ENTRIES || gameBytes + cost > GAME_BYTES) return;
+      if (!room(3) || gameEntries >= FRAME_LIMITS.eventEntries || gameBytes + cost > FRAME_LIMITS.eventBytes) return;
       gameEntries++;
       gameBytes += cost;
       entries.push(entry);

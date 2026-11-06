@@ -4,7 +4,7 @@
 
 import { FakeChain } from '@egb/relayer/test/fake-chain';
 import { MemoryStore } from '@egb/relayer/test/memory-store';
-import { type Key, boxKey } from '@egb/relayer/test/world';
+import { type Key, STORE_POT, boxKey } from '@egb/relayer/test/world';
 import { packBundle, readBundle } from '@egb/sdk/bundle';
 import type { MatchLog } from '@egb/sdk';
 import { gameBoxNamesAbi } from '@egb/shared/names';
@@ -32,7 +32,8 @@ export const ROUND = '42';
 export const AMOUNT = '5000000';
 /** Who `POST /judge` comes from, unless a test says. */
 export const CALLER = '203.0.113.7';
-export const POT: Address = '0x00000000000000000000000000000000000000f1';
+/** The relayer's world's pot, so what is signed here can go through its real routes. */
+export const POT: Address = STORE_POT;
 export const NAMES: Address = '0x00000000000000000000000000000000000000f2';
 export const PLAYERS: readonly Address[] = [
   '0x1000000000000000000000000000000000000001',
