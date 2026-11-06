@@ -3,6 +3,9 @@
 The plan for the Box's touchscreen, built simulated first. Plan live at
 https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/. **Demo live at https://ethereum-game-box.pages.dev/.**
 
+**Since this plan:** PR #20 gave Stock Duel the Slab look, and PR #21 put the Box on chain: stakes are USDC, and the
+`box` build shows real transactions. Only the `demo` build still simulates. Read "EGB" below as history.
+
 ## 1. Goal
 
 The Box's touchscreen UI, plus a **Demo mode** of the same UI that runs in any browser with no hardware. The
@@ -121,7 +124,7 @@ A western standoff at dusk, drawn in flat silhouette: a long horizon, two seat-c
 
 ### Stock Duel
 
-**In review on PR #20:** the Slab look replaces the painting, dial and seals below: a dark room, graphite slabs, chunky
+**Since PR #20:** the Slab look replaces the painting, dial and seals below: a dark room, graphite slabs, chunky
 type and seat colours as fills. The Grid stays on the launcher.
 
 A painterly **live painting**: a dark study, a warm lamp on Player 1's side (left), a cyan lamp on Player 2's

@@ -1,8 +1,11 @@
 # The Box server, the tap stations and the game builder
 
 The plan for the Game Box's own server on the Raspberry Pi, the tap stations that feed it, and the game builder that
-makes new games on the Box. No blockchain on the Box yet: money, blocks and transactions stay simulated inside the core.
-The contracts and the relayer are live, but the Box has no chain client, and adding one means a new port. Plan live at https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/.
+makes new games on the Box. This plan built the Box without a blockchain; PR #21 added the chain afterwards. Plan live at https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/.
+
+**Since this plan:** PR #21 put the Box on chain. The chain port (`src/chain/`) and the HYP2003 signer (`src/signer/`)
+replaced the simulated ledger, faucet and chain on the Pi, and stakes are USDC. Read "simulated" and "EGB" below as
+history. The master plan says what runs today.
 
 ## 1. Goal
 
@@ -18,8 +21,8 @@ Priorities, in order:
 2. Generated games run.
 3. Code quality at least as high as the UI pass.
 
-**No blockchain on the Box yet.** This plan adds no contracts, RPC, relayer, Box signer or ENS to the Box. Money,
-blocks and transactions stay simulated, inside the core. Only what has to wait for the chain is simulated; everything else
+**No blockchain in this plan.** It added no contracts, RPC, relayer, Box signer or ENS to the Box. Money, blocks and
+transactions stayed simulated until PR #21. Only what has to wait for the chain is simulated; everything else
 (stations, badges, randomness, the server, the builder) is real.
 
 ## 2. What exists today
@@ -106,8 +109,7 @@ blocks and transactions stay simulated, inside the core. Only what has to wait f
 - **One process owns the serial port**: the Box server. No helper process, bridge or monitor sits between the
   receiver and the server.
 - **The core** (`apps/box/src/core/`) has no DOM and no Node APIs. It reaches the world through ports: clock and
-  timers, stations, badges (tap events in), the ledger store, the library, the match log, and a rules runner (built
-  games). The chain has no port yet: it is simulated inside the core.
+  timers, stations, badges (tap events in), the chain, the library, the match log, and a rules runner (built games).
 - **Two hosts run the core:** `SimLink` in the browser for the demo build, and the Box server on the Pi.
 - **Built games** are refereed by the server: their rules run in a sandboxed child, their screens in a sandboxed
   frame that only draws.
@@ -139,11 +141,11 @@ deploy/pi/     setup.sh, release.sh, activate.sh, update.sh, push.sh, lib.sh, un
 interface CorePorts {
   clock: Clock;                 // now(), after(ms, fn), every(ms, fn), cancel(handle)
   stations: StationsPort;       // show(seat, view), buzz(seat, kind: "ok" | "no")
-  ledger: LedgerStore;          // load() / save(ledger): in memory in the browser, $EGB_DATA/ledger.json on the Pi
+  chain: ChainPort;             // Sepolia on the Pi (src/chain/); in memory in the demo
   rules: RulesRunnerPort;       // built games' rules (the server's child processes); absent in the demo
   log: MatchLog;                // transcripts; a no-op in the demo
   library: LibraryPort;         // the installed games
-  random: () => number;         // seeds and the simulated chain, not game outcomes
+  random: () => number;         // seeds and the lobby's labels, not game outcomes
 }
 // in: core.tap(event: TapEvent), core.send(command: ScreenCommand); out: BoxLink's state() and subscribe()
 ```
@@ -559,9 +561,8 @@ The results of the bench are in §9.
   connected).
 - The repo deploy key: `~/.ssh/egb_deploy.pub` on the Pi goes on the repo as a read-only deploy key, then
   `EGB_REPO_URL` in `~/.config/egb/env` and `systemctl --user enable --now egb-update.timer`.
-- The chain: the contracts and the relayer are live, but the Box doesn't use them. It has no Box key signer, chain
-  client or relayer client, so stakes, payouts and blocks stay simulated inside the core. The HYP2003 hasn't been set
-  up on the Pi.
+- The chain: PR #21 added the chain port and the HYP2003 signer, and they're live on the Pi. PR #21 records no full
+  staked match with hand taps yet.
 
 ## 14. Done when
 

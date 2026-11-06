@@ -80,8 +80,10 @@
   <div class="kicker">ETHGlobal Mumbai · Box server plan</div>
   <h1>The Box server, the tap stations and the game builder</h1>
   <div class="lede"><p>The plan for the Game Box&#39;s own server on the Raspberry Pi, the tap stations that feed it, and the game builder that
-makes new games on the Box. No blockchain on the Box yet: money, blocks and transactions stay simulated inside the core.
-The contracts and the relayer are live, but the Box has no chain client, and adding one means a new port. Plan live at <a href="https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/</a>.</p>
+makes new games on the Box. This plan built the Box without a blockchain; PR #21 added the chain afterwards. Plan live at <a href="https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/</a>.</p>
+<p><strong>Since this plan:</strong> PR #21 put the Box on chain. The chain port (<code>src/chain/</code>) and the HYP2003 signer (<code>src/signer/</code>)
+replaced the simulated ledger, faucet and chain on the Pi, and stakes are USDC. Read "simulated" and "EGB" below as
+history. The master plan says what runs today.</p>
 </div>
   <nav>
     <a href="#s1">Goal</a>
@@ -116,8 +118,8 @@ build is the only exception: it runs in any visitor&#39;s browser.</li>
 <li>Generated games run.</li>
 <li>Code quality at least as high as the UI pass.</li>
 </ol>
-<p><strong>No blockchain on the Box yet.</strong> This plan adds no contracts, RPC, relayer, Box signer or ENS to the Box. Money,
-blocks and transactions stay simulated, inside the core. Only what has to wait for the chain is simulated; everything else
+<p><strong>No blockchain in this plan.</strong> It added no contracts, RPC, relayer, Box signer or ENS to the Box. Money, blocks and
+transactions stayed simulated until PR #21. Only what has to wait for the chain is simulated; everything else
 (stations, badges, randomness, the server, the builder) is real.</p>
 </section>
 
@@ -206,8 +208,7 @@ back on failure, prune old releases.</li>
 <li><strong>One process owns the serial port</strong>: the Box server. No helper process, bridge or monitor sits between the
 receiver and the server.</li>
 <li><strong>The core</strong> (<code>apps/box/src/core/</code>) has no DOM and no Node APIs. It reaches the world through ports: clock and
-timers, stations, badges (tap events in), the ledger store, the library, the match log, and a rules runner (built
-games). The chain has no port yet: it is simulated inside the core.</li>
+timers, stations, badges (tap events in), the chain, the library, the match log, and a rules runner (built games).</li>
 <li><strong>Two hosts run the core:</strong> <code>SimLink</code> in the browser for the demo build, and the Box server on the Pi.</li>
 <li><strong>Built games</strong> are refereed by the server: their rules run in a sandboxed child, their screens in a sandboxed
 frame that only draws.</li>
@@ -238,11 +239,11 @@ deploy/pi/     setup.sh, release.sh, activate.sh, update.sh, push.sh, lib.sh, un
 <pre><code class="language-ts">interface CorePorts {
   clock: Clock;                 // now(), after(ms, fn), every(ms, fn), cancel(handle)
   stations: StationsPort;       // show(seat, view), buzz(seat, kind: &quot;ok&quot; | &quot;no&quot;)
-  ledger: LedgerStore;          // load() / save(ledger): in memory in the browser, $EGB_DATA/ledger.json on the Pi
+  chain: ChainPort;             // Sepolia on the Pi (src/chain/); in memory in the demo
   rules: RulesRunnerPort;       // built games&#39; rules (the server&#39;s child processes); absent in the demo
   log: MatchLog;                // transcripts; a no-op in the demo
   library: LibraryPort;         // the installed games
-  random: () => number;         // seeds and the simulated chain, not game outcomes
+  random: () => number;         // seeds and the lobby&#39;s labels, not game outcomes
 }
 // in: core.tap(event: TapEvent), core.send(command: ScreenCommand); out: BoxLink&#39;s state() and subscribe()
 </code></pre>
@@ -868,9 +869,8 @@ tap both games for real, including Quick Draw&#39;s reaction times and a badge l
 connected).</li>
 <li>The repo deploy key: <code>~/.ssh/egb_deploy.pub</code> on the Pi goes on the repo as a read-only deploy key, then
 <code>EGB_REPO_URL</code> in <code>~/.config/egb/env</code> and <code>systemctl --user enable --now egb-update.timer</code>.</li>
-<li>The chain: the contracts and the relayer are live, but the Box doesn&#39;t use them. It has no Box key signer, chain
-client or relayer client, so stakes, payouts and blocks stay simulated inside the core. The HYP2003 hasn&#39;t been set
-up on the Pi.</li>
+<li>The chain: PR #21 added the chain port and the HYP2003 signer, and they&#39;re live on the Pi. PR #21 records no full
+staked match with hand taps yet.</li>
 </ul>
 </section>
 
