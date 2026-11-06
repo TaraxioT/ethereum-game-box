@@ -27,10 +27,11 @@ export const agentSandbox: Sandbox = {
   command: (script) => [...BOUNDED, ...AS_AGENT, "bash", "-c", script],
   // `kill -1` reaches every process the agent owns, including one that left the shell's process group. It runs outside
   // BOUNDED, so a fork bomb at its process limit can't block it.
-  stop: () => {
-    const [file, ...args] = AS_AGENT;
-    spawn(file, [...args, "bash", "-c", "kill -KILL -1"], { stdio: "ignore" });
-  },
+  stop: () =>
+    new Promise((resolve) => {
+      const [file, ...args] = AS_AGENT;
+      spawn(file, [...args, "bash", "-c", "kill -KILL -1"], { stdio: "ignore" }).on("close", () => resolve());
+    }),
 };
 
 /** Throws unless the switch of user really works. Without this, a failing `setpriv` would only show up as shell

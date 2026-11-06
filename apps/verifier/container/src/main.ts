@@ -10,9 +10,6 @@ const DEFAULT_PROXY = "http://zg.internal/v1/chat/completions";
 
 await checkSandbox();
 
-// Node runs as PID 1 here, where a signal with no handler does nothing, and the platform waits 15 minutes for a stop.
-process.on("SIGTERM", () => process.exit(0));
-
 createJobServer({
   modelUrl: process.env.ZG_PROXY_URL ?? DEFAULT_PROXY,
   sandbox: agentSandbox,

@@ -9,8 +9,8 @@ import type { Limits } from "./limits.ts";
 export interface Sandbox {
   /** The command that runs `bash -c script`. */
   readonly command: (script: string) => readonly [string, ...string[]];
-  /** Kills everything the agent has running. `shell` is this call's process. */
-  readonly stop: (shell: ChildProcess) => void;
+  /** Kills everything the agent has running, resolving once that's done. `shell` is this call's process. */
+  readonly stop: (shell: ChildProcess) => Promise<void>;
 }
 
 export interface ShellJob {
@@ -48,11 +48,16 @@ export function runShell(script: string, job: ShellJob): Promise<ShellResult> {
     const chunks: Buffer[] = [];
     let size = 0;
     let stopped: ShellResult["stopped"] = null;
+    let stopping = Promise.resolve();
 
+    /** A call ends only after its stops have, or one that ran late would kill the next call. */
+    const stopAll = (): void => {
+      stopping = stopping.then(() => sandbox.stop(shell));
+    };
     const halt = (why: "time" | "output"): void => {
       if (stopped) return;
       stopped = why;
-      sandbox.stop(shell);
+      stopAll();
     };
     const take = (chunk: Buffer): void => {
       const room = limits.shellBytes - size;
@@ -63,7 +68,7 @@ export function runShell(script: string, job: ShellJob): Promise<ShellResult> {
     const timer = setTimeout(() => halt("time"), limits.shellMs);
     const onAbort = (): void => {
       clearTimeout(timer);
-      sandbox.stop(shell);
+      stopAll();
       reject(new RunFailure("the run timed out"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
@@ -76,11 +81,11 @@ export function runShell(script: string, job: ShellJob): Promise<ShellResult> {
       reject(new RunFailure("the shell can't start"));
     });
     // Bash has gone, but anything it left running would hold the pipes open, and `close` would never come.
-    shell.on("exit", () => sandbox.stop(shell));
+    shell.on("exit", stopAll);
     shell.on("close", (exitCode) => {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
-      resolve({ output: Buffer.concat(chunks).toString("utf8"), exitCode, stopped });
+      void stopping.then(() => resolve({ output: Buffer.concat(chunks).toString("utf8"), exitCode, stopped }));
     });
   });
 }
