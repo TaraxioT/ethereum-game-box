@@ -1,10 +1,11 @@
-// Finds every name `GameBoxNames` has made, from its events (read in chunks from its deploy block), and every proxy
-// behind them: the fixed ones in `deployments/sepolia.json` (with `gamebox.eth`'s own resolver) and one resolver per
-// Box licence and per player. Pop-ups have none of their own: they use their Box's.
+// Finds every name `GameBoxNames` and `Championships` have made, from their events (read in chunks from their deploy
+// blocks), and every proxy behind them: the fixed ones in `deployments/sepolia.json` (with `gamebox.eth`'s own
+// resolver) and one resolver per Box licence, per player and per championship. Pop-ups have none of their own: they
+// use their Box's.
 
 import { type Address, type PublicClient, getAbiItem } from 'viem';
 
-import { gameBoxNamesAbi } from '../../src/names/abis.ts';
+import { championshipsAbi, gameBoxNamesAbi } from '../../src/names/abis.ts';
 import { contractAddress, namesProxies, ourContract } from '../../src/names/deployments.ts';
 
 const CHUNK = 5_000n;
@@ -28,18 +29,44 @@ export interface PopupName {
   expiry: bigint;
 }
 
+export interface Championship {
+  id: bigint;
+  game: string;
+  label: string;
+  resolver: Address;
+}
+
 export interface Discovered {
   boxes: BoxLicence[];
   players: PlayerName[];
   popups: PopupName[];
+  cups: Championship[];
   /** Every factory proxy, with what it is. */
   proxies: { address: Address; what: string }[];
+}
+
+/** `CupOpened` from `Championships`, in chunks from its deploy block. */
+async function championships(client: PublicClient, head: bigint): Promise<Championship[]> {
+  const deployed = ourContract('Championships');
+  if (!deployed) return [];
+  const cups: Championship[] = [];
+  for (let start = BigInt(deployed.deployBlock); start <= head; start += CHUNK) {
+    const logs = await client.getLogs({
+      address: deployed.address,
+      event: getAbiItem({ abi: championshipsAbi, name: 'CupOpened' }),
+      fromBlock: start,
+      toBlock: start + CHUNK - 1n > head ? head : start + CHUNK - 1n,
+    });
+    for (const { args } of logs) cups.push({ id: args.id!, game: args.game!, label: args.label!, resolver: args.resolver! });
+  }
+  return cups;
 }
 
 export async function discover(client: PublicClient): Promise<Discovered> {
   const names = contractAddress('GameBoxNames');
   const from = BigInt(ourContract('GameBoxNames')!.deployBlock);
   const head = await client.getBlockNumber();
+  const cups = await championships(client, head);
   const boxes: BoxLicence[] = [];
   const players: PlayerName[] = [];
   const popups: PopupName[] = [];
@@ -78,8 +105,9 @@ export async function discover(client: PublicClient): Promise<Discovered> {
     ...Object.entries(fixed.titles).map(([game, address]) => ({ address, what: `${game} title registry` })),
     ...boxes.map((b) => ({ address: b.resolver, what: `${b.label} resolver` })),
     ...players.map((p) => ({ address: p.resolver, what: `${p.label} resolver` })),
+    ...cups.map((c) => ({ address: c.resolver, what: `${c.label}.${c.game} resolver` })),
   ];
-  return { boxes, players, popups, proxies };
+  return { boxes, players, popups, cups, proxies };
 }
 
 /** The latest pop-up per label. */
