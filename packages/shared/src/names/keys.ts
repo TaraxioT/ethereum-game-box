@@ -43,6 +43,16 @@ export const BOX_DEVICE_KEYS = [BOX_KEYS.lastSeen, BOX_KEYS.game] as const;
 export const BOX_STATUS = ['active', 'suspended', 'revoked'] as const;
 export type BoxStatus = (typeof BOX_STATUS)[number];
 
+/** `gamebox.eth`'s own record (it has one of its own, so it no longer reads the default record). */
+export const GAMEBOX_KEYS = {
+  /** Written by `PlayerStats` only: the top `LEADERBOARD_SIZE` players, in rank order (most wins, then who reached them
+   *  first). JSON, an array of `LeaderRow` (`parseLeaderboard`). */
+  leaderboard: 'leaderboard',
+} as const;
+
+/** How many players `leaderboard` lists. */
+export const LEADERBOARD_SIZE = 10;
+
 /** The default record on `gamebox.eth`'s own resolver, which every unregistered or expired `*.gamebox.eth` name
  *  resolves to (wildcard). It has no `addr`. Written by `gamebox.eth`'s owner. */
 export const DEFAULT_KEYS = {
@@ -54,7 +64,8 @@ export const DEFAULT_KEYS = {
 
 /** Player names (`<player>.gamebox.eth`). `addr` is the badge, which may write every key. */
 export const PLAYER_KEYS = {
-  /** Written by `PlayerStats` only, until the badge revokes it. JSON: `{"<game>":{"wins":n,"losses":n,"draws":n}}`. */
+  /** Written by `PlayerStats` only, until the badge revokes it. JSON, a `PlayerStats` (`parseStats`): the totals over
+   *  every game and each game played. */
   stats: 'stats',
 } as const;
 
@@ -134,6 +145,66 @@ export function parseStandings(text: string): Standing[] {
       draws: r.draws as number,
       losses: r.losses as number,
     };
+  });
+}
+
+/** A player's record in one game. */
+export interface GameRecord {
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+/** A player's record over every game, as `stats` and each `leaderboard` row hold it. `streak` is the run of wins up to
+ *  now, in any game (a loss or a draw ends it); `best` is the longest. */
+export interface PlayerTotals extends GameRecord {
+  played: number;
+  streak: number;
+  best: number;
+}
+
+/** A player's `stats` record: the totals, and each game played, in the order first played. */
+export interface PlayerStats extends PlayerTotals {
+  games: Record<string, GameRecord>;
+}
+
+/** One row of `gamebox.eth`'s `leaderboard`. */
+export interface LeaderRow extends PlayerTotals {
+  /** The player's name, `<player>.gamebox.eth` (empty if the badge no longer holds one). */
+  name: string;
+}
+
+const TOTALS = ['played', 'wins', 'losses', 'draws', 'streak', 'best'] as const;
+const RECORD = ['wins', 'losses', 'draws'] as const;
+
+function counts<K extends string>(value: unknown, keys: readonly K[], what: string): Record<K, number> {
+  const r = value as Record<string, unknown> | null;
+  if (typeof r !== 'object' || r === null || keys.some((k) => typeof r[k] !== 'number')) {
+    throw new Error(`${what} is malformed: ${JSON.stringify(value)}`);
+  }
+  return Object.fromEntries(keys.map((k) => [k, r[k]])) as Record<K, number>;
+}
+
+/** Reads a `stats` record. Throws on anything that isn't the shape `PlayerStats` writes. */
+export function parseStats(text: string): PlayerStats {
+  const r: unknown = JSON.parse(text);
+  const totals = counts(r, TOTALS, 'stats');
+  const games = (r as { games?: unknown }).games;
+  if (typeof games !== 'object' || games === null || Array.isArray(games)) throw new Error('stats has no games');
+  return {
+    ...totals,
+    games: Object.fromEntries(Object.entries(games).map(([game, g]) => [game, counts(g, RECORD, `stats.games.${game}`)])),
+  };
+}
+
+/** Reads a `leaderboard` record. Throws on anything that isn't the shape `PlayerStats` writes. */
+export function parseLeaderboard(text: string): LeaderRow[] {
+  const rows: unknown = JSON.parse(text);
+  if (!Array.isArray(rows)) throw new Error('leaderboard is not an array');
+  return rows.map((row: unknown) => {
+    const name = (row as { name?: unknown } | null)?.name;
+    if (typeof name !== 'string') throw new Error(`leaderboard row is malformed: ${JSON.stringify(row)}`);
+    return { name, ...counts(row, TOTALS, 'leaderboard row') };
   });
 }
 

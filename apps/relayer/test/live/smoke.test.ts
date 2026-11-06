@@ -20,7 +20,9 @@ import { fileURLToPath } from 'node:url';
 import {
   CUP_KEYS,
   type DemoBoxView,
+  GAMEBOX_KEYS,
   PARENT_NAME,
+  PLAYER_KEYS,
   type RelayerHealth,
   type ReportResponse,
   type TxView,
@@ -35,7 +37,10 @@ import {
   formatUsdc,
   fullName,
   gameBoxNamesAbi,
+  namesProxies,
+  parseLeaderboard,
   parseStandings,
+  parseStats,
   permissionedRegistryAbi,
   permissionedResolverAbi,
   popupLabel,
@@ -375,9 +380,11 @@ describe('the Game Box names, live on Sepolia', () => {
     const standingsBefore = cup ? await standingsAt(before) : undefined;
     // demo-01 is the site's Box too, so others may report this badge's matches: compare with the state just before.
     const resolver = await registryRead('getResolver', label, before);
-    const statsAt = async (blockNumber: bigint) =>
-      (JSON.parse((await record(resolver, fullName(label), 'stats', blockNumber)) || '{}') as Record<string, { wins: number; losses: number }>)[GAME] ??
-      { wins: 0, losses: 0 };
+    const statsAt = async (blockNumber: bigint) => {
+      const text = await record(resolver, fullName(label), PLAYER_KEYS.stats, blockNumber);
+      const stats = text ? parseStats(text) : undefined;
+      return { wins: stats?.wins ?? 0, losses: stats?.losses ?? 0, streak: stats?.streak ?? 0, game: stats?.games[GAME] ?? { wins: 0, losses: 0 } };
+    };
     const statsBefore = await statsAt(before);
 
     const res = await call<ReportResponse>(urls.demoBox, '/result', {
@@ -404,7 +411,19 @@ describe('the Game Box names, live on Sepolia', () => {
     const title = await client.readContract({ ...names, functionName: 'getTitle', args: [GAME], blockNumber });
     expect(title.holder).toBe(badge.address);
     report.push(`${titleName(GAME)}: ${titleBefore.holder} -> ${title.holder}, streak ${title.streak}`);
-    expect(await statsAt(blockNumber)).toMatchObject({ wins: statsBefore.wins + 1, losses: statsBefore.losses });
+    // The winner's stats on its own name: one more win in every game together and in this one, and its streak.
+    const statsAfter = await statsAt(blockNumber);
+    expect(statsAfter).toMatchObject({
+      wins: statsBefore.wins + 1,
+      losses: statsBefore.losses,
+      streak: statsBefore.streak + 1,
+      game: { wins: statsBefore.game.wins + 1, losses: statsBefore.game.losses },
+    });
+    report.push(`${fullName(label)} stats: ${statsBefore.wins}W ${statsBefore.losses}L -> ${statsAfter.wins}W ${statsAfter.losses}L, streak ${statsAfter.streak}`);
+    // gamebox.eth's leaderboard was rewritten, with the winner on it.
+    const board = parseLeaderboard(await record(namesProxies().gameboxResolver, PARENT_NAME, GAMEBOX_KEYS.leaderboard, blockNumber));
+    expect(board.find((row) => row.name === fullName(label))).toMatchObject({ wins: statsAfter.wins, streak: statsAfter.streak });
+    report.push(`${PARENT_NAME} leaderboard: ${board.length} players, ${board[0]?.name} first with ${board[0]?.wins} wins`);
     if (resolvable) expect(await client.getEnsAddress({ name: titleName(GAME), blockNumber })).toBe(badge.address);
 
     // The championship scored it, if one is open.
