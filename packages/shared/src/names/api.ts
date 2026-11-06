@@ -76,7 +76,7 @@ export interface DripRequest {
   badge: Address;
 }
 
-/** `POST /usdc/topup`: mints 100 test USDC to a player holding less than 25. `POST /store/topup` takes the same, and
+/** `POST /usdc/topup`: mints 100 test USDC to a player, whatever they hold. `POST /store/topup` takes the same, and
  *  mints Store USDC. */
 export interface TopupRequest {
   /** The player: an address, or an ENS name that resolves to one (`nova.gamebox.eth`). */

@@ -1,9 +1,10 @@
 // Result: the winner's side lit and paid, the winner named by their player name. The result goes to Sepolia (it pays
 // the pot, moves the title and scores the championship); once its receipt is in, what it did is read back from chain
 // and listed under the banner ("+20 USDC", "now holds champion.stockduel.gamebox.eth", "mumbai-cup: 2nd, 6 pts"),
-// never made up here. A draw sends both stakes back, and so does a void (a built game's rules failed); a free-play
-// game shows no money. A store game's result is the verifier's: each seat's share of the split, or every stake back.
-// Rematch goes back to Stake with the same seats; Home returns to the library.
+// never made up here. A draw sends both stakes back, and so does a void (a built game's rules failed) or a match called
+// off with EXIT (settled as a draw); a free-play game shows no money. A store game's result is the verifier's: each
+// seat's share of the split, or every stake back. Rematch goes back to Stake with the same seats; Home returns to the
+// library.
 import type { BoxState, Judged, SeatState } from "../../core/types.ts";
 import { badgeLabel } from "../../core/badges.ts";
 import type { View, ViewContext } from "./view.ts";
@@ -65,6 +66,7 @@ export function resultView(ctx: ViewContext): View {
     state.seats.forEach((s, i) => {
       const panel = row.panel(i);
       if (m.voided) panel?.set(s, money ? `VOID · ${m.stake} USDC BACK` : "VOID", "done");
+      else if (m.calledOff) panel?.set(s, money ? `CALLED OFF · ${m.stake} USDC BACK` : "CALLED OFF", "done");
       else if (winner === null) panel?.set(s, money ? `DRAW · ${m.stake} USDC BACK` : "DRAW", "done");
       else if (winner === i) panel?.set(s, money ? `WINNER · +${m.stake * 2} USDC${m.playFor === "title" ? " · TITLE" : ""}` : "WINNER", "win");
       else panel?.set(s, money ? `−${m.stake} USDC` : "LOSE", "lose");
@@ -73,9 +75,11 @@ export function resultView(ctx: ViewContext): View {
     const named = winner === null ? null : nameOf(state.seats[winner]);
     bannerText.textContent = m.voided
       ? "VOID · THE GAME FAILED"
-      : winner === null
-        ? money ? "DRAW · STAKES RETURNED" : "DRAW"
-        : `${named ?? `PLAYER ${winner + 1}`} WINS`;
+      : m.calledOff
+        ? money ? "CALLED OFF · STAKES RETURNED" : "CALLED OFF"
+        : winner === null
+          ? money ? "DRAW · STAKES RETURNED" : "DRAW"
+          : `${named ?? `PLAYER ${winner + 1}`} WINS`;
     const onChain = money || m.playFor !== "usdc";
     const lines = m.lines ?? (onChain && !m.voided ? ["reading the result from Sepolia…"] : []);
     chainLines.replaceChildren(...lines.map((text) => el("li", m.lines ? "" : "pending", text)));

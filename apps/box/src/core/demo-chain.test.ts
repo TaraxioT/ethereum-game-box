@@ -36,6 +36,12 @@ describe("the demo chain", () => {
     expect(await chain.outcome({ round: 1, game: "stock-duel", badges: [A, B], winner: 1 }, null)).toEqual([
       `${B.slice(0, 6)}…${B.slice(-4)} +20 USDC`,
       `${B.slice(0, 6)}…${B.slice(-4)} now holds champion.stockduel.gamebox.eth`,
+      `${A.slice(0, 6)}…${A.slice(-4)} stats: 0W 1L`,
+      `${B.slice(0, 6)}…${B.slice(-4)} stats: 1W 0L, streak 1`,
+    ]);
+    expect((await chain.board("stock-duel")).leaders.map((row) => [row.name, row.wins])).toEqual([
+      [`${B.slice(0, 6)}…${B.slice(-4)}`, 1],
+      [`${A.slice(0, 6)}…${A.slice(-4)}`, 0],
     ]);
     expect((await chain.board("stock-duel")).title?.streak).toBe(1);
     expect(chain.sent).toEqual(["open 1", "settle 1"]);

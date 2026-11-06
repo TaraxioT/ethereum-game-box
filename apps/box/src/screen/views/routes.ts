@@ -11,6 +11,7 @@ import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
 import { judgingView } from "./judging.ts";
 import { lobbyView } from "./lobby.ts";
+import { hallView } from "./hall.ts";
 import { builderView } from "./builder.ts";
 import { bundleFrameView } from "../frame/bundle-view.ts";
 import { storeMatch, storePowers } from "../frame/bundle-feed.ts";
@@ -66,5 +67,7 @@ export const routes: Routes = (state) => {
       return { key: "build", pose: "page", view: builderView };
     case "lobby":
       return { key: "lobby", pose: "page", view: lobbyView };
+    case "hall":
+      return { key: "hall", pose: "page", view: hallView };
   }
 };

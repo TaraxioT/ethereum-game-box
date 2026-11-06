@@ -79,6 +79,7 @@ export async function deployContracts(chain: Chain, keys: RunKeys, box: { label:
   };
 
   const names = await deploy('StubNames', []);
+  const lease = await deploy('StubLease', []);
   const teamUsdc = await deploy('FakeUSDC', [deployer.address, deployer.address]);
   const usdc = await deploy('FakeUSDC', [deployer.address, deployer.address]);
   const pot = await deploy('StorePot', [names, usdc, deployer.address]);
@@ -96,6 +97,6 @@ export async function deployContracts(chain: Chain, keys: RunKeys, box: { label:
     { operator: admin.address, account: admin.address, qx: box.qx, qy: box.qy, status: ACTIVE, resolver: zeroAddress, expiry: FAR_FUTURE },
   ]);
 
-  writeDeployments(file, { GameBoxNames: names, FakeUSDC: teamUsdc, StoreUSDC: usdc, StorePot: pot });
+  writeDeployments(file, { GameBoxNames: names, BoxLease: lease, FakeUSDC: teamUsdc, StoreUSDC: usdc, StorePot: pot });
   return { pot, usdc, names, deployments: file };
 }

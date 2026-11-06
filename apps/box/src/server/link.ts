@@ -6,6 +6,7 @@ import type http from "node:http";
 import type { Duplex } from "node:stream";
 import { LOG_LIMITS, PLAYER_LIMITS, SMALL_CHARS, printable, utf8Bytes } from "@egb/sdk";
 import { WebSocketServer, type WebSocket } from "ws";
+import { labelProblem } from "@egb/shared/names";
 import type { BoxEvent, BoxLink, BoxState, FrameWord, ScreenCommand } from "../core/types.ts";
 import { LINK_COALESCE_MS, LINK_PATH, STATE_ONLY, type LinkDown } from "../core/wire.ts";
 import { coalesce } from "./coalesce.ts";
@@ -79,8 +80,16 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "lobby":
     case "topup":
     case "propose":
-    case "claim":
+    case "hall":
+    case "quit":
       return { type: c.type };
+    case "challenge":
+      if (typeof c.game !== "string" || c.game.length > 64) return null;
+      return c.target === "usdc" || c.target === "title" || c.target === "cup" ? { type: "challenge", game: c.game, target: c.target } : null;
+    case "claim":
+      // A typed label must keep the label rule; with none, the proposed one is claimed.
+      if (c.label === undefined) return { type: "claim" };
+      return typeof c.label === "string" && labelProblem(c.label) === null ? { type: "claim", label: c.label } : null;
     case "focus":
       return typeof c.game === "string" && c.game.length <= 64 ? { type: "focus", game: c.game } : null;
     case "stake":

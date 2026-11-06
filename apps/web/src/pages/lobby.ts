@@ -38,7 +38,7 @@ async function playerPanel(name: string): Promise<HTMLElement> {
     return h("div", {}, h("p.hint.bad", {}, `${name} doesn't resolve: getEnsAddress returns null. Claim it on the Players page first.`));
   }
   const balance = await readBalance(client, address);
-  const hint = h("span.hint.wait", {}, "The relayer mints 100 test USDC when the balance is under 25, once per address every 10 minutes.");
+  const hint = h("span.hint.wait", {}, "The relayer mints 100 test USDC, once per address every 10 minutes.");
   const run = async () => {
     button.disabled = true;
     hint.className = "hint wait";

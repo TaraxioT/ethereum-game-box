@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -14,6 +14,7 @@ import { chainLabel, TEAM_GAMES, teamLibrary } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
 import { instantTap } from "./instant-tap.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
+import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
 
@@ -63,7 +64,7 @@ function recordingPort(): Recording {
     player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100, record: null }),
     board(game): Promise<Board> {
       boards.push(game);
-      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 }, cup: null });
+      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER }, cup: null, leaders: [], won: [] });
     },
     open: take("open"),
     settle: take("settle"),
@@ -188,14 +189,99 @@ async function potConfirmed<C extends ChainPort>(r: Rig<C>): Promise<void> {
   } else await until(r, (state) => state.phase === "playing");
 }
 
-/** Plays the running Quick Draw to a win for `seat` and waits out the end hold. */
+/** The running Quick Draw's state, or null. */
+const qd = (state: BoxState): QuickDrawState | null => (state.match?.play.game === "quick-draw" ? state.match.play.state : null);
+
+/** Plays the running Quick Draw until `seat` takes the match, drawing first in every round, and waits out the end hold. */
 async function quickWin<C extends ChainPort>(r: Rig<C>, seat: Seat): Promise<void> {
-  await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-  instantTap(r.core, seat, seat === 0 ? NOVA : KITE, 1);
+  while (!r.core.state().match?.outcome) {
+    await until(r, (state) => qd(state)?.phase === "draw");
+    instantTap(r.core, seat, seat === 0 ? NOVA : KITE, 1);
+    await until(r, (state) => qd(state)?.phase !== "draw");
+  }
   await until(r, (state) => state.phase === "result");
 }
 
 const lastTap = (r: Rig) => r.events.filter((event) => event.type === "tap").at(-1);
+
+describe("the hall", () => {
+  it("opens from Home, seats a tap, and plays a title from its card at the title's stake", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "hall" });
+    expect(r.core.state().phase).toBe("hall");
+    await flush();
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.core.state().seats.map((s) => s.badge?.address)).toEqual([NOVA.address, KITE.address]);
+    // No cup is open on the demo chain: a cup card can't be played.
+    r.core.send({ type: "challenge", game: "quick-draw", target: "cup" });
+    expect(r.core.state().phase).toBe("hall");
+    r.core.send({ type: "challenge", game: "quick-draw", target: "title" });
+    expect(r.core.state()).toMatchObject({ phase: "stake", focus: "quick-draw", playFor: "title" });
+  });
+
+  it("goes back Home on BACK, and by itself after IDLE_MS", () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "hall" });
+    r.core.send({ type: "back" });
+    expect(r.core.state().phase).toBe("home");
+    r.core.send({ type: "hall" });
+    r.clock.advance(IDLE_MS);
+    expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("players who walk away", () => {
+  async function toStake(r: Rig<Recording>): Promise<void> {
+    await seated(r);
+    r.core.send({ type: "focus", game: "quick-draw" });
+    r.core.send({ type: "play" });
+    await flush();
+    expect(r.core.state().phase).toBe("stake");
+  }
+
+  it("leave Stake for Home after SEATED_IDLE_MS, and a sign tap holds it there", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    r.clock.advance(SEATED_IDLE_MS - 1);
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state().seats[0].signed).toBe(true);
+    r.clock.advance(SEATED_IDLE_MS - 1);
+    expect(r.core.state().phase).toBe("stake");
+    r.clock.advance(1);
+    expect(r.core.state().phase).toBe("home");
+    expect(r.core.state().seats.map((seat) => seat.signed)).toEqual([false, false]);
+  });
+
+  it("stay on Stake while both have signed and the pot is opening", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    r.clock.advance(SEATED_IDLE_MS * 3);
+    expect(r.core.state().phase).toBe("stake");
+    await potConfirmed(r);
+    expect(r.core.state().phase).toBe("playing");
+  });
+});
+
+describe("EXIT", () => {
+  it("calls a match off as a draw: it settles on chain and both stakes go back", async () => {
+    const r = rig();
+    await toPlaying(r, "quick-draw");
+    r.core.send({ type: "quit" });
+    expect(r.core.state()).toMatchObject({ phase: "result", match: { calledOff: true, outcome: { winner: null } } });
+    await until(r, (state) => state.txs.some((tx) => tx.kind === "settle" && tx.step === "paid"));
+    expect(r.core.state().seats.map((s) => s.balance)).toEqual([100, 100]);
+    // Nothing to call off once it is over.
+    r.core.send({ type: "quit" });
+    expect(r.core.state().phase).toBe("result");
+  });
+});
 
 describe("the core on its ports", () => {
   it("plans each seat's taps from the phase", () => {
@@ -225,20 +311,25 @@ describe("the core on its ports", () => {
     // It waits SETTLE_MS from the touch for the other station, then judges.
     expect(core.state().match?.outcome).toBeNull();
     clock.advance(400);
-    const after = core.state().match;
-    if (after?.play.game !== "quick-draw") throw new Error("no Quick Draw");
-    expect(after.outcome).toEqual({ winner: 1 });
-    expect(reactionMs(after.play.state, 1)).toBe(180);
+    const after = qd(core.state());
+    // Player 2 takes the first round; the match goes on to the best of three.
+    expect(after).toMatchObject({ phase: "round", took: 1, score: [0, 1] });
+    expect(core.state().match?.outcome).toBeNull();
+    if (after) expect(reactionMs(after, 1)).toBe(180);
     expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true, meaning: "play" });
     expect(r.buzzes.at(-1)).toEqual([1, "ok"]);
-    expect(core.plan(1)).toBe("none");
+    expect([core.plan(0), core.plan(1)]).toEqual(["none", "none"]);
     // The chip's answer arrives afterwards and changes nothing.
     const count = r.events.length;
     core.tap({ phase: "done", tap, seat: 1, at: drawAt + 180, badge: KITE, roll: null });
     expect(r.events.length).toBe(count);
 
-    clock.advance(END_HOLD_MS);
-    expect(core.state().phase).toBe("result");
+    // The next round is counted in, and Player 2 takes it and the match.
+    await until(r, (state) => qd(state)?.phase === "count");
+    expect(qd(core.state())).toMatchObject({ round: 2, score: [0, 1] });
+    expect([core.plan(0), core.plan(1)]).toEqual(["identify", "identify"]);
+    await quickWin(r, 1);
+    expect(core.state().match?.outcome).toEqual({ winner: 1 });
     // The pot lands in the next head; the result goes then, and its lines come from the chain once it is paid.
     await until(r, (state) => state.match?.lines !== null);
     expect(r.chain.sent).toEqual(["open 1", "settle 1"]);
@@ -407,7 +498,7 @@ describe("the core on its ports", () => {
     expect(core.state().match?.outcome).toBeNull();
     core.tap({ phase: "done", tap: unknown, seat: 0, at: drawAt + 120, badge: NOVA, roll: null });
     clock.advance(50);
-    expect(core.state().match?.outcome).toEqual({ winner: 0 });
+    expect(qd(core.state())).toMatchObject({ phase: "round", took: 0 });
   });
 
   it("freezes the Stock Duel card a touch saw, and lets it go when the tap fails", async () => {
@@ -443,22 +534,24 @@ describe("the core on its ports", () => {
     stationTap(core, 1, KITE);
     await until(r, (state) => state.phase === "playing");
     clock.advance(12_000);
-    await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-    stationTap(core, 1, KITE);
+    while (!core.state().match?.outcome) {
+      await until(r, (state) => qd(state)?.phase === "draw");
+      stationTap(core, 1, KITE);
+      await until(r, (state) => qd(state)?.phase !== "draw");
+    }
     await until(r, (state) => state.phase === "result");
     expect(r.logged).toHaveLength(1);
     const [t] = r.logged;
     expect(t).toMatchObject({ v: 1, game: "quick-draw", badges: [NOVA.address, KITE.address], stake: 10, result: { winner: 1 }, counts: true });
-    expect(t?.taps).toEqual([{ seat: 1, at: expect.any(Number), roll: null, accepted: true }]);
+    const good = { seat: 1, at: expect.any(Number), roll: null, accepted: true };
+    expect(t?.taps).toEqual([good, good]);
     expect(t?.endedAt).toBe(core.state().match?.endedAt);
 
     // The same match from injected taps is played, logged, and doesn't count.
     const injected = rig();
     await toPlaying(injected, "quick-draw");
     injected.clock.advance(15_000);
-    await until(injected, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
-    instantTap(injected.core, 0, NOVA, 1);
-    await until(injected, (state) => state.phase === "result");
+    await quickWin(injected, 0);
     expect(injected.logged[0]?.counts).toBe(false);
   });
 
@@ -466,8 +559,7 @@ describe("the core on its ports", () => {
     const r = rig();
     const { core, clock } = r;
     await toPlaying(r, "quick-draw");
-    instantTap(core, 0, NOVA, 1);
-    await until(r, (state) => state.phase === "result");
+    await quickWin(r, 0);
     const endedAt = core.state().match?.endedAt ?? 0;
     expect(core.plan(0)).toBe("none");
     instantTap(core, 0, NOVA, 1);
@@ -534,13 +626,19 @@ describe("what the screen hears", () => {
     expect(moments(r)).toEqual(expect.arrayContaining([["draw", null], ["shot", 1], ["over", 1]]));
   });
 
-  it("marks a false start with the seat that jumped", async () => {
+  it("marks a foul with the seat that jumped, and counts the next round in", async () => {
     const r = rig();
     await toPlaying(r, "quick-draw");
+    // A tap in the countdown is ignored; one on WAIT… is a foul.
     instantTap(r.core, 0, NOVA, 1);
-    await until(r, (state) => state.match?.outcome != null);
+    expect(meanings(r).at(-1)).toBe("ignored");
+    await until(r, (state) => qd(state)?.phase === "wait");
+    instantTap(r.core, 0, NOVA, 1);
+    expect(qd(r.core.state())).toMatchObject({ phase: "round", took: 1, reason: "early" });
     expect(moments(r)).toContainEqual(["false-start", 0]);
     expect(moments(r).map(([cue]) => cue)).not.toContain("draw");
+    await until(r, (state) => qd(state)?.phase === "count");
+    expect(moments(r).filter(([cue]) => cue === "round")).toHaveLength(2);
   });
 
   it("marks each Stock Duel card going down with its seat", async () => {
@@ -554,18 +652,18 @@ describe("what the screen hears", () => {
 });
 
 describe("stakes on chain", () => {
-  it("shows each seat's record in the focused game, read from chain, and the new one after a match", async () => {
+  it("shows each seat's stats, read from chain: none before a first result, then the new ones after a match", async () => {
     const r = rig();
     await toPlaying(r, "quick-draw");
-    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([
-      { game: "quick-draw", wins: 0, losses: 0, draws: 0 },
-      { game: "quick-draw", wins: 0, losses: 0, draws: 0 },
-    ]);
+    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([null, null]);
     await quickWin(r, 1);
     await until(r, (state) => state.txs.some((tx) => tx.kind === "settle" && tx.step === "paid"));
     r.core.send({ type: "rematch" });
     await flush();
-    expect(r.core.state().seats.map((seat) => [seat.record?.wins, seat.record?.losses])).toEqual([[0, 1], [1, 0]]);
+    expect(r.core.state().seats.map((seat) => seat.record)).toEqual([
+      { played: 1, wins: 0, losses: 1, draws: 0, streak: 0, best: 0 },
+      { played: 1, wins: 1, losses: 0, draws: 0, streak: 1, best: 1 },
+    ]);
   });
 
   it("waits on Stake while the pot opens, begins the match once it is in a block, and the bar follows the pot", async () => {
@@ -705,7 +803,7 @@ describe("the lobby", () => {
       instantTap(r.core, seat, badge, 1);
       expect(r.buzzes.at(-1)).toEqual([seat, "ok"]);
       await flush();
-      expect(r.core.state().lobby.card).toEqual({ address: badge.address, name: null, balance: 100, record: { game: "stock-duel", wins: 0, losses: 0, draws: 0 } });
+      expect(r.core.state().lobby.card).toEqual({ address: badge.address, name: null, balance: 100, record: null });
       proposals.push(r.core.state().lobby.proposal);
     }
     expect(proposals).toEqual(["nova", "kite", "juno"]);
@@ -731,6 +829,18 @@ describe("the lobby", () => {
     // A badge with a name has nothing to claim.
     r.core.send({ type: "claim" });
     expect(r.chain.sent).toHaveLength(1);
+  });
+
+  it("claims a label typed on the screen instead of the one proposed", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    instantTap(r.core, 0, NOVA, 1);
+    await flush();
+    r.core.send({ type: "claim", label: "alice" });
+    await until(r, (state) => state.lobby.card?.name !== null);
+    expect(r.chain.sent).toEqual(["claim alice"]);
+    expect(r.core.state().lobby.card?.name).toBe("alice.gamebox.eth");
   });
 
   it("claims the badge's own label: NOVA becomes nova.gamebox.eth, and a seat shows it", async () => {
@@ -775,7 +885,7 @@ describe("the lobby", () => {
     expect(new Set(r.chain.boards)).toEqual(new Set(["quick-draw", "stock-duel"]));
     r.core.send({ type: "lobby" });
     await flush();
-    expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
+    expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER });
   });
 
   it("goes back Home after IDLE_MS with nobody there", () => {
@@ -797,7 +907,11 @@ describe("refund", () => {
     const began = r.core.now();
     r.core.setPower(false);
     await until(r, (state) => state.txs[0]?.step === "paid");
-    instantTap(r.core, 0, NOVA, 1);
+    while (!r.core.state().match?.outcome) {
+      await until(r, (state) => qd(state)?.phase === "draw");
+      instantTap(r.core, 0, NOVA, 1);
+      await until(r, (state) => qd(state)?.phase !== "draw");
+    }
     await until(r, (state) => state.phase === "refund");
     return { ...r, began };
   }

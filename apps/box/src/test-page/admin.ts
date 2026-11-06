@@ -61,7 +61,7 @@ export function adminTab(): AdminTab {
 
   const cupGame = h("select");
   const cupLabel = input("text", "", "badge-name");
-  cupLabel.placeholder = "championship label, such as demo-cup-1";
+  cupLabel.placeholder = "cup label, such as demo-cup-1";
   const cupMinutes = input("number", "5");
   cupMinutes.min = "1";
   const cupPrize = input("text", "0");
@@ -82,11 +82,11 @@ export function adminTab(): AdminTab {
       h("p", "hint", "Adds <label>.gamebox.eth and champion.<label>.gamebox.eth. A game can't be removed once added; its title moves with every win and lapses after the term."),
       h("div", "row", gameLabel, h("label", "", "title term ", termCount, " ", termUnit), button("Add game", () => act(addGame))),
     ),
-    h("section", "card wide", h("h2", "", "Games and titles"), table(["Game", "Title term", "Champion", "Streak", "Title", "Championship"], gamesBody)),
+    h("section", "card wide", h("h2", "", "Games and titles"), table(["Game", "Title term", "Champion", "Streak", "Title", "Cup"], gamesBody)),
     h(
       "section",
       "card wide",
-      h("h2", "", "Open a championship"),
+      h("h2", "", "Open a cup"),
       h("p", "hint", "One open per game. Every result for the game scores it until it ends; it can't be cancelled, only closed once it has ended. A prize is test USDC, minted to the admin first."),
       h("div", "row", cupGame, cupLabel, h("label", "", "runs ", cupMinutes, " min"), h("label", "", "prize ", cupPrize, " USDC"), button("Open", () => act(openCup))),
     ),
@@ -117,7 +117,7 @@ export function adminTab(): AdminTab {
 
   function drawStatus(reply: Extract<AdminReply, { enabled: true }>): void {
     const v = reply.view;
-    const roles = v ? `games ${v.roles.games ? "yes" : "NO"} · championships ${v.roles.cups ? "yes" : "NO"} · USDC minter ${v.roles.minter ? "yes" : "NO"}` : "";
+    const roles = v ? `games ${v.roles.games ? "yes" : "NO"} · cups ${v.roles.cups ? "yes" : "NO"} · USDC minter ${v.roles.minter ? "yes" : "NO"}` : "";
     statusLine.textContent = [reply.address, v && `${Number(v.eth).toFixed(4)} ETH`, v && `${v.usdc} USDC`, v && `block ${v.block}`, roles, reply.error]
       .filter(Boolean)
       .join(" · ");

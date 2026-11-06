@@ -47,9 +47,10 @@ and it can't move a stake or end a pot. Whatever it says, the round stays on the
 chain: it forgets a pot that is over, and refunds one that isn't.
 
 Reads go to `SEPOLIA_RPC_URL`: USDC balances, `GameBoxNames.nameOf`, the pot and rounds, the head for the block clock,
-and a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`) and open championship (`Championships.openCup`, then
-its name's `standings`) through the Universal Resolver. After a result is paid, its lines are read at the receipt's
-block: the `PotSettled` payout, whether the winner now holds the title, and each player's place in the championship.
+and through the Universal Resolver a player's `stats`, a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`),
+its open cup (`Championships.openCup`, then its name's `standings`) and `gamebox.eth`'s `leaderboard`. After a result is
+paid, its lines are read at the receipt's block: the `PotSettled` payout, whether the winner now holds the title, each
+player's place in the cup, and each player's new `stats`.
 The RPC URL carries the node's key, so every error that leaves `reads.ts` has its URLs replaced by `<rpc>`.
 
 ## Modules

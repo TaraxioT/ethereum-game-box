@@ -741,22 +741,15 @@ describe('one transaction in flight per round', () => {
 describe('POST /store/topup', () => {
   const topped = (world: World) => decodeFunctionData({ abi: fakeUsdcAbi, data: world.chain.sent[0]!.data! });
 
-  it('mints 100 Store USDC to a player holding less than 25', async () => {
+  it('mints 100 Store USDC to a player, whatever they hold', async () => {
     const world = new World();
     const player = newBadge().address;
-    world.storeUsdc.set(player.toLowerCase(), usdc(24.99));
+    world.storeUsdc.set(player.toLowerCase(), usdc(500));
     const res = await world.post('/store/topup', { player });
     expect(res).toMatchObject({ status: 202, body: { kind: 'store-topup', status: 'sent' } });
     expect(world.chain.sent).toHaveLength(1);
     expect(world.chain.sent[0]).toMatchObject({ to: STORE_USDC, gas: 300_000n });
     expect(topped(world)).toMatchObject({ functionName: 'mint', args: [player, usdc(100)] });
-  });
-
-  it('counts only Store USDC, not the first token', async () => {
-    const world = new World();
-    const player = newBadge().address;
-    world.usdc.set(player.toLowerCase(), usdc(100));
-    expect((await world.post('/store/topup', { player })).status).toBe(202);
   });
 
   it('takes an ENS name, resolved through the Universal Resolver', async () => {
@@ -771,15 +764,6 @@ describe('POST /store/topup', () => {
     ['a body with no player', () => ({}), 400, /player: expected a string/],
     ['something that is neither an address nor a name', () => ({ player: 'not a name' }), 400, /address or an ENS name/],
     ['a name that does not resolve', () => ({ player: 'nobody.gamebox.eth' }), 404, /does not resolve/],
-    [
-      'a player who holds 25 Store USDC or more',
-      (m) => {
-        m.world.storeUsdc.set(m.players[0]!.toLowerCase(), usdc(25));
-        return { player: m.players[0] };
-      },
-      409,
-      /already holds 25 USDC/,
-    ],
     [
       'an eth_call revert (the relayer is not the minter), by name',
       (m) => {

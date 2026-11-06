@@ -157,6 +157,7 @@ async function checkRoles(client: PublicClient, found: Awaited<ReturnType<typeof
   const ethRegistry = ensAddress('ETHRegistry');
   const owner = await client.readContract({ address: ethRegistry, abi: permissionedRegistryAbi, functionName: 'getOwner', args: [BigInt(labelhash('gamebox'))] });
   await soleHolder(client, proxies.gameboxResolver, ROOT_RESOURCE, owner, S.SET_TEXT | S.SET_TEXT_ADMIN, "gamebox.eth's resolver: its owner is the only writer");
+  await soleHolder(client, proxies.gameboxResolver, textResource('leaderboard'), stats, S.SET_TEXT, "gamebox.eth's resolver: leaderboard is PlayerStats'");
   const resolver = await client.readContract({ address: ethRegistry, abi: permissionedRegistryAbi, functionName: 'getResolver', args: ['gamebox'] });
   expect(isAddressEqual(resolver, proxies.gameboxResolver), "gamebox.eth's resolver is its own default-record resolver", resolver);
 

@@ -268,14 +268,15 @@ export const SOUNDS: readonly SoundEntry[] = [
     },
   },
   {
-    name: "false-start", group: "game", seated: true, label: "False start",
-    meaning: "Quick Draw: a tap before the draw",
-    sounds: "A sour, detuned falling tone: clearly a mistake",
+    name: "false-start", group: "game", seated: true, label: "Foul",
+    meaning: "Quick Draw: a tap before DRAW, and the fouler's gun blows up in the hand",
+    sounds: "A muffled bang and a burst of crackle, then a sour, detuned fall: clearly a mistake",
     play(s, o, t, { seat }) {
       const k = bySeat(seat, 0.9, 1.1);
-      s.thump(o, t, 120, 60, 0.2, 0.1);
-      s.noise(o, t, { filter: "lowpass", freq: 500, dur: 0.05, gain: 0.1 });
-      for (const f of [440, 466.16]) s.tone(o, t, { type: "sawtooth", freq: f * k, to: f * k * 0.75, dur: 0.38, gain: 0.06, lowpass: 1800 });
+      s.thump(o, t, 140 * k, 40, 0.6, 0.22);
+      s.noise(o, t, { filter: "lowpass", freq: 2400, to: 300, dur: 0.35, gain: 0.45, attack: 0.001 });
+      for (let i = 0; i < 6; i++) s.noise(o, t + 0.05 + i * 0.035, { filter: "bandpass", freq: 3000 + i * 400, dur: 0.02, gain: 0.08, q: 2, attack: 0.001 });
+      for (const f of [440, 466.16]) s.tone(o, t + 0.18, { type: "sawtooth", freq: f * k, to: f * k * 0.7, dur: 0.4, gain: 0.05, lowpass: 1600 });
     },
   },
   {
@@ -373,7 +374,7 @@ export const SOUNDS: readonly SoundEntry[] = [
   },
   {
     name: "count", group: "game", rising: true, label: "Counting up",
-    meaning: "Stock Duel: the round's number counts up on the cards",
+    meaning: "Stock Duel: the round's number counts up on the cards. Quick Draw: each beat of the 3-2-1 before a round",
     sounds: "A blip that rises with the value (A4 to A6)",
     play(s, o, t, { pitch }) {
       const f = N.A4 * Math.pow(2, clamp01(pitch) * 2);

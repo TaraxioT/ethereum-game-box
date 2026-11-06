@@ -20,6 +20,7 @@ import {
     IUniversalResolver,
     IVerifiableFactory
 } from "../../src/names/IENSv2.sol";
+import {NameLib} from "../../src/names/NameLib.sol";
 import {PlayerStats} from "../../src/names/PlayerStats.sol";
 import {FakeUSDC} from "../../src/token/FakeUSDC.sol";
 import {P256Keys} from "../box/P256Keys.sol";
@@ -97,6 +98,10 @@ abstract contract NamesFork is Test, P256Keys {
             resolverImpl, uint256(keccak256("gamebox.eth resolver")), DefaultRecord.initData(ENS_DEPLOYER)
         );
         ethRegistry.setResolver(uint256(keccak256("gamebox")), gameboxResolver);
+        IPermissionedResolver(gameboxResolver)
+            .grantSetterRoles(
+                abi.encodeCall(IPermissionedResolver.setText, (NameLib.PARENT_DNS, "leaderboard", "")), address(stats)
+            );
         vm.stopPrank();
 
         vm.startPrank(admin);

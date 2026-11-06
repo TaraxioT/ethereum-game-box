@@ -117,6 +117,9 @@ Modules go with them, each pure one tested:
   has already booted is sent `booted` at once. With `onSeatTap` (Demo mode) a touch on a `data-seat` element (a port,
   a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in (the quarter, with
   more than two seats), with a ring of that seat's light. `isBot` tags the bot's port.
+- `exit-key.ts`: EXIT, fixed to the window's bottom-left corner while a match runs: a first tap arms it for 4 s (alert
+  red, `TAP AGAIN · to call it off · both stakes go back`), a second sends `quit`. Its events never reach the stage.
+  `mountExitKey(host, link, sound)`, in both builds.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`,
   `fitWidth`, `facesReady`, `wait`, `calm`.
 
@@ -144,14 +147,23 @@ on `BoxEvent`s and acts only through `link.send`.
   Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes; the
   board right of the core.
-- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel, TITLES &
-  CHAMPIONSHIPS with a LIVE lamp, then game by game (the games this Box plays) its TITLE (the holder, streak and time
-  left, or UP FOR GRABS) and its CUP (the open championship with its prize, leader and countdown; ENDED until it is
-  closed; one closed in the last hour with its winner; else NONE OPEN). Read from `GET /api/board` every 4 s and at
-  once when a result is paid, counted down every second. Hidden where there's no board (the simulator in a browser).
-  `boardGames(board, now)` is its words, tested.
+- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel, TITLES & CUPS with a
+  LIVE lamp and OPEN THE HALL (a tap on the head sends `hall`), then game by game (the games this Box plays) its TITLE
+  (the holder's whole ENS name, streak and time left, or UP FOR GRABS) and its CUP (the open cup with its prize, leader
+  and countdown; ENDED until it is closed; one closed in the last hour with its winner, FOREVER; else NONE OPEN), each
+  line with its own ENS name under it. A tap on a title line, or on a cup line while it scores, plays for it now
+  (`challenge`: PLAY ›). Read from `GET /api/board` every 4 s and at once when a result is paid; the times count down
+  in place every second, and a line is redrawn only when it changes. Hidden where there's no board (the simulator in a
+  browser). `boardGames(board, now)` is its words, tested.
+- `hall.ts`: the hall (`hall`, from Home's TITLES & CUPS program or the board's head): under the top band, TITLES (a
+  card per game on chain: the title's ENS name, its holder big, the streak, `EXPIRES IN` its time left, or VACANT · UP
+  FOR GRABS), CUPS (each open cup: its ENS name, prize, countdown and top three, or ENDED; then WON FOREVER, the closed
+  cups each → its winner) and the LEADERBOARD (`gamebox.eth`'s record, the top ten, the seated players lit). Each title
+  and open cup has PLAY FOR IT at its stake (`challenge`: Stake when both seats are taken, else Join). A tap takes a seat
+  as on Home. A card is redrawn only when it changes; the countdowns tick every second. BACK returns Home.
 - `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, the board (`board.ts`)
-  right of the core, and the rack (`rack.ts`). Touch or arrow keys focus: the
+  right of the core, and the rack (`rack.ts`). After the games the TITLES & CUPS program (a cup between two crowns):
+  focused, its facts say titles expire, cups are forever, and its key, ENTER, opens the hall (`hall`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
   derezzes and rezzes, the facts rez in turn and the `ui-focus` tick plays. Enter or Play launches: the key and program flash,
   the core turns and every trace flares. On the Box (`build:box`) the rack ends in the blank NEW GAME program: it
@@ -159,10 +171,14 @@ on `BoxEvent`s and acts only through `link.send`.
   Built games' programs stand before it with their art from the Box; one that can't load is sealed, and focusing it
   shows SEALED and why under the title. When the library changes (a `games` event) the rack is built again, and a
   game installed since Home last stood rezzes in where it stands.
-- `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, then NEW GAME where the Box has the builder)
+- `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, the hall's (`HALL`), then NEW GAME where the
+  Box has the builder)
   and where each stands (`rackSlots`: the layout's slots, each fed by a trace, then on along the row; a row too long
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
-- ENS names: the ports and seat panels print a player's ENS name in full (`nova` bright, `.gamebox.eth` dim) once
+- ENS names are never shortened. `shell/ens-name.ts` (`ensName`, `setEns`) is how every screen shows one: a single
+  line at full length in a box that scrolls sideways; one wider than its box drifts to its end and back (`.ens-name` in
+  `shell.css`, sized by a container query so it moves exactly the overflow) and can be swiped. The lobby, the hall,
+  Home's board and the settings panel use it. The ports and seat panels print a player's ENS name in full (`nova` bright, `.gamebox.eth` dim) once
   read, else the badge's label alone, so a `.gamebox.eth` name on screen always resolves; a seat panel adds the title
   the player holds or the championship they lead, by its own ENS name. `shell/ens-tags.ts`: on Attract and Home a tap
   shows a card under its port for a few seconds: the ENS name (or `no ENS name yet` and where to claim one) and each
@@ -177,13 +193,14 @@ on `BoxEvent`s and acts only through `link.send`.
   per player (`seat-row.ts` puts them up: every seat on show at Join, the players after it; with three or four they
   stand smaller, in a column each side, and that page stands round the core on the wide stage too; `seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
   loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
-  `4W 1L 0D · 90 USDC`, its record in the focused game and its balance, read from chain, popping in on its tap), a
+  `4W 1L 0D · STREAK 3 · 90 USDC`, its stats over every game from its name's `stats` record (the streak while it runs)
+  and its balance, read from chain, popping in on its tap), a
   panel under the core and keys at the bottom. Stakes are USDC on Sepolia for the team games; a built game isn't on
   chain and plays for nothing (`FREE PLAY`). Once both seats sign, Stake's panel shows the pot opening
   (`LOCKING 20 USDC IN THE POT`, SIGNED › SENT › IN BLOCK with the next step breathing, the hash and the seconds) until
   it is in a block and the match begins; an open that fails turns the panel red and both sign again. Result's banner names the winner by their player name in the winner's colour (a draw in system
   light), and under it the lines the Box read from chain after the result's receipt (the payout, the title, the
-  championship), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
+  cup, and each player's new stats from their name's `stats` record), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
   pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,
   and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
   rules failed. A store game stakes on the amount keys alone, under its tier's plate, `JUDGED BY AI`; Join says
@@ -191,10 +208,13 @@ on `BoxEvent`s and acts only through `link.send`.
   seat, lit once enough have sat down (`join-words.ts`, tested). Judging waits on the verifier, and Result shows each player's
   share of the split on their panel, under the plate's line for each with two, or `REFUNDED` with why (`judged.ts`, tested). A verifier that never paid goes to Refund, saying so.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
-  shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
-  `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
-  name) and its open championship (the prize, a countdown to the close, the top five with points and W-D-L), from the
-  Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
+  shows its card from chain: its player name, or `NO NAME YET` with a name field holding the proposed label (a tap
+  on it opens the Box's own keyboard, `name-keys.ts`, since the Pi's touch keyboard opens under the full-screen
+  kiosk; a keyboard works too: lower case, a-z, 0-9 and -, checked as it is typed), `.gamebox.eth` after it,
+  `ANOTHER` and `CLAIM` (Enter, or the keyboard's CLAIM, claims too); its `STATS` from its name's `stats` record (streak, wins, losses, played, best and its rank on the
+  leaderboard); its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
+  name), its open cup (the prize, a countdown to the close, the top five with points and W-D-L) and the leaderboard
+  over every game (`gamebox.eth`'s `leaderboard` record, the top five), from the Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
 - Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
   frame (`frame/`, its own README), which gives it `<egb-key>`, `<egb-fact>`, `<egb-seg>` and `<egb-plate>` (a panel,
   lit unless `metal`; a `metal` key draws as `ghost`, so games written before the Grid keep working).
@@ -249,8 +269,14 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 
 | Module | What it is | API |
 |---|---|---|
-| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`), two columns. LIVE NOW: a card per game (this Box's games first), its TITLE (the holder, streak and time left, or lapsed) and its CUP (the open championship, its leader, prize and countdown; OPENING… or CLOSING… while a job runs; CLOSE & PAY once it has ended), then the championships closed lately. OPEN A CHAMPIONSHIP (the game, a game with one open greyed out; how long it runs; the prize; a made-up name), ACTIVITY (the latest jobs as they send) and ADD A GAME (a title term and a label). Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open and counts down every second; the status line says how fresh the read is. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
+| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`), two columns. LIVE NOW: a card per game (this Box's games first), its TITLE (the title's ENS name → its holder's, the streak and time left, or lapsed) and its CUP (the open cup's ENS name → its leader's, the prize and countdown; OPENING… or CLOSING… while a job runs; a lit CLOSE & PAY with the prize once it has ended), then the cups closed lately (each name → its winner's, forever) and ADD A GAME (a title term and a label). OPEN A CUP in four numbered steps: 1 GAME (Quick Draw first when free; a game with a cup open is shown taken, with that cup's name and its time left), 2 HOW LONG, 3 PRIZE (5 MIN and 50 USDC to start), 4 NAME (a made-up label, NEW NAME for another); then the cup's full ENS name as it will be registered, a line saying how long it runs, its prize and when it ends (or what is wrong with the label), OPEN, and what happens (win 3, draw 1; at the close the winner is paid and owns the name forever). Then ACTIVITY (the latest jobs as they send). Every ENS name shows whole: one that doesn't fit drifts to its end and back and can be swiped. Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open and counts down every second, redrawing a line only when what it says changes; the status line says how fresh the read is. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
+| `lease.ts` | The Box's lease (`/api/lease`, read every 2 s, counted down every second on the chain's clock). A tag under the gear, in the strip left of player 1's port so it never covers a name: a lit dot that folds the rest away and back (remembered on the screen, localStorage `gamebox-lease-folded`), and LEASED over the time left (days above the clock), which opens BOX LEASE: the name and its standing, TIME LEFT as a big clock over a bar of what is left, when it was staked and when it ends, STAKED, RATE, STAKER and HOSTING, and a red SLIDE TO UNSTAKE (for the lease's own staker only). While the gate is closed, BOX OFFLINE covers the stage (under the gear, so Settings still opens): the name, why it is off, and the stake picker: a slider over 1 hour to 30 days, its GBX cost, RATE, what the staker holds (red when short) and when it would run until, then STAKE. Off for good with the simulator. Its pointer and key events never reach the stage. | `mountLease(host, sound)` |
+| `lease-ens.ts` | What the lease writes in ENS, on BOX LEASE and BOX OFFLINE: BoxLease (GBX staked) → GameBoxNames → gamebox.eth's registry (the name's expiry) and the name's resolver (its `status` text), each card with its address and value, and a verdict naming the record that keeps the Box offline. A changed value sends a pulse down the wires to its card, which flashes while the old value lifts off struck through; a running stake or unstake loops a pulse to the cards it will write. Visual only. | `ensMap(): { node, draw(reply, now) }`, `ensCards`, `ensVerdict`, `pendingWrites` |
+| `lease-words.ts` | The lease's words: the slider's stops, a length in hours, days or weeks, the clock, GBX grouped in thousands, a time of day, a span in its largest unit. | `hourStops`, `hoursWord`, `clock`, `gbxWord`, `timeOfDay`, `spanWord` |
+| `slide.ts` | Slide to confirm: the thumb dragged the whole track does it (unstaking), let go short and it springs home. Only transform and opacity move. | `slideToConfirm(word, onConfirm)` |
 | `kiosk.css` | The tag's and the page's styles. | |
+| `lease.css` | The lease's: the tag and its fold, the page, the slide, BOX OFFLINE in alert red, the hours slider. | |
+| `lease-ens.css` | The ENS map's: chamfered cards on SVG wires, the write pulse and flash, the struck old value, a red ping on the record that keeps the Box offline. | |
 
 ## Sound
 
@@ -263,7 +289,7 @@ looking at the screen. Every sound is synthesized with WebAudio; the music loop 
 | `synth.ts` | The instruments: one bus into a compressor (stacked sounds never clip), a second of noise, and `tone`, `noise`, `bell`, `brass`, `thump`. | `Synth` |
 | `sound.ts` | The `Sound` the views get: `play(name, { seat, pitch, volume })`, `music(on)`, `duck(on)`, the mute. A seat's sound leans to its side (a stereo pan), and is also pitched or voiced apart from the other seat's, since the speaker is mono. The same sound for the same seat within 25 ms is dropped. The kiosk's Chromium starts audio without a touch; a normal browser starts it on the first gesture. Muted (localStorage `gamebox-muted=1`), cues are silent and the music is paused. Nothing in it throws into a caller: with no audio, the Box runs silent. | `createSound(): Sound` |
 | `music.ts` | The one loop (`digital-dividend.mp3`) at 0.18 volume, fading in and out over 0.8 s, paused once faded out or while muted, and sunk to 30 % while a spoken clip plays. | `createMusic(url, muted)` |
-| `event-sounds.ts` | What each Box event sounds like, pure: a `touch` (a chip landed, still being read), a `tap` by its `meaning` and seat, a `cue` (a match's moment, with its seat), a block outside a match. And `musicFor(phase)`: the music plays in attract, Home, Join, the lobby and Result, and fades out for Stake, a match, the builder and Refund. `shell/app.ts` plays both on every event. | `soundsFor(state, event)`, `musicFor(phase)` |
+| `event-sounds.ts` | What each Box event sounds like, pure: a `touch` (a chip landed, still being read), a `tap` by its `meaning` and seat, a `cue` (a match's moment, with its seat), a block outside a match. And `musicFor(phase)`: the music plays in attract, Home, Join, the lobby, the hall and Result, and fades out for Stake, a match, the builder and Refund. `shell/app.ts` plays both on every event. | `soundsFor(state, event)`, `musicFor(phase)` |
 | `board.ts`, `board.css` | The sound board, a developer's page: every sound by its plain name, meaning and description; tap one to hear it (a seat's sound plays for Player 1, then Player 2; a rising one climbs), or PLAY ALL to hear them one after another; MUSIC, DUCK and the mute to try the loop. It is the page at `#sounds` in either build. On the Box's screen, **hold the block clock for two seconds** to open it; BACK TO THE BOX returns. | `mountSoundBoard(host, sound)`, `bindBoardHold(area)` |
 
 Tap feedback plays as the event reaches the screen: it never waits for a transaction or a chip's signature. The core
@@ -299,7 +325,7 @@ The sounds, for the Box's views, its games and a Forge-built game's designer, by
 |---|---|---|
 | `draw` | Quick Draw: the sign turns to DRAW | A card-flip whoosh up into a sharp crack of an accent |
 | `shot` (seat) | Quick Draw: the winner's good draw | A gunshot: a crack of noise over a fast thump, and its echo. Player 1 deeper, Player 2 higher |
-| `false-start` (seat) | Quick Draw: a tap before the draw | A sour, detuned falling tone: clearly a mistake |
+| `false-start` (seat) | Quick Draw: a tap before DRAW, and the fouler's gun blows up in the hand | A muffled bang and a burst of crackle, then a sour, detuned fall: clearly a mistake |
 | `tie` | Quick Draw: a dead heat, or nobody drew; a Stock Duel round tied; a drawn match | A neutral falling fourth on soft triangles |
 | `step` (seat) | Stock Duel: a seat's spotlight steps to its next card | A tiny soft blip, quiet enough to run for minutes. Player 1 lower, Player 2 higher |
 | `play` (seat) | Stock Duel: a seat's card goes down | A card slammed on the desk: a thunk, a slap of noise and a chime (E for Player 1, A for Player 2) |
@@ -308,7 +334,7 @@ The sounds, for the Box's views, its games and a Forge-built game's designer, by
 | `reel` | Stock Duel: the dial's pointer passes a mark as it turns | One slot-reel click |
 | `land` | Stock Duel: the dial settles on the round's stat | A boom and a bell |
 | `flip` | Stock Duel: both cards turn over | A paper whoosh |
-| `count` (pitch) | Stock Duel: the round's number counts up on the cards | A blip that rises with the value (A4 to A6) |
+| `count` (pitch) | Stock Duel: the round's number counts up on the cards. Quick Draw: each beat of the 3-2-1 before a round | A blip that rises with the value (A4 to A6) |
 | `round-won` (seat) | A round won (and a game built) | A short major brass fanfare from the winner's side: Player 1 in C, Player 2 a step up in D |
 | `over` (seat) | The match is over: the winner's sound | An arpeggio up into a held chord, with a boom and sparkles. Player 1 in C, Player 2 in D |
 | `round` | A match opens, or a new Stock Duel round begins | A noise riser into a hit |
@@ -359,32 +385,38 @@ figures lower-left and lower-right.
 
 | Module | What it is | API |
 |---|---|---|
-| `screen.ts` | The view: places the parts, runs the standoff from the game's phase and the Box's events. | `quickDrawScreen: ViewFactory` |
+| `screen.ts` | The view: places the parts, runs each round from the game's phase and the Box's events, and says what to do on the round plate, the call strip and the bubbles. | `quickDrawScreen: ViewFactory` |
 | `scene.ts` | The static landscape, drawn once: a graded dusk sky, a big low sun on a long horizon, three ranges of flat-topped mesas with sun-lit ridges, scrub, rocks and two saguaros, a dust haze and a band of drifting motes. | `createScene(spec): { el, sun }` |
-| `sign.ts` | The flip-plate sign on its post: planked wood from layered gradients, nail heads, two iron pins, a plate with a dark painted `WAIT…` face and a bright `DRAW` face, hand-painted letters a little off square, paint wear over them. | `createSign(): { el, flip(instant?), reset(), rattle() }` |
-| `figure.ts` | One gunslinger in silhouette (SVG, facing right; Player 2 mirrored), a seat-coloured rim on its sun-facing edges, hat band and bandana. Body, holstered arm and drawn arm are separate layers. | `createFigure(seat): { el, idle(), twitch(), win(), lose() }` |
+| `sign.ts` | The flip-plate sign on its post: planked wood from layered gradients, nail heads, two iron pins, a plate with a dark painted `WAIT…` face and a bright `DRAW` face, hand-painted letters a little off square, paint wear over them. A decoy (or a foul) paints the dark face red with its word. | `createSign(): { el, flip(instant?), reset(), say(word), rattle(), decoy(word) }` |
+| `figure.ts` | One gunslinger in silhouette (SVG, facing right; Player 2 mirrored), a seat-coloured rim on its sun-facing edges, hat band and bandana. Body, holstered arm and drawn arm are separate layers. A foul blows its gun up in the hand. | `createFigure(seat): { el, idle(), twitch(), win(), lose(), explode(), … }` |
 | `quick-draw.css` | All its styles, imported by `screen.ts`. | |
 
-How it moves:
+How it moves (best of three):
 
-- **Wait**: the sign reads `WAIT…`. A dark layer fades in from the standoff's start over the longest possible wait
-  (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette beat like a heart, and the
-  beat quickens once the shortest wait has passed. The figures hold. All of this is the same for every match, timed
-  from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A remounted view
-  picks the dimming up where it has got to.
-- **Draw** (the phase turns to `draw`, or a `cue: draw` event): the plate turns over on its pins (rotateX) with a
-  swing that settles. The horizon flashes and the light comes back up.
-- **Done**: the winner's arm comes up out of the holster and fires (a muzzle-flash spark, a recoil); the loser sags
-  back on its heels. A brass plate drops in under each figure with its reaction time (`reactionMs`, JetBrains Mono)
-  or `TOO EARLY`. A player who never tapped reads `TOO SLOW` (the other drew first) or `HELD FIRE` (the other jumped
-  the gun). The winner's plate is ringed in its seat colour. A carved plank with `PLAYER 1 WINS` / `PLAYER 2 WINS` in
-  seat paint swings in across the post. After an early tap the sign stays on `WAIT…` and rattles on its pins. The
-  whole sequence is done in about a second, inside the ~2.4 s the Box holds it before Result.
-- **Stood again**: when nobody draws within 4 s of the flip, the rules stand the standoff again (the phase goes back
-  to `wait` with a new start), and the view runs the standoff from the top.
+- **Saying what to do**: a brass round plate up top reads `ROUND n` over `BEST OF 3` with each player's two pips (a
+  pip fills in seat paint as a round is won, `FINAL` at the end). A call strip under the sign says what to do now:
+  cream while counting and waiting, red on a decoy and a foul, green on DRAW. Over each gunslinger a bubble says
+  `TAP!` (green, bouncing) on DRAW and `DON'T!` (red) on a decoy.
+- **Count**: everyone back on their marks (a fallen or scorched figure stands up again); the sign counts `3`, `2`,
+  `1` on the Box's clock with a rising blip, the strip reads `ROUND n · GET READY · TAP YOUR BADGE ON DRAW!`.
+- **Wait**: the sign reads `WAIT…`, the strip `DON'T TAP YET`. A dark layer fades in from the standoff's start over
+  the longest possible wait (`MAX_WAIT_MS`), quicker up to the shortest (`MIN_WAIT_MS`). The sun and the vignette
+  beat like a heart, and the beat quickens once the shortest wait has passed. All of this is the same every round,
+  timed from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A decoy
+  paints the sign red with its word, the strip says `NOT YET!` and the vignette flares red, then it is WAIT… again.
+- **Draw** (the phase turns to `draw`, or a `cue: draw` event): the plate turns over on its pins to its gold DRAW
+  face, the horizon flashes, gold rays fan out from behind the sign, the strip goes green with `DRAW! TAP NOW!`.
+- **Round decided**: a good draw fires (a muzzle flash, smoke) and the other falls; a foul paints `FOUL` on the sign
+  in red, blows the fouler's gun up in the hand (a blast, shards, soot, a scorched rim, a stagger) and shakes the
+  stage. The strip names who took the round (`PLAYER 2 TAKES ROUND 1`, `FOUL! GUN BLEW UP`, `DEAD HEAT`, `NOBODY
+  DREW`), a brass plate drops in under each figure with its reaction time or `FOUL!`, `HELD FIRE`, `TOO SLOW`,
+  `NO DRAW`, and the winner's pip pops. The next round is counted in after `ROUND_MS`.
+- **Done**: the deciding round as above, then a carved plank with `PLAYER 1 WINS 2–1` (or `NO WINNER`) in seat paint
+  swings in over the strip, inside the ~2.4 s the Box holds it before Result.
 - **Taps**: each accepted `tap` event jolts that seat's figure a few pixels back, so the player feels it land.
-- Sounds: the Box cues `draw` as the sign turns, `shot` from the winner's seat, `false-start` from the seat that
-  jumped, and `tie` for a dead heat or a standoff nobody drew.
+- Sounds: the Box cues `round` as each later round is counted in, `draw` as the sign turns, `shot` from the round
+  winner's seat, `false-start` (a bang and crackle, then a sour fall) from the seat that fouled, and `tie` for a dead
+  heat or a round nobody drew. The screen plays the countdown's `count` blips itself.
 - Only transform and opacity animate; every shadow and glow is static. Under reduced motion it shows end states: a
   fixed dim during the wait, no heartbeat, the plate already turned, the poses, plates and plank in place.
 

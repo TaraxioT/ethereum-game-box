@@ -3,7 +3,8 @@
 // PAY_MS after it. No hashes: nothing here is on Sepolia, and the screen shows none. The Box itself runs the real port
 // (`src/chain/`).
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Board, DuelSeat, GameId, PlayerCard, PlayerRecord } from "./types.ts";
+import type { Board, DuelSeat, GameId, Leader, PlayerCard, PlayerRecord } from "./types.ts";
+import { NO_RECORD, counted, recordText } from "./stats.ts";
 import { BLOCK_MS, TOPUP_USDC } from "./core.ts";
 import { chainLabel } from "./catalogue.ts";
 import { createTimers } from "./timers.ts";
@@ -13,6 +14,8 @@ export const SEND_MS = 400;
 export const PAY_MS = 900;
 /** The demo's pots refund after a minute, not an hour. */
 export const DEMO_REFUND_MS = 60_000;
+/** How long a title lasts after its holder's last win, by chain label: as on Sepolia (`AddGames`). */
+const TITLE_TERM_MS: Readonly<Record<string, number>> = { stockduel: 7 * 24 * 3_600_000, quickdraw: 15 * 60_000 };
 /** Where the demo's block numbers start: Sepolia's height in November 2026. */
 const FIRST_BLOCK = 12_065_134;
 
@@ -43,19 +46,22 @@ export function createDemoChain(clock: Clock): DemoChain {
   const balances = new Map<Address, number>();
   const names = new Map<Address, string>();
   const pots = new Map<number, Pot>();
-  const titles = new Map<string, { holder: Address; streak: number }>();
-  /** Each badge's wins, losses and draws, by `<chain label>|<address>`. */
-  const records = new Map<string, { wins: number; losses: number; draws: number }>();
-  const recordOf = (game: GameId, address: Address): PlayerRecord | null => {
-    const label = chainLabel(game);
-    if (label === null) return null;
-    return { game, ...(records.get(`${label}|${address}`) ?? { wins: 0, losses: 0, draws: 0 }) };
+  const titles = new Map<string, { holder: Address; streak: number; expires: number }>();
+  /** Each badge's stats over every game, and when it reached its wins (the leaderboard's tiebreak). */
+  const records = new Map<Address, PlayerRecord>();
+  const reached = new Map<Address, number>();
+  let seq = 0;
+  const recordOf = (address: Address): PlayerRecord | null => records.get(address) ?? null;
+  const score = (address: Address, result: "win" | "loss" | "draw"): void => {
+    records.set(address, counted(records.get(address) ?? NO_RECORD, result));
+    if (result === "win" || !reached.has(address)) reached.set(address, ++seq);
   };
-  const score = (label: string, address: Address, field: "wins" | "losses" | "draws"): void => {
-    const key = `${label}|${address}`;
-    const now = records.get(key) ?? { wins: 0, losses: 0, draws: 0 };
-    records.set(key, { ...now, [field]: now[field] + 1 });
-  };
+  /** The players with a result, by most wins, then who reached them first: the top ten. */
+  const leaders = (): Leader[] =>
+    [...records]
+      .sort(([a, x], [b, y]) => y.wins - x.wins || (reached.get(a) ?? 0) - (reached.get(b) ?? 0))
+      .slice(0, 10)
+      .map(([address, r]) => ({ name: nameOf(address), ...r }));
   const listeners = new Set<(head: ChainHead) => void>();
   /** Transactions sent and waiting for the next head. */
   const waiting = new Set<() => void>();
@@ -105,14 +111,17 @@ export function createDemoChain(clock: Clock): DemoChain {
     refundAfterMs: DEMO_REFUND_MS,
     stakeNeedsName: false,
     balance: (address) => Promise.resolve(balanceOf(address)),
-    player: (address, game): Promise<PlayerCard> =>
-      Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address), record: recordOf(game, address) }),
+    player: (address): Promise<PlayerCard> =>
+      Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address), record: recordOf(address) }),
     board(game): Promise<Board> {
       const label = chainLabel(game) ?? game;
       const title = titles.get(label);
+      const live = title && title.expires > clock.now() ? title : null;
       return Promise.resolve({
-        title: title ? { name: `champion.${label}.gamebox.eth`, holder: nameOf(title.holder), streak: title.streak } : null,
+        title: live ? { name: `champion.${label}.gamebox.eth`, holder: nameOf(live.holder), streak: live.streak, expires: live.expires } : null,
         cup: null,
+        leaders: leaders(),
+        won: [],
       });
     },
     open(order: StakeOrder, watch) {
@@ -131,15 +140,16 @@ export function createDemoChain(clock: Clock): DemoChain {
         if (pot && order.winner === null) for (const address of pot.badges) credit(address, pot.amount);
         const label = chainLabel(order.game) ?? order.game;
         if (order.winner === null) {
-          for (const address of order.badges) score(label, address, "draws");
+          for (const address of order.badges) score(address, "draw");
           return;
         }
         const winner = winnerOf(order, order.winner);
-        score(label, winner, "wins");
-        for (const address of order.badges) if (address !== winner) score(label, address, "losses");
+        score(winner, "win");
+        for (const address of order.badges) if (address !== winner) score(address, "loss");
         if (pot) credit(winner, pot.amount * pot.badges.length);
         const title = titles.get(label);
-        titles.set(label, { holder: winner, streak: title?.holder === winner ? title.streak + 1 : 1 });
+        const held = title && title.holder === winner && title.expires > clock.now();
+        titles.set(label, { holder: winner, streak: held ? title.streak + 1 : 1, expires: clock.now() + (TITLE_TERM_MS[label] ?? 0) });
       });
     },
     refund(round, watch) {
@@ -163,7 +173,11 @@ export function createDemoChain(clock: Clock): DemoChain {
     },
     outcome(order: ResultOrder): Promise<readonly string[]> {
       const amount = paid.get(order.round);
-      if (order.winner === null) return Promise.resolve(amount ? [`A draw: ${amount} USDC back to each`] : ["A draw"]);
+      const statsLines = order.badges.flatMap((address) => {
+        const r = recordOf(address);
+        return r ? [`${nameOf(address)} stats: ${recordText(r)}`] : [];
+      });
+      if (order.winner === null) return Promise.resolve([amount ? `A draw: ${amount} USDC back to each` : "A draw", ...statsLines]);
       const winner = winnerOf(order, order.winner);
       const label = chainLabel(order.game) ?? order.game;
       const title = titles.get(label);
@@ -171,7 +185,7 @@ export function createDemoChain(clock: Clock): DemoChain {
       if (title?.holder === winner) {
         lines.push(`${nameOf(winner)} now holds champion.${label}.gamebox.eth${title.streak > 1 ? `, streak ${title.streak}` : ""}`);
       }
-      return Promise.resolve(lines);
+      return Promise.resolve([...lines, ...statsLines]);
     },
     watchHead(listener) {
       listeners.add(listener);

@@ -3,9 +3,9 @@ import type { Board } from "../../core/types.ts";
 import { judgedLine, onTheLine } from "./play-for.ts";
 
 const NOW = 1_800_000_000_000;
-const title = { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2 };
+const title = { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2, expires: 1_800_000_600_000 };
 const cup = { name: "cup-1921.stockduel.gamebox.eth", ends: NOW + 192_000, prize: 50, standings: [{ name: "orbit.gamebox.eth", points: 6, wins: 2, draws: 0, losses: 0 }] };
-const board = (over: Partial<Board> = {}): Board => ({ title, cup, ...over });
+const board = (over: Partial<Board> = {}): Board => ({ title, cup, leaders: [], won: [], ...over });
 
 describe("what Stake's plate says is on the line", () => {
   it("a store game: the pot the judge splits, and no title", () => {
@@ -33,6 +33,6 @@ describe("what Stake's plate says is on the line", () => {
       head: "WINNER TAKES 30 USDC + 3 PTS IN CUP-1921",
       detail: "15 USDC EACH · cup-1921.stockduel.gamebox.eth → orbit.gamebox.eth · 6 PTS · 50 USDC PRIZE · 03:12 LEFT",
     });
-    expect(onTheLine({ stake: 10, playFor: "cup", board: board() }, "Stock Duel", cup.ends).head).toBe("THE CHAMPIONSHIP HAS CLOSED");
+    expect(onTheLine({ stake: 10, playFor: "cup", board: board() }, "Stock Duel", cup.ends).head).toBe("THE CUP HAS CLOSED");
   });
 });

@@ -20,7 +20,7 @@ for closing a championship that has ended, and for nothing else. Live at **https
 | `POST /store/void` | `{ void, signature }`, the void being `{ box, round, record, deadline }` | the label; an unexpired deadline; the signature over `Void` and its signer, as for a verdict; `(box, round)` has an open pot; `eth_call` | `StorePot.voidPot`, every stake back |
 | `POST /store/refund` | `{ box, round }` | as `/duel/refund`, on `StorePot`; anyone may ask | `StorePot.refund`, every stake back |
 | `POST /players/box-claim` | `{ seat, r, s }` | the labels; an unexpired deadline; the Box and its signature over `Seat`, as for a result; the badge has no name, the label is free and was never a Box (as for a claim); `eth_call` | `BoxSeats.claim`, which claims `<label>.gamebox.eth` for the badge (`claimPlayerFor`) |
-| `POST /usdc/topup` | `{ player }`: an address, or an ENS name (resolved with stock viem through the Universal Resolver) | the name resolves; the player holds less than 25 USDC; `eth_call` | `FakeUSDC.mint` of 100 USDC to the player |
+| `POST /usdc/topup` | `{ player }`: an address, or an ENS name (resolved with stock viem through the Universal Resolver) | the name resolves; `eth_call` | `FakeUSDC.mint` of 100 USDC to the player |
 | `POST /store/topup` | `{ player }`, as `/usdc/topup` | as `/usdc/topup`, on Store USDC | Store USDC's `mint` of 100 USDC to the player |
 | `POST /cup/close` | `{ game }` | the label; the game has an open championship; its `ends` has passed; `eth_call` | `Championships.close`: the prize to the winner, the name to the winner for good, the records frozen |
 | `POST /box/popup` | `{ label }` | the label rule; `popup-<label>` is not live (`getPopup`); `eth_call` | `DemoLicences.openPopup` |

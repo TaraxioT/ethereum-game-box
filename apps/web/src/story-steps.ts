@@ -32,7 +32,7 @@ export const STEPS: Step[] = [
     id: "tree",
     title: "The tree",
     brief: "Your own subname registry",
-    caption: "gamebox.eth's subregistry is a UserRegistry we deployed, and every Box, player, game, title and championship is a name in it or under it, each with its own resolver.",
+    caption: "gamebox.eth's subregistry is a UserRegistry we deployed, and every Box, player, game, title and cup is a name in it or under it, each with its own resolver.",
     show: () => show("#/", "registry"),
   },
   {
@@ -108,9 +108,9 @@ export const STEPS: Step[] = [
   },
   {
     id: "championship",
-    title: "Championship",
+    title: "Cup",
     brief: "Live records, then frozen",
-    caption: `The same two results scored the open ${STORY_GAME} championship: its standings, leader and addr records moved. Below it, a closed one: the winner holds its name with no expiry, its records are frozen, and every write reverts, ours included.`,
+    caption: `The same two results scored the open ${STORY_GAME} cup: its standings, leader and addr records moved. Below it, a closed one: the winner holds its name with no expiry, its records are frozen, and every write reverts, ours included.`,
     show: () => show("#/championships", "cups"),
   },
 ];

@@ -48,6 +48,8 @@ export type ContractName =
   | 'BoxSeats'
   | 'StoreUSDC'
   | 'StorePot'
+  | 'BoxLease'
+  | 'GBX'
   | (string & {});
 
 /** The proxies we created through ENS's `VerifiableFactory` and that never move. */

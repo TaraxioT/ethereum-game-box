@@ -81,8 +81,8 @@ export interface OpenCup {
  *  run it short and close it. */
 export function openCupCall(cup: OpenCup, now: number): AdminCall {
   refuseIf(labelProblem(cup.game), `game "${cup.game}"`);
-  refuseIf(championshipLabelProblem(cup.label), `championship "${cup.label}"`);
-  wholeSeconds(cup.ends - now, CUP_RUN_MIN, CUP_RUN_MAX, 'a championship');
+  refuseIf(championshipLabelProblem(cup.label), `cup "${cup.label}"`);
+  wholeSeconds(cup.ends - now, CUP_RUN_MIN, CUP_RUN_MAX, 'a cup');
   if (cup.prize < 0n) throw new AdminInputError('the prize must not be negative');
   return {
     to: contractAddress('Championships'),
@@ -103,7 +103,7 @@ export function closeCupCall(game: string): AdminCall {
     to: contractAddress('Championships'),
     data: encodeFunctionData({ abi: championshipsAbi, functionName: 'close', args: [game] }),
     gas: CREATES_STORAGE_GAS,
-    what: `close ${game}'s championship`,
+    what: `close ${game}'s cup`,
   };
 }
 

@@ -5,13 +5,10 @@
 // never logged or answered: every error that leaves here has its URLs replaced by `<rpc>`.
 import type http from "node:http";
 import {
-  type AdminCall,
   type AdminFunds,
   type AdminReads,
   type AdminSender,
   type AdminView as ChainView,
-  AdminInputError,
-  AdminRefused,
   addGameCall,
   adminReads,
   adminSender,
@@ -19,21 +16,19 @@ import {
   openCupCalls,
 } from "@egb/shared/admin";
 import { contractAddress, fakeUsdcAbi, formatUsdc, usdc } from "@egb/shared/names";
-import { ETHERSCAN, sepoliaClient } from "@egb/shared/web";
+import { sepoliaClient } from "@egb/shared/web";
 import { type Address, type PublicClient, createWalletClient, formatEther, http as rpc } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { redact } from "../chain/reads.ts";
 import { wireBoard } from "./board.ts";
-import { ADMIN, type AdminJob, type AdminReply, type AdminStep, type AdminView } from "./admin-wire.ts";
+import { ADMIN, type AdminJob, type AdminReply, type AdminView } from "./admin-wire.ts";
+import { built, createJobs, reason } from "./jobs.ts";
 import { HttpError, readJson, sendJson } from "./http.ts";
 import type { Route } from "./routes.ts";
 import type { AdminSetting } from "./settings.ts";
 
 /** A view younger than this is answered from memory (the tab polls every few seconds). */
 const VIEW_TTL_MS = 3_000;
-/** Jobs kept for the tab. */
-const JOBS_KEPT = 12;
 const MAX_LABEL = 64;
 
 export interface AdminPorts {
@@ -78,9 +73,6 @@ export function adminOnSepolia(setting: AdminSetting, log: (text: string) => voi
   });
 }
 
-const reason = (error: unknown): string =>
-  redact(error instanceof AdminRefused ? error.message : error instanceof Error ? error.message.split("\n")[0] ?? "" : String(error));
-
 function wireView(view: ChainView): AdminView {
   return { ...wireBoard(view), eth: formatEther(view.eth), usdc: formatUsdc(view.usdc), roles: view.roles };
 }
@@ -108,19 +100,7 @@ function prize(body: Record<string, unknown>): bigint {
   return usdc(value.trim());
 }
 
-/** Builds the calls; a refusal of the input is a 400. */
-function built<T>(build: () => T): T {
-  try {
-    return build();
-  } catch (error) {
-    if (error instanceof AdminInputError) throw new HttpError(400, error.message);
-    throw error;
-  }
-}
-
 export function createAdmin(ports: AdminPorts): Admin {
-  const jobs: AdminJob[] = [];
-  let nextId = 1;
   let view: { at: number; value: AdminView } | null = null;
   let viewError: string | null = null;
   let reading: Promise<void> | null = null;
@@ -139,40 +119,16 @@ export function createAdmin(ports: AdminPorts): Admin {
     return reading;
   }
 
-  function update(id: number, change: Partial<AdminJob>): void {
-    const i = jobs.findIndex((job) => job.id === id);
-    const job = jobs[i];
-    if (job) jobs[i] = { ...job, ...change };
-  }
-
-  /** Starts `calls` as a job: answered at once, run in the background. */
-  function start(what: string, calls: readonly AdminCall[]): AdminJob {
-    const job: AdminJob = { id: nextId++, what, status: "running", steps: [], error: null, at: ports.now() };
-    jobs.unshift(job);
-    jobs.length = Math.min(jobs.length, JOBS_KEPT);
-    ports.log(`admin: job ${job.id} ${what}`);
-    const steps: AdminStep[] = [];
-    void ports.sender
-      .send(calls, (step, hash) => {
-        steps.push({ what: step, hash, etherscan: `${ETHERSCAN}/tx/${hash}` });
-        update(job.id, { steps: [...steps] });
-        ports.log(`admin: job ${job.id} sent ${step}: ${hash}`);
-      })
-      .then(() => {
-        update(job.id, { status: "done" });
-        ports.log(`admin: job ${job.id} done`);
-      })
-      .catch((error: unknown) => {
-        const why = reason(error);
-        update(job.id, { status: "failed", error: why });
-        ports.log(`admin: job ${job.id} failed: ${why}`);
-      })
-      .finally(() => {
-        view = null;
-        void refresh();
-      });
-    return job;
-  }
+  const jobs = createJobs({
+    sender: ports.sender,
+    now: ports.now,
+    log: ports.log,
+    tag: "admin",
+    settled() {
+      view = null;
+      void refresh();
+    },
+  });
 
   const nowSeconds = () => Math.floor(ports.now() / 1000);
 
@@ -180,12 +136,12 @@ export function createAdmin(ports: AdminPorts): Admin {
     address: ports.address,
     async reply() {
       if (!view || ports.now() - view.at > VIEW_TTL_MS) await refresh();
-      return { enabled: true, address: ports.address, view: view?.value ?? null, error: viewError, jobs: [...jobs] };
+      return { enabled: true, address: ports.address, view: view?.value ?? null, error: viewError, jobs: jobs.list() };
     },
     addGame(input) {
       const body = object(input);
       const call = built(() => addGameCall(text(body, "label"), seconds(body, "titleTerm")));
-      return start(call.what, [call]);
+      return jobs.start(call.what, [call]);
     },
     async openCup(input) {
       const body = object(input);
@@ -193,11 +149,11 @@ export function createAdmin(ports: AdminPorts): Admin {
       const cup = { game: text(body, "game"), label: text(body, "label"), ends: now + seconds(body, "runSeconds"), prize: prize(body) };
       const funds = await ports.funds();
       const calls = built(() => openCupCalls(cup, now, ports.address, funds));
-      return start(calls[calls.length - 1]?.what ?? "open a championship", calls);
+      return jobs.start(calls[calls.length - 1]?.what ?? "open a cup", calls);
     },
     closeCup(input) {
       const call = built(() => closeCupCall(text(object(input), "game")));
-      return start(call.what, [call]);
+      return jobs.start(call.what, [call]);
     },
   };
 }

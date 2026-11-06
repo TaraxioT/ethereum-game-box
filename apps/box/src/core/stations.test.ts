@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { BIG_CHARS, SMALL_CHARS, TAG_CHARS } from "@egb/sdk";
+import { BIG_CHARS, SMALL_CHARS, TAG_CHARS, type Seat } from "@egb/sdk";
 import type { Match, MatchPlay, Phase, SeatState, StationView } from "./types.ts";
-import { rules as quickDraw } from "../games/quick-draw/rules.ts";
+import { ROUND_MS, rules as quickDraw } from "../games/quick-draw/rules.ts";
+import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import { DEAL_MS, frontCard, rules as stockDuel } from "../games/stock-duel/rules.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
@@ -47,6 +48,7 @@ function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
     play,
     outcome: null,
     voided: false,
+    calledOff: false,
     endedAt: null,
     refunded: [false, false],
     lines: null,
@@ -111,19 +113,32 @@ describe("station views", () => {
     expect(stationView(input("stake", two), 1, NOW).small).toBe("opening");
   });
 
-  it("runs Quick Draw: wait, the draw, then the outcome with the reaction time", () => {
-    const wait = quickDraw.start(7, NOW);
-    expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: wait })), 0, NOW).big).toBe("WAIT");
+  it("runs Quick Draw: the count, WAIT, a decoy, the draw, each round, then the match", () => {
+    const view = (state: QuickDrawState, s: Seat, now = NOW, phase: "playing" | "result" = "playing") =>
+      lines(stationView(input(phase, both, matchOf({ game: "quick-draw", state })), s, now));
+    const seed = Array.from({ length: 200 }, (_, i) => i).find((i) => quickDraw.start(i, NOW).decoys.length > 0) ?? 0;
+    const count = quickDraw.start(seed, NOW);
+    expect(view(count, 0)).toEqual({ tag: "P1", big: "3", small: "round 1  0-0" });
+    expect(view(count, 0, count.startedAt - 1)).toMatchObject({ big: "1" });
+    const wait = quickDraw.step(count, { type: "tick", now: count.startedAt });
+    expect(view(wait, 0, wait.startedAt)).toMatchObject({ big: "WAIT", small: "tap on DRAW" });
+    const decoy = wait.decoys[0];
+    if (!decoy) throw new Error("no decoy");
+    expect(view(wait, 1, decoy.at)).toMatchObject({ big: decoy.word, small: "don't tap!" });
     const draw = quickDraw.step(wait, { type: "tick", now: wait.drawAt });
-    expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: draw })), 1, NOW).big).toBe("DRAW!");
+    expect(view(draw, 1)).toMatchObject({ big: "DRAW!", small: "tap now" });
     const tapped = quickDraw.step(draw, { type: "tap", seat: 1, at: wait.drawAt + 231, now: wait.drawAt + 235 });
-    expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: tapped })), 1, NOW)).toMatchObject({ big: "DRAW!", small: "231 ms" });
-    const done = quickDraw.step(tapped, { type: "tick", now: wait.drawAt + 1000 });
-    const ended = input("result", both, matchOf({ game: "quick-draw", state: done }));
-    expect(lines(stationView(ended, 1, NOW))).toEqual({ tag: "P2", big: "WIN", small: "231 ms" });
-    expect(lines(stationView(ended, 0, NOW))).toEqual({ tag: "P1", big: "LOSE", small: "no tap" });
-    const early = quickDraw.step(wait, { type: "tap", seat: 0, at: NOW + 10, now: NOW + 12 });
-    expect(stationView(input("playing", both, matchOf({ game: "quick-draw", state: early })), 0, NOW).small).toBe("too early");
+    expect(view(tapped, 1)).toMatchObject({ big: "DRAW!", small: "231 ms" });
+    const round = quickDraw.step(tapped, { type: "tick", now: wait.drawAt + 1000 });
+    expect(view(round, 1)).toEqual({ tag: "P2", big: "POINT", small: "231 ms" });
+    expect(view(round, 0)).toEqual({ tag: "P1", big: "MISSED", small: "too slow" });
+    const next = quickDraw.step(round, { type: "tick", now: wait.drawAt + 1000 + ROUND_MS });
+    expect(view(next, 1, next.countAt)).toMatchObject({ big: "3", small: "round 2  1-0" });
+    // Player 1 jumps the gun in round 2: a foul, and the match goes to Player 2.
+    const waiting = quickDraw.step(next, { type: "tick", now: next.startedAt });
+    const foul = quickDraw.step(waiting, { type: "tap", seat: 0, at: next.startedAt + 10, now: next.startedAt + 12 });
+    expect(view(foul, 0, NOW, "result")).toEqual({ tag: "P1", big: "LOSE", small: "foul: too early" });
+    expect(view(foul, 1, NOW, "result")).toEqual({ tag: "P2", big: "WIN", small: "held fire" });
   });
 
   it("shows each player their own Stock Duel front card, privately, rolls on the tap, then PLAYED", () => {

@@ -1,0 +1,79 @@
+/* The lease's ENS map (`lease-ens.ts`): BoxLease → GameBoxNames → gamebox.eth's registry and the name's resolver, as
+   chamfered cards on SVG wires. A held record glows; one that keeps the Box offline is red with a ping. A write sends a
+   packet down the wires to its card, which flashes while its old value lifts off struck through. A pending write loops
+   its packet. Glow is static; only transform, opacity and the packet's dash move. */
+.ens-map { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid rgb(207 232 246 / 0.12); }
+.ens-flow { display: grid; grid-template-columns: minmax(0, 0.8fr) 20px minmax(0, 0.8fr) 24px minmax(0, 1.6fr); align-items: center; min-height: 128px; }
+.ens-records { display: flex; flex-direction: column; gap: 8px; }
+
+.ens-card {
+  --tone: var(--sys); position: relative; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 8px 10px;
+  background: rgb(207 232 246 / 0.04); border-left: 2px solid var(--tone);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.ens-card::before, .ens-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.ens-card::before { background: var(--tone); }
+.ens-card::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.22), transparent); transform: translateX(-100%); }
+.ens-card[data-state="fail"] { --tone: var(--alert); background: rgb(255 45 61 / 0.06); }
+.ens-card[data-state="off"] { --tone: rgb(207 232 246 / 0.25); opacity: 0.55; }
+.ens-card-title { font: 700 9px/1 var(--hud-display); letter-spacing: 0.06em; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ens-card-row { position: relative; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ens-card-field { flex: none; font: 600 11px/1 var(--mono); color: var(--fg-3); }
+.ens-card-value { font: 700 15px/1.1 var(--mono); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ens-card[data-state="pass"] .ens-card-value { color: var(--sys-hot); text-shadow: 0 0 8px var(--sys-bloom); }
+.ens-card[data-state="fail"] .ens-card-value { color: var(--alert); text-shadow: 0 0 8px rgb(255 45 61 / 0.5); }
+.ens-card-old {
+  position: absolute; right: 0; top: 0; font: 700 13px/1.1 var(--mono); color: var(--fg-3); text-decoration: line-through;
+  text-decoration-color: var(--alert); opacity: 0; pointer-events: none;
+}
+.ens-card-foot { display: flex; justify-content: space-between; gap: 8px; font: 600 10px/1 var(--mono); letter-spacing: 0.04em; color: var(--fg-3); }
+.ens-card-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ens-card-address { flex: none; opacity: 0.8; }
+.ens-card[data-state="fail"] .ens-card-note { color: var(--alert); }
+
+/* The broken record pings. */
+.ens-card[data-state="fail"]:not(.ens-pending)::before { animation: ens-ping 1.8s ease-out infinite; }
+
+/* Wires. */
+.ens-wire { width: 100%; height: 100%; overflow: visible; }
+.ens-path-base { fill: none; stroke: rgb(207 232 246 / 0.16); stroke-width: 2; }
+.ens-path-packet { fill: none; stroke: var(--sys-hot); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 16 120; stroke-dashoffset: 16; opacity: 0; }
+.ens-path[data-state="pass"] .ens-path-base { stroke: var(--sys-glow); }
+.ens-path[data-state="fail"] .ens-path-base { stroke: var(--alert); stroke-dasharray: 3 4; opacity: 0.7; }
+.ens-path[data-state="pass"] .ens-path-packet { animation: ens-packet 2.6s linear infinite; opacity: 0.6; }
+
+/* A write: the packet runs once, then the card it reaches flashes and its old value lifts off. */
+.ens-path.ens-write .ens-path-packet { animation: ens-packet 520ms var(--ease-out) both; animation-delay: calc(var(--step) * 170ms); opacity: 1; stroke: var(--tone, var(--sys-hot)); }
+.ens-card.ens-write::before { animation: ens-flash 900ms var(--ease-out) both; animation-delay: calc(var(--step) * 170ms); }
+.ens-card.ens-write::after { animation: ens-sweep 700ms var(--ease-out) both; animation-delay: calc(var(--step) * 170ms); }
+.ens-card-old.ens-struck { animation: ens-lift 1.8s var(--ease-out) both; animation-delay: 700ms; }
+
+/* A write on its way: the packet loops to the card, which breathes. */
+.ens-path.ens-pending .ens-path-packet { animation: ens-packet 900ms linear infinite; opacity: 1; stroke: var(--sys-hot); }
+.ens-card.ens-pending::before { animation: ens-wait 900ms ease-in-out infinite; }
+
+.ens-verdict { display: flex; align-items: center; justify-content: center; gap: 10px; font: 700 12px/1 var(--hud-display); letter-spacing: 0.22em; }
+.ens-verdict-mark { width: 7px; height: 7px; border-radius: 50%; animation: lease-breathe 1.4s ease-in-out infinite; }
+.ens-map[data-online="true"] .ens-verdict { color: var(--sys); text-shadow: 0 0 10px var(--sys-bloom); }
+.ens-map[data-online="true"] .ens-verdict-mark { background: var(--sys-hot); box-shadow: 0 0 8px var(--sys-glow); }
+.ens-map[data-online="false"] .ens-verdict { color: var(--alert); text-shadow: 0 0 10px rgb(255 45 61 / 0.45); }
+.ens-map[data-online="false"] .ens-verdict-mark { background: var(--alert); box-shadow: 0 0 8px rgb(255 45 61 / 0.7); }
+
+/* Opening: the cards rez along the path. */
+.ens-flow > *, .ens-records > * { animation: ens-rez 520ms var(--ease-rez) both; }
+.ens-flow > :nth-child(2) { animation-delay: 90ms; }
+.ens-flow > :nth-child(3) { animation-delay: 180ms; }
+.ens-flow > :nth-child(4) { animation-delay: 270ms; }
+.ens-records > :nth-child(1) { animation-delay: 360ms; }
+.ens-records > :nth-child(2) { animation-delay: 450ms; }
+
+@keyframes ens-rez { from { opacity: 0; transform: translateX(-8px); } }
+@keyframes ens-packet { from { stroke-dashoffset: 16; } to { stroke-dashoffset: -104; } }
+@keyframes ens-flash { 0% { opacity: 0; } 20% { opacity: 0.35; } 100% { opacity: 0; } }
+@keyframes ens-sweep { from { opacity: 1; transform: translateX(-100%); } to { opacity: 1; transform: translateX(100%); } }
+@keyframes ens-lift { 0% { opacity: 1; transform: translateY(0); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+@keyframes ens-ping { 0%, 100% { opacity: 0; } 50% { opacity: 0.12; } }
+@keyframes ens-wait { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) {
+  .ens-map *, .ens-map *::before, .ens-map *::after { animation: none !important; }
+}

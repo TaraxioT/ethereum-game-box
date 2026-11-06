@@ -1,5 +1,6 @@
 // The flip-plate sign on its post: a weathered plank frame with nail heads, and a plate hung between two iron pins
-// that turns over on them (rotateX) from its dark painted WAIT… face to its bright DRAW face.
+// that turns over on them (rotateX) from its dark painted WAIT… face to its bright DRAW face. A decoy paints the dark
+// face red with another word (DRAG, DRAT…) for a moment: never tap on red.
 import { el, play } from "../../screen/shell/dom.ts";
 
 export interface Sign {
@@ -12,6 +13,8 @@ export interface Sign {
   say(word: string): void;
   /** The plate jumps on its pins: a tap came before the draw. */
   rattle(): void;
+  /** Paints `word` in red on the unturned face and shakes it: a decoy, not the DRAW. `reset` takes it off. */
+  decoy(word: string): void;
 }
 
 /** Hand-painted letters: each one sits a little off the line and off square, as a brush leaves them. */
@@ -97,10 +100,12 @@ export function createSign(): Sign {
     reset() {
       flipped = false;
       cancel();
+      waitFace.classList.remove("is-decoy");
       paint(WAIT_WORD);
     },
 
     say(next) {
+      waitFace.classList.remove("is-decoy");
       paint(next);
       // The new word knocks the plate on its pins.
       void play(plate, [
@@ -109,6 +114,17 @@ export function createSign(): Sign {
         { transform: "rotateX(5deg)", offset: 0.65 },
         { transform: "rotateX(0deg)" },
       ], { duration: 300, easing: "ease-out" });
+    },
+
+    decoy(next) {
+      waitFace.classList.add("is-decoy");
+      paint(next);
+      void play(plate, [
+        { transform: "rotateX(0deg) rotate(0deg)" },
+        { transform: "rotateX(-16deg) rotate(-2deg)", offset: 0.25 },
+        { transform: "rotateX(8deg) rotate(1.5deg)", offset: 0.55 },
+        { transform: "rotateX(0deg) rotate(0deg)" },
+      ], { duration: 260, easing: "ease-out" });
     },
 
     rattle() {

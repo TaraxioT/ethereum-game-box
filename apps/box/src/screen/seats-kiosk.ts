@@ -116,6 +116,7 @@ function matchOf(scene: Scene): Match | null {
     stake: 10,
     openedBlock: 100,
     refundAt: FAR,
+    calledOff: false,
     play,
     outcome: scene.phase === "playing" ? null : { winner: scene.team ? 0 : null },
     voided: false,

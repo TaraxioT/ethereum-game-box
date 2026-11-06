@@ -11,7 +11,7 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 
 | Port | What the core does with it |
 |---|---|
-| `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, Home's idle). |
+| `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, the idles). |
 | `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap; `inUse(seats)` whenever the seats that need a station change (and once at start). |
 | `chain` | The chain behind the money (`ChainPort`): `balance`, `player` (balance and player name) and `board` (the title and the open championship) are reads; `open` (both stakes into the pot), `settle` (the result), `refund`, `topup` and `claim` are sends that never wait, each step coming back through its watch; `outcome` reads what a paid result did; `watchHead` drives the block clock; `nextRound` (kept on disk on the Box, never repeated) and `refundAfterMs`; `onChain(game)`: a built game isn't, and plays for nothing. `store` (`StoreChainPort`) is a store game's money and judge, apart from all of that: `balance` (Store USDC), `open`, `refund`, `topup` and `judge`. The Box runs Sepolia through the relayer (`src/chain/`); the demo and the tests run `demo-chain.ts`, which has no `store`. |
 | `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). A `GameInfo` carries its checked game.json (`manifest`) and, for a game that should play but can't, why (`sealed`). |
@@ -78,7 +78,9 @@ The Box has a seat for each tap station: two to four (`createCore`'s `stations`,
 - **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
   Stake tap whose balance can't cover the stake (or isn't read yet), or with no player name where the port stakes only
   named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
-  badge, with Back returning to Stake.
+  badge, with Back returning to Stake. Join and Stake go Home after `SEATED_IDLE_MS` (2 minutes) with no tap or touch,
+  dropping a lone signature, so seats left by players who walked away don't greet the next ones (or a restarted
+  screen) and don't keep the updater waiting; not while every player has signed and the pot is opening.
 - **Open.** When every player has signed, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
   `nextRound`) and the Box waits on Stake until the open is confirmed (the relayer's `done`: a block past the one it is
   in): only then does the match begin. The screen shows the wait in the game's own screen (Quick Draw's walk-out, Stock
@@ -93,11 +95,19 @@ The Box has a seat for each tap station: two to four (`createCore`'s `stations`,
 - **Refund.** With the power off the Box misses its settle: Refund opens `refundAfterMs` after the open (an hour on
   Sepolia), and any player's tap sends one refund for the whole pot, then Home. A pot the players walk away from, or
   one left by a reset, stays on chain until the server refunds it.
-- **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name and
-  USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
+- **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name, its
+  stats over every game (`PlayerRecord`, from its name's `stats` record) and USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
   and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The board
-  shows the focused game's title and championship. It goes Home
+  shows the focused game's title and cup, and the leaderboard over every game (`Board.leaders`). It goes Home
   after `IDLE_MS` alone.
+- **Hall** (`hall` from Home or Attract). Every on-chain game's board: its title with when it lapses
+  (`Board.title.expires`), its open cup, its closed cups (`Board.won`, each name its winner's for good) and the
+  leaderboard, read every `BOARD_MS` while it shows. A tap takes a seat, as on Home. `challenge` (from a title or cup
+  card, here or on Home's board) brings the game into focus and plays it for the title or the open cup at its stake:
+  Stake when both seats are taken, else Join. BACK, or `IDLE_MS` alone, goes Home.
+- **EXIT** (`quit` while a match runs). A team game's match is called off (`Match.calledOff`) and ends as a draw: its
+  result settles on chain as one, so both stakes go back at once and the players' stats count a draw. A built game's is
+  void, as when its rules fail.
 
 ## Built games
 

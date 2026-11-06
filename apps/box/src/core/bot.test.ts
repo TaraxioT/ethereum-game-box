@@ -82,7 +82,9 @@ describe("bot intents", () => {
   });
 
   it("waits for the draw in Quick Draw, and for its refund to open", () => {
-    const state = quickDraw.start(3, NOW);
+    const counting = quickDraw.start(3, NOW - 4000);
+    // The countdown is over: the sign reads WAIT….
+    const state = quickDraw.step(counting, { type: "tick", now: NOW });
     const match = {
       id: 4,
       game: "quick-draw" as const,
@@ -94,12 +96,17 @@ describe("bot intents", () => {
       play: { game: "quick-draw" as const, state },
       outcome: null,
       voided: false,
+      calledOff: false,
       endedAt: null,
       refunded: [false, false] as const,
       lines: null,
     };
     const playing = botIntent(box({ phase: "playing", seats: [human(true), bot(true)], match }), NOW, BOT_BADGE);
-    expect(playing).toEqual({ kind: "draw", key: "draw:4", untilDraw: state.drawAt - NOW });
+    expect(state.phase).toBe("wait");
+    expect(playing).toEqual({ kind: "draw", key: "draw:4:1", untilDraw: state.drawAt - NOW });
+    // Not in the countdown: a tap there means nothing.
+    const counted = { ...match, play: { game: "quick-draw" as const, state: counting } };
+    expect(botIntent(box({ phase: "playing", seats: [human(true), bot(true)], match: counted }), NOW - 4000, BOT_BADGE)).toBeNull();
     expect(botIntent(box({ phase: "refund", seats: [human(), bot()], match }), NOW, BOT_BADGE)).toBeNull();
     const open = box({ phase: "refund", seats: [human(), bot()], match });
     expect(botIntent(open, NOW + 60_000, BOT_BADGE)?.kind).toBe("refund");
@@ -177,6 +184,7 @@ describe("bot scheduler", () => {
       play: { game: "stock-duel" as const, state: duel },
       outcome: null,
       voided: false,
+      calledOff: false,
       endedAt: null,
       refunded: [false, false] as const,
       lines: null,

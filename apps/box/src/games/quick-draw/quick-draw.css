@@ -139,6 +139,25 @@
 .qd-fig-flash { position: absolute; width: 64px; height: 64px; left: calc(100% - 26px); top: calc(34.7% - 32px); opacity: 0; }
 .qd-fig-flash-outer { fill: #ffd27a; }
 .qd-fig-flash-core { fill: #fffbea; }
+/* A foul: the gun blows up in the drawn hand. The blast, its shards and the soot sit where that hand is. */
+.qd-fig-blown { position: absolute; left: 88%; top: 37.5%; width: 0; height: 0; }
+.qd-fig-blast { position: absolute; width: 96px; height: 96px; left: -48px; top: -48px; opacity: 0; overflow: visible; }
+.qd-fig-blast-outer { fill: #e2401c; }
+.qd-fig-blast-inner { fill: #ffb12e; }
+.qd-fig-blast-core { fill: #fff6d8; }
+.qd-fig-shard {
+  position: absolute; left: -4px; top: -3px; width: 9px; height: 6px; opacity: 0;
+  background: linear-gradient(135deg, #b9c0c8, #3b3f45); clip-path: polygon(0 30%, 70% 0, 100% 80%, 20% 100%);
+}
+.qd-fig-shard:nth-child(odd) { width: 6px; height: 9px; background: linear-gradient(135deg, #ffcf6a, #b0481a); }
+.qd-fig-soot {
+  position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(closest-side, rgb(30 24 22 / 0.9), rgb(50 40 36 / 0.45) 60%, transparent);
+  will-change: transform, opacity;
+}
+/* Scorched: the seat's lit rim goes to ash until the next round. */
+.qd-fig.is-blown .qd-fig-rim { fill: #6d625c; transition: fill 0.25s; }
+
 /* Gun smoke: soft warm-grey puffs from the muzzle. */
 .qd-fig-smoke { position: absolute; left: 100%; top: 34.7%; width: 0; height: 0; }
 .qd-fig-puff {
@@ -345,5 +364,81 @@
   -webkit-mask: radial-gradient(circle, #000 66%, transparent 71%);
   mask: radial-gradient(circle, #000 66%, transparent 71%);
 }
+
+/* --- Saying what to do: the round plate, the call strip, the bubbles, the rays and the decoy ------------------ */
+
+/* The round plate: Player 1's pips, ROUND n over BEST OF 3, Player 2's pips. A pip fills in the seat colour. */
+.qd-hud {
+  opacity: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 18px;
+  border-radius: 6px; color: var(--brass-ink);
+  background: linear-gradient(180deg, var(--brass-hi), var(--brass) 30%, var(--brass-mid) 70%, var(--brass-lo));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -2px 0 var(--brass-edge), 0 3px 0 #3b2608, 0 8px 12px rgb(6 2 12 / 0.5);
+}
+.qd-hud.is-up { opacity: 1; }
+.qd-hud-middle { display: flex; flex-direction: column; align-items: center; gap: 4px; text-shadow: 0 1px 0 rgb(255 246 214 / 0.6); }
+.qd-hud-round { font: 900 22px/1 var(--display); letter-spacing: 0.06em; }
+.qd-hud-best { font: 700 11px/1 var(--mono); letter-spacing: 0.2em; opacity: 0.75; }
+.qd-hud-pips { display: flex; align-items: center; gap: 8px; }
+.qd-hud-pips--p1 { --seat: var(--p1); }
+.qd-hud-pips--p2 { --seat: var(--p2); }
+.qd-hud-tag { font: 900 15px/1 var(--display); color: var(--brass-ink); }
+.qd-hud-pip {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgb(255 246 214 / 0.35), rgb(59 38 8 / 0.35));
+  box-shadow: inset 0 2px 3px rgb(59 38 8 / 0.6), 0 1px 0 rgb(255 246 214 / 0.6);
+}
+.qd-hud-pip.is-won {
+  background: radial-gradient(circle at 38% 32%, #fff6dd 0 14%, var(--seat) 40%, color-mix(in srgb, var(--seat), #000 35%));
+  box-shadow: 0 0 0 2px var(--brass-edge), 0 0 10px var(--seat);
+}
+
+/* The call strip: what to do now. Cream while counting and waiting, red on a decoy and a foul, green on DRAW. */
+.qd-call {
+  opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 10px; text-align: center; color: #f6ead0;
+  background: rgb(20 10 6 / 0.82); box-shadow: 0 0 0 3px var(--call-edge, #8a6a3c), 0 10px 24px rgb(6 2 12 / 0.55);
+  --call-edge: #8a6a3c; --call-ink: #f6ead0;
+}
+.qd-call.is-up { opacity: 1; }
+.qd-call-big { font: 900 36px/1 var(--display); letter-spacing: 0.04em; color: var(--call-ink); white-space: nowrap; }
+.qd-call-small { font: 700 15px/1 var(--mono); letter-spacing: 0.14em; opacity: 0.9; white-space: nowrap; }
+.qd-call[data-tone="decoy"], .qd-call[data-tone="foul"] { --call-edge: #ff3b2f; --call-ink: #ff5a47; background: rgb(48 4 4 / 0.9); }
+.qd-call[data-tone="draw"] {
+  --call-edge: #6dff8a; --call-ink: #7dff96; background: rgb(4 36 12 / 0.9);
+  box-shadow: 0 0 0 3px var(--call-edge), 0 0 32px rgb(109 255 138 / 0.65), 0 10px 24px rgb(6 2 12 / 0.55);
+}
+.qd-call[data-tone="won"] { --call-edge: var(--brass); --call-ink: var(--brass-hi); }
+.qd-call[data-tone="again"] { --call-edge: #9a8f80; }
+
+/* Over each head: a bold speech plate. Green TAP! on the draw, red DON'T! on a decoy. */
+.qd-bubble {
+  opacity: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px;
+  font: 900 40px/1 var(--display); letter-spacing: 0.04em;
+}
+.qd-bubble.is-up { opacity: 1; }
+.qd-bubble::after {
+  content: ""; position: absolute; left: calc(50% - 12px); bottom: -14px; width: 24px; height: 16px;
+  background: inherit; clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.qd-bubble[data-tone="draw"] { color: #062a10; background: #7dff96; box-shadow: 0 0 0 4px #062a10, 0 0 30px rgb(125 255 150 / 0.8); }
+.qd-bubble[data-tone="decoy"] { color: #fff2ee; background: #e8261a; box-shadow: 0 0 0 4px #3a0402, 0 0 24px rgb(232 38 26 / 0.7); }
+
+/* Gold rays fanning out from behind the sign when it turns to DRAW. */
+.qd-rays {
+  opacity: 0; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, rgb(255 226 140 / 0.42) 0 6deg, transparent 6deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 8%, rgb(0 0 0 / 0.6) 30%, transparent 62%);
+  mask: radial-gradient(circle, #000 8%, rgb(0 0 0 / 0.6) 30%, transparent 62%);
+}
+
+/* A decoy: the dark face painted red with another word. */
+.qd-sign-face--wait.is-decoy {
+  background:
+    repeating-linear-gradient(179deg, transparent 0 6px, rgb(40 0 0 / 0.25) 6px 7px, transparent 7px 15px),
+    linear-gradient(180deg, #c22a1c, #8f170e 60%, #6d0f08);
+}
+.qd-sign-face--wait.is-decoy .qd-sign-letter { color: #ffe9e2; }
+
+.qd-banner--none { --seat: #efe2c4; }
 
 @media (prefers-reduced-motion: reduce) { .qd-wire-step[current] { animation: none; } }

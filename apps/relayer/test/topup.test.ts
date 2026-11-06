@@ -6,10 +6,10 @@ import { newBadge } from './bodies.ts';
 import { NOW, World, addresses } from './world.ts';
 
 describe('POST /usdc/topup', () => {
-  it('mints 100 USDC to a player holding less than 25', async () => {
+  it('mints 100 USDC to a player, whatever it already holds', async () => {
     const world = new World();
     const player = newBadge().address;
-    world.usdc.set(player.toLowerCase(), usdc(24.99));
+    world.usdc.set(player.toLowerCase(), usdc(265));
     const res = await world.post('/usdc/topup', { player });
     expect(res).toMatchObject({ status: 202, body: { kind: 'topup', status: 'sent' } });
     expect(world.chain.sent).toHaveLength(1);
@@ -33,16 +33,6 @@ describe('POST /usdc/topup', () => {
     ['a body with no player', () => ({}), 400, /player: expected a string/],
     ['something that is neither an address nor a name', () => ({ player: 'not a name' }), 400, /address or an ENS name/],
     ['a name that does not resolve', () => ({ player: 'nobody.gamebox.eth' }), 404, /does not resolve/],
-    [
-      'a player who holds 25 USDC or more',
-      (world) => {
-        const player = newBadge().address;
-        world.usdc.set(player.toLowerCase(), usdc(25));
-        return { player };
-      },
-      409,
-      /already holds 25 USDC/,
-    ],
     [
       'an eth_call revert (the relayer lost its minter role), by name',
       (world) => {

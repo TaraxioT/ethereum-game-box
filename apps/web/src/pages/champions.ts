@@ -98,7 +98,7 @@ function reportPanel(d: Directory, licensed: boolean): HTMLElement {
       "p.labelled",
       {},
       h("b", {}, "The demo Box reports this result. "),
-      `It is a Box Worker with a software P-256 key, licensed as ${fullName(DEMO_BOX_LABEL)}. At the event, the Box signs only after a real match on its table. A result in a game with an open championship scores it too.`,
+      `It is a Box Worker with a software P-256 key, licensed as ${fullName(DEMO_BOX_LABEL)}. At the event, the Box signs only after a real match on its table. A result in a game with an open cup scores it too.`,
     ),
     h("div.field", {}, h("label", {}, "game"), game),
     h("div.field", {}, h("label", {}, "winner"), winner, h("label", { style: "min-width:0" }, "beat"), loser),

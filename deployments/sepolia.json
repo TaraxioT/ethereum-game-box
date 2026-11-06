@@ -18,16 +18,10 @@
       "txHash": "0x1f1e2a24355956e316cb5e289c8e35d0775de0b9ec95f6de0d6e6c64d6b38f8d",
       "verified": true
     },
-    "PlayerStats": {
-      "address": "0xd7d328645b77DF958E9B855c226F436ec1187717",
-      "deployBlock": 12075915,
-      "txHash": "0xb63495ad940c557ccc6c44f57a7023ac22944fbe08357e39f593c0e68833c0fc",
-      "verified": true
-    },
     "BoxResults": {
-      "address": "0x8C50253D4F8eCd770Aa851d8A77Dade8839ff7C3",
-      "deployBlock": 12075919,
-      "txHash": "0xc86763b03c7ca1468ba0b7cca48e40994497c3ea42118588815ff8c028fa3175",
+      "address": "0x81Ef1F56C4bF98e99871367f0DD79C8F9aacb544",
+      "deployBlock": 12077989,
+      "txHash": "0xf12ee706e5dcc07ccd0eba54173d972f5335a2d3deea1820c920b02dede717da",
       "verified": true
     },
     "DemoLicences": {
@@ -88,6 +82,18 @@
       "address": "0xF4BbB7CCF834183d143b3c77C2C96331bb51D080",
       "deployBlock": 12076211,
       "txHash": "0x217ce910b2cc563c0d95199759e7d63d4b9c1a6ada874448e09d7b8805eaa41c",
+      "verified": false
+    },
+    "PlayerStats": {
+      "address": "0x5e77890E7f36390Cd972187Db2A5Da6483393bD8",
+      "deployBlock": 12077988,
+      "txHash": "0x1f4b77e55559ddc44ac13a5250f08dd04de56125a79e6bbdff060c58a2e84cbf",
+      "verified": true
+    },
+    "BoxLease": {
+      "address": "0xb03B16cAE9a18575ea2b17fe4cb4379B7A7529A9",
+      "deployBlock": 12078750,
+      "txHash": "0x0fabbf1163b3155264664b4a4a6b22db1b7757062b38ab0910c444fcd95e715a",
       "verified": false
     }
   },

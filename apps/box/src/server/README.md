@@ -58,6 +58,7 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `POST /api/taps/fake` | same origin | The fake receiver's hands: `{ op: "place", badge, st }`, `{ op: "lift", badge }`, `{ op: "linkDown" \| "linkUp", st }`, `{ op: "unplug" \| "plug" }`. 409 on real hardware. |
 | `/api/builder/…` | launcher token | The game builder: below. |
 | `/api/admin/…` | launcher token | The admin panel: below. |
+| `/api/lease…` | anyone reads, launcher token writes | The Box's lease: below. |
 | `GET /api/board` | anyone | The board Attract and Home show: `{ available: false }` without an RPC; else `{ available, board, error }`, every game with its title and open championship and the latest championships with an open one's leader (`board.ts`, read at most every 3 s). |
 | `GET /games/<id>/icon.svg`, `screen.js`, `frame.html` | anyone | A built game's cartridge art, screen module and sandboxed frame page, under the frame's own CSP (`games/`). |
 | `GET /games/icon.svg` | anyone | The Box's plain icon, on every store game's cartridge. |
@@ -151,6 +152,28 @@ from its own nonce queue, so a nonce clash is retried once. Paths and replies ar
 
 A bad body or label is a 400; without the key every write is a 409.
 
+## The lease
+
+On Sepolia the Box hosts only while GBX is staked on it in `BoxLease` (`lease.ts`): staking keeps its name
+`<EGB_BOX>.gamebox.eth` Active until the lease ends, and unstaking gives the GBX back and suspends the name. The watch
+reads the lease every 10 s and checks its end every second against the chain's clock. The gate is `checking` until
+the first read, then `open` (staked, name Active) or `closed`; a failed read keeps the last one. A lease that ran out
+is closed on chain (`lapse`) once. With the simulator (no chain settings) the gate is `off` and nothing is gated.
+
+While it isn't open, every tap and screen command is refused before the core sees it (`lease-gate.ts`): a touch gets
+the station's refused buzz, and only the screen's `booted` gets in, so a kiosk that starts on a closed Box still
+boots. The chain refuses the same Box on its own: `BoxCheck` turns down every call it signs while its name isn't
+Active. With `EGB_ADMIN_KEY` the screen stakes and unstakes from that key, one job at a time like the admin panel's,
+approving GBX first when the allowance is short. Paths and replies are in `lease-wire.ts`.
+
+| Route | What |
+|---|---|
+| `GET /api/lease` | `{ gate, now, status, staker, error, jobs }`: the chain's time, the lease (`label`, `name`, `standing`, `expiry`, `startedAt`, `endsAt`, `stake`, `operator`, `ratePerHour`, `minHours`, `maxHours`, the staker's `gbx`, and `ens`: the `BoxLease`, `GameBoxNames`, gamebox.eth registry and name resolver addresses a stake or unstake goes through), who stakes from here, and the latest jobs. |
+| `POST /api/lease/stake` | `{ hours }` (`minHours` to `maxHours`): approve if needed, then `BoxLease.stake` with the Box's P-256 key, so a Box with no name gets one and a Box with one keeps it. 202 with the job. |
+| `POST /api/lease/unstake` | `BoxLease.unstake`, by the lease's operator only. 202. |
+
+A bad body is a 400; without the key, or with a job already running, a write is a 409.
+
 ## Taps
 
 The taps library (`src/taps/`) starts once the server listens, unless `EGB_RECEIVER=none`. It is the core's stations
@@ -190,6 +213,9 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `games/` | Built games over HTTP: cartridges, frames, the frames' shared assets (its own README). | `createGameRoutes`, `createFrameAssets` |
 | `admin.ts` | The admin panel: the key's account over the RPC, the jobs, the routes. | `adminOnSepolia(setting, log)`, `createAdmin(ports)`, `adminRoutes(admin)` |
 | `admin-wire.ts` | The admin routes' and the board's paths, bodies and replies. No Node, no DOM. | `ADMIN`, `BOARD_PATH`, types |
+| `lease.ts` | The lease: the watch over the RPC, the gate, the stake and unstake jobs, the routes. | `leaseOnSepolia(options)`, `createLeaseWatch(ports)`, `leaseRoutes(lease)`, `LEASE_POLL_MS` |
+| `lease-gate.ts` | The core as taps and the screen reach it: nothing in while the Box may not host. | `gatedCore(core, hosting, refuse)` |
+| `lease-wire.ts` | The lease's paths, bodies and replies. No Node, no DOM. | `LEASE`, types |
 | `board.ts` | The board: the chain's titles and championships, cached 3 s, for anyone. | `boardRoutes(rpcUrl)`, `createBoard(reads)`, `wireBoard` |
 | `api.ts` | The Box's routes: health, state, injected taps, the Box tab. | `apiRoutes`, `busy(state, building)` |
 | `builder-host.ts` | The game builder on the server: the Forge and the Designer on one lock, a confirmed design built on `EGB_FORGE_PROVIDER`, every change fanned out to the stream. | `startBuilder(options): Builder`, `forgeProvider(env)` |

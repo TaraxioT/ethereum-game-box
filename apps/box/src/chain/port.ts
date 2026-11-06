@@ -23,6 +23,7 @@ import { DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import type { Address, Hex } from "viem";
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
+import { recordText } from "../core/stats.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import type { Reads, Settled } from "./reads.ts";
 import type { Relayer } from "./relayer.ts";
@@ -62,6 +63,8 @@ export interface SepoliaChain extends ChainPort {
   sweep(): Promise<void>;
   /** Whether the signer's key is the one `GameBoxNames` holds for this Box, said in the log. */
   checkKey(): Promise<boolean>;
+  /** The signer's public key. */
+  publicKey(): Promise<{ readonly qx: Hex; readonly qy: Hex }>;
   stop(): void;
 }
 
@@ -117,6 +120,10 @@ export function outcomeLines(order: ResultOrder, settled: Settled): string[] {
       if (row) lines.push(`${settled.cup.label}: ${named(seat)} ${ORDINALS[rank] ?? `${rank + 1}th`}, ${row.points} pts`);
     }
   }
+  for (const seat of [0, 1] as const) {
+    const stats = settled.stats[seat];
+    if (stats) lines.push(`${named(seat)} stats: ${recordText(stats)}`);
+  }
   return lines;
 }
 
@@ -160,14 +167,9 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     stakeNeedsName: true,
     store,
     balance: (address) => reads.balance(address),
-    async player(address, game) {
-      const onChain = chainLabel(game);
-      const [name, balance, record] = await Promise.all([
-        reads.nameOf(address),
-        reads.balance(address),
-        onChain === null ? null : reads.record(address, onChain),
-      ]);
-      return { address, name, balance, record: record && { game, ...record } };
+    async player(address) {
+      const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);
+      return { address, name, balance, record: name ? await reads.stats(name) : null };
     },
     board: async (game) => reads.board(label(game)),
     open(order, watch) {
@@ -228,6 +230,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
       log(same ? `chain: the signer's key is ${box}'s (${mine.qx.slice(0, 10)}…)` : `chain: the signer's key ${mine.qx.slice(0, 10)}… is not ${box}'s (${registered.qx.slice(0, 10)}…): the relayer will refuse every request`);
       return same;
     },
+    publicKey: () => signer.publicKey(),
     async sweep() {
       await sweepPots(rounds.open(), reads.potOpen, (round) => refundRound(round, () => {}));
       if (store) await sweepPots(rounds.open("store"), reads.storePotOpen, (round) => store.refund(round, () => {}));

@@ -75,8 +75,13 @@ describe("the screen's link", () => {
       propose: { type: "propose" },
       claim: { type: "claim" },
       frame: { type: "frame", word: { t: "event", name: "score", data: { seat: 0 } } },
+      hall: { type: "hall" },
+      challenge: { type: "challenge", game: "quick-draw", target: "cup" },
+      quit: { type: "quit" },
     };
     for (const command of Object.values(every)) expect(parseCommand(JSON.stringify({ t: "command", command }))).toEqual(command);
+    const typed = { type: "claim", label: "alice" };
+    expect(parseCommand(JSON.stringify({ t: "command", command: typed }))).toEqual(typed);
   });
 
   it("reads commands strictly", () => {
@@ -84,6 +89,10 @@ describe("the screen's link", () => {
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "stake", amount: 25, extra: 1 } }))).toEqual({ type: "stake", amount: 25 });
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "stake", amount: "25" } }))).toBeNull();
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "focus" } }))).toBeNull();
+    expect(parseCommand(JSON.stringify({ t: "command", command: { type: "challenge", game: "quick-draw", target: "all" } }))).toBeNull();
+    for (const label of ["Alice", "al", "-alice", "alice.eth", 7]) {
+      expect(parseCommand(JSON.stringify({ t: "command", command: { type: "claim", label } }))).toBeNull();
+    }
     expect(parseCommand(JSON.stringify({ t: "nope", command: { type: "play" } }))).toBeNull();
     expect(parseCommand("not json")).toBeNull();
   });

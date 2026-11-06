@@ -142,7 +142,9 @@ describe("a store game on the Box", () => {
     expect(readdirSync(folder).sort()).toEqual(["index.html", "manifest.json"]);
     tb.advance(JOIN_SETTLE_MS);
     expect(core.state().phase).toBe("stake");
-    expect(core.state().seats.map((s) => [s.ens, s.balance])).toEqual([["nova.gamebox.eth", 100], ["kite.gamebox.eth", 100]]);
+    await vi.waitFor(() =>
+      expect(core.state().seats.map((s) => [s.ens, s.balance])).toEqual([["nova.gamebox.eth", 100], ["kite.gamebox.eth", 100]]),
+    );
 
     // Both sign: `StorePot` takes the stakes by the bundle's hash, and the match begins once that is confirmed.
     await inject(tb, 0, NOVA);

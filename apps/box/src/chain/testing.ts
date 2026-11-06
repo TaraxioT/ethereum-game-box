@@ -3,7 +3,7 @@
 import type { TxView } from "@egb/shared/names";
 import type { JudgeRequest, JudgeStatus } from "@egb/shared/store";
 import type { Address, Hex } from "viem";
-import type { Board } from "../core/types.ts";
+import type { Board, PlayerRecord } from "../core/types.ts";
 import type { Reads, Settled } from "./reads.ts";
 import type { Relayer, RelayerReply } from "./relayer.ts";
 import type { Verifier, VerifierReply } from "./verifier.ts";
@@ -73,8 +73,8 @@ export interface MemoryReads extends Reads {
   readonly balances: Map<Address, number>;
   readonly storeBalances: Map<Address, number>;
   readonly names: Map<Address, string>;
-  /** Records by `<game label>|<address>`. */
-  readonly records: Map<string, { wins: number; losses: number; draws: number }>;
+  /** `stats` records by player name. */
+  readonly statsByName: Map<string, PlayerRecord>;
   /** Rounds the chain has seen, and pots still open. */
   readonly taken: Set<number>;
   readonly openPots: Set<number>;
@@ -86,16 +86,16 @@ export function memoryReads(): MemoryReads {
   const balances = new Map<Address, number>();
   const storeBalances = new Map<Address, number>();
   const names = new Map<Address, string>();
-  const records = new Map<string, { wins: number; losses: number; draws: number }>();
+  const statsByName = new Map<string, PlayerRecord>();
   const taken = new Set<number>();
   const openPots = new Set<number>();
   const openStorePots = new Set<number>();
-  const board: Board = { title: null, cup: null };
+  const board: Board = { title: null, cup: null, leaders: [], won: [] };
   const reads: MemoryReads = {
     balances,
     storeBalances,
     names,
-    records,
+    statsByName,
     taken,
     openPots,
     openStorePots,
@@ -104,7 +104,7 @@ export function memoryReads(): MemoryReads {
     balance: async (address) => balances.get(address) ?? 0,
     storeBalance: async (address) => storeBalances.get(address) ?? 0,
     nameOf: async (address) => names.get(address) ?? null,
-    record: async (address, game) => records.get(`${game}|${address}`) ?? { wins: 0, losses: 0, draws: 0 },
+    stats: async (name) => statsByName.get(name) ?? null,
     roundTaken: async (_box, round) => taken.has(round),
     potOpen: async (_box, round) => openPots.has(round),
     storePotOpen: async (_box, round) => openStorePots.has(round),

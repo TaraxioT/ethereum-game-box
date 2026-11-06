@@ -82,3 +82,29 @@
 .ens-tag-hint { font: 600 12px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-3); }
 @keyframes ens-tag-in { from { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .ens-tag { animation: none; } }
+
+/* An ENS name, always whole (`ens-name.ts`): one line in a box that scrolls sideways. One wider than its box drifts to its end and
+   back (the box is the container, so the drift is exactly the overflow), and a finger can swipe it too. */
+.ens-name {
+  display: block; min-width: 0; overflow-x: auto; overflow-y: hidden; white-space: nowrap; container-type: inline-size;
+  scrollbar-width: none; touch-action: pan-x; user-select: text;
+}
+.ens-name::-webkit-scrollbar { display: none; }
+.ens-name-text { display: inline-block; animation: ens-drift 10s ease-in-out 1.5s infinite alternate; }
+@keyframes ens-drift {
+  0%, 12% { transform: translateX(0); }
+  88%, 100% { transform: translateX(min(0px, calc(100cqw - 100%))); }
+}
+@media (prefers-reduced-motion: reduce) { .ens-name-text { animation: none; } }
+
+/* EXIT while a match runs (`exit-key.ts`): a quiet chip in the bottom-left corner; armed, it turns alert red and says
+   what a second tap does. */
+.exit-key {
+  position: fixed; left: 14px; bottom: 14px; z-index: 40; display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 14px; background: var(--glass); border: 1px solid var(--fg-4); color: var(--fg-2); cursor: pointer;
+  font: 700 14px/1 var(--hud-display); letter-spacing: 0.14em; touch-action: manipulation;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+.exit-key[hidden] { display: none; }
+.exit-key.armed { border-color: var(--alert); color: var(--alert); box-shadow: 0 0 14px rgb(255 45 61 / 0.35); }
+.exit-key-hint { font: 600 12px/1 var(--hud-body); letter-spacing: 0.06em; text-transform: none; }

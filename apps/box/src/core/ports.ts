@@ -149,8 +149,8 @@ export interface ChainPort {
   /** Only a badge with a player name may stake (`DuelPot` refuses `NotAPlayer`): one without is sent to the lobby. */
   readonly stakeNeedsName: boolean;
   balance(address: `0x${string}`): Promise<number>;
-  /** A badge's name, balance and record in `game`. */
-  player(address: `0x${string}`, game: GameId): Promise<PlayerCard>;
+  /** A badge's name, balance and stats. */
+  player(address: `0x${string}`): Promise<PlayerCard>;
   board(game: GameId): Promise<Board>;
   /** Sends both stakes into the pot (a Box-signed `Stake`). */
   open(order: StakeOrder, watch: TxWatch): void;

@@ -83,14 +83,19 @@ describe("a match with its stakes on Sepolia", () => {
     await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
     expect(core.state().txs[0]?.step).toBe("paid");
 
-    // Player 2 wins the draw; the game ends and holds, and the result goes.
-    await tb.settle(() => {
+    // Player 2 draws first in two rounds; the game ends and holds, and the result goes.
+    const quick = () => {
       const play = core.state().match?.play;
-      return play?.game === "quick-draw" && play.state.phase === "draw";
-    });
-    tb.advance(200);
-    await inject(tb, 1, KITE);
-    tb.advance(SETTLE_MS + END_HOLD_MS + 100);
+      return play?.game === "quick-draw" ? play.state : null;
+    };
+    for (let round = 0; round < 2; round++) {
+      await tb.settle(() => quick()?.phase === "draw");
+      tb.advance(200);
+      await inject(tb, 1, KITE);
+      tb.advance(SETTLE_MS + 100);
+    }
+    expect(core.state().match?.outcome).toEqual({ winner: 1 });
+    tb.advance(END_HOLD_MS);
     await flush();
     expect(core.state().phase).toBe("result");
     await tb.settle(() => relayer.posted.length === 2, POLL_MS * 2, 100);
@@ -99,7 +104,7 @@ describe("a match with its stakes on Sepolia", () => {
     expect(result.body.result).toMatchObject({ box: "mumbai-01", game: "quickdraw", round: "1", winner: KITE, loser: NOVA, draw: false });
 
     // Paid: the lines come from the receipt, and the balances are read again.
-    reads.settledAs = { block: 1n, pot: 10, names: ["nova.gamebox.eth", "kite.gamebox.eth"], title: { name: "champion.quickdraw.gamebox.eth", holder: KITE, streak: 1 }, cup: null };
+    reads.settledAs = { block: 1n, pot: 10, names: ["nova.gamebox.eth", "kite.gamebox.eth"], stats: [null, null], title: { name: "champion.quickdraw.gamebox.eth", holder: KITE, streak: 1 }, cup: null };
     reads.balances.set(KITE, 110);
     relayer.advance(relayer.ids()[1]!, "done");
     await tb.settle(() => core.state().match?.lines !== null, POLL_MS * 2, 100);

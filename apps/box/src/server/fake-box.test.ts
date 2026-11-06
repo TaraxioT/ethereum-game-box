@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Transcript } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../core/types.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
+import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import type { BoxReply } from "../test-page/wire.ts";
 import { fakeTap, flush, post, startTestBox, type TestBox } from "./testing.ts";
 
@@ -55,6 +56,12 @@ async function fakeBox(timeScale = 0, stations: readonly string[] = [P1, P2]): P
       return fresh;
     },
   };
+}
+
+/** The running Quick Draw's state, or null. */
+function quick(rig: Rig): QuickDrawState | null {
+  const play = rig.state().match?.play;
+  return play?.game === "quick-draw" ? play.state : null;
 }
 
 /**
@@ -108,14 +115,15 @@ describe("the Box on the fake receiver", () => {
   it("plays a Quick Draw from join to a paid result, judged at the touch, and logs a counted transcript", async () => {
     const rig = await fakeBox();
     await staked(rig, "quick-draw");
-    await rig.tb.settle(() => {
-      const play = rig.state().match?.play;
-      return play?.game === "quick-draw" && play.state.phase === "draw";
-    }, 10_000, 20);
-    // The touch time is worked out from the station's line (the read and the radio before it), some 40 ms before the
-    // line arrives: a chip put down the moment the sign flips was a false start.
-    rig.tb.advance(200, 10);
-    await rig.tap("bo", P2);
+    // Best of three: Player 2 draws first in two rounds.
+    for (let round = 0; round < 2; round++) {
+      await rig.tb.settle(() => quick(rig)?.phase === "draw", 20_000, 20);
+      // The touch time is worked out from the station's line (the read and the radio before it), some 40 ms before
+      // the line arrives: a chip put down the moment the sign flips was a foul.
+      rig.tb.advance(200, 10);
+      await rig.tap("bo", P2);
+      await rig.tb.settle(() => quick(rig)?.phase !== "draw", 10_000, 20);
+    }
     await paid(rig);
     const match = rig.state().match;
     expect(match?.outcome).toEqual({ winner: 1 });
@@ -126,7 +134,8 @@ describe("the Box on the fake receiver", () => {
 
     const [t] = await transcripts(rig.tb);
     expect(t).toMatchObject({ v: 1, game: "quick-draw", stake: 10, result: { winner: 1 }, counts: true });
-    expect(t?.taps).toEqual([{ seat: 1, at: expect.any(Number), roll: null, accepted: true }]);
+    const good = { seat: 1, at: expect.any(Number), roll: null, accepted: true };
+    expect(t?.taps).toEqual([good, good]);
   });
 
   it("plays a Stock Duel to a paid result, each card played with its badge's verified roll", async () => {
@@ -160,11 +169,11 @@ describe("the Box on the fake receiver", () => {
     const rig = await fakeBox();
     await staked(rig, "quick-draw");
     expect((await post(rig.tb.box, "/api/box/power", { on: false })).status).toBe(204);
-    await rig.tb.settle(() => {
-      const play = rig.state().match?.play;
-      return play?.game === "quick-draw" && play.state.phase === "draw";
-    }, 10_000, 20);
-    await rig.tap("ada", P1);
+    while (!rig.state().match?.outcome) {
+      await rig.tb.settle(() => quick(rig)?.phase === "draw", 20_000, 20);
+      await rig.tap("ada", P1);
+      await rig.tb.settle(() => quick(rig)?.phase !== "draw", 10_000, 20);
+    }
     await rig.tb.settle(() => rig.state().phase === "refund", 10_000, 50);
     expect(rig.state().stations[0].big).toBe("OFFLINE");
     const match = rig.state().match;
@@ -186,6 +195,7 @@ describe("the Box on the fake receiver", () => {
     expect([P2, P3].map(seatOf)).toEqual([1, 0]);
     // The view follows the seat, so the player sees where to tap, and the tap is theirs.
     expect(taps?.fake?.status().stations.find((s) => s.st === P3)?.screen).toContain("tag=P1");
+    await rig.tb.settle(() => quick(rig)?.phase === "draw", 20_000, 20);
     rig.events.length = 0;
     await rig.tap("ada", P3);
     expect(rig.events).toContainEqual(expect.objectContaining({ type: "tap", seat: 0, accepted: true }));

@@ -43,6 +43,13 @@ const ART: Record<string, string> = {
       )
       .join("")}
   </svg>`,
+  // The hall (TITLES & CUPS): a cup in brass light between two crowns, a star over it.
+  hall: `<svg viewBox="0 0 120 64" aria-hidden="true">
+    <path class="bloom" d="M48 8h24v12a12 12 0 0 1-24 0Z"/>
+    <path class="gold" d="M48 8h24v12a12 12 0 0 1-24 0ZM48 11h-7v3a7 7 0 0 0 7 7M72 11h7v3a7 7 0 0 1-7 7M60 32v12M52 48h16M55 44h10"/>
+    <path class="hot" d="M16 30l3-9 5 5 4-7 4 7 5-5 3 9ZM83 30l3-9 5 5 4-7 4 7 5-5 3 9Z"/>
+    <path class="spark" d="M60 1v4M57 3h6M16 40h20M84 40h20"/>
+  </svg>`,
   // The blank program (NEW GAME on the Box): nothing in its window yet but a dashed frame waiting for art, and a plus.
   "new-game": `<svg viewBox="0 0 120 64" aria-hidden="true">
     <rect class="blank" x="36" y="4" width="48" height="56"/>
@@ -88,6 +95,7 @@ const styles = sheet(`
 .o { stroke: var(--p1); }
 .c { stroke: var(--p2); }
 .o, .c { fill: none; stroke-width: 2; }
+.gold { fill: none; stroke: var(--brass-hi); stroke-width: 2; stroke-linejoin: round; }
 .blank { fill: none; stroke: var(--sys); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0.5; }
 /* A built game's icon: its own art on its own background, filling the window. */
 .window img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }

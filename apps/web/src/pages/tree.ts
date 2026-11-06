@@ -179,10 +179,10 @@ export async function treePage(): Promise<HTMLElement> {
           depth: 3,
           name: cup.name,
           what: !cup.closed
-            ? "championship · live records: standings, leader and addr move with every result"
+            ? "cup · live records: standings, leader and addr move with every result"
             : winner
-              ? h("span", {}, "championship · records frozen · held by ", h("span.p1t", {}, winner), " for good")
-              : h("span.expired-note", {}, "championship · nobody played: unregistered"),
+              ? h("span", {}, "cup · records frozen · held by ", h("span.p1t", {}, winner), " for good")
+              : h("span.expired-note", {}, "cup · nobody played: unregistered"),
           resolver: gone ? null : cup.resolver,
           expiry: gone ? "—" : expiryCell(where.expiry),
           note: cup === cups[0] ? "Live records, then frozen" : undefined,
@@ -207,7 +207,7 @@ export async function treePage(): Promise<HTMLElement> {
     h(
       "p.intro",
       {},
-      "Game Box is a console you play by tapping a badge. Each Box, player, game, champion title and championship is an ENSv2 name in ",
+      "Game Box is a console you play by tapping a badge. Each Box, player, game, title and cup is an ENSv2 name in ",
       h("b", {}, "a registry we deployed"),
       ", and each one has ",
       h("b", {}, "its own resolver"),

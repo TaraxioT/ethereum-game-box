@@ -59,16 +59,24 @@ export interface SeatState {
   readonly pending: number;
   /** This seat has signed the entry for the match being staked. */
   readonly signed: boolean;
-  /** The badge's record in the focused game, read from chain; null until read, or for a game not on chain. */
+  /** The badge's stats over every game, from its name's `stats` record; null until read, or with no name or no stats. */
   readonly record: PlayerRecord | null;
 }
 
-/** A badge's wins, losses and draws in one game, as `PlayerStats` holds them. */
+/** A player's stats over every game, as `PlayerStats` writes them to its name's `stats` record. `streak` is its run of
+ *  wins up to now, in any game (a loss or a draw ends it); `best` is the longest. */
 export interface PlayerRecord {
-  readonly game: GameId;
+  readonly played: number;
   readonly wins: number;
   readonly losses: number;
   readonly draws: number;
+  readonly streak: number;
+  readonly best: number;
+}
+
+/** A row of `gamebox.eth`'s `leaderboard`: a player by name, and its stats. */
+export interface Leader extends PlayerRecord {
+  readonly name: string;
 }
 
 /** Sepolia's head, as the Box last read it (block 0 before the first read). */
@@ -178,6 +186,8 @@ export interface Match {
   readonly outcome: { readonly winner: DuelSeat | null } | null;
   /** The built game's rules failed (over budget, crashed): the match is void and both stakes go back. */
   readonly voided: boolean;
+  /** Called off from the screen mid-match (EXIT): it ends as a draw, so both stakes go back at the settle. */
+  readonly calledOff: boolean;
   /** When the game ended (ms since the epoch), or null while it runs. */
   readonly endedAt: number | null;
   /** Each player has taken their stake back (Refund). */
@@ -204,7 +214,7 @@ export interface PlayerCard {
   readonly name: string | null;
   /** USDC. */
   readonly balance: number;
-  /** Its record in the game it was read for, or null for a game not on chain. */
+  /** Its stats over every game, from its name's `stats` record, or null: no name, or no stats yet. */
   readonly record: PlayerRecord | null;
 }
 
@@ -217,11 +227,12 @@ export interface Standing {
   readonly losses: number;
 }
 
-/** A game's title and its open championship, read through the Universal Resolver. */
+/** A game's title and its open cup, and the leaderboard over every game, read through the Universal Resolver. */
 export interface Board {
-  /** `champion.<game>.gamebox.eth`: its holder's name and streak, or null while nobody holds it. */
-  readonly title: { readonly name: string; readonly holder: string; readonly streak: number } | null;
-  /** The open championship (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
+  /** `champion.<game>.gamebox.eth`: its holder's name, streak and when it lapses (ms since the epoch), or null while
+   *  nobody holds it. */
+  readonly title: { readonly name: string; readonly holder: string; readonly streak: number; readonly expires: number } | null;
+  /** The open cup (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
   readonly cup: {
     readonly name: string;
     /** When scoring stops (ms since the epoch). */
@@ -230,6 +241,20 @@ export interface Board {
     readonly prize: number;
     readonly standings: readonly Standing[];
   } | null;
+  /** `gamebox.eth`'s `leaderboard`: the top players over every game, in rank order (most wins, then who reached them
+   *  first). */
+  readonly leaders: readonly Leader[];
+  /** The game's closed cups, latest first: each name its winner holds forever. */
+  readonly won: readonly WonCup[];
+}
+
+/** A closed cup: its name, registered to its winner with no expiry, and the prize it paid. */
+export interface WonCup {
+  readonly name: string;
+  /** The winner's player name, or its address with none. */
+  readonly winner: string;
+  /** USDC. */
+  readonly prize: number;
 }
 
 /** The lobby: whoever tapped last, their card and a label to claim. */
@@ -248,12 +273,13 @@ export type Phase =
   | "attract" // TAP TO START
   | "home" // the library
   | "join" // each seat taps a badge
-  | "stake" // pick what to play for (USDC, the title, the championship), everyone taps to sign
+  | "stake" // pick what to play for (USDC, the title, the cup), everyone taps to sign
   | "playing" // a game runs
   | "judging" // a store match's log is with the verifier
   | "result" // the winner is paid
   | "refund" // the Box missed its settle: each player takes their stake back
-  | "lobby" // a badge's name, balance and top-up; the game's title and championship
+  | "lobby" // a badge's name, balance and top-up; the game's title and cup
+  | "hall" // every title and cup and the leaderboard, each one played for from its card
   | "build"; // the game builder: the Designer and the Build screen (the Box's own screen only, never the demo)
 
 export interface BoxState {
@@ -388,9 +414,15 @@ export type ScreenCommand =
   | { readonly type: "lobby" }
   /** The lobby's Top up 100 USDC, for the badge on show. */
   | { readonly type: "topup" }
-  /** The lobby: another label to claim, or claim the one proposed. */
+  /** The lobby: another label to claim, or claim one: the label typed on the screen, else the one proposed. */
   | { readonly type: "propose" }
-  | { readonly type: "claim" }
+  | { readonly type: "claim"; readonly label?: string }
+  /** Home's TITLES & CUPS cartridge: the hall. */
+  | { readonly type: "hall" }
+  /** A title or cup card (the hall, Home's board): play `game` for `target` now, at its stake. */
+  | { readonly type: "challenge"; readonly game: GameId; readonly target: PlayFor }
+  /** EXIT inside a match: it is called off as a draw and both stakes go back. */
+  | { readonly type: "quit" }
   /** A store game's frame spoke. */
   | { readonly type: "frame"; readonly word: FrameWord };
 

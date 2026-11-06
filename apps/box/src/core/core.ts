@@ -64,7 +64,7 @@ import type {
   Tx,
 } from "./types.ts";
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
-import type { QuickDrawEvent } from "../games/quick-draw/types.ts";
+import type { QuickDrawEvent, QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame, stakeOf } from "./catalogue.ts";
@@ -88,6 +88,12 @@ export const IDLE_MS = 60_000;
  * player works (and as a build streams in), so only a builder left alone times out; a running build carries on.
  */
 export const BUILD_IDLE_MS = 5 * 60_000;
+/**
+ * Join or Stake goes back to Home after this long with no tap or touch: players who walk away don't leave their seats
+ * on screen for whoever comes next (or for a screen that restarts), and the updater can switch releases. Not while
+ * everyone has signed, since their stakes are moving on chain.
+ */
+export const SEATED_IDLE_MS = 2 * 60_000;
 /** How often a running game is stepped. */
 export const TICK_MS = 50;
 /** A finished game stays on screen this long (the winner, the reaction times, the last seal) before it settles. */
@@ -230,13 +236,17 @@ function playCues(before: MatchPlay, after: MatchPlay, frontsBefore: readonly (n
   const add = (cue: Cue, seat: DuelSeat | null = null) => moments.push({ cue, seat });
   if (before.game === "quick-draw" && after.game === "quick-draw") {
     const [was, is] = [before.state, after.state];
-    if (was.phase === "wait" && is.phase !== "wait" && is.reason !== "early") add("draw");
-    if (was.phase !== "done" && is.phase === "done") {
-      if (is.winner === null) add("tie");
-      else if (is.reason === "early") add("false-start", other(is.winner));
-      else add("shot", is.winner);
+    const decided = (s: QuickDrawState) => s.phase === "round" || s.phase === "done";
+    // The sign turned to DRAW: the phase says so, or the standoff was decided by a good draw in the same step.
+    const turned = (s: QuickDrawState) => s.phase === "draw" || (decided(s) && s.reason !== "early" && (s.taps[0] ?? s.taps[1] ?? s.drawAt) >= s.drawAt);
+    if ((was.phase === "count" || was.phase === "wait") && was.standoff === is.standoff && turned(is)) add("draw");
+    if (!decided(was) && decided(is)) {
+      if (is.took === null) add("tie");
+      else if (is.reason === "early") add("false-start", other(is.took));
+      else add("shot", is.took);
     }
-    if (is.standoff > was.standoff) add("tie");
+    // The next round is counted in.
+    if (was.phase === "round" && is.phase === "count") add("round");
   }
   if (before.game === "stock-duel" && after.game === "stock-duel") {
     const frontsAfter = fronts(after, now);
@@ -318,7 +328,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** Each badge's USDC and player name, as last read from chain (absent: not read yet). */
   const balances = new Map<string, number>();
   const names = new Map<string, string | null>();
-  /** Each badge's record in the game it was last read for. */
+  /** Each badge's stats over every game, as last read. */
   const records = new Map<string, PlayerRecord | null>();
   /** USDC on its way to each address: top-ups, payouts and refunds not yet paid. */
   const incoming = new Map<string, number>();
@@ -366,11 +376,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return games.find((info) => info.id === id);
   }
 
-  /** A seated badge's record, while it is the focused game's. */
-  function recordFor(badge: Badge | null): PlayerRecord | null {
-    const record = badge ? records.get(badge.address) : null;
-    return record && record.game === focus ? record : null;
-  }
 
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
@@ -380,7 +385,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       ens: badge ? (names.get(badge.address) ?? null) : null,
       balance: badge ? (balances.get(badge.address) ?? null) : null,
       pending: badge ? (incoming.get(badge.address) ?? 0) : 0,
-      record: recordFor(badge),
+      record: badge ? (records.get(badge.address) ?? null) : null,
     };
   }
 
@@ -454,9 +459,15 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function resetIdle(): void {
     timers.cancel(idleTimer);
     if (phase === "home") idleTimer = timers.after(IDLE_MS, () => setPhase("attract"));
-    else if (phase === "lobby") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
+    else if (phase === "lobby" || phase === "hall") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
     else if (phase === "build") idleTimer = timers.after(BUILD_IDLE_MS, () => setPhase("home"));
+    else if (phase === "join" || phase === "stake") idleTimer = timers.after(SEATED_IDLE_MS, leaveSeats);
     else idleTimer = null;
+  }
+
+  /** Seated players walked away: Home, unless everyone has signed and their stakes are moving. */
+  function leaveSeats(): void {
+    if (phase === "join" || (phase === "stake" && !allSigned(seats))) setPhase("home");
   }
 
   function setPhase(to: Phase): void {
@@ -553,13 +564,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** A badge's card, its balance in what the focused game stakes. */
   function cardOf(address: `0x${string}`): Promise<PlayerCard> {
     const store = storeFocus();
-    const card = port.player(address, focus);
+    const card = port.player(address);
     return store ? Promise.all([card, store.balance(address)]).then(([read, balance]) => ({ ...read, balance })) : card;
   }
 
   /**
-   * Reads a badge's balance, player name and record in the focused game from chain; the seats and the lobby show them
-   * when they come back.
+   * Reads a badge's balance, player name and stats from chain; the seats and the lobby show them when they come back.
    */
   function read(badge: Badge): void {
     cardOf(badge.address).then(
@@ -699,6 +709,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       play,
       outcome: null,
       voided: false,
+      calledOff: false,
       endedAt: null,
       refunded: badges.map(() => false),
       lines: null,
@@ -712,8 +723,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     setPhase("playing");
     cue("round");
     tickTimer = timers.every(TICK_MS, () => stepGame(null));
-    // The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
-    if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - now), () => stepGame(null));
+    if (play.game === "quick-draw") drawTimer(play.state, now);
+  }
+
+  /** The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond. */
+  function drawTimer(standoff: QuickDrawState, now: number): void {
+    timers.after(Math.max(0, standoff.drawAt - now), () => stepGame(null));
   }
 
   /** Reads a badge's balance again, after money moved. */
@@ -792,6 +807,45 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     built = null;
     timers.cancel(tickTimer);
     tickTimer = null;
+  }
+
+  /**
+   * A title or cup card's PLAY: from Home or the hall, the game comes into focus and the match is played for `target`
+   * at its stake, straight to Stake when both seats are taken (else Join). A cup only while it is open.
+   */
+  function challenge(id: GameId, target: PlayFor): void {
+    const info = gameOf(id);
+    if ((phase !== "home" && phase !== "hall") || !info?.ready || !isTeamGame(id) || !port.onChain(id)) return;
+    const cup = boards[id]?.cup;
+    if (target === "cup" && !(cup && cup.ends > clock.now())) return;
+    if (focus !== id) {
+      focus = id;
+      emit({ type: "focus", game: focus });
+    }
+    game = id;
+    stake = defaultStake(info);
+    playFor = target;
+    emit({ type: "stake", amount: stake });
+    emit({ type: "play-for", target: playFor });
+    setPhase(enoughSeated() ? "stake" : "join");
+  }
+
+  /**
+   * EXIT inside a match: it ends now as a draw. A team game's result settles on chain as one, so both stakes go back
+   * at once (the players' stats count a draw); a built game's is void, as when its rules fail. A store match can't be
+   * called off: only the verifier's split pays its pot, so it runs to its end.
+   */
+  function callOff(): void {
+    if (phase !== "playing" || !match || match.outcome || match.play.game === "store") return;
+    if (match.play.game === "built") {
+      voidBuilt(() => match as Match);
+      return;
+    }
+    timers.cancel(tickTimer);
+    tickTimer = null;
+    match = { ...match, outcome: { winner: null }, calledOff: true, endedAt: clock.now() };
+    emit({ type: "game" });
+    conclude();
   }
 
   // ── Store games ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -948,6 +1002,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (changed) match = { ...match, play: after, outcome, endedAt: outcome ? now : null };
     const cues = playCues(before, after, lastFronts, now);
     lastFronts = fronts(after, now);
+    // Each standoff's draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
+    if (after.game === "quick-draw" && before.game === "quick-draw" && after.state.standoff !== before.state.standoff) drawTimer(after.state, now);
     if (changed) emit({ type: "game" });
     // The Rolodex turns with the clock, so the stations can change while the game state does not.
     else if (JSON.stringify(snapshot().stations) !== JSON.stringify(state.stations)) emit({ type: "stations" });
@@ -1111,11 +1167,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return cup != null && cup.ends > clock.now();
   }
 
-  /** Reads the boards while Stake, the lobby or the result shows, and every `BOARD_MS` after; stops on any other. */
+  /** Reads the boards while Stake, the lobby, the hall or the result shows, and every `BOARD_MS` after; stops on any
+   *  other. */
   function followBoard(): void {
     timers.cancel(boardTimer);
     boardTimer = null;
-    if (phase !== "stake" && phase !== "lobby" && phase !== "result") return;
+    if (phase !== "stake" && phase !== "lobby" && phase !== "hall" && phase !== "result") return;
     readBoards();
     boardTimer = timers.every(BOARD_MS, readBoards);
   }
@@ -1156,12 +1213,14 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     );
   }
 
-  function claimName(): void {
+  /** Claims `typed` (a label typed on the screen), else the label proposed, for the badge on show. */
+  function claimName(typed: string | undefined): void {
     const { badge, proposal, card } = lobby;
-    if (!badge || !proposal || card?.name) return;
+    const label = typed ?? proposal;
+    if (!badge || !label || card?.name) return;
     send(
       { kind: "claim", seat: null, direction: "out", amount: 0 },
-      (watch) => port.claim(proposal, badge.address, watch),
+      (watch) => port.claim(label, badge.address, watch),
       () => read(badge),
     );
   }
@@ -1200,10 +1259,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         setPhase("home");
         return "wake";
       case "home":
+      case "hall":
       case "join":
         resetIdle();
         return takeSeat(seat, badge);
       case "stake":
+        resetIdle();
         return seatedHere ? sign(seat) : "ignored";
       case "playing":
         return seatedHere ? gameTap({ seat, at, roll }) : "ignored";
@@ -1336,8 +1397,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase !== "home" || cmd.game === focus || !gameOf(cmd.game)) return;
         focus = cmd.game;
         emit({ type: "focus", game: focus });
-        // The seats show their record in the focused game.
-        readSeats();
         return;
       case "play": {
         const info = gameOf(focus);
@@ -1374,7 +1433,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         return;
       case "back":
         if (phase === "lobby") setPhase(lobby.from === "stake" && enoughSeated() && game ? "stake" : "home");
-        else if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
+        else if (phase === "join" || phase === "build" || phase === "hall" || (phase === "stake" && nobodySigned())) setPhase("home");
         return;
       case "rematch": {
         if (phase !== "result") return;
@@ -1391,7 +1450,16 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "home":
         // From Refund too: a pot left unrefunded is refunded by the server once its delay has run. From Judging too: a
         // verdict pays the pot with nobody watching.
-        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby" || phase === "judging") setPhase("home");
+        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby" || phase === "hall" || phase === "judging") setPhase("home");
+        return;
+      case "hall":
+        if (phase === "home" || phase === "attract") setPhase("hall");
+        return;
+      case "challenge":
+        challenge(cmd.game, cmd.target);
+        return;
+      case "quit":
+        callOff();
         return;
       case "build":
         // From Home, the builder opens; inside it, resetIdle() above was the point (a player is still there).
@@ -1410,7 +1478,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase === "lobby") proposeAnother();
         return;
       case "claim":
-        if (phase === "lobby") claimName();
+        if (phase === "lobby") claimName(cmd.label);
         return;
       case "frame":
         if (phase === "playing") frameWord(cmd.word);
