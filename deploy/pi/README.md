@@ -8,9 +8,9 @@ switching to it (and back), the updater, a push from a laptop, and the systemd u
 | Path | Holds |
 |---|---|
 | `setup.sh` | One-time, idempotent setup on the Pi: Node, pnpm, `uhubctl`, groups, udev, the nice limit, the env file, linger, the units |
-| `lib.sh` | Shared by the Pi scripts: the layout, `log`, `setting`, the health and idle waits, the deploy lock, pruning |
+| `lib.sh` | Shared by the Pi scripts: the layout, `log`, `setting` and `setting_int`, the health, receiver and idle waits, the deploy lock, pruning |
 | `release.sh` | `release.sh <source dir> <commit>`: copies a tree to `~/egb/releases/`, installs, builds, smoke-tests; removes it on failure |
-| `activate.sh` | `activate.sh [--force] <release>`: waits for an idle Box, switches `current`, restarts, checks health, rolls back on failure, prunes |
+| `activate.sh` | `activate.sh [--force] <release>`: waits for an idle Box, switches `current`, restarts, checks health and the receiver, rolls back on failure or interruption, prunes |
 | `update.sh` | The updater: follows `EGB_DEPLOY_BRANCH`, and runs release then activate on a new commit |
 | `push.sh` | Run on the laptop: sends a commit to the Pi and runs release then activate there |
 | `kiosk-prestart.sh` | Runs before the kiosk browser starts: waits for the server and the display, clears a stale window placement |
@@ -80,17 +80,30 @@ priority (so a build during a match doesn't slow the taps), then starts the rele
 `EGB_RECEIVER=fake` and an empty data folder. It must answer `/api/health` with `ok: true` and serve HTML at `/`, while
 its own process is alive. Any failure removes the release and exits non-zero.
 
-`activate.sh` waits until `GET /api/state` says `busy: false` (a Box that isn't running is idle), for at most
-`EGB_IDLE_WAIT` seconds (900; `--force` doesn't wait). Then it:
+`activate.sh` waits until `GET /api/state` says `busy: false`, for at most `EGB_IDLE_WAIT` seconds (900; `--force`
+doesn't wait). A Box that isn't running is idle; one whose unit is up but does not answer is busy (a plain 404, a
+release without the route, counts as idle). It notes whether the tap receiver is open on the running release
+(`GET /api/taps`, `status.receiver.open`: `/api/health` can't tell, because the server listens before it opens the
+port). Then it:
 
 1. points `~/egb/current` at the release with `ln -s` to a temporary name and `mv -T`, which is atomic;
 2. installs the release's units and scripts (so changing them is just another commit), keeping the old ones;
-3. restarts `egb-server` (the kiosk is `PartOf` it, so a running screen reloads) and waits for `/api/health`, then
-   checks again 4 s later that the unit is still up;
-4. on failure, switches back to the previous release, restores its units and scripts and restarts;
-5. prunes to the newest `EGB_KEEP_RELEASES` (5), never the live release or the one before it.
+3. looks at `/api/state` once more, right before the restart: a match that started since (the wait ended before the
+   switch and the unit install) puts everything back and exits 3, without restarting;
+4. restarts `egb-server` (the kiosk is `PartOf` it, so a running screen reloads) and waits for `/api/health`, checks
+   again 4 s later that the unit is still up, and, if the receiver was open before, waits up to `EGB_RECEIVER_WAIT`
+   seconds (10) for the new release to report `receiver.open`;
+5. on failure, switches back to the previous release, restores its units and scripts and restarts;
+6. prunes to the newest `EGB_KEEP_RELEASES` (5), never the live release or the one before it. A failure after a good
+   release is live (the kiosk start, the prune) is logged and never changes the exit status.
 
-Exit status: 0 live, 1 failed and rolled back, 2 usage, 3 the Box stayed busy (nothing changed).
+From the switch until step 4 passes, an exit trap guards the deploy: any way out (a unit that won't install, a failed
+restart, `SIGTERM`/`SIGINT`) puts the previous release, units and scripts back (restarting onto it if the server had
+been restarted), marks the release failed and exits 4. `SIGHUP` and `SIGPIPE` are ignored from the switch on and the log
+writes tolerate a dead stderr, so a push whose ssh connection drops still reaches a verdict, written to `deploy.log`.
+
+Exit status: 0 live, 1 failed and rolled back, 2 usage, 3 the Box was busy (nothing changed), 4 cut short after the
+switch and put back. A release that is marked `failed` is never offered again.
 
 ## The updater
 
@@ -105,9 +118,18 @@ what is missing (in `~/egb/state/deploy.log`) and exits 0. To switch it on:
 2. Set `EGB_REPO_URL` in `~/.config/egb/env` (the commented example in `env.example` is this repo).
 3. `systemctl --user enable --now egb-update.timer`
 
-A commit that fails to build or to come up is remembered and not retried; the next commit gets a fresh try (to retry
-one anyway: `rm ~/egb/state/last-seen`). If the Box is busy past `EGB_IDLE_WAIT`, the built release waits and the next
-tick activates it without rebuilding. The update service runs at `Nice=15` with idle I/O.
+A commit that fails to build, to come up (activate exit 1) or to finish going live (exit 4) is remembered and not
+retried; the next commit gets a fresh try (to retry one anyway: `rm ~/egb/state/last-seen`). If the Box is busy past
+`EGB_IDLE_WAIT` (exit 3), the built release waits and the next tick activates it without rebuilding. The update service
+runs at `Nice=15` with idle I/O.
+
+The update service has **no `EnvironmentFile`**: the updater reads the few settings it needs (`EGB_REPO_URL`,
+`EGB_DEPLOY_BRANCH`, `EGB_DEPLOY_KEY`, the waits, the port) from `~/.config/egb/env` itself with `setting`, so the API
+keys in that file never reach `pnpm install`, the build or the smoke test. `setting` parses the file (it is never
+sourced), takes a quoted value as written, drops a trailing ` # comment` from an unquoted one, and `setting_int`
+falls back to the default, with one log line, for a value that is not a whole number (so `EGB_KEEP_RELEASES=lots`
+can't make the prune delete everything). systemd itself keeps an inline comment as part of the value for the
+server's own `EnvironmentFile`, so keep comments on their own lines.
 
 ## The units
 
