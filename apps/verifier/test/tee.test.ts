@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SignedChatCheck, type TeeReply, type ZgService, type ZgServices, cachedServices } from '../src/tee.ts';
 
+const NO_DEADLINE = new AbortController().signal;
 const ENCLAVE = privateKeyToAccount(`0x${'a1'.repeat(32)}`);
 const TARGET = privateKeyToAccount(`0x${'b2'.repeat(32)}`);
 const PROVIDER = `0x${'cc'.repeat(20)}` as const;
@@ -33,10 +34,42 @@ function check(record: ZgService, signatures: typeof fetch) {
   return new SignedChatCheck({ services: { read: async () => record }, fetch: signatures, sleep: async () => undefined });
 }
 
+describe("the turn's deadline", () => {
+  /** A fetch that answers nothing until its signal gives up on it. */
+  const hanging = () =>
+    vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+
+  it('stops the signature tries the moment it passes', async () => {
+    const deadline = new AbortController();
+    const fetch = hanging();
+    const result = check(service(), fetch as unknown as typeof globalThis.fetch).check(reply(), deadline.signal);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    deadline.abort();
+    await expect(result).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("doesn't wait out a provider read that hangs", async () => {
+    const deadline = new AbortController();
+    const services: ZgServices = { read: () => new Promise(() => undefined) };
+    const result = new SignedChatCheck({ services, fetch: vi.fn(), sleep: async () => undefined }).check(reply(), deadline.signal);
+    deadline.abort();
+    await expect(result).rejects.toThrow('the TEE check timed out');
+  });
+
+  it('fetches nothing once it has passed', async () => {
+    const fetch = await signatureFetch();
+    await expect(check(service(), fetch).check(reply(), AbortSignal.abort())).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('the check', () => {
   it('passes a sealed reply whose chat the enclave signed', async () => {
     const fetch = await signatureFetch();
-    expect(await check(service(), fetch).check(reply())).toEqual({
+    expect(await check(service(), fetch).check(reply(), NO_DEADLINE)).toEqual({
       proof: { chatId: CHAT, provider: PROVIDER, text: TEXT, signature: await ENCLAVE.signMessage({ message: TEXT }) },
     });
     expect(fetch).toHaveBeenCalledWith(
@@ -47,27 +80,27 @@ describe('the check', () => {
 
   it('uses the target key when the record separates it', async () => {
     const additionalInfo = JSON.stringify({ TargetSeparated: true, ProviderType: 'tee', TargetTeeAddress: TARGET.address });
-    expect(await check(service({ additionalInfo }), await signatureFetch(TARGET)).check(reply())).toHaveProperty('proof');
-    expect(await check(service({ additionalInfo }), await signatureFetch(ENCLAVE)).check(reply())).toEqual({
+    expect(await check(service({ additionalInfo }), await signatureFetch(TARGET)).check(reply(), NO_DEADLINE)).toHaveProperty('proof');
+    expect(await check(service({ additionalInfo }), await signatureFetch(ENCLAVE)).check(reply(), NO_DEADLINE)).toEqual({
       problem: "the signature is not the enclave's",
     });
   });
 
   it('keeps the listed key for a centralized provider', async () => {
     const additionalInfo = JSON.stringify({ TargetSeparated: true, ProviderType: 'centralized', TargetTeeAddress: TARGET.address });
-    expect(await check(service({ additionalInfo }), await signatureFetch(ENCLAVE)).check(reply())).toHaveProperty('proof');
+    expect(await check(service({ additionalInfo }), await signatureFetch(ENCLAVE)).check(reply(), NO_DEADLINE)).toHaveProperty('proof');
   });
 
   it('ignores the signing address the reply claims', async () => {
     const signature = await TARGET.signMessage({ message: TEXT });
     const fetch = (async () => Response.json({ text: TEXT, signature, signing_address: TARGET.address })) as typeof globalThis.fetch;
-    expect(await check(service(), fetch).check(reply())).toEqual({ problem: "the signature is not the enclave's" });
+    expect(await check(service(), fetch).check(reply(), NO_DEADLINE)).toEqual({ problem: "the signature is not the enclave's" });
   });
 
   it('waits a moment for a signature that is not ready', async () => {
     const good = await signatureFetch();
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(new Response('{}', { status: 404 })).mockImplementation(good);
-    expect(await check(service(), fetch).check(reply())).toHaveProperty('proof');
+    expect(await check(service(), fetch).check(reply(), NO_DEADLINE)).toHaveProperty('proof');
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -78,7 +111,7 @@ describe('the check', () => {
     ['names a bad provider', reply({}, 'nobody'), 'the reply names no provider'],
   ])('fails a reply that %s', async (_name, input, problem) => {
     const fetch = await signatureFetch();
-    expect(await check(service(), fetch).check(input)).toEqual({ problem });
+    expect(await check(service(), fetch).check(input, NO_DEADLINE)).toEqual({ problem });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -89,26 +122,26 @@ describe('the check', () => {
     ['has empty additional info', { additionalInfo: '' }, "the provider's record names no enclave key"],
     ['has a bad target', { additionalInfo: '{"TargetSeparated":true,"TargetTeeAddress":"nobody"}' }, "the provider's record names no enclave key"],
   ])('fails a provider that %s', async (_name, overrides, problem) => {
-    expect(await check(service(overrides), await signatureFetch()).check(reply())).toEqual({ problem });
+    expect(await check(service(overrides), await signatureFetch()).check(reply(), NO_DEADLINE)).toEqual({ problem });
   });
 
   it('fails when the chat never gets a signature', async () => {
     const fetch = vi.fn(async () => new Response('{}', { status: 404 }));
-    expect(await check(service(), fetch).check(reply())).toEqual({ problem: 'the chat has no signature' });
+    expect(await check(service(), fetch).check(reply(), NO_DEADLINE)).toEqual({ problem: 'the chat has no signature' });
     expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it('fails a signature that is not hex or does not recover', async () => {
     const notHex = (async () => Response.json({ text: TEXT, signature: 'zz' })) as typeof globalThis.fetch;
-    expect(await check(service(), notHex).check(reply())).toEqual({ problem: 'the chat has no signature' });
+    expect(await check(service(), notHex).check(reply(), NO_DEADLINE)).toEqual({ problem: 'the chat has no signature' });
     const broken = (async () => Response.json({ text: TEXT, signature: '0x1234' })) as typeof globalThis.fetch;
-    expect(await check(service(), broken).check(reply())).toEqual({ problem: "the signature is not the enclave's" });
+    expect(await check(service(), broken).check(reply(), NO_DEADLINE)).toEqual({ problem: "the signature is not the enclave's" });
   });
 
   it('fails a signature over other text', async () => {
     const signature = await ENCLAVE.signMessage({ message: 'something else' });
     const fetch = (async () => Response.json({ text: TEXT, signature })) as typeof globalThis.fetch;
-    expect(await check(service(), fetch).check(reply())).toEqual({ problem: "the signature is not the enclave's" });
+    expect(await check(service(), fetch).check(reply(), NO_DEADLINE)).toEqual({ problem: "the signature is not the enclave's" });
   });
 });
 

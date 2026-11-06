@@ -56,6 +56,7 @@ export async function proxyTurn(options: ProxyOptions, text: string): Promise<Tu
   });
 
   const { fetch: send } = options;
+  const signal = AbortSignal.timeout(LIMITS.turnMs);
   let response: Response;
   let replyText: string;
   try {
@@ -67,7 +68,7 @@ export async function proxyTurn(options: ProxyOptions, text: string): Promise<Tu
         'x-0g-provider-trust-mode': 'private',
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(LIMITS.modelMs),
+      signal,
     });
     replyText = await response.text();
   } catch (error) {
@@ -87,7 +88,7 @@ export async function proxyTurn(options: ProxyOptions, text: string): Promise<Tu
 
   let checked;
   try {
-    checked = await options.tee.check({ headers: response.headers, body: reply });
+    checked = await options.tee.check({ headers: response.headers, body: reply }, signal);
   } catch (error) {
     console.error(`the TEE check failed: ${options.scrub(error)}`);
     checked = { problem: 'the TEE check could not run' };

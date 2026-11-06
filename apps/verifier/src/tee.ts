@@ -9,6 +9,7 @@
 
 import { type Address, type Hex, isAddress, isAddressEqual, isHex, recoverMessageAddress } from 'viem';
 
+import { abortable } from './abortable.ts';
 import { isRecord, parsed } from './json.ts';
 
 /** A model reply, as far as a check needs it. */
@@ -28,7 +29,8 @@ export interface TeeProof {
 export type TeeResult = { readonly proof: TeeProof } | { readonly problem: string };
 
 export interface TeeCheck {
-  check(reply: TeeReply): Promise<TeeResult>;
+  /** Stops at `signal`, the turn's own deadline: the reply has already used part of it. */
+  check(reply: TeeReply, signal: AbortSignal): Promise<TeeResult>;
 }
 
 /** A provider's record in 0G's serving contract. */
@@ -89,7 +91,7 @@ export class SignedChatCheck implements TeeCheck {
     this.options = options;
   }
 
-  async check({ headers, body }: TeeReply): Promise<TeeResult> {
+  async check({ headers, body }: TeeReply, signal: AbortSignal): Promise<TeeResult> {
     const chatId = headers.get('zg-res-key');
     const trace = isRecord(body) ? body.x_0g_trace : undefined;
     const provider = isRecord(trace) ? trace.provider : undefined;
@@ -97,13 +99,13 @@ export class SignedChatCheck implements TeeCheck {
     if (!chatId) return { problem: 'the reply has no chat id' };
     if (typeof provider !== 'string' || !isAddress(provider, { strict: false })) return { problem: 'the reply names no provider' };
 
-    const service = await this.options.services.read(provider);
+    const service = await abortable(this.options.services.read(provider), signal, 'the TEE check timed out');
     if (service.verifiability !== 'TeeML') return { problem: 'the provider is not TeeML' };
     if (!service.teeSignerAcknowledged) return { problem: "the provider's enclave key is not acknowledged" };
     const signer = enclaveSigner(service);
     if (!signer) return { problem: "the provider's record names no enclave key" };
 
-    const signed = await this.signature(service, chatId);
+    const signed = await this.signature(service, chatId, signal);
     if (!signed) return { problem: 'the chat has no signature' };
     const recovered = await recoverMessageAddress({ message: signed.text, signature: signed.signature }).catch(() => null);
     if (!recovered || !isAddressEqual(recovered, signer)) return { problem: "the signature is not the enclave's" };
@@ -111,11 +113,12 @@ export class SignedChatCheck implements TeeCheck {
   }
 
   /** The enclave's signature for `chatId`. Its `signing_address` field is the provider's say-so, so it goes unread. */
-  private async signature(service: ZgService, chatId: string): Promise<{ text: string; signature: Hex } | null> {
+  private async signature(service: ZgService, chatId: string, signal: AbortSignal): Promise<{ text: string; signature: Hex } | null> {
     const { fetch: get, sleep } = this.options;
     const url = `${service.url}/v1/proxy/signature/${encodeURIComponent(chatId)}?model=${encodeURIComponent(service.model)}`;
     for (let tries = 1; ; tries++) {
-      const reply = await get(url, { signal: AbortSignal.timeout(SIGNATURE_MS) })
+      signal.throwIfAborted();
+      const reply = await get(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(SIGNATURE_MS)]) })
         .then((response) => (response.ok ? response.json() : null))
         .catch(() => null);
       if (isRecord(reply) && typeof reply.text === 'string' && typeof reply.signature === 'string' && isHex(reply.signature)) {

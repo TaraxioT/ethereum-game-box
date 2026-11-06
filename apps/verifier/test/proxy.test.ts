@@ -50,6 +50,53 @@ describe('a proven turn', () => {
   });
 });
 
+describe("a turn's time", () => {
+  it("is under the container's 60 s for its whole call to zg.internal, so a turn that passes gets back to it", () => {
+    expect(LIMITS.turnMs).toBeLessThan(60_000);
+  });
+
+  it('is one deadline, shared by 0G and the TEE check', async () => {
+    const zg = new FakeZg();
+    const { fetch: send } = zg;
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const signals: unknown[] = [];
+    const fetch: typeof send = (input, init) => {
+      signals.push(init?.signal);
+      return send(input, init);
+    };
+    const tee: TeeCheck = {
+      check: async (_reply, signal) => {
+        signals.push(signal);
+        return { proof: PROOF };
+      },
+    };
+    await proxyTurn({ ...options(zg, tee), fetch }, chat());
+    expect(timeout).toHaveBeenCalledExactlyOnceWith(LIMITS.turnMs);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[1]).toBe(signals[0]);
+    timeout.mockRestore();
+  });
+
+  it('leaves the turn unproven when the check runs out of it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const tee: TeeCheck = {
+      check: (_reply, signal) => {
+        deadline.abort();
+        return Promise.reject(signal.reason as Error);
+      },
+    };
+    expect(await proxyTurn(options(new FakeZg(), tee), chat())).toMatchObject({
+      ok: false,
+      failure: { kind: 'tee', why: 'the TEE check could not run' },
+      turn: { teeVerified: false },
+    });
+    timeout.mockRestore();
+    error.mockRestore();
+  });
+});
+
 describe("a turn's cost", () => {
   const tokensOf = async (zg: FakeZg, text: string) => {
     const result = await proxyTurn(options(zg), text);

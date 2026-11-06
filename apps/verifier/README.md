@@ -91,6 +91,10 @@ Mainnet's replies carry no `tee_verified`, even with `verify_tee: true`. So ever
 The chat id, provider, text and signature go in the turn, so anyone can recheck it. A turn that fails fails the run, and
 its reply never reaches the agent. `AgentTurn.teeVerified` is true only for a turn that passed.
 
+A turn has one deadline, 55 seconds, for 0G's reply and this check together. The container gives its whole call to
+`zg.internal` 60, so a turn that passes always gets back to it, and one that doesn't is recorded here as a failure, not
+lost when the container gives up.
+
 **What this doesn't prove.** The signed text is `zg-sig-v1/e2ee-ct:<hash>:<hash>`, two hashes of ciphertext we never hold
 and can't recompute. It proves that a registered, attested enclave handled this chat id. It doesn't bind the prompt or
 the reply's text to the signature, and 0G's own SDK check doesn't either. Say "each turn passed an attested enclave".
@@ -120,7 +124,7 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 | `src/proxy.ts`, `src/tee.ts`, `src/zg-chain.ts` | The model proxy, the TEE check and 0G's serving contract |
 | `src/audit-store.ts`, `src/zg-storage.ts` | The `AuditStore` interface, and 0G Storage behind it |
 | `src/texts.ts` | Long text in Durable Object storage, in chunks under its 2 MB limit |
-| `src/limits.ts`, `src/failure.ts`, `src/safe.ts`, `src/json.ts` | The limits, why a run failed, redaction and JSON helpers |
+| `src/limits.ts`, `src/failure.ts`, `src/safe.ts`, `src/json.ts`, `src/abortable.ts` | The limits, why a run failed, redaction, JSON helpers and a deadline for work with no signal |
 | `test/` | Every refusal, failure and crash on fakes, through `test/world.ts` |
 | `test/fake-zg/` | A fake 0G for tests and for the end-to-end harness |
 | `container/` | The agent's container: its own package and tests |

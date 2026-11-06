@@ -8,6 +8,7 @@ import { Indexer, MemData, StorageNode, Uploader, getFlowContract, selectNodes }
 import { JsonRpcProvider, Wallet } from 'ethers';
 import type { Hex } from 'viem';
 
+import { abortable } from './abortable.ts';
 import type { AuditStore, Landed } from './audit-store.ts';
 
 export interface ZgStorageOptions {
@@ -87,7 +88,7 @@ export class ZgAuditStore implements AuditStore {
       uploader = new Uploader(nodes, rpcUrl, flow);
       // `skipTx`: a retry finds its file on the chain and carries on, rather than paying for it again.
       const upload = uploader.uploadFile(new MemData(new TextEncoder().encode(text)), { skipTx: true, expectedReplica: REPLICAS });
-      const [result, error] = await abortable(upload, signal);
+      const [result, error] = await abortable(upload, signal, 'the upload timed out');
       if (error) throw error;
       return { root: result.rootHash as Hex, tx: result.txHash ? (result.txHash as Hex) : null };
     } finally {
@@ -96,14 +97,4 @@ export class ZgAuditStore implements AuditStore {
       uploader?.provider.destroy();
     }
   }
-}
-
-/** `work`, or a rejection the moment `signal` aborts: the chain's calls don't take a signal. */
-function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  return Promise.race([
-    work,
-    new Promise<never>((_, reject) => {
-      signal.addEventListener('abort', () => reject(new Error('the upload timed out')), { once: true });
-    }),
-  ]);
 }

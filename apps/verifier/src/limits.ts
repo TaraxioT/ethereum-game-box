@@ -15,8 +15,9 @@ export const LIMITS = {
   turns: 16,
   /** Tokens in a run, as the container's limit and for the same reason, counting each turn's whole prompt. */
   tokens: 200_000,
-  /** One model call, as the container's own limit. */
-  modelMs: MINUTE,
+  /** One model call from end to end, 0G's reply and the TEE check together. The container gives its whole call to
+   *  `zg.internal` 60 s, so this stays under that: a turn that passes here always gets back to it. */
+  turnMs: 55_000,
   /** The most a turn may ask of the model, as the container's limit. */
   replyTokens: 2048,
   /** A turn's request, and a turn's reply. */
