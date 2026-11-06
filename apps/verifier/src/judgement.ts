@@ -19,6 +19,9 @@ import { ZgAuditStore } from './zg-storage.ts';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** The Workers `fetch` throws "Illegal invocation" when called as a method of anything else, such as an options object. */
+const callFetch: typeof fetch = (input, init) => fetch(input, init);
+
 export class Judgement extends DurableObject<Env> {
   private readonly judge: Judge;
   private readonly scrub: Scrub;
@@ -37,8 +40,8 @@ export class Judgement extends DurableObject<Env> {
         baseUrl: env.ZG_BASE_URL,
         apiKey: env.ZG_API_KEY,
         model: env.ZG_MODEL,
-        tee: new SignedChatCheck({ services, fetch, sleep }),
-        fetch,
+        tee: new SignedChatCheck({ services, fetch: callFetch, sleep }),
+        fetch: callFetch,
         scrub: this.scrub,
       },
       signer: verifierSigner(env.VERIFIER_PRIVATE_KEY as Hex, deployedPot),

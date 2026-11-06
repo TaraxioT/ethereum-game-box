@@ -15,7 +15,8 @@ function fakeState() {
   const kv = new Map<string, unknown>();
   return {
     id: { toString: () => CONTAINER_ID },
-    container: { running: false, monitor: () => Promise.resolve() },
+    exports: { ContainerProxy: () => ({}) },
+    container: { running: false as boolean, monitor: () => Promise.resolve(), interceptOutboundHttp: async () => undefined },
     storage: {
       kv: { get: (key: string) => kv.get(key), put: (key: string, value: unknown) => kv.set(key, value) },
       sql: { exec: () => ({ toArray: () => [], [Symbol.iterator]: () => [][Symbol.iterator]() }) },
@@ -106,6 +107,48 @@ describe('the way out', () => {
     const response = await zgOutbound(new Request(url, { method }), bindings, { containerId: CONTAINER_ID, className: 'AgentContainer' });
     expect(response.status).toBe(404);
     expect(modelTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe('a run', () => {
+  /** A container that started and is running, with the real `run`. */
+  function started(ask: () => Promise<Response>) {
+    const state = fakeState();
+    const container = new AgentContainer(state as never, {} as Env);
+    state.container.running = true;
+    vi.spyOn(container, 'startAndWaitForPorts').mockResolvedValue();
+    vi.spyOn(container, 'containerFetch').mockImplementation(ask);
+    return { container, state };
+  }
+
+  it('hands back what the container answered', async () => {
+    const { container, state } = started(async () => new Response('{"verdict":1}'));
+    const reply = await container.run(TICKET, { instructions: 'i', log: 'l' });
+    state.container.running = false;
+    expect(reply).toEqual({ status: 200, text: '{"verdict":1}' });
+  });
+
+  it('keeps an answer that lands just as the container exits', async () => {
+    vi.useFakeTimers();
+    const { container, state } = started(() => new Promise((resolve) => setTimeout(() => resolve(new Response('{"verdict":1}')), 1500)));
+    const reply = container.run(TICKET, { instructions: 'i', log: 'l' });
+    await vi.advanceTimersByTimeAsync(0);
+    state.container.running = false;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await reply).toEqual({ status: 200, text: '{"verdict":1}' });
+    vi.useRealTimers();
+  });
+
+  it('fails soon after the container dies, though the call never returns', async () => {
+    vi.useFakeTimers();
+    const { container, state } = started(() => new Promise(() => undefined));
+    const reply = container.run(TICKET, { instructions: 'i', log: 'l' });
+    const seen = expect(reply).rejects.toThrow('the container stopped');
+    await vi.advanceTimersByTimeAsync(5000);
+    state.container.running = false;
+    await vi.advanceTimersByTimeAsync(4000);
+    await seen;
+    vi.useRealTimers();
   });
 });
 

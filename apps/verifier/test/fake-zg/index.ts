@@ -24,6 +24,8 @@ export interface FakeZgSettings {
   payouts: string[] | null;
   /** Shell calls the agent makes before its verdict. */
   shellTurns: number;
+  /** What it runs in them. Their output comes back in `GET /__fake`, so a harness can probe the container from inside. */
+  shellCommand: string;
   /** The provider's record. */
   verifiability: string;
   acknowledged: boolean;
@@ -66,6 +68,7 @@ export class FakeZg {
     chat: 'none',
     payouts: null,
     shellTurns: 1,
+    shellCommand: 'jq .header log.json',
     verifiability: 'TeeML',
     acknowledged: true,
     additionalInfo: '{}',
@@ -76,8 +79,10 @@ export class FakeZg {
   private readonly enclave = privateKeyToAccount(generatePrivateKey());
   private readonly stranger = privateKeyToAccount(generatePrivateKey());
   private readonly signed = new Map<string, string>();
-  /** Whether a storage transaction has landed, and how many. */
+  /** Storage transactions so far. */
   private submissions = 0;
+  /** Files with a transaction, by root. The chain's calldata stays unread: the next unknown root asked about takes it. */
+  private readonly files = new Set<string>();
 
   /** The enclave's address, as the provider's record gives it. */
   get teeSigner(): Address {
@@ -100,9 +105,15 @@ export class FakeZg {
     }
     if (pathname === '/__fake') {
       if (request.method === 'POST') Object.assign(this.settings, await request.json());
-      return json({ settings: this.settings, chats: this.chats.length, segments: this.segments.length });
+      return json({ settings: this.settings, chats: this.chats.length, segments: this.segments.length, shellOutput: this.shellOutput() });
     }
     return json({ error: 'not found' }, { status: 404 });
+  }
+
+  /** What the last shell call printed, as the agent sent it back. */
+  private shellOutput(): unknown {
+    const messages = (this.chats.at(-1)?.body.messages ?? []) as { role?: string; content?: unknown }[];
+    return messages.findLast(({ role }) => role === 'tool')?.content ?? null;
   }
 
   private async chat(request: Request): Promise<Response> {
@@ -125,7 +136,7 @@ export class FakeZg {
     const turnsSoFar = (body.messages as unknown[]).filter((message) => (message as { role?: string }).role === 'tool').length;
     const call =
       turnsSoFar < shellTurns
-        ? { name: 'shell', arguments: JSON.stringify({ command: 'jq .header log.json' }) }
+        ? { name: 'shell', arguments: JSON.stringify({ command: this.settings.shellCommand }) }
         : {
             name: 'submit_verdict',
             arguments: JSON.stringify(
@@ -192,7 +203,7 @@ export class FakeZg {
       case 'zgs_getShardConfig':
         return { numShard: 1, shardId: 0 };
       case 'zgs_getFileInfo':
-        return this.submissions === 0 || !this.settings.nodeSyncs ? null : this.fileInfo(params[0] as Hex);
+        return this.fileInfo(params[0] as Hex);
       case 'zgs_uploadSegmentsByTxSeq':
         this.segments.push(...(params[0] as unknown[]));
         return null;
@@ -202,12 +213,15 @@ export class FakeZg {
   }
 
   private fileInfo(root: Hex) {
-    const finalized = this.segments.length > 0;
+    if (!this.settings.nodeSyncs) return null;
+    if (!this.files.has(root) && this.files.size < this.submissions) this.files.add(root);
+    if (!this.files.has(root)) return null;
+    const uploadedSegNum = (this.segments as { root?: string }[]).filter((segment) => segment.root === root).length;
     return {
       tx: { streamIds: [], data: '', dataMerkleRoot: root, merkleNodes: [], startEntryIndex: 0, size: MAX_FILE_BYTES, seq: 7 },
-      finalized,
+      finalized: uploadedSegNum > 0,
       isCached: false,
-      uploadedSegNum: this.segments.length,
+      uploadedSegNum,
       pruned: false,
     };
   }

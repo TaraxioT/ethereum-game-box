@@ -3,7 +3,7 @@ import { packBundle } from '@egb/sdk/bundle';
 import { describe, expect, it, vi } from 'vitest';
 
 import { handle } from '../src/routes.ts';
-import { POT_STATE, deployedPot } from '../src/pot.ts';
+import { POT_STATE } from '../src/pot.ts';
 import { BOX, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, matchLog, stakedWorld } from './world.ts';
 
 async function setup() {
@@ -376,7 +376,10 @@ describe('errors', () => {
   it('answer 503 until StorePot is deployed', async () => {
     const { world, deps } = await setup();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const reply = await world.post({ ...deps, ctx: { ...deps.ctx, pot: deployedPot } }, world.signedRequest(world.log));
+    const pot = () => {
+      throw new Error('StorePot is not in deployments/sepolia.json');
+    };
+    const reply = await world.post({ ...deps, ctx: { ...deps.ctx, pot } }, world.signedRequest(world.log));
     expect(reply.status).toBe(503);
     error.mockRestore();
   });

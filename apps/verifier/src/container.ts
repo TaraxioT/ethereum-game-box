@@ -15,6 +15,9 @@ import type { Scrub } from './safe.ts';
 const TICKET = 'ticket';
 const PORT = 8080;
 const MODEL_PATH = '/v1/chat/completions';
+const WATCH_MS = 1000;
+/** A container exits the moment it has answered, so its answer gets this long to arrive after the exit. */
+const ANSWER_GRACE_MS = 2000;
 
 /** What the container answered `POST /run` with. */
 export interface RunReply {
@@ -33,6 +36,8 @@ export async function zgOutbound(request: Request, env: Env, ctx: OutboundHandle
   return new Response(body, { status, headers: { 'content-type': 'application/json' } });
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export class AgentContainer extends Container<Env> {
   override defaultPort = PORT;
   override enableInternet = false;
@@ -47,12 +52,23 @@ export class AgentContainer extends Container<Env> {
   async run(ticket: Ticket, job: AgentRunRequest): Promise<RunReply> {
     await this.ctx.storage.put(TICKET, ticket);
     await this.startAndWaitForPorts({ cancellationOptions: { instanceGetTimeoutMS: 30_000, portReadyTimeoutMS: 60_000 } });
+    return Promise.race([this.ask(job), this.dies()]);
+  }
+
+  private async ask(job: AgentRunRequest): Promise<RunReply> {
     const response = await this.containerFetch('http://container/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(job),
     });
     return { status: response.status, text: await response.text() };
+  }
+
+  /** Rejects if the container stops without answering: a call to a killed container can otherwise hang. */
+  private async dies(): Promise<never> {
+    while (this.ctx.container?.running) await sleep(WATCH_MS);
+    await sleep(ANSWER_GRACE_MS);
+    throw new Error('the container stopped');
   }
 }
 
@@ -71,16 +87,13 @@ export function readRunReply({ status, text }: RunReply): RunResult {
 
 const STOPPED = Symbol('stopped');
 
-/** Rejects nothing: resolves `STOPPED` after `ms`. */
-const stopAfter = (ms: number) => new Promise<typeof STOPPED>((resolve) => setTimeout(() => resolve(STOPPED), ms));
-
 /** Each attempt is a new Durable Object, so each gets a fresh container, and it is destroyed however the run ends. */
 export function containerRunner(env: Pick<Env, 'AGENT'>, scrub: Scrub): AgentRunner {
   return {
     async run(ticket, job) {
       const container = env.AGENT.getByName(`${ticket.judgement}:${ticket.attempt}`);
       try {
-        const reply = await Promise.race([container.run(ticket, job), stopAfter(LIMITS.runMs)]);
+        const reply = await Promise.race([container.run(ticket, job), sleep(LIMITS.runMs).then((): typeof STOPPED => STOPPED)]);
         return reply === STOPPED ? { failure: failed('timeout', 'the run timed out') } : readRunReply(reply);
       } catch (error) {
         console.error(`the container failed: ${scrub(error)}`);
