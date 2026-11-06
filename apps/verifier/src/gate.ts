@@ -1,5 +1,6 @@
 // The rate limit on new judgements, one Durable Object per Box. It counts only requests the Box really signed, so
-// nobody else can use up a Box's allowance, and each judgement can run the model, which the team pays for.
+// nobody else can use up a Box's allowance, and each judgement can run the model, which the team pays for. A count is
+// taken before the pot and the store are read, and given back if they fail: that is an outage, not the Box's doing.
 
 import { type Limit, Limits } from '@egb/relayer/limits';
 import type { Store } from '@egb/relayer/store';
@@ -26,8 +27,17 @@ export async function takeJudgement(store: Store, box: string, now: number): Pro
   return null;
 }
 
+/** Gives back what `takeJudgement` counted at `at`. */
+export function returnJudgement(store: Store, box: string, at: number): Promise<void> {
+  return new Limits(store).giveBack([limitOf(box)], at);
+}
+
 export class BoxGate extends DurableObject<Env> {
   take(box: string, now: number): Promise<string | null> {
     return takeJudgement(this.ctx.storage, box, now);
+  }
+
+  giveBack(box: string, at: number): Promise<void> {
+    return returnJudgement(this.ctx.storage, box, at);
   }
 }

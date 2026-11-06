@@ -38,6 +38,7 @@ export default {
         judgement,
         reads: judgement,
         takeJudgement: (box, now) => env.BOX_GATE.getByName(box).take(box, now),
+        returnJudgement: (box, at) => env.BOX_GATE.getByName(box).giveBack(box, at),
       },
       verifier: () => privateKeyToAccount(env.VERIFIER_PRIVATE_KEY as Hex).address,
       scrub: envScrubber(env),

@@ -15,6 +15,7 @@ import { generatePrivateKey } from 'viem/accounts';
 import type { AdmitContext, Doors } from '../src/admit.ts';
 import type { AuditStore, Landed } from '../src/audit-store.ts';
 import { failed } from '../src/failure.ts';
+import { returnJudgement, takeJudgement } from '../src/gate.ts';
 import { type AgentRunner, Judge, type RunResult, type Ticket, judgementName } from '../src/judge.ts';
 import { POT_STATE } from '../src/pot.ts';
 import { type Deps, handle } from '../src/routes.ts';
@@ -211,12 +212,13 @@ export class World {
     bundle: `0x${'00'.repeat(32)}` as Hex,
     record: `0x${'00'.repeat(32)}` as Hex,
   };
-  /** Thrown by the pot's read, when set. */
+  /** Thrown by every read of the pot, when set. */
   potDown = false;
   zip: { zip: Uint8Array; hash: Hex } | null = null;
   /** What the store answers for a zip, when set. */
   storeReply: (() => Response) | null = null;
-  gateHits = 0;
+  /** The real gate's store. */
+  readonly gate = new MemoryStore();
   private latest: Judge | null = null;
 
   private readonly services = cachedServices(
@@ -247,7 +249,12 @@ export class World {
         expiry: this.entry.expiry,
       }),
     });
-    this.chain.contract(POT, storePotAbi as Abi, { getPot: () => this.pot });
+    this.chain.contract(POT, storePotAbi as Abi, {
+      getPot: () => {
+        if (this.potDown) throw new Error(`read failed at ${RPC_SECRET}`);
+        return this.pot;
+      },
+    });
   }
 
   /** Reads the pot as `Judge` does: it can be down. */
@@ -343,16 +350,16 @@ export class World {
     const doors: Doors & Deps['doors'] = {
       judgement,
       reads: judgement,
-      takeJudgement: async () => {
-        this.gateHits += 1;
-        return this.gateLimit !== null && this.gateHits > this.gateLimit ? '60 judgements per hour from one Box' : null;
-      },
+      takeJudgement: (box, now) => takeJudgement(this.gate, box, now),
+      returnJudgement: (box, now) => returnJudgement(this.gate, box, now),
     };
     return { ctx, doors, verifier: () => this.signer.address, scrub: scrubber([ZG_API_KEY, this.key, RPC_SECRET]) };
   }
 
-  /** New judgements the gate lets through, when set. */
-  gateLimit: number | null = null;
+  /** What the gate is holding against this Box. */
+  gateHits(): number {
+    return (this.gate.map.get(`rate:judge:box:${BOX}`) as number[] | undefined)?.length ?? 0;
+  }
 
   /** `POST /judge`, through the real routes. */
   async post(deps: Deps, body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {

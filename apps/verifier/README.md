@@ -28,7 +28,8 @@ means something upstream failed and the Box can repeat it. `503` means `StorePot
    repeated key is refused, as it would read two ways.
 2. The deadline, and the Box's P-256 signature over `Judge`, against `GameBoxNames.getBox`, as the relayer checks it.
 3. Whether this pot already has a judgement. The same log gets the running one back, and another log is refused.
-4. The Box's rate limit: 60 new judgements an hour. It counts only requests the Box signed.
+4. The Box's rate limit: 60 new judgements an hour. It counts only requests the Box signed. A request that then fails
+   upstream gives its count back, so a Box repeating a `502` through an outage uses none of it. A refusal keeps its count.
 5. The pot, read from `StorePot`: open, with the same players in the same order, amount and bundle as the log's header.
 6. The zip from the store, by hash. The reader and the hash must pass, and the manifest's id must be the log's game. The
    instructions come from here, never from the Box.

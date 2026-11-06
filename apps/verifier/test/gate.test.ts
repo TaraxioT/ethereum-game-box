@@ -1,7 +1,7 @@
 import { MemoryStore } from '@egb/relayer/test/memory-store';
 import { describe, expect, it } from 'vitest';
 
-import { takeJudgement } from '../src/gate.ts';
+import { returnJudgement, takeJudgement } from '../src/gate.ts';
 
 describe('the Box gate', () => {
   it('lets 60 judgements through in an hour, and refuses the next', async () => {
@@ -14,6 +14,21 @@ describe('the Box gate', () => {
     const store = new MemoryStore();
     for (let i = 0; i < 60; i++) await takeJudgement(store, 'mumbai-01', 1000);
     expect(await takeJudgement(store, 'mumbai-01', 1000 + 3601)).toBeNull();
+  });
+
+  it('frees one judgement when it is given back, and no more', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 60; i++) await takeJudgement(store, 'mumbai-01', 1000);
+    await returnJudgement(store, 'mumbai-01', 1000);
+    expect(await takeJudgement(store, 'mumbai-01', 1001)).toBeNull();
+    expect(await takeJudgement(store, 'mumbai-01', 1001)).toBe('60 judgements per hour from one Box');
+  });
+
+  it('gives nothing back for a time it never counted', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 60; i++) await takeJudgement(store, 'mumbai-01', 1000);
+    await returnJudgement(store, 'mumbai-01', 999);
+    expect(await takeJudgement(store, 'mumbai-01', 1001)).toBe('60 judgements per hour from one Box');
   });
 
   it('keeps each Box apart', async () => {

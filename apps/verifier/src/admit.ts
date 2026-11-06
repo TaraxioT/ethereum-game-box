@@ -30,6 +30,8 @@ export interface Doors {
   judgement(box: string, round: string): JudgementDoor;
   /** Counts one new judgement against a Box. Returns the limit it broke, or null. */
   takeJudgement(box: string, now: number): Promise<string | null>;
+  /** Gives back the count taken at `at`. */
+  returnJudgement(box: string, at: number): Promise<void>;
 }
 
 export interface Signed {
@@ -75,23 +77,9 @@ function requireSamePot(pot: Pot, { header }: MatchLog): void {
   if (pot.bundle !== header.bundle) throw new Refusal(409, "the log's bundle isn't the pot's");
 }
 
-export type Admitted = { readonly fresh: boolean; readonly status: JudgeStatus };
-
-/** Runs every check, and opens the pot's one judgement. A repeat of the same log gets the running one back. */
-export async function admit(ctx: AdmitContext, doors: Doors, input: unknown): Promise<Admitted> {
-  const signed = parseRequest(input);
-  await requireSigned(ctx, signed);
-
-  const { log, hash, text } = signed;
+/** Reads the pot and the bundle, and opens the judgement if they agree with the log. */
+async function open(ctx: AdmitContext, judgement: JudgementDoor, { log, hash, text }: Signed): Promise<JudgeStatus> {
   const { box, round, bundle, game, players, amount } = log.header;
-  const judgement = doors.judgement(box, round);
-  const found = await judgement.find(hash);
-  if (found === ANOTHER_LOG) throw new Refusal(409, ANOTHER_LOG_REFUSAL);
-  if (found) return { fresh: false, status: found };
-
-  const limited = await doors.takeJudgement(box, ctx.now());
-  if (limited) throw new Refusal(429, `rate limit: ${limited}`);
-
   requireSamePot(await readPot(ctx.client, ctx.pot(), box, BigInt(round)), log);
   const manifest = await fetchManifest(ctx.store, bundle);
   if (manifest.id !== game) throw new Refusal(409, "the log's game isn't the bundle's");
@@ -107,5 +95,31 @@ export async function admit(ctx: AdmitContext, doors: Doors, input: unknown): Pr
     amount,
   });
   if (status === ANOTHER_LOG) throw new Refusal(409, ANOTHER_LOG_REFUSAL);
-  return { fresh: true, status };
+  return status;
+}
+
+export type Admitted = { readonly fresh: boolean; readonly status: JudgeStatus };
+
+/** Runs every check, and opens the pot's one judgement. A repeat of the same log gets the running one back. */
+export async function admit(ctx: AdmitContext, doors: Doors, input: unknown): Promise<Admitted> {
+  const signed = parseRequest(input);
+  await requireSigned(ctx, signed);
+
+  const { box, round } = signed.log.header;
+  const judgement = doors.judgement(box, round);
+  const found = await judgement.find(signed.hash);
+  if (found === ANOTHER_LOG) throw new Refusal(409, ANOTHER_LOG_REFUSAL);
+  if (found) return { fresh: false, status: found };
+
+  const now = ctx.now();
+  const limited = await doors.takeJudgement(box, now);
+  if (limited) throw new Refusal(429, `rate limit: ${limited}`);
+  try {
+    return { fresh: true, status: await open(ctx, judgement, signed) };
+  } catch (error) {
+    // Something upstream failed, and the Box will repeat this: an outage mustn't use up its hour. A refusal keeps its
+    // count, as an honest Box doesn't repeat one, and the reads it cost are what the limit is there to bound.
+    if (!(error instanceof Refusal)) await doors.returnJudgement(box, now);
+    throw error;
+  }
 }

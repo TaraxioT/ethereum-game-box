@@ -79,6 +79,16 @@ export class Limits {
     }
   }
 
+  /** Takes back one request counted at `at`, against each limit. */
+  async giveBack(limits: Limit[], at: number): Promise<void> {
+    for (const limit of limits) {
+      const key = `rate:${limit.key}`;
+      const times = (await this.store.get<number[]>(key)) ?? [];
+      const index = times.lastIndexOf(at);
+      if (index >= 0) await this.store.put(key, times.toSpliced(index, 1));
+    }
+  }
+
   private async recent(limit: Limit, now: number): Promise<number[]> {
     const times = (await this.store.get<number[]>(`rate:${limit.key}`)) ?? [];
     return times.filter((t) => t > now - limit.windowSeconds);

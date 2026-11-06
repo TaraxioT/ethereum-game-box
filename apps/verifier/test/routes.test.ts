@@ -2,6 +2,7 @@ import { boxKey } from '@egb/relayer/test/world';
 import { packBundle } from '@egb/sdk/bundle';
 import { describe, expect, it, vi } from 'vitest';
 
+import { takeJudgement } from '../src/gate.ts';
 import { handle } from '../src/routes.ts';
 import { POT_STATE } from '../src/pot.ts';
 import { BOX, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, matchLog, stakedWorld } from './world.ts';
@@ -279,7 +280,7 @@ describe('one judgement per pot', () => {
     const body = world.signedRequest(world.log);
     await world.post(deps, body);
     expect(await world.post(deps, body)).toMatchObject({ status: 200, body: { state: 'judging' } });
-    expect(world.gateHits).toBe(1);
+    expect(world.gateHits()).toBe(1);
   });
 
   it('answers a repeat with the outcome, even with the pot closed', async () => {
@@ -321,9 +322,14 @@ describe('one judgement per pot', () => {
 });
 
 describe('the rate limit', () => {
+  const fill = async (world: Awaited<ReturnType<typeof stakedWorld>>) => {
+    for (let i = 0; i < 60; i++) await takeJudgement(world.gate, BOX, NOW);
+  };
+
   it('answers 429 once a Box is over, before reading the pot', async () => {
     const { world, deps } = await setup();
-    world.gateLimit = 0;
+    await fill(world);
+    world.potDown = true;
     const reply = await world.post(deps, world.signedRequest(world.log));
     expect(reply).toMatchObject({ status: 429, body: { error: 'rate limit: 60 judgements per hour from one Box' } });
     expectNothingRan(world);
@@ -332,7 +338,38 @@ describe('the rate limit', () => {
   it('counts only requests the Box signed', async () => {
     const { world, deps } = await setup();
     await world.post(deps, world.signedRequest(world.log, { key: boxKey() }));
-    expect(world.gateHits).toBe(0);
+    expect(world.gateHits()).toBe(0);
+  });
+
+  it('is not used up by a Box repeating through a store outage', async () => {
+    const { world, deps } = await setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const body = world.signedRequest(world.log);
+    world.storeReply = () => new Response('down', { status: 500 });
+    for (let i = 0; i < 61; i++) expect((await world.post(deps, body)).status).toBe(502);
+    expect(world.gateHits()).toBe(0);
+
+    world.storeReply = null;
+    expect((await world.post(deps, body)).status).toBe(202);
+    expect(world.gateHits()).toBe(1);
+    error.mockRestore();
+  });
+
+  it('is not used by a pot that can not be read', async () => {
+    const { world, deps } = await setup();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    world.potDown = true;
+    expect((await world.post(deps, world.signedRequest(world.log))).status).toBe(502);
+    expect(world.gateHits()).toBe(0);
+    error.mockRestore();
+  });
+
+  it('keeps counting a refusal: an honest Box never repeats one', async () => {
+    const { world, deps } = await setup();
+    world.pot.state = POT_STATE.settled;
+    const body = world.signedRequest(world.log);
+    for (let i = 0; i < 60; i++) expect((await world.post(deps, body)).status).toBe(409);
+    expect((await world.post(deps, body)).status).toBe(429);
   });
 });
 
