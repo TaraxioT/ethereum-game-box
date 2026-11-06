@@ -13,6 +13,7 @@
 | `src/chains.ts` | Sepolia and Robinhood Chain settings, with RPC URLs taken from the environment |
 | `src/names/` | The ENS names under `gamebox.eth`, imported as `@egb/shared/names` (below) |
 | `src/web/` | What the sites (`apps/web`, `apps/operator`) need in a browser, imported as `@egb/shared/web` (below) |
+| `src/swap/` | The tap swap on the GBX/USDC pool, imported as `@egb/shared/swap` (below) |
 
 ## `src/names/`
 
@@ -68,6 +69,14 @@ its own client, head watch and transaction log.
 | `errors.ts` | Reverts by name, from every names ABI and the ENSv2 slice: `decodeRevert`, `revertData`, `errorName` |
 | `relayer.ts` | `relayerClient(base)` and `demoBoxClient(base)` over HTTP, typed with `names/api.ts`; `ApiRefusal`; the live `RELAYER_URL` and `DEMO_BOX_URL` |
 | `txs.ts` | `txLog({ follow })`: the writes a transaction strip draws (`onTxs`, `relayed`, `direct`), with `Tx`, `TxFailed` and `fromView` |
+
+## `src/swap/`
+
+| Module | Holds |
+|---|---|
+| `tapSwap.ts` | `GameBoxHook`'s EIP-712 `TapSwap` message (the typed data and the digest the Box signs with P-256, like `Execute`) and `tapSwapHookData`, the hook data a tap swap carries to the pool |
+| `vectors.json` | Written by `contracts/test/hook/SwapVectors.t.sol`; `tapSwap.test.ts` checks `tapSwap.ts` against it |
+| `vectors.ts` | `TAP_SWAP_VECTOR`, typed, signed with the names vector Box key |
 
 ## Rules
 

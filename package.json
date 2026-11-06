@@ -9,7 +9,7 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",
-    "contracts:install": "cd contracts && forge install --no-git OpenZeppelin/openzeppelin-contracts@v5.7.0 foundry-rs/forge-std@v1.17.0",
+    "contracts:install": "cd contracts && forge install --no-git OpenZeppelin/openzeppelin-contracts@v5.7.0 foundry-rs/forge-std@v1.17.0 Uniswap/v4-core@v4.0.0",
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts",
     "names:abis": "forge build --root contracts && pnpm --filter @egb/shared abis",

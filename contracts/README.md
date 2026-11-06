@@ -276,3 +276,26 @@ forge script script/DeployStaking.s.sol --rpc-url sepolia --account sepolia-depl
 
 `test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against real USDC and a fresh
 `GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.
+
+## Swap hook
+
+`hook/GameBoxHook.sol` is the Uniswap v4 hook of the GBX/USDC pool (dynamic fee, tick spacing 60). It is the only
+pool it serves: `afterInitialize` refuses any other key, and only once.
+
+| Rule | |
+|---|---|
+| Fee | 1% on a plain swap. 0.25% on a tap swap. 0% for a router with `FEE_EXEMPT_ROLE` (the lobby and the buyback, later) |
+| Tap swap | The swap's hook data is a `TapSwapData`: a Box, a badge, a nonce, a deadline and the Box's P-256 signature over the EIP-712 `TapSwap` (`tapSwapDigest`). The signature covers the router, direction and amount, so it can't be reused on another swap. The Box must be `Active` and unexpired in `GameBoxNames`, and each nonce works once per Box. A bad tap reverts the swap rather than falling back to 1% |
+| Price | `PriceOracle` keeps 512 observations of the pool's tick, written before the first swap of each second, so a price moved inside one block counts for nothing. `observe` and `meanTick(window)` give the time-weighted price for the buyback and the dynamic floor |
+
+The hook's address must carry its permission bits (`afterInitialize`, `beforeSwap`), so `DeployHook.s.sol` mines a
+CREATE2 salt (`HookMiner.sol`) and deploys through the CREATE2 factory. It records the hook and the pool key
+(`.pools.GBX_USDC`) but doesn't initialize the pool: the launch auction does, at its clearing price.
+
+```sh
+forge script script/DeployHook.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+`test/hook/` runs against Sepolia's real v4 `PoolManager` and test routers on the names fork, with real USDC.
+`SwapVectors.t.sol` writes `packages/shared/src/swap/vectors.json`.
