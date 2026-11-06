@@ -3,12 +3,17 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./box": "./src/box.ts",
     "./chain": "./src/chain.ts",
     "./cors": "./src/cors.ts",
     "./guard": "./src/guard.ts",
     "./limits": "./src/limits.ts",
+    "./parse": "./src/parse.ts",
+    "./refusal": "./src/refusal.ts",
     "./store": "./src/store.ts",
+    "./test/fake-chain": "./test/fake-chain.ts",
     "./test/memory-store": "./test/memory-store.ts",
+    "./test/world": "./test/world.ts",
     "./verify": "./src/verify.ts"
   },
   "scripts": {

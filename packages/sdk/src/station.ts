@@ -36,9 +36,12 @@ export interface StationView {
 
 const UNPRINTABLE = /[^\x20-\x7e]/g;
 
-/** `text` as the station's font can draw it: printable ASCII (anything else becomes `?`), at most `max` characters. */
+/**
+ * `text` as the station's font can draw it: printable ASCII (anything else becomes `?`), at most `max` characters. It cuts
+ * first: each UTF-16 unit is replaced one for one, so the answer is the same, and the cost is `max`, whatever `text` is.
+ */
 export function printable(text: string, max: number): string {
-  return text.replace(UNPRINTABLE, "?").slice(0, max);
+  return text.slice(0, max).replace(UNPRINTABLE, "?");
 }
 
 /** A view cut to what the station can show: printable ASCII, each line at its length, `big` upper-cased. */

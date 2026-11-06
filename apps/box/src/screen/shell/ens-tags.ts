@@ -5,8 +5,9 @@
 import { badgeLabel } from "../../core/badges.ts";
 import { gameOfLabel } from "../../core/catalogue.ts";
 import { honoursOf } from "../../core/honours.ts";
-import type { BoxEvent, BoxState, Phase, Seat } from "../../core/types.ts";
+import type { BoxEvent, BoxState, Phase } from "../../core/types.ts";
 import { el, place } from "./dom.ts";
+import { ensName } from "./ens-name.ts";
 import type { Layout } from "./layout.ts";
 
 /** Where a tap shows the card: Attract and Home, where nothing else names the player (Join, Stake, the result and the
@@ -37,31 +38,27 @@ export function createEnsTags(layout: Layout): EnsTags {
     place(tag, { x: p.module.x, y: p.module.y + p.module.h + GAP, w: p.module.w, h: 0 });
     return tag;
   });
-  const hideAt: [number, number] = [0, 0];
+  const hideAt = tags.map(() => 0);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  function draw(state: BoxState, seat: Seat, now: number): void {
+  function draw(state: BoxState, seat: number, now: number): void {
     const tag = tags[seat];
     const card = state.taps[seat];
     if (!tag) return;
-    if (!card || now >= hideAt[seat] || !NAMED_HERE.has(state.phase)) {
+    if (!card || now >= (hideAt[seat] ?? 0) || !NAMED_HERE.has(state.phase)) {
       tag.hidden = true;
       return;
     }
     tag.hidden = false;
-    const head = el("div", "ens-tag-name");
-    if (card.ens) {
-      const dot = card.ens.indexOf(".");
-      head.append(el("b", "", card.ens.slice(0, dot)), el("span", "", card.ens.slice(dot)));
-    } else {
-      head.append(el("b", "", badgeLabel(card.badge).toLowerCase()), el("span", "", card.read ? " · no ENS name yet" : " · reading ENS…"));
-    }
+    const head = card.ens
+      ? ensName(card.ens, "ens-tag-name", { split: true })
+      : ensName(`${badgeLabel(card.badge).toLowerCase()}${card.read ? " · no ENS name yet" : " · reading ENS…"}`, "ens-tag-name");
     const rows = honoursOf(card.ens, state.boards, now).map((h) => {
       const row = el("div", "ens-tag-honour");
       row.dataset.kind = h.kind;
       row.append(
         el("span", "ens-tag-kind", h.kind === "title" ? `♛ ${gameWord(h.name)} CHAMPION${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS ${gameWord(h.name)} CUP · ${h.count} PTS`),
-        el("span", "ens-tag-map", `${h.name} → ${card.ens ?? ""}`),
+        ensName(`${h.name} → ${card.ens ?? ""}`, "ens-tag-map"),
       );
       return row;
     });
@@ -72,14 +69,14 @@ export function createEnsTags(layout: Layout): EnsTags {
   function schedule(state: BoxState, now: number): void {
     clearTimeout(timer);
     const next = Math.min(...hideAt.filter((at) => at > now));
-    if (Number.isFinite(next)) timer = setTimeout(() => ([0, 1] as const).forEach((s) => draw(state, s, Date.now())), next - now + 20);
+    if (Number.isFinite(next)) timer = setTimeout(() => tags.forEach((_, s) => draw(state, s, Date.now())), next - now + 20);
   }
 
   return {
     els: tags,
     update(state, event, now) {
-      if (event.type === "tap" && state.taps[event.seat]) hideAt[event.seat] = now + TAG_MS;
-      ([0, 1] as const).forEach((s) => draw(state, s, now));
+      if (event.type === "tap" && state.taps[event.seat] && event.seat < hideAt.length) hideAt[event.seat] = now + TAG_MS;
+      tags.forEach((_, s) => draw(state, s, now));
       schedule(state, now);
     },
   };

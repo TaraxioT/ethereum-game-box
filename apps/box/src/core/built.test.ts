@@ -83,7 +83,7 @@ function rig(taps: GameManifest["taps"] = "identify"): Rig {
   const core = createCore(
     {
       clock,
-      stations: { show: () => {}, buzz: () => {} },
+      stations: { show: () => {}, buzz: () => {}, inUse: () => {} },
       chain,
       library,
       rules: fake.runner,

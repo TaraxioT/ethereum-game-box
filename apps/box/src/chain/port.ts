@@ -8,34 +8,35 @@
 // - refund: `POST /duel/refund`. A pot the Box lost track of (a restart, a reset) is refunded by the sweep once its
 //   delay has run.
 // - topup: `POST /usdc/topup`. claim: a `Seat` to `POST /players/box-claim` (a badge can't sign a `ClaimName`).
+// - store: a store game's money and judge (`store.ts`), once `StorePot` is deployed and the verifier is set.
 import {
   type Result,
   type Seat,
   type Stake,
-  type TxView,
   contractAddress,
   resultDigest,
   seatDigest,
   stakeDigest,
   usdc,
 } from "@egb/shared/names";
-import type { Address, Hex } from "viem";
-import type { ChainHead, ChainPort, ChainTxUpdate, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
+import { DUEL_SEATS, type DuelSeat } from "@egb/sdk";
+import { type Address, type Hex, isAddressEqual } from "viem";
+import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
 import { recordText } from "../core/stats.ts";
+import type { CupPlace, Settlement } from "../core/types.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import type { Reads, Settled } from "./reads.ts";
-import type { Relayer, RelayerReply } from "./relayer.ts";
+import type { Relayer } from "./relayer.ts";
+import { createRequests } from "./requests.ts";
 import type { Rounds } from "./rounds.ts";
+import { createStoreChain } from "./store.ts";
+import type { Verifier } from "./verifier.ts";
 
 /** How long a signed message stays valid, in seconds. */
 export const DEADLINE_S = 600;
 /** `DuelPot.REFUND_DELAY` (one hour after the open), and a minute's margin for the head's lag. */
 export const REFUND_AFTER_MS = 61 * 60_000;
-/** How often a request's progress is asked for (the match waits on its pot's block, so this is short), and when the
- *  Box stops asking. */
-export const POLL_MS = 1_000;
-export const GIVE_UP_MS = 10 * 60_000;
 /** How often the head is read for the screen's block clock. */
 export const HEAD_MS = 4_000;
 /** How often pots past their refund delay are looked for. */
@@ -52,6 +53,8 @@ export interface SepoliaChainOptions {
   readonly log: (text: string) => void;
   /** The messages' verifying contracts (default: deployments/sepolia.json; tests pass the vectors'). */
   readonly contracts?: { readonly duelPot: Address; readonly boxResults: Address; readonly boxSeats: Address };
+  /** Store games' pot and judge. Absent: this Box has none. */
+  readonly store?: { readonly storePot: Address; readonly verifier: Verifier } | undefined;
 }
 
 export interface SepoliaChain extends ChainPort {
@@ -69,36 +72,28 @@ export interface SepoliaChain extends ChainPort {
 const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th"] as const;
 const short = (address: Address): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
-/** The relayer's statuses as the tx bar's steps (`done` is paid). */
-function stepOf(view: TxView): ChainTxUpdate["step"] | null {
-  switch (view.status) {
-    case "signed":
-      return null;
-    case "sent":
-      return "sent";
-    case "in-block":
-      return "in-block";
-    case "done":
-      return "paid";
-    case "failed":
-      return "failed";
-  }
-}
-
 function label(game: string): string {
   const found = chainLabel(game);
   if (!found) throw new Error(`${game} isn't on chain`);
   return found;
 }
 
+/** `DuelPot` and `BoxResults` hold two: a team game's two players, whatever an order can list. */
+function pair(badges: readonly Address[]): readonly [Address, Address] {
+  const [a, b] = badges;
+  if (!a || !b || badges.length !== 2) throw new Error("a team game's match has two players");
+  return [a, b];
+}
+
 /** A match's stakes as the Box signs them: badge `a` is Player 1's. `deadline` is unix seconds. */
 export function stakeOf(box: string, order: StakeOrder, deadline: bigint): Stake {
-  return { box, game: label(order.game), round: BigInt(order.round), a: order.badges[0], b: order.badges[1], amount: usdc(order.amount), deadline };
+  const [a, b] = pair(order.badges);
+  return { box, game: label(order.game), round: BigInt(order.round), a, b, amount: usdc(order.amount), deadline };
 }
 
 /** A match's result as the Box signs it: a draw names Player 1 the winner and Player 2 the loser, with `draw` set. */
 export function resultOf(box: string, order: ResultOrder, deadline: bigint): Result {
-  const [a, b] = order.badges;
+  const [a, b] = pair(order.badges);
   const [winner, loser] = order.winner === 1 ? [b, a] : [a, b];
   return { box, game: label(order.game), round: BigInt(order.round), winner, loser, draw: order.winner === null, deadline };
 }
@@ -108,19 +103,39 @@ export function seatOf(box: string, labelText: string, badge: Address, deadline:
   return { label: labelText, badge, box, deadline };
 }
 
+/** What the result did, from what the chain says at its receipt: the facts the result screen announces, and its lines. */
+export function settlementOf(order: ResultOrder, settled: Settled): Settlement {
+  const badges = pair(order.badges);
+  const holds = order.winner !== null && settled.title !== null && isAddressEqual(settled.title.holder, badges[order.winner]);
+  const placeOf = (seat: DuelSeat): CupPlace | null => {
+    const rank = settled.cup?.standings.findIndex((row) => isAddressEqual(row.addr, badges[seat])) ?? -1;
+    const row = settled.cup?.standings[rank];
+    return row ? { rank, points: row.points } : null;
+  };
+  return {
+    lines: outcomeLines(order, settled),
+    names: settled.names,
+    paid: settled.pot === null ? null : order.winner === null ? settled.pot : settled.pot * 2,
+    title: holds && settled.title ? { name: settled.title.name, streak: settled.title.streak } : null,
+    cup: settled.cup ? { name: settled.cup.name, places: DUEL_SEATS.map(placeOf) } : null,
+    stats: settled.stats,
+  };
+}
+
 /** The lines the result screen shows, from what the chain says the result did. */
-export function outcomeLines(order: ResultOrder, settled: Settled): string[] {
-  const named = (seat: 0 | 1): string => settled.names[seat] ?? short(order.badges[seat]);
+function outcomeLines(order: ResultOrder, settled: Settled): string[] {
+  const badges = pair(order.badges);
+  const named = (seat: DuelSeat): string => settled.names[seat] ?? short(badges[seat]);
   const lines: string[] = [];
   if (order.winner === null) lines.push(settled.pot === null ? "A draw" : `A draw: ${settled.pot} USDC back to each`);
   else lines.push(settled.pot === null ? `${named(order.winner)} wins` : `${named(order.winner)} +${settled.pot * 2} USDC`);
   const { title } = settled;
-  if (order.winner !== null && title && title.holder.toLowerCase() === order.badges[order.winner].toLowerCase()) {
+  if (order.winner !== null && title && title.holder.toLowerCase() === badges[order.winner].toLowerCase()) {
     lines.push(`${named(order.winner)} now holds ${title.name}${title.streak > 1 ? `, streak ${title.streak}` : ""}`);
   }
   if (settled.cup) {
-    for (const seat of [0, 1] as const) {
-      const rank = settled.cup.standings.findIndex((row) => row.addr.toLowerCase() === order.badges[seat].toLowerCase());
+    for (const seat of DUEL_SEATS) {
+      const rank = settled.cup.standings.findIndex((row) => row.addr.toLowerCase() === badges[seat].toLowerCase());
       const row = settled.cup.standings[rank];
       if (row) lines.push(`${settled.cup.label}: ${named(seat)} ${ORDINALS[rank] ?? `${rank + 1}th`}, ${row.points} pts`);
     }
@@ -139,76 +154,28 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     boxResults: contractAddress("BoxResults"),
     boxSeats: contractAddress("BoxSeats"),
   };
-  /** Polls waiting to run. */
-  const handles = new Set<ReturnType<Clock["after"]>>();
   const deadline = (): bigint => BigInt(Math.floor(clock.now() / 1000) + DEADLINE_S);
-  const failed = (watch: TxWatch, error: string): void => watch({ step: "failed", hash: null, etherscan: null, block: null, error });
+  const requests = createRequests({ signer, relayer, clock, log });
+  const { follow, signed } = requests;
+  const store = options.store && createStoreChain({ box, signer, relayer, requests, reads, rounds, clock, deadline, log, ...options.store });
 
-  /** Follows a request on `/tx/:id` until it is done or failed, reporting each new step. */
-  function follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (paid: boolean) => void): void {
-    if (!("tx" in reply)) {
-      log(`chain: ${what} refused: ${reply.error}`);
-      failed(watch, reply.error);
-      ended?.(false);
-      return;
+  /** Refunds each pot past its delay that is still open, and forgets one that isn't. */
+  async function sweepPots(pots: ReadonlyMap<number, number>, isOpen: (box: string, round: number) => Promise<boolean>, refund: (round: number) => void): Promise<void> {
+    for (const [round, openedAt] of pots) {
+      if (clock.now() - openedAt < REFUND_AFTER_MS) continue;
+      if (!(await isOpen(box, round).catch(() => true))) {
+        rounds.closed(round);
+        continue;
+      }
+      log(`chain: refunding pot ${round}, left open since ${new Date(openedAt).toISOString()}`);
+      refund(round);
     }
-    const started = clock.now();
-    let last: string | null = null;
-    const apply = (view: TxView): boolean => {
-      const step = stepOf(view);
-      const key = `${step}:${view.hash ?? ""}:${view.block ?? ""}`;
-      if (step && key !== last) {
-        last = key;
-        if (step === "in-block") log(`chain: ${what} in block ${view.block ?? "?"}`);
-        watch({ step, hash: view.hash ?? null, etherscan: view.etherscan ?? null, block: view.block ?? null, error: view.error ?? null });
-      }
-      if (step === "paid" || step === "failed") {
-        log(`chain: ${what} ${step}${view.hash ? ` ${view.hash}` : ""}${view.error ? `: ${view.error}` : ""}`);
-        ended?.(step === "paid");
-        return true;
-      }
-      return false;
-    };
-    if (apply(reply.tx)) return;
-    const id = reply.tx.id;
-    const poll = (): void => {
-      const handle = clock.after(POLL_MS, () => {
-        handles.delete(handle);
-        void relayer.tx(id).then((next) => {
-          if ("tx" in next && apply(next.tx)) return;
-          if (clock.now() - started > GIVE_UP_MS) {
-            failed(watch, `no answer from the relayer for request ${id}`);
-            ended?.(false);
-            return;
-          }
-          poll();
-        });
-      });
-      handles.add(handle);
-    };
-    poll();
-  }
-
-  /** Signs `digest` and posts what `body` builds from the signature; a signer that can't sign fails the request. */
-  function signed(what: string, digest: Hex, path: string, body: (sig: { r: Hex; s: Hex }) => unknown, watch: TxWatch, ended?: (paid: boolean) => void): void {
-    signer
-      .sign(digest)
-      .then((sig) => relayer.post(path, body(sig)))
-      .then(
-        (reply) => follow(what, reply, watch, ended),
-        (error: unknown) => {
-          const reason = error instanceof Error ? error.message : String(error);
-          log(`chain: ${what} not signed: ${reason}`);
-          failed(watch, reason);
-          ended?.(false);
-        },
-      );
   }
 
   function refundRound(round: number, watch: TxWatch): void {
     void relayer.post("/duel/refund", { box, round: String(round) }).then((reply) =>
-      follow(`refund ${round}`, reply, watch, (paid) => {
-        if (paid) rounds.closed(round);
+      follow(`refund ${round}`, reply, watch, (end) => {
+        if (end === "paid") rounds.closed(round);
       }),
     );
   }
@@ -218,25 +185,27 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     nextRound: () => rounds.take(),
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
-    balance: (address) => reads.balance(address),
-    async player(address) {
-      const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);
-      return { address, name, balance, record: name ? await reads.stats(name) : null };
+    store,
+    async player(address, block) {
+      const at = block === undefined ? undefined : BigInt(block);
+      const [name, balance] = await Promise.all([reads.nameOf(address, at), reads.balance(address, at)]);
+      return { address, name, balance, record: name ? await reads.stats(name, at) : null };
     },
     board: async (game) => reads.board(label(game)),
     open(order, watch) {
       const stake = stakeOf(box, order, deadline());
       rounds.opened(order.round, clock.now());
       const json = { ...stake, round: String(stake.round), amount: String(stake.amount), deadline: String(stake.deadline) };
-      signed(`open ${order.round}`, stakeDigest(stake, contracts.duelPot), "/duel/open", (sig) => ({ stake: json, ...sig }), watch, (paid) => {
-        if (!paid) rounds.closed(order.round);
+      signed(`open ${order.round}`, stakeDigest(stake, contracts.duelPot), "/duel/open", (sig) => ({ stake: json, ...sig }), watch, (end) => {
+        // Only a refusal proves there's no pot. Any other failure stays for the sweep, which asks the chain.
+        if (end === "refused") rounds.closed(order.round);
       });
     },
     settle(order, watch) {
       const result = resultOf(box, order, deadline());
       const json = { ...result, round: String(result.round), deadline: String(result.deadline) };
-      signed(`result ${order.round}`, resultDigest(result, contracts.boxResults), "/box/result", (sig) => ({ result: json, ...sig }), watch, (paid) => {
-        if (paid) rounds.closed(order.round);
+      signed(`result ${order.round}`, resultDigest(result, contracts.boxResults), "/box/result", (sig) => ({ result: json, ...sig }), watch, (end) => {
+        if (end === "paid") rounds.closed(order.round);
       });
     },
     refund: refundRound,
@@ -250,7 +219,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     },
     async outcome(order, hash) {
       if (!hash) throw new Error("a result with no hash");
-      return outcomeLines(order, await reads.settled(label(order.game), order.badges, hash));
+      return settlementOf(order, await reads.settled(label(order.game), pair(order.badges), hash));
     },
     watchHead(listener) {
       let last = 0;
@@ -283,19 +252,11 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     },
     publicKey: () => signer.publicKey(),
     async sweep() {
-      for (const [round, openedAt] of rounds.open()) {
-        if (clock.now() - openedAt < REFUND_AFTER_MS) continue;
-        if (!(await reads.potOpen(box, round).catch(() => true))) {
-          rounds.closed(round);
-          continue;
-        }
-        log(`chain: refunding pot ${round}, left open since ${new Date(openedAt).toISOString()}`);
-        refundRound(round, () => {});
-      }
+      await sweepPots(rounds.open(), reads.potOpen, (round) => refundRound(round, () => {}));
+      if (store) await sweepPots(rounds.open("store"), reads.storePotOpen, (round) => store.refund(round, () => {}));
     },
     stop() {
-      for (const handle of handles) clock.cancel(handle);
-      handles.clear();
+      requests.stop();
       signer.stop();
     },
   };

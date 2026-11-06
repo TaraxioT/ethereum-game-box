@@ -37,7 +37,9 @@
   box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.45), inset 0 -3px 0 rgb(0 0 0 / 0.25), 0 6px 16px rgb(var(--seat-rgb) / 0.45);
 }
 .sd-who { flex: 1; min-width: 0; }
-.sd-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 20px/1.3 var(--body); letter-spacing: -0.01em; }
+.sd-name { font: 700 20px/1.3 var(--body); letter-spacing: -0.01em; }
+.sd-name .ens-name-label { color: inherit; }
+.sd-name .ens-name-rest { color: var(--ink-2); font-weight: 600; }
 .sd-who span { font: 500 14px var(--mono); color: var(--ink-2); }
 .sd-who em { font-style: normal; color: var(--seat); }
 .sd-pips { display: flex; gap: 8px; }
@@ -55,7 +57,7 @@
 .sd-pot[hidden] { display: none; }
 [data-orientation="portrait"] .sd-mid { flex-direction: row; justify-content: center; gap: 16px; }
 [data-orientation="portrait"] .sd-round { font-size: 24px; }
-[data-orientation="portrait"] .sd-who b { font-size: 17px; }
+[data-orientation="portrait"] .sd-name { font-size: 17px; }
 
 /* The end: a slab over the wheel naming the winner. */
 .sd-banner { position: absolute; z-index: 6; display: grid; place-items: center; align-content: center; gap: 6px; border-radius: 28px;

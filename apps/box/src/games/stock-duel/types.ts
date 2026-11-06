@@ -1,6 +1,6 @@
 // Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events. The cards and
 // their stats are the deck's (built/deck.ts), shared with Stock Duel's built form.
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import type { StatKey, Stock } from "./built/deck.ts";
 
 export type { StatKey, Stock };
@@ -17,7 +17,7 @@ export interface RoundRecord {
   readonly cards: readonly [Stock, Stock];
   readonly stat: StatKey;
   /** null: a tie, replayed with the next cards. */
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
 export interface StockDuelState {
@@ -47,7 +47,7 @@ export interface StockDuelState {
   readonly stat: StatKey | null;
   readonly history: readonly RoundRecord[];
   /** Set when phase is `over`: the match winner, or null for a draw. */
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
 /**
@@ -57,7 +57,7 @@ export interface StockDuelState {
  */
 export type StockDuelEvent =
   | { readonly type: "tick"; readonly now: number }
-  | { readonly type: "touch"; readonly seat: Seat; readonly now: number }
+  | { readonly type: "touch"; readonly seat: DuelSeat; readonly now: number }
   /** Plays the held card (or, with no touch before it, the card in front at `now`). `roll` is the badge's number. */
-  | { readonly type: "tap"; readonly seat: Seat; readonly now: number; readonly roll: number }
-  | { readonly type: "release"; readonly seat: Seat };
+  | { readonly type: "tap"; readonly seat: DuelSeat; readonly now: number; readonly roll: number }
+  | { readonly type: "release"; readonly seat: DuelSeat };

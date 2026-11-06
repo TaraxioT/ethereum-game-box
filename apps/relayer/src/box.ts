@@ -13,6 +13,9 @@ import { requireP256 } from './verify.ts';
 const NONE = 0;
 const ACTIVE = 1;
 
+/** What the check reads: a whole `Context`, or the verifier's smaller one. */
+export type BoxContext = Pick<Context, 'client' | 'now'> & { readonly addresses: Pick<Context['addresses'], 'names'> };
+
 /** The lock a round's pot requests (open, refund) and its result share: one of them is pending at a time. */
 export const potLock = (box: string, round: bigint) => `pot:${box}:${round}`;
 
@@ -23,7 +26,7 @@ export function requireLabel(value: string, field: string): void {
 }
 
 /** Throws a 403 unless `box` is a live, `Active` Box, then a 401 unless `(r, s)` is its key's signature of `digest`. */
-export async function requireBoxSigned(ctx: Context, box: string, digest: Hex, r: Hex, s: Hex): Promise<void> {
+export async function requireBoxSigned(ctx: BoxContext, box: string, digest: Hex, r: Hex, s: Hex): Promise<void> {
   const entry = await ctx.client.readContract({
     address: ctx.addresses.names,
     abi: gameBoxNamesAbi,

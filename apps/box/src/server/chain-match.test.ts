@@ -10,7 +10,8 @@ import type { Address } from "viem";
 import { afterEach, describe, expect, it } from "vitest";
 import { END_HOLD_MS } from "../core/core.ts";
 import { SETTLE_MS } from "../games/quick-draw/rules.ts";
-import { createSepoliaChain, POLL_MS } from "../chain/port.ts";
+import { createSepoliaChain } from "../chain/port.ts";
+import { POLL_MS } from "../chain/requests.ts";
 import { roundsFile } from "../chain/rounds.ts";
 import { memoryReads, mockRelayer } from "../chain/testing.ts";
 import { softwareSigner } from "../signer/software.ts";
@@ -106,8 +107,8 @@ describe("a match with its stakes on Sepolia", () => {
     reads.settledAs = { block: 1n, pot: 10, names: ["nova.gamebox.eth", "kite.gamebox.eth"], stats: [null, null], title: { name: "champion.quickdraw.gamebox.eth", holder: KITE, streak: 1 }, cup: null };
     reads.balances.set(KITE, 110);
     relayer.advance(relayer.ids()[1]!, "done");
-    await tb.settle(() => core.state().match?.lines !== null, POLL_MS * 2, 100);
-    expect(core.state().match?.lines).toEqual(["kite.gamebox.eth +20 USDC", "kite.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
+    await tb.settle(() => core.state().match?.settlement != null, POLL_MS * 2, 100);
+    expect(core.state().match?.settlement?.lines).toEqual(["kite.gamebox.eth +20 USDC", "kite.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
     expect(core.state().seats.map((s) => s.balance)).toEqual([90, 110]);
     // The open was confirmed before the match began, so only the settle is still on screen.
     expect(core.state().txs.map((t) => [t.kind, t.step, t.hash !== null])).toEqual([["settle", "paid", true]]);

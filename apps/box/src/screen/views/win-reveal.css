@@ -1,0 +1,109 @@
+/* The win reveal (`win-reveal.ts`): a shade over the result, and a card of light per prize in its own tone: the pot in
+   the winner's colour, the title in brass, the cup in the system's blue. The card bursts in behind a ring and sparks,
+   rays turn behind it, its headline prints, its "→ who" line breathes like a key to press. Only transform and opacity
+   move; every glow is a static shadow. */
+.win-reveal { z-index: 30; --tone: var(--sys-hot); --tone-line: var(--sys); --tone-bloom: var(--sys-bloom); cursor: pointer; }
+.win-reveal[hidden] { display: none; }
+.win-reveal[data-kind="usdc"][data-seat="0"] { --tone: var(--p1-hi); --tone-line: var(--p1); --tone-bloom: var(--p1-bloom); }
+.win-reveal[data-kind="usdc"][data-seat="1"] { --tone: var(--p2-hi); --tone-line: var(--p2); --tone-bloom: var(--p2-bloom); }
+.win-reveal[data-kind="title"] { --tone: var(--brass-hi); --tone-line: var(--brass); --tone-bloom: rgb(255 200 90 / 0.5); }
+.win-reveal[data-kind="cup"] { --tone: var(--sys-hot); --tone-line: var(--sys-glow); --tone-bloom: var(--sys-bloom); }
+
+.win-shade { position: absolute; inset: 0; background: rgb(1 4 9 / 0.82); animation: win-fade 320ms var(--ease-out) both; }
+.win-reveal.leaving { animation: win-out 400ms var(--ease-in) both; }
+.win-stage { pointer-events: none; }
+.win-stage > * { position: absolute; }
+
+/* Behind the card: rays turning slowly, a ring of light thrown out once, sparks flying off the emblem. */
+.win-rays {
+  left: 50%; top: 50%; width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--tone-bloom) 0deg 4deg, transparent 4deg 18deg);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0 30%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 0 30%, transparent 100%);
+  opacity: 0; will-change: transform; animation: win-rays-in 600ms var(--ease-out) 120ms forwards, win-turn 24s linear infinite;
+}
+.win-ring {
+  left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%;
+  border: 3px solid var(--tone); box-shadow: 0 0 18px var(--tone-bloom), inset 0 0 18px var(--tone-bloom);
+  opacity: 0; animation: win-ring 900ms var(--ease-out) forwards;
+}
+.win-sparks { left: 50%; top: 92px; width: 0; height: 0; }
+.win-sparks i {
+  position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--tone);
+  box-shadow: 0 0 8px var(--tone-line), 0 0 16px var(--tone-bloom); opacity: 0;
+  animation: win-spark 900ms var(--ease-out) calc(160ms + var(--t)) forwards;
+}
+
+/* The card: glass in its tone's line, everything centred. */
+.win-card {
+  inset: 0; display: flex; flex-direction: column; align-items: center; padding: 22px 48px 18px; text-align: center;
+  background: radial-gradient(120% 90% at 50% 0%, rgb(22 40 58 / 0.98), rgb(4 10 17 / 0.98) 70%); border: 1px solid var(--tone-line);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 0 22px var(--tone-bloom), 0 0 60px rgb(0 0 0 / 0.6);
+  clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+  animation: win-card-in 520ms var(--ease-spring) both;
+}
+.win-emblem {
+  width: 84px; height: 84px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--tone-line);
+  font: 700 46px/1 var(--hud-display); color: var(--tone);
+  text-shadow: 0 0 6px var(--tone), 0 0 18px var(--tone-bloom); box-shadow: 0 0 14px var(--tone-bloom), inset 0 0 14px var(--tone-bloom);
+  animation: win-emblem 640ms var(--ease-spring) 80ms both;
+}
+.win-kicker {
+  margin-top: 12px; font: 700 20px/1.1 var(--hud-display); letter-spacing: 0.12em; color: var(--tone); white-space: nowrap;
+  text-shadow: 0 0 10px var(--tone-bloom); animation: win-rise 380ms var(--ease-out) 240ms both;
+}
+.win-big {
+  position: relative; max-width: 100%; margin-top: 12px; overflow: hidden; white-space: pre;
+  font: 700 46px/1.15 var(--mono); letter-spacing: 0; color: var(--sys-hot); text-transform: none;
+  text-shadow: 0 0 2px rgb(255 255 255 / 0.9), 0 0 12px var(--tone-bloom);
+}
+.win-reveal[data-kind="usdc"] .win-big { font: 700 76px/1.05 var(--hud-display); letter-spacing: 0.02em; color: var(--tone); }
+.win-letter { display: inline-block; opacity: 0; animation: win-print 220ms var(--ease-out) both; }
+.win-sheen {
+  position: absolute; inset: 0 auto 0 0; width: 30%; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  animation: win-sheen 900ms var(--ease-out) var(--sheen-at, 1s) both;
+}
+.win-to {
+  position: relative; display: grid; margin-top: 12px; padding: 8px 22px; white-space: nowrap;
+  font: 700 26px/1.2 var(--mono); color: var(--fg); text-transform: none; border: 1px solid var(--tone-line);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  animation: win-slide 420ms var(--ease-spring) both;
+}
+.win-to > * { grid-area: 1 / 1; }
+.win-to-text { position: relative; }
+.win-to-glow { background: var(--tone-bloom); opacity: 0; animation: win-breathe 1.6s ease-in-out 1.2s infinite alternate; }
+.win-facts { margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+.win-facts li {
+  font: 600 17px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--fg-2); white-space: nowrap; text-transform: none;
+  animation: win-rise 340ms var(--ease-out) both;
+}
+.win-foot {
+  margin-top: auto; align-self: stretch; display: flex; justify-content: space-between;
+  font: 600 12px/1 var(--hud-body); letter-spacing: 0.16em; color: var(--fg-3);
+}
+.win-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--tone-line); box-shadow: 0 0 8px var(--tone-bloom); transform-origin: left; animation: win-bar linear both; }
+
+@keyframes win-fade { from { opacity: 0; } }
+@keyframes win-out { to { opacity: 0; } }
+@keyframes win-rays-in { to { opacity: 0.55; } }
+@keyframes win-turn { to { transform: rotate(360deg); } }
+@keyframes win-ring { 0% { opacity: 1; transform: scale(0.2); } 100% { opacity: 0; transform: scale(3.4); } }
+@keyframes win-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(30px) scale(1.4); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scale(0.3); }
+}
+@keyframes win-card-in { from { opacity: 0; transform: scale(0.82) translateY(24px); } }
+@keyframes win-emblem { 0% { opacity: 0; transform: translateY(-40px) scale(0.4); } 100% { opacity: 1; transform: none; } }
+@keyframes win-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes win-print { from { opacity: 0; transform: translateY(-8px) scale(1.6); } to { opacity: 1; transform: none; } }
+@keyframes win-sheen { 0% { opacity: 1; transform: translateX(-110%); } 100% { opacity: 0; transform: translateX(380%); } }
+@keyframes win-slide { from { opacity: 0; transform: translateX(-60px); } }
+@keyframes win-breathe { from { opacity: 0.05; } to { opacity: 0.35; } }
+@keyframes win-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .win-reveal *, .win-reveal { animation: none !important; }
+  .win-letter, .win-ring, .win-sparks i, .win-sheen { opacity: 1; }
+  .win-ring, .win-sparks, .win-sheen { display: none; }
+  .win-rays { opacity: 0.4; }
+}

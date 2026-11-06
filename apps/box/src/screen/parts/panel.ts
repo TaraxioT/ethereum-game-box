@@ -19,7 +19,7 @@ const styles = sheet(`
 .frame-fill { position: absolute; inset: 0; background: var(--glass); clip-path: ${chamferClip(CHAMFER)}; }
 .frame-line { opacity: var(--panel-line, 0.45); }
 .frame-bloom { opacity: 0; }
-.content { position: relative; display: block; }
+.content { position: relative; display: block; min-width: 0; max-width: 100%; }
 :host([lit]) { --panel-line: 1; color: var(--fg); }
 :host([lit]) .frame-bloom { opacity: 1; }
 :host([lit]) .content { text-shadow: var(--glow-text); }

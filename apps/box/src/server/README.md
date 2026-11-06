@@ -17,14 +17,16 @@ named.
 |---|---|---|
 | `EGB_PORT` | `8790` | The port for HTTP and the link. |
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
-| `EGB_DATA` | `~/.local/share/egb` | The data folder: `rounds.json` (the next round and the pots still open), `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games), `forge/` and `logs/` (the Box's log, `YYYY-MM-DD.log`). |
+| `EGB_DATA` | `~/.local/share/egb` | The data folder: `rounds.json` (the next round and the pots still open), `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games), `store-bundles/` (the store bundle of the match in play, emptied at the start), `forge/` and `logs/` (the Box's log, `YYYY-MM-DD.log`). |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
-| `EGB_STATIONS` | `df3b9c,df3d88,e4ba70` | The stations this Box knows (the fake simulates them). Seats go by link order: the first station to link is Player 1's, the second Player 2's, a third waits for a free seat. |
+| `EGB_STATIONS` | `df3b9c,df3d88,e4ba70` | The stations this Box knows, 2 to 4 of them (the fake simulates them). Each is a seat, so this is how many a store game can seat here. Seats go by link order: the first station to link is Player 1's, the second Player 2's. A station on a seat a game isn't using covers a seat whose station is lost, so a third station is a two-player game's spare. The list sets how many seats there are, not whose they are: a station off it takes a free seat like any other. The receiver holds four stations and forgets none, so a fifth can't link until it restarts. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
 | `P256_SIGNER_CMD` | | The Box key's signer daemon, run with no shell (`deploy/p256-signer/`): `python3 /home/pi/egb/current/deploy/p256-signer/hyp2003_signer.py --serve`. |
 | `RELAYER_URL` | | The relayer that sends the Box's signed requests and pays the gas: `https://gamebox-relayer.mathew.workers.dev`. |
 | `SEPOLIA_RPC_URL` | | A Sepolia RPC for the reads (balances, names, the title, the championship, receipts). It carries the node's key: no error or log line ever shows it. |
 | `EGB_BOX` | `mumbai-01` | The Box's label under `gamebox.eth`, registered with the token's key. |
+| `EGB_STORE_URL` | | The store (`apps/store`): its index and bundles. With `EGB_VERIFIER_URL`, or a bad setting stops the start. Neither: a Box with no store games. |
+| `EGB_VERIFIER_URL` | | The verifier (`apps/verifier`), which judges store matches. Store games also need the chain settings and `StorePot` in `deployments/sepolia.json`; without those the rack has none, and the log says so. |
 | `EGB_ADMIN_KEY` | | Optional: `gamebox.eth`'s admin key (the `sepolia-deployer`), for the test page's Admin tab (below). It needs `SEPOLIA_RPC_URL`; neither is ever logged or answered. |
 | `EGB_FORGE_PROVIDER` | `claude` | Who builds games: `claude` (the Pi's Claude login) or `sim` (a recorded build replayed, shown SIMULATED). Anything else stops the start. |
 
@@ -59,7 +61,10 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `/api/lease…` | anyone reads, launcher token writes | The Box's lease: below. |
 | `GET /api/board` | anyone | The board Attract and Home show: `{ available: false }` without an RPC; else `{ available, board, error }`, every game with its title and open championship and the latest championships with an open one's leader (`board.ts`, read at most every 3 s). |
 | `GET /games/<id>/icon.svg`, `screen.js`, `frame.html` | anyone | A built game's cartridge art, screen module and sandboxed frame page, under the frame's own CSP (`games/`). |
+| `GET /games/icon.svg` | anyone | The Box's plain icon, on every store game's cartridge. |
 | `GET /parts.js`, `/parts.css`, `/parts/…`, `/frame.js` | anyone | What every frame loads besides the game: the parts, their look and fonts, the frame's program. |
+| `GET /bundle-host.js` | anyone | A store bundle's first script: its `window.egb`. |
+| `GET /store/<hash>/<file>` | anyone | A file the unpacked store bundle lists, by exact path, under the bundle's own CSP (`games/`). |
 | `GET /`, `/index.html` | anyone | The screen's page, never cached; the launcher token is written into it only for a top-level navigation. |
 | `GET /test` | anyone | The test page (same rules as the screen's page). |
 | `GET /…` | anyone | The built files (`assets/` cached for good). |
@@ -71,8 +76,10 @@ it is a 421: a page whose own name points at 127.0.0.1 (DNS rebinding) can't rea
 answers only on those names; `EGB_HOST` changes the address it binds, not the names it answers to. Every request
 that isn't a GET, and the link's upgrade, also needs the same origin: an Origin of exactly `http://` and the
 request's Host, so the Box's own port (or the dev server's, which passes the page's requests through with its own
-Host), never another local server's page. No Origin at all is allowed, as browsers always send one. JSON bodies are
-capped at 64 KB. Every page and file goes out with the CSP
+Host), never another local server's page. No Origin at all is allowed, as browsers always send one. A route under
+`/api/` also needs a `Sec-Fetch-Site` of `same-origin` or `none`, or none at all, else it is a 403: a store game's
+prerender is a GET to any local URL that no CSP stops, and it can't read the answer, but the route would still run. JSON
+bodies are capped at 64 KB. Every page and file goes out with the CSP
 in `security.ts`. A route marked `launcher` needs the `x-egb-launcher` header to match this boot's token (compared in
 constant time).
 
@@ -91,6 +98,13 @@ the listen, the team games' game.json and the built games in `$EGB_DATA/games/`,
 reason when they can't be offered. The rules host (`rules/`) is the core's `RulesRunnerPort`: each built game's rules
 in a sandboxed child, one game at a time, with a budget on every step; a bundle that won't load in its child seals the
 game. The game routes (`games/`) serve the cartridges and the frames ahead of the screen's files.
+
+## Store games
+
+With `EGB_STORE_URL` and `EGB_VERIFIER_URL` set, on a chain with `StorePot`, the library reads the store's index after
+the listen and every minute (`STORE_INDEX_MS`), and lists its games after the others; the core's `BundlePort`
+(`library/bundles.ts`) fetches a game's zip for each match into `$EGB_DATA/store-bundles/`. A store game's code never
+runs here: only the kiosk's sandboxed frame runs it. `library/` has the details, and `chain/` the money and the verifier.
 
 Every route is a `launcher` route; every one that isn't a GET also needs the same origin. Paths and replies are in
 `builder-wire.ts`, which the screen and the test page import too. The event stream is read back by
@@ -183,7 +197,7 @@ On connect, a screen gets `{ t: "state", now, state }`; then `{ t: "event", now,
 order and never coalesced. The one change with no event (the stations' views moving with the clock) goes out as a
 whole `state` at most every 100 ms; an event cancels a pending one, since it carries the whole state too. The screen
 sends `{ t: "command", command }`, checked strictly before it reaches the core (`lobby`, `topup`, `propose` and `claim` drive the lobby; `build` opens the game builder from
-Home). A socket that stops reading (1 MB
+Home; `frame` carries a store game's words, held to what the log takes). A socket that stops reading (1 MB
 unread) or stops answering pings (15 s) is dropped; the screen reconnects and starts from the whole state.
 
 ## Modules
@@ -193,8 +207,8 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `main.ts` | The entry: env files, settings, the Box, signals. Uncaught errors are logged and never fatal; SIGTERM and SIGINT stop it within 10 s (the taps closed, the signer stopped, the logs on disk). | |
 | `env.ts` | `.env`-style files, never overriding a set key. | `parseEnv`, `loadEnvFile`, `envFiles`, `loadEnv` |
 | `settings.ts` | The typed, checked settings. | `readSettings(env, home, repoRoot)`, `SettingsError` |
-| `box.ts` | The Box put together: the core on Node's ports (the chain port the settings name, the library and the rules host among them; after the listen the rounds are checked against the chain and pots past their refund delay are swept every 5 minutes) and the monotonic clock (`core/system-clock.ts`), the taps, the library's scan, the session log's read-back and the game builder (after it listens), the routes and the built games' routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, chain?, builder? }): Box` (`core`, `library`, `rules`, `taps()`, `builder()`) |
-| `library/` | The game library (its own README). | `createLibrary` |
+| `box.ts` | The Box put together: the core on Node's ports (the chain port the settings name, the library, the rules host and the store's bundles among them; after the listen the rounds are checked against the chain and pots past their refund delay are swept every 5 minutes) and the monotonic clock (`core/system-clock.ts`), the taps, the library's scan, the session log's read-back and the game builder (after it listens), the routes and the built games' routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, chain?, storeFetch?, builder? }): Box` (`core`, `library`, `rules`, `bundles`, `taps()`, `builder()`) |
+| `library/` | The game library and store games' bundles (its own README). | `createLibrary`, `createStoreIndex`, `createBundles` |
 | `rules/` | The rules runner host and the sandbox's proof (its own README). | `createRulesHost` |
 | `games/` | Built games over HTTP: cartridges, frames, the frames' shared assets (its own README). | `createGameRoutes`, `createFrameAssets` |
 | `admin.ts` | The admin panel: the key's account over the RPC, the jobs, the routes. | `adminOnSepolia(setting, log)`, `createAdmin(ports)`, `adminRoutes(admin)` |
@@ -213,7 +227,7 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `taps-api.ts` | The stations' routes for the test page and the bench. | `tapsRoutes` |
 | `sessions.ts` | The session log, and the records and per-pair counts rebuilt from it after the listen. | `createSessionLog(dataDir, log)` (the core's `MatchLog`; `load()`, `records()`, `flush()`), `dayOf` |
 | `routes.ts` | The HTTP handler: the loopback Host, the same origin, the launcher guard, the API, the built games' routes, the screen's files. | `createHandler`, `Route` |
-| `http.ts` | Static files, capped bodies, the loopback-host and same-origin rules. | `loopbackHost`, `sameOrigin`, `within`, `sendFile`, `readBody`, `readJson`, `HttpError` |
+| `http.ts` | Static files, capped bodies, the loopback-host, same-origin and own-request rules. | `loopbackHost`, `sameOrigin`, `ownRequest`, `within`, `sendFile`, `readBody`, `readJson`, `HttpError` |
 | `security.ts` | The CSP and the launcher token. | `CSP`, `createLauncherToken`, `isTopNavigation`, `withToken`, `hasToken` |
 | `link.ts` | The screen's WebSocket on the HTTP server (`ws`, `noServer`); its upgrade takes the same Host and origin rules as a POST. | `attachLink(server, box, log)`, `parseCommand` |
 | `coalesce.ts` | At most one run per window, always a trailing run. | `coalesce(run, everyMs)` |
@@ -221,9 +235,9 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `files.ts` | Atomic writes: a temp file, fsync, rename, then the folder fsynced. The roster, the Forge's job records and the voice's clips and totals all write through it. | `writeFileAtomic` |
 | `log-file.ts` | The Box's log: every line the server logs (each tap's plan, end and cause; each phase; each tap the core took or didn't) also goes to `$EGB_DATA/logs/YYYY-MM-DD.log`, appended in order off the tap path, because the Pi keeps no user journal. | `createLogFile(dataDir, echo)` |
 | `release.ts` | The running commit. | `readCommit(repoRoot)` |
-| `testing.ts` | For tests: a whole Box on a free port with its core (and taps) on a fake clock, a recording screen. | `startTestBox`, `openScreen`, `post`, `flush` |
+| `testing.ts` | For tests: a whole Box on a free port with its core (and taps) on a fake clock, a recording screen, a simulated badge's whole tap. | `startTestBox`, `openScreen`, `post`, `flush`, `fakeTap` |
 
-Tests: `env`, `settings` (the chain's three settings, all or none, never echoed; the admin key only with an RPC, never echoed), `board` (cached for `BOARD_TTL_MS`, a failed read keeps the last board with no RPC URL, unavailable without an RPC), `admin` (the view cached, a job to done, bad input a 400 before any job, a championship's prize minted and approved first, a refusal by its error name with no RPC URL; the routes behind the token and a 409 without the key), `files` (atomic writes), `http` (the loopback Host on every request and
+Tests: `store-seats` (a whole store match with three and four players on the fake stations, a seat left empty, a refund, a team game kept to two), `env`, `settings` (2 to 4 stations; the chain's three settings, all or none, never echoed; the admin key only with an RPC, never echoed; the store and the verifier together), `board` (cached for `BOARD_TTL_MS`, a failed read keeps the last board with no RPC URL, unavailable without an RPC), `admin` (the view cached, a job to done, bad input a 400 before any job, a championship's prize minted and approved first, a refusal by its error name with no RPC URL; the routes behind the token and a 409 without the key), `files` (atomic writes), `http` (the loopback Host on every request and
 upgrade, the same origin port and all, CSP, the token, the body cap, the guard), `builder-frames` (the stream's
 reader), `link` (state first, events in order, coalescing, commands), `match` (a whole Quick Draw and Stock
 Duel over the link with injected taps), `live-link` (the screen's `LiveLink` against a real server), `sessions` (the
@@ -240,4 +254,9 @@ child to its result and transcript, for nothing (a built game isn't on chain), a
 whole Quick Draw on the Sepolia chain port over a mocked relayer, its key a software one: the match opens with only the
 open sent, the result goes once the open is done with the same round and badges, the lines come from the chain's
 reads, the balances are read again; and a seat short of the stake sent to the lobby, which tops it up and claims its
-name. `match` and `fake-box` play on the demo chain.
+name. `store-match`: the real Tap Rush bundle from a stand-in store on the Sepolia chain port, over a mocked relayer and
+verifier: listed, fetched, staked by hash, played with the page's words over the link, judged and paid, with the log
+passing the verifier's own check; the index gone and back; a changed zip sealed for good, a zip that never came sealed
+until the next read; and no store games on the demo chain. Its last test plays Tap Rush in a real Chromium on the built
+screen, where the kiosk's frame and the core really meet, and is skipped without one. `match` and `fake-box` play on the
+demo chain.

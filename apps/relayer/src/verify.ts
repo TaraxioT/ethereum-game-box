@@ -5,8 +5,10 @@
 //   OpenZeppelin's `WebAuthn.verify` checks it, with user verification required.
 // - `ClaimName` and the primary-name consent: the badge's ECDSA signature, or ERC-1271 for a contract account, the way
 //   OpenZeppelin's `SignatureChecker` decides between them (by whether the badge has code).
+// - A store pot's `Verdict` and `Void`: the signer's address, recovered the way OpenZeppelin's `ECDSA` recovers it.
 
 import { p256 } from '@noble/curves/nist.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import {
   type Address,
   type Hex,
@@ -14,6 +16,7 @@ import {
   concatHex,
   decodeAbiParameters,
   hexToBytes,
+  hexToNumber,
   isAddressEqual,
   parseAbi,
   recoverAddress,
@@ -27,6 +30,7 @@ import { Refusal } from './refusal.ts';
 
 const N = p256.Point.CURVE().n;
 const HALF_N = N / 2n;
+const SECP256K1_HALF_N = secp256k1.Point.CURVE().n / 2n;
 
 /** Why `(r, s)` is not the P-256 key `(qx, qy)`'s signature of `digest`, or `null` if it is. */
 export function p256Problem(digest: Hex, r: Hex, s: Hex, qx: Hex, qy: Hex, signer = 'the Box key'): string | null {
@@ -132,4 +136,18 @@ export async function requireBadgeSignature(client: Client, badge: Address, dige
           () => false,
         );
   if (!ok) throw new Refusal(401, 'not signed by the badge');
+}
+
+/** The address that signed `digest` with `signature`, `r ‖ s ‖ v`, as OpenZeppelin's `ECDSA` reads it: 65 bytes, a low
+ *  `s` and a `v` of 27 or 28. Anything else is a 401 naming the error the contract would revert with. */
+export async function recoverSigner(digest: Hex, signature: Hex): Promise<Address> {
+  if (size(signature) !== 65) throw new Refusal(401, 'not a signature of 65 bytes', 'ECDSAInvalidSignatureLength');
+  if (BigInt(slice(signature, 32, 64)) > SECP256K1_HALF_N) {
+    throw new Refusal(401, 'high s: the contracts take s <= n/2 only', 'ECDSAInvalidSignatureS');
+  }
+  const invalid = () => new Refusal(401, 'not a valid signature', 'ECDSAInvalidSignature');
+  if (![27, 28].includes(hexToNumber(slice(signature, 64)))) throw invalid();
+  return recoverAddress({ hash: digest, signature }).catch(() => {
+    throw invalid();
+  });
 }

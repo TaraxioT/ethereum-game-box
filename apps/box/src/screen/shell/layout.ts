@@ -1,6 +1,7 @@
 // Where every object of the Box stands, in stage pixels. The stage is a fixed-size surface (1280×800 landscape,
 // 1422×800 wide for a 16:9 screen such as the Pi's 1280×720, 720×1080 portrait) scaled to fit the window; the Grid, the parts and the views all place themselves from these
 // anchors, so the traces always land on the parts they feed.
+import { sideOf, type Seat } from "@egb/sdk";
 
 export type Orientation = "landscape" | "portrait";
 
@@ -74,7 +75,7 @@ export const LANDSCAPE: Layout = {
     { x: 868, y: 580, w: 176, h: 186 },
   ],
   txbar: { x: 452, y: 102, w: 376, h: 46 },
-  board: { x: 836, y: 176, w: 404, h: 300 },
+  board: { x: 836, y: 176, w: 404, h: 352 },
 };
 
 export const PORTRAIT: Layout = {
@@ -127,6 +128,27 @@ export const WIDE: Layout = {
   txbar: shiftRect(LANDSCAPE.txbar, WIDE_INSET),
   board: LANDSCAPE.board && shiftRect(LANDSCAPE.board, WIDE_INSET),
 };
+
+/**
+ * Each port's box for `seats` seats on show. Two stand as the layout has them. With more, each corner's box holds two at
+ * half height, Player 3 under Player 1 and Player 4 under Player 2, and a port scales itself to fit.
+ */
+export function portBoxes(layout: Layout, seats: number): readonly Rect[] {
+  const [left, right] = layout.ports.map((port) => port.module) as [Rect, Rect];
+  if (seats <= 2) return [left, right];
+  const half = (r: Rect, row: 0 | 1): Rect => ({ ...r, y: r.y + (row * r.h) / 2, h: r.h / 2 });
+  return [half(left, 0), half(right, 0), half(left, 1), half(right, 1)].slice(0, seats);
+}
+
+/** In a game, a touch below the overlay (stage px) taps a seat. */
+export const OVERLAY_FOOT = { landscape: 130, portrait: 150 } as const;
+
+/** The seat a touch below the overlay taps, with `seats` on show: the half it lands in, or with more than two, the quarter. */
+export function seatAt(layout: Layout, seats: number, x: number, y: number): Seat {
+  const side = sideOf(x < layout.width / 2 ? 0 : 1);
+  const middle = (OVERLAY_FOOT[layout.orientation] + layout.height) / 2;
+  return y >= middle && side + 2 < seats ? ((side + 2) as Seat) : side;
+}
 
 export function layoutFor(orientation: Orientation): Layout {
   return orientation === "portrait" ? PORTRAIT : LANDSCAPE;

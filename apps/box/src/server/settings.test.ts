@@ -17,6 +17,7 @@ describe("settings", () => {
       stations: ["df3b9c", "df3d88", "e4ba70"],
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "mumbai-01" },
       admin: null,
+      store: null,
     });
   });
 
@@ -30,6 +31,8 @@ describe("settings", () => {
         EGB_RECEIVER: "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_7C:DF:A1:D5:04:CC-if00",
         EGB_STATIONS: " DF3D88 , e4ba70 ",
         EGB_BOX: "demo-01",
+        EGB_STORE_URL: "https://store.example",
+        EGB_VERIFIER_URL: "https://verifier.example",
         ...CHAIN,
       },
       HOME,
@@ -44,6 +47,7 @@ describe("settings", () => {
       stations: ["df3d88", "e4ba70"],
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "demo-01" },
       admin: null,
+      store: { storeUrl: "https://store.example", verifierUrl: "https://verifier.example" },
     });
     expect(readSettings({ EGB_RECEIVER: "fake" }, HOME, REPO).receiver).toEqual({ kind: "fake" });
     expect(readSettings({ EGB_RECEIVER: "none" }, HOME, REPO).receiver).toEqual({ kind: "none" });
@@ -58,6 +62,9 @@ describe("settings", () => {
       expect((error as SettingsError).problems).toHaveLength(3);
     }
     expect(() => readSettings({ EGB_STATIONS: "e4ba70,e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/different station ids/);
+    expect(() => readSettings({ EGB_STATIONS: "e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/EGB_STATIONS must be 2 to 4/);
+    expect(() => readSettings({ EGB_STATIONS: "e4ba70,df3d88,df3b9c,0a0b0c,0a0b0d", ...CHAIN }, HOME, REPO)).toThrow(/EGB_STATIONS must be 2 to 4/);
+    expect(readSettings({ EGB_STATIONS: "e4ba70,df3d88,df3b9c,0a0b0c", ...CHAIN }, HOME, REPO).stations).toHaveLength(4);
     expect(() => readSettings({ EGB_PORT: "70000", ...CHAIN }, HOME, REPO)).toThrow(/EGB_PORT/);
   });
 
@@ -74,6 +81,17 @@ describe("settings", () => {
     } catch (error) {
       expect(String(error)).not.toContain("secret-key");
     }
+  });
+
+  it("takes the store and the verifier together, as URLs, and has no store games without them", () => {
+    const both = { EGB_STORE_URL: "http://127.0.0.1:8791", EGB_VERIFIER_URL: "http://127.0.0.1:8792" };
+    expect(readSettings({ ...CHAIN, ...both }, HOME, REPO).store).toEqual({ storeUrl: "http://127.0.0.1:8791", verifierUrl: "http://127.0.0.1:8792" });
+    expect(readSettings({ EGB_RECEIVER: "fake" }, HOME, REPO).store).toBeNull();
+    expect(readSettings({ ...CHAIN, EGB_STORE_URL: " ", EGB_VERIFIER_URL: "" }, HOME, REPO).store).toBeNull();
+    expect(() => readSettings({ ...CHAIN, EGB_STORE_URL: both.EGB_STORE_URL }, HOME, REPO)).toThrow(/both EGB_STORE_URL and EGB_VERIFIER_URL/);
+    expect(() => readSettings({ ...CHAIN, EGB_VERIFIER_URL: both.EGB_VERIFIER_URL }, HOME, REPO)).toThrow(/both EGB_STORE_URL and EGB_VERIFIER_URL/);
+    expect(() => readSettings({ ...CHAIN, ...both, EGB_STORE_URL: "ftp://store.example" }, HOME, REPO)).toThrow(/EGB_STORE_URL must be/);
+    expect(() => readSettings({ ...CHAIN, ...both, EGB_VERIFIER_URL: "not a url" }, HOME, REPO)).toThrow(/EGB_VERIFIER_URL must be/);
   });
 
   it("takes the admin key only with an RPC to use it on, and never echoes it", () => {

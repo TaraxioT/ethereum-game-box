@@ -12,7 +12,7 @@ change here is a change on both sides.
 - **Receiver → Pi:** one JSON object, at most 1024 bytes, written whole or not at all (the receiver never waits on
   USB: a line that doesn't fit the transmit buffer is dropped and counted in `stats`).
 - `st` names a station by the last three bytes of its MAC, lower-case hex (`e4ba70`). Up to four stations share one
-  receiver.
+  receiver. It keeps each one it hears until it restarts, so a fifth station is ignored, even with one of the four gone.
 - `at_us` is the receiver's `micros()` when the event happened on the receiver (a 32-bit counter: it wraps every
   ~71 minutes, so the Pi compares it modulo 2³²).
 - Every `id` a command carries is the caller's, a decimal from 1 to 2³²−1, and comes back on every line about that

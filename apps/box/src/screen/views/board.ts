@@ -37,7 +37,8 @@ export interface BoardLine {
   readonly when: string;
   /** `live`: held or scoring now. `done`: ended or closed. `none`: nobody holds it, nothing open. */
   readonly tone: "live" | "done" | "none";
-  /** The title's or cup's own ENS name (`champion.quickdraw.gamebox.eth`), or "". */
+  /** The title's or cup's own ENS name and who it resolves to now (`champion.quickdraw.gamebox.eth → nova.gamebox.eth`),
+   *  or the name alone with nobody behind it, or "". */
   readonly map: string;
   /** What a tap on the line plays for (the title, or the cup while it scores), or null. */
   readonly play: PlayFor | null;
@@ -54,11 +55,12 @@ export interface BoardGame {
 function titleLine(g: AdminGame, now: number): BoardLine {
   const t = g.title;
   if (!t.holder || t.expiry <= now) return { what: "UP FOR GRABS", when: "", tone: "none", map: t.name, play: "title" };
+  const holder = playerWord(t.holderName, t.holder);
   return {
-    what: `${playerWord(t.holderName, t.holder)}${t.streak > 1 ? ` ×${t.streak}` : ""}`,
+    what: `${holder}${t.streak > 1 ? ` ×${t.streak}` : ""}`,
     when: timeLeft(t.expiry - now),
     tone: "live",
-    map: t.name,
+    map: `${t.name} → ${holder}`,
     play: "title",
   };
 }
@@ -69,12 +71,16 @@ function cupLine(cups: readonly AdminCup[], label: string, now: number): BoardLi
   if (open) {
     const leader = open.leader ? playerWord(open.leader.name, open.leader.address) : null;
     const prize = open.prize === "0" ? "" : `${open.prize} USDC · `;
-    if (open.ends > now) return { what: `${prize}${leader ? `${leader} ${open.leader?.points ?? 0} PTS` : "NO RESULTS YET"}`, when: timeLeft(open.ends - now), tone: "live", map: open.name, play: "cup" };
+    if (open.ends > now) {
+      const what = `${prize}${leader ? `${leader} ${open.leader?.points ?? 0} PTS` : "NO RESULTS YET"}`;
+      return { what, when: timeLeft(open.ends - now), tone: "live", map: leader ? `${open.name} → ${leader}` : open.name, play: "cup" };
+    }
     return { what: leader ? `${leader} WINS` : "NOBODY PLAYED", when: "ENDED", tone: "done", map: open.name, play: null };
   }
   const last = mine.find((c) => c.closed && now - c.ends < RECENT_S);
   if (last) {
-    return { what: last.winner ? `${playerWord(last.winnerName, last.winner)} · FOREVER` : "NOBODY PLAYED", when: "WON", tone: "done", map: last.name, play: null };
+    const winner = last.winner ? playerWord(last.winnerName, last.winner) : null;
+    return { what: winner ? `${winner} · FOREVER` : "NOBODY PLAYED", when: "WON", tone: "done", map: winner ? `${last.name} → ${winner}` : last.name, play: null };
   }
   return { what: "NONE OPEN", when: "", tone: "none", map: "", play: null };
 }
@@ -128,7 +134,7 @@ export function createBoardPanel(layout: Layout, link: BoxLink): BoardPanel | nu
   let skew = 0;
 
   /** What the games were last drawn from, leaving out the times: they are redrawn only when a line changes, so names
-   *  keep their drift; the times are set in place every tick. */
+   *  keep scrolling; the times are set in place every tick. */
   let drawn = "";
 
   function draw(): void {

@@ -95,6 +95,18 @@
       "deployBlock": 12078750,
       "txHash": "0x0fabbf1163b3155264664b4a4a6b22db1b7757062b38ab0910c444fcd95e715a",
       "verified": false
+    },
+    "StoreUSDC": {
+      "address": "0xA9d4870998016502ddb04052fcEF09ffce352d02",
+      "deployBlock": 12079380,
+      "txHash": "0xb46e1d26b2e21210484b927abda2b0a3a7d1d3e9e23fc5832a25267ed47a1846",
+      "verified": true
+    },
+    "StorePot": {
+      "address": "0x4cba5d09A55fcf9aE5d5d930FE7E03770BBB27F5",
+      "deployBlock": 12079381,
+      "txHash": "0x0abe446f88025006d2f2b1ba98e0ba43c5bdf44acb78334f5864e2527873fd44",
+      "verified": true
     }
   },
   "ens": {

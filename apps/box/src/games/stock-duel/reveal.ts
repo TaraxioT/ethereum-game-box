@@ -9,7 +9,7 @@
 // of the round's number counting up, then the winner's fanfare from its side (or the neutral fall of a tie).
 import type { Rect } from "../../screen/shell/layout.ts";
 import type { Sound } from "../../screen/views/view.ts";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import type { RoundRecord, StatKey, Stock } from "./types.ts";
 import { calm, el, fitFont, place, play, wait } from "../../screen/shell/dom.ts";
 import { formatStat, STAT_LABEL, STATS } from "./deck.ts";
@@ -55,9 +55,9 @@ export interface RevealPlaces {
 export interface Reveal {
   readonly el: HTMLElement;
   /** A played card lands face down on its seat's well, flying from `from` (stage pixels), or simply lying there. */
-  place(seat: Seat, auto: boolean, from: Rect | null): void;
+  place(seat: DuelSeat, auto: boolean, from: Rect | null): void;
   /** The seat's well says it is on its last turn (its partner has played), or goes quiet. */
-  waiting(seat: Seat, on: boolean): void;
+  waiting(seat: DuelSeat, on: boolean): void;
   /** Both cards turn over together and show the round; resolves once its outcome is shown. */
   flip(record: RoundRecord, animate: boolean): Promise<void>;
   /** The line under the cards recalls a finished round (`play` is its 1-based number), or goes blank for null. */
@@ -75,7 +75,7 @@ interface Slot {
 }
 
 /** `label(seat)` is the player's short name (`KAI`), for the result line and the last-turn note. */
-export function createReveal(places: RevealPlaces, label: (seat: Seat) => string, sound: Sound): Reveal {
+export function createReveal(places: RevealPlaces, label: (seat: DuelSeat) => string, sound: Sound): Reveal {
   const root = el("div", "sd-reveal");
   const wells = places.rests.map((r, seat) => {
     const well = el("div", `sd-rest s${seat}`);
@@ -93,7 +93,7 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
   let alive = true;
   let shown: RoundRecord | null = null;
 
-  function make(seat: Seat, auto: boolean): Slot {
+  function make(seat: DuelSeat, auto: boolean): Slot {
     const wrap = el("div", `sd-slot s${seat}`);
     place(wrap, places.rests[seat]);
     const lift = el("div", "sd-rc-lift");
@@ -133,7 +133,7 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
       if (!alive || shown !== record) return;
       const share = k / COUNT_STEPS;
       values.forEach((value, seat) => {
-        if (value) value.textContent = formatStat(record.stat, record.cards[seat as Seat][record.stat] * share);
+        if (value) value.textContent = formatStat(record.stat, record.cards[seat as DuelSeat][record.stat] * share);
       });
       sound.play("count", { pitch: share });
       await wait(OUTCOME_AFTER_MS / COUNT_STEPS);
@@ -141,7 +141,7 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
   }
 
   /** The winner's card lifts and lights; the loser's sinks and dims. */
-  function outcome(seat: Seat, won: boolean, animate: boolean): Promise<void> {
+  function outcome(seat: DuelSeat, won: boolean, animate: boolean): Promise<void> {
     const slot = slots[seat];
     if (!slot) return Promise.resolve();
     slot.wrap.classList.add(won ? "won" : "lost");
@@ -151,7 +151,7 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
     return play(slot.lift, [{ transform: "none" }, { transform: to }], { duration: OUTCOME_MS, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
   }
 
-  function say(kind: "recall" | "result" | null, seat: Seat | null, html: Node[]): void {
+  function say(kind: "recall" | "result" | null, seat: DuelSeat | null, html: Node[]): void {
     call.className = `sd-call${kind ? ` ${kind} on` : ""}${seat === null ? "" : ` s${seat}`}`;
     call.replaceChildren(...html);
   }

@@ -1,4 +1,4 @@
-// What the Box reads from Sepolia (SEPOLIA_RPC_URL): USDC balances, player names, the pot and rounds, the head, and
+// What the Box reads from Sepolia (SEPOLIA_RPC_URL): USDC balances, player names, the pots and rounds, the head, and
 // through the Universal Resolver a player's `stats`, a game's title and cup, and `gamebox.eth`'s `leaderboard`. Every address comes from deployments/sepolia.json
 // (the shared loader). The RPC URL carries the node's key, so every error that leaves here has its URLs redacted.
 import {
@@ -21,6 +21,7 @@ import {
   parseStats,
   titleName,
 } from "@egb/shared/names";
+import { storePotAbi, storePotAddress, storeUsdcAddress } from "@egb/shared/store";
 import { sepoliaClient } from "@egb/shared/web";
 import { type Address, type Hex, type PublicClient, decodeEventLog, isAddressEqual, zeroAddress } from "viem";
 import type { ChainHead } from "../core/ports.ts";
@@ -36,21 +37,25 @@ export interface Settled {
   readonly stats: readonly [PlayerRecord | null, PlayerRecord | null];
   /** The title's holder and streak at that block, or null. */
   readonly title: { readonly name: string; readonly holder: Address; readonly streak: number } | null;
-  /** The open cup's name and standings at that block, or null. */
-  readonly cup: { readonly label: string; readonly standings: readonly (Standing & { readonly addr: Address })[] } | null;
+  /** The open cup's label, ENS name and standings at that block, or null. */
+  readonly cup: { readonly label: string; readonly name: string; readonly standings: readonly (Standing & { readonly addr: Address })[] } | null;
 }
 
 export interface Reads {
   head(): Promise<ChainHead>;
-  balance(address: Address): Promise<number>;
+  balance(address: Address, block?: bigint): Promise<number>;
   /** `<label>.gamebox.eth`, or null. */
   nameOf(address: Address, block?: bigint): Promise<string | null>;
   /** A player's `stats` record, by its name: null with none, or one `PlayerStats` didn't write. */
   stats(name: string, block?: bigint): Promise<PlayerRecord | null>;
-  /** BoxResults has seen this round, or DuelPot holds a pot for it (open, settled or refunded). */
+  /** A badge's Store USDC. */
+  storeBalance(address: Address): Promise<number>;
+  /** BoxResults has seen this round, or DuelPot or StorePot holds a pot for it (open, settled or refunded). */
   roundTaken(box: string, round: number): Promise<boolean>;
   /** The pot is still open (neither settled nor refunded). */
   potOpen(box: string, round: number): Promise<boolean>;
+  /** StorePot's pot is still open (not settled, voided or refunded). */
+  storePotOpen(box: string, round: number): Promise<boolean>;
   board(game: string): Promise<Board>;
   /** The P-256 key `GameBoxNames` holds for a Box (zeros for none). */
   boxKey(box: string): Promise<{ readonly qx: Hex; readonly qy: Hex }>;
@@ -86,6 +91,12 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
   const pot = { address: contractAddress("DuelPot"), abi: duelPotAbi } as const;
   const results = { address: contractAddress("BoxResults"), abi: boxResultsAbi } as const;
   const cups = { address: contractAddress("Championships"), abi: championshipsAbi } as const;
+
+  /** A pot in `StorePot`, or null before it is deployed. */
+  async function storePot(box: string, round: number) {
+    const address = storePotAddress();
+    return address ? client.readContract({ address, abi: storePotAbi, functionName: "getPot", args: [box, BigInt(round)] }) : null;
+  }
 
   /** A text record through the Universal Resolver; a name that doesn't resolve is null. */
   async function text(name: string, key: string, blockNumber?: bigint): Promise<string | null> {
@@ -177,8 +188,16 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
         const gwei = Number(block.baseFeePerGas ?? 0n) / 1e9;
         return { block: Number(block.number), at: Number(block.timestamp) * 1000, gasGwei: Math.round(gwei * 100) / 100 };
       }),
-    balance: (badge) =>
-      safely("a USDC balance", async () => Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge] })))),
+    balance: (badge, block) =>
+      safely("a USDC balance", async () =>
+        Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge], ...(block === undefined ? {} : { blockNumber: block }) }))),
+      ),
+    storeBalance: (badge) =>
+      safely("a Store USDC balance", async () => {
+        const address = storeUsdcAddress();
+        if (!address) throw new Error("Store USDC isn't deployed");
+        return Number(formatUsdc(await client.readContract({ address, abi: fakeUsdcAbi, functionName: "balanceOf", args: [badge] })));
+      }),
     nameOf: (badge, block) => safely("a player name", () => nameOf(badge, block)),
     stats: (name, block) => safely("a player's stats", () => stats(name, block)),
     roundTaken: (box, round) =>
@@ -186,10 +205,12 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
         const used = await client.readContract({ ...results, functionName: "roundUsed", args: [box, BigInt(round)] });
         if (used) return true;
         const held = await client.readContract({ ...pot, functionName: "getPot", args: [box, BigInt(round)] });
-        return held.state !== 0;
+        if (held.state !== 0) return true;
+        return ((await storePot(box, round))?.state ?? 0) !== 0;
       }),
     potOpen: (box, round) =>
       safely("a pot", async () => (await client.readContract({ ...pot, functionName: "getPot", args: [box, BigInt(round)] })).state === POT_OPEN),
+    storePotOpen: (box, round) => safely("a store pot", async () => (await storePot(box, round))?.state === POT_OPEN),
     boxKey: (box) =>
       safely("the Box's key", async () => {
         const [qx, qy] = await client.readContract({ ...names, functionName: "boxKey", args: [box] });
@@ -235,7 +256,7 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
           names: [one, two],
           stats: [first, second],
           title: held,
-          cup: open ? { label: open.info.label, standings: open.standings.map((row) => ({ ...row, addr: row.addr as Address })) } : null,
+          cup: open ? { label: open.info.label, name: open.name, standings: open.standings.map((row) => ({ ...row, addr: row.addr as Address })) } : null,
         };
       }),
   };

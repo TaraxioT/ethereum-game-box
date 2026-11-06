@@ -15,6 +15,7 @@
 | `src/web/` | What the sites (`apps/web`, `apps/operator`) need in a browser, imported as `@egb/shared/web` (below) |
 | `src/admin/` | What `gamebox.eth`'s admin does, imported as `@egb/shared/admin` (below) |
 | `src/swap/` | The tap swap on the GBX/USDC pool, imported as `@egb/shared/swap` (below) |
+| `src/store/` | The game store's messages and the verifier's API, imported as `@egb/shared/store` (below) |
 
 ## `src/admin/`
 
@@ -91,6 +92,18 @@ its own client, head watch and transaction log.
 | `tapSwap.ts` | `GameBoxHook`'s EIP-712 `TapSwap` message (the typed data and the digest the Box signs with P-256, like `Execute`) and `tapSwapHookData`, the hook data a tap swap carries to the pool |
 | `vectors.json` | Written by `contracts/test/hook/SwapVectors.t.sol`; `tapSwap.test.ts` checks `tapSwap.ts` against it |
 | `vectors.ts` | `TAP_SWAP_VECTOR`, typed, signed with the names vector Box key |
+
+## `src/store/`
+
+| Module | Holds |
+|---|---|
+| `api.ts` | The on-chain messages (`StoreStake`, `StoreVerdict`, `StoreVoid`), the verifier's HTTP API, what passes between its Worker and its container, and the audit record |
+| `messages.ts` | `StorePot`'s three EIP-712 messages (domain `Game Box Store Pots`) and the verifier's `Judge` (domain `Game Box Verifier`, whose `verifyingContract` is the pot): `store*TypedData`, `judgeTypedData` and their digests. `jsonTextHash` is the keccak256 of exact JSON text, as a `Judge`'s `log` and an audit record's `record` both are. The Box signs `Stake` and `Judge` with P-256 over the raw digest; a verifier key signs `Verdict` and `Void` with ECDSA |
+| `deployments.ts` | `storePotAddress()` and `storeUsdcAddress()`, each `undefined` until it is deployed |
+| `vectors.json` | Written by `contracts/test/game/StoreVectors.t.sol`; `messages.test.ts` checks `messages.ts` against it |
+| `vectors.ts` | The vectors, typed, signed with the names vector Box key and anvil's second well-known key |
+
+`storePotAbi` is generated with the others into `src/names/abis.ts`, and exported here too.
 
 ## Rules
 

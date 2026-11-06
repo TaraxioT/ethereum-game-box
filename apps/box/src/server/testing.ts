@@ -10,7 +10,7 @@ import { LINK_PATH } from "../core/wire.ts";
 import { createFakeClock, type FakeClock } from "../core/fake-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { startBox, type Box, type BoxOptions } from "./box.ts";
-import type { ReceiverSetting } from "./settings.ts";
+import type { ReceiverSetting, Settings } from "./settings.ts";
 
 /** When every test Box's clock starts. */
 export const TEST_START = Date.parse("2026-11-06T10:00:00Z");
@@ -44,7 +44,19 @@ export async function flush(rounds = 6): Promise<void> {
 export const TEST_BUILDER_ENV = { EGB_MODEL: "off", EGB_FORGE_PROVIDER: "sim", PATH: process.env.PATH, HOME: process.env.HOME };
 
 export async function startTestBox(
-  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"]; chain?: BoxOptions["chain"]; exitScreen?: BoxOptions["exitScreen"] } = {},
+  options: {
+    port?: number;
+    dir?: string;
+    receiver?: ReceiverSetting;
+    /** The Box's stations: two, unless a test seats more. */
+    stations?: readonly string[];
+    fake?: FakeOptions;
+    builder?: BoxOptions["builder"];
+    chain?: BoxOptions["chain"];
+    exitScreen?: BoxOptions["exitScreen"];
+    store?: Settings["store"];
+    storeFetch?: typeof fetch;
+  } = {},
 ): Promise<TestBox> {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "egb-box-")));
   await mkdir(join(dir, "screen", "assets"), { recursive: true });
@@ -59,14 +71,16 @@ export async function startTestBox(
       dataDir: join(dir, "data"),
       screenDir: join(dir, "screen"),
       receiver: options.receiver ?? { kind: "none" },
-      stations: ["e4ba70", "df3d88"],
+      stations: options.stations ?? ["e4ba70", "df3d88"],
       chain: { kind: "demo" },
       admin: null,
+      store: options.store ?? null,
     },
     repoRoot: dir,
     clock,
     ...(options.fake ? { fake: options.fake } : {}),
     ...(options.chain ? { chain: options.chain } : {}),
+    ...(options.storeFetch ? { storeFetch: options.storeFetch } : {}),
     log: (text) => logs.push(text),
     builder: { env: TEST_BUILDER_ENV, simSpeed: 0, ...options.builder },
     // Never the real kiosk: a test would close the developer's own unit.
@@ -98,6 +112,25 @@ export async function startTestBox(
       if (!options.dir) await rm(dir, { recursive: true, force: true });
     },
   };
+}
+
+/** A simulated badge lands on a station's reader, stays until its tap has ended, and lifts off. */
+export async function fakeTap(tb: TestBox, badge: string, st: string): Promise<void> {
+  const taps = tb.box.taps();
+  if (!taps?.fake) throw new Error("no fake receiver");
+  const { fake } = taps;
+  // stats() hands out the live counters: keep a copy.
+  const before = structuredClone(taps.stats().taps);
+  const ended = () => {
+    const now = taps.stats().taps;
+    const fails = Object.values(now.fail).reduce((a, b) => a + b, 0) - Object.values(before.fail).reduce((a, b) => a + b, 0);
+    return now.touch > before.touch && now.done - before.done + fails === now.touch - before.touch && taps.status().running === 0;
+  };
+  fake.lift(badge);
+  fake.place(badge, st);
+  await tb.settle(ended, 5_000, 5);
+  fake.lift(badge);
+  await tb.settle(() => fake.status().badges.every((b) => b.name !== badge || b.station === null), 1_000, 5);
 }
 
 /** A screen on the link: every message it got, in order. */

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node", "@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "erasableSyntaxOnly": true
+  },
+  // The one test that runs the relayer's real routes. They need the Workers' types, and the Box's own code must not get them.
+  "include": ["src/chain/relayer.test.ts"]
+}

@@ -29,16 +29,18 @@ describe("the demo chain", () => {
     clock.advance(BLOCK_MS - SEND_MS + PAY_MS);
     expect(steps[0]?.map((s) => s.step)).toEqual(["sent", "in-block", "paid"]);
     expect(steps[0]?.every((s) => s.hash === null)).toBe(true);
-    expect(await chain.balance(A)).toBe(DEMO_START_USDC - 10);
+    expect((await chain.player(A)).balance).toBe(DEMO_START_USDC - 10);
     chain.settle({ round: 1, game: "stock-duel", badges: [A, B], winner: 1 }, watch());
     clock.advance(BLOCK_MS + PAY_MS);
-    expect(await chain.balance(B)).toBe(DEMO_START_USDC + 10);
-    expect(await chain.outcome({ round: 1, game: "stock-duel", badges: [A, B], winner: 1 }, null)).toEqual([
+    expect((await chain.player(B)).balance).toBe(DEMO_START_USDC + 10);
+    const settlement = await chain.outcome({ round: 1, game: "stock-duel", badges: [A, B], winner: 1 }, null);
+    expect(settlement.lines).toEqual([
       `${B.slice(0, 6)}…${B.slice(-4)} +20 USDC`,
       `${B.slice(0, 6)}…${B.slice(-4)} now holds champion.stockduel.gamebox.eth`,
       `${A.slice(0, 6)}…${A.slice(-4)} stats: 0W 1L`,
       `${B.slice(0, 6)}…${B.slice(-4)} stats: 1W 0L, streak 1`,
     ]);
+    expect(settlement).toMatchObject({ paid: 20, title: { name: "champion.stockduel.gamebox.eth", streak: 1 }, cup: null });
     expect((await chain.board("stock-duel")).leaders.map((row) => [row.name, row.wins])).toEqual([
       [`${B.slice(0, 6)}…${B.slice(-4)}`, 1],
       [`${A.slice(0, 6)}…${A.slice(-4)}`, 0],

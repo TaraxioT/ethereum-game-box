@@ -1,7 +1,7 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
-import type { Seat, StationView, Transcript, BuiltEvent, Outcome, TapNeed } from "@egb/sdk";
-import type { Badge, Board, GameId, GameInfo, PlayerCard, TxStep } from "./types.ts";
+import type { DuelSeat, Seat, StationView, Transcript, BuiltEvent, LogEntry, Outcome, TapNeed } from "@egb/sdk";
+import type { Badge, Board, GameId, GameInfo, Judged, PlayerCard, Settlement, TxStep } from "./types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };
@@ -20,6 +20,8 @@ export interface StationsPort {
   show(seat: Seat, view: StationView): void;
   /** `ok`: one short buzz (an accepted tap). `no`: two short (a refused one). */
   buzz(seat: Seat, kind: "ok" | "no"): void;
+  /** The seats that need a station now, each time that changes: a station on any other seat can cover a lost one. */
+  inUse(seats: readonly Seat[]): void;
 }
 
 /** What the next tap at a seat should ask of the badge. `none`: the tap means nothing now (still identified). */
@@ -70,11 +72,11 @@ export interface ChainTxUpdate {
 /** Hears a transaction's every step, up to `paid` or `failed`. */
 export type TxWatch = (update: ChainTxUpdate) => void;
 
-/** Both stakes of a match, for the pot. The game is the core's id; the port names it on chain. */
+/** Every stake of a team game's match, for the pot. The game is the core's id; the port names it on chain. */
 export interface StakeOrder {
   readonly round: number;
   readonly game: GameId;
-  readonly badges: readonly [`0x${string}`, `0x${string}`];
+  readonly badges: readonly `0x${string}`[];
   /** Whole USDC per seat. */
   readonly amount: number;
 }
@@ -83,8 +85,45 @@ export interface StakeOrder {
 export interface ResultOrder {
   readonly round: number;
   readonly game: GameId;
-  readonly badges: readonly [`0x${string}`, `0x${string}`];
-  readonly winner: 0 | 1 | null;
+  readonly badges: readonly `0x${string}`[];
+  readonly winner: DuelSeat | null;
+}
+
+/** A store match's stakes, for `StorePot`: the bundle's hash names the game. */
+export interface StoreStakeOrder {
+  readonly round: number;
+  readonly bundle: `0x${string}`;
+  readonly badges: readonly `0x${string}`[];
+  /** Whole USDC per seat. */
+  readonly amount: number;
+}
+
+/** A closed store match, for the verifier: what the port needs to write the log's header, and its entries. */
+export interface JudgeOrder extends StoreStakeOrder {
+  readonly game: GameId;
+  /** ms since the epoch, the Box's clock. */
+  readonly startedAt: number;
+  readonly entries: readonly LogEntry[];
+}
+
+/** Hears the verifier's every new word, up to `paid`, `refunded` or `failed`. */
+export type JudgeWatch = (update: Judged) => void;
+
+/**
+ * The money and the judge behind a store game. `StorePot` and Store USDC are apart from `DuelPot` and its USDC. Sends
+ * never wait, as on `ChainPort`.
+ */
+export interface StoreChainPort {
+  /** A badge's Store USDC. */
+  balance(address: `0x${string}`): Promise<number>;
+  /** Sends every stake into the pot (a Box-signed `Stake` naming the bundle). */
+  open(order: StoreStakeOrder, watch: TxWatch): void;
+  /** Sends the pot back past its refund delay, when the verifier never paid it. */
+  refund(round: number, watch: TxWatch): void;
+  /** 100 Store USDC to a badge. */
+  topup(address: `0x${string}`, watch: TxWatch): void;
+  /** Sends the match's log, signed by the Box's key, to the verifier, and follows it to a payout or a refund. */
+  judge(order: JudgeOrder, watch: JudgeWatch): void;
 }
 
 /** Sepolia's head: its number, when it was sealed (ms since the epoch) and its base fee (gwei). */
@@ -109,9 +148,12 @@ export interface ChainPort {
   readonly refundAfterMs: number;
   /** Only a badge with a player name may stake (`DuelPot` refuses `NotAPlayer`): one without is sent to the lobby. */
   readonly stakeNeedsName: boolean;
-  balance(address: `0x${string}`): Promise<number>;
-  /** A badge's name, balance and stats. */
-  player(address: `0x${string}`): Promise<PlayerCard>;
+  /**
+   * A badge's name, balance and stats. With `block`, read at that block (a transaction's): an RPC node behind the
+   * relayer's would still answer from before it, so the screen would keep the old balance. Rejects while the node
+   * doesn't have the block yet.
+   */
+  player(address: `0x${string}`, block?: number): Promise<PlayerCard>;
   board(game: GameId): Promise<Board>;
   /** Sends both stakes into the pot (a Box-signed `Stake`). */
   open(order: StakeOrder, watch: TxWatch): void;
@@ -124,15 +166,35 @@ export interface ChainPort {
   /** `<label>.gamebox.eth` for a badge (a Box-signed `Seat`). */
   claim(label: string, address: `0x${string}`, watch: TxWatch): void;
   /**
-   * What a settled result did, read from chain at its receipt: the payout, the title, the championship. `hash` is the
+   * What a settled result did, read from chain at its receipt: the payout, the title, the cup, the stats. `hash` is the
    * result's transaction (null on a chain with no hashes: the demo's).
    */
-  outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<readonly string[]>;
+  outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<Settlement>;
   /** Calls back with each new head; returns the unsubscribe. */
   watchHead(listener: (head: ChainHead) => void): () => void;
+  /** Absent: no store game can run (the demo, or Sepolia before `StorePot` is deployed). */
+  readonly store?: StoreChainPort;
 }
 
-/** The games the Box can run: the team games plus the installed built games. */
+/** What the core needs from a store game's manifest, once its bundle is here and checked. */
+export interface StoreBundle {
+  /** The match's time limit, in minutes. */
+  readonly minutes: number;
+  readonly taps: TapNeed;
+}
+
+/**
+ * Store games' bundles, one at a time: fetched for each match, and never kept. A bundle's code never runs here: it runs
+ * only in the kiosk's sandboxed frame.
+ */
+export interface BundlePort {
+  /** Fetches the bundle and checks it. A rejection means the game is sealed, and nothing may be staked on it. */
+  fetch(game: GameId, hash: `0x${string}`): Promise<StoreBundle>;
+  /** Forgets the bundle: stops a fetch still running, and deletes what is on disk. */
+  drop(): void;
+}
+
+/** The games the Box can run: the team games, the installed built games and the store's games. */
 export interface LibraryPort {
   games(): readonly GameInfo[];
   /** Calls back when a game is installed or removed. */
@@ -162,8 +224,8 @@ export interface RulesRunnerPort {
 /** Where finished matches go: the session log on the Pi, nowhere in the demo. */
 export interface MatchLog {
   record(transcript: Transcript): void;
-  /** How many counted results this pair of badges (either seat) has had since `since` (ms since the epoch). */
-  countedSince(badges: readonly [string, string], since: number): number;
+  /** How many counted results these badges (in any seats) have had together since `since` (ms since the epoch). */
+  countedSince(badges: readonly string[], since: number): number;
 }
 
 /**
@@ -179,6 +241,8 @@ export interface CorePorts {
   readonly library: LibraryPort;
   /** Absent: built games can't run (the demo). */
   readonly rules?: RulesRunnerPort;
+  /** Absent: store games can't run (the demo, a Box with no store settings). */
+  readonly bundles?: BundlePort;
   readonly log: MatchLog;
   /** uint32 randomness for seeds and the lobby's proposed labels (never a game's outcome on a real Box: badges roll those). */
   readonly random: () => number;

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["scripts", "test/cli", "test/live", "test/setup.ts", "test/zips.ts", "vitest.config.ts"]
+}

@@ -3,6 +3,7 @@
 // locked until the first gesture, which unlocks both. Muting is remembered (localStorage `gamebox-muted=1`) and
 // silences the cues and pauses the music. The same sound for the same seat again within 25 ms is dropped, so a moment
 // heard twice (a replayed event) sounds once. Nothing here ever throws into a caller: with no audio, the Box is silent.
+import { sideOf } from "@egb/sdk";
 import type { Sound } from "../views/view.ts";
 import { soundEntry, type SoundName, type SoundOptions } from "./catalogue.ts";
 import { createMusic } from "./music.ts";
@@ -70,9 +71,9 @@ export function createSound(): Sound {
       if (!entry) return;
       const out = s.ctx.createGain();
       out.gain.value = Math.max(0, Math.min(1, volume));
-      if (options.seat === 0 || options.seat === 1) {
+      if (options.seat !== undefined && options.seat !== null) {
         const pan = s.ctx.createStereoPanner();
-        pan.pan.value = options.seat === 0 ? -PAN : PAN;
+        pan.pan.value = sideOf(options.seat) === 0 ? -PAN : PAN;
         out.connect(pan).connect(s.bus);
       } else out.connect(s.bus);
       entry.play(s, out, s.ctx.currentTime + lead(s.ctx), options);

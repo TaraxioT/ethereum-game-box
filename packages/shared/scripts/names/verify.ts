@@ -36,6 +36,8 @@ const OURS: Record<string, string> = {
   Championships: 'src/names/Championships.sol:Championships',
   DuelPot: 'src/game/DuelPot.sol:DuelPot',
   FakeUSDC: 'src/token/FakeUSDC.sol:FakeUSDC',
+  StoreUSDC: 'src/token/FakeUSDC.sol:FakeUSDC',
+  StorePot: 'src/game/StorePot.sol:StorePot',
   DemoBoxAccount: 'src/box/P256Account.sol:P256Account',
   MumbaiBoxAccount: 'src/box/P256Account.sol:P256Account',
 };

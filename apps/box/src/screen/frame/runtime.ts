@@ -27,7 +27,8 @@ export interface FrameRuntime {
   fail(error: unknown): void;
 }
 
-function text(error: unknown): string {
+/** An error as the frame reports it, cut to MAX_MESSAGE. */
+export function errorText(error: unknown): string {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   return message.slice(0, MAX_MESSAGE);
 }
@@ -39,10 +40,10 @@ function isGameScreen(v: unknown): v is GameScreen {
 }
 
 /** The kiosk's messages, by shape: the kiosk is trusted, but a stray message must never reach the game's code. */
-function toFrame(data: unknown): ToFrame | null {
+function toFrame(data: unknown): Extract<ToFrame, { t: "init" | "update" }> | null {
   if (!isObject(data)) return null;
-  if (data.t === "init" && isObject(data.manifest) && Array.isArray(data.seats) && typeof data.now === "number") return data as unknown as ToFrame;
-  if (data.t === "update" && isObject(data.event) && typeof data.now === "number") return data as unknown as ToFrame;
+  if (data.t === "init" && isObject(data.manifest) && Array.isArray(data.seats) && typeof data.now === "number") return data as unknown as Extract<ToFrame, { t: "init" }>;
+  if (data.t === "update" && isObject(data.event) && typeof data.now === "number") return data as unknown as Extract<ToFrame, { t: "update" }>;
   return null;
 }
 
@@ -54,7 +55,7 @@ export function createFrameRuntime(options: FrameRuntimeOptions): FrameRuntime {
   function fail(error: unknown): void {
     if (errors >= MAX_ERRORS) return;
     errors++;
-    options.post({ t: "error", message: text(error) });
+    options.post({ t: "error", message: errorText(error) });
   }
 
   return {

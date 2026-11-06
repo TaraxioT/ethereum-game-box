@@ -3,9 +3,10 @@
 // the pot between them, and at the end a slab over the wheel naming the winner. A player's square pops when their
 // tap lands; a tap that meant nothing shakes their slab.
 import type { Rect } from "../../screen/shell/layout.ts";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import type { PlayFor } from "../../core/types.ts";
 import { el, fitFont, place, play } from "../../screen/shell/dom.ts";
+import { ensName, setEns } from "../../screen/shell/ens-name.ts";
 import { ROUNDS_TO_WIN } from "./rules.ts";
 
 export interface StandingPlaces {
@@ -30,9 +31,9 @@ export interface Standing {
   /** Lights each seat's won rounds and shows the round number; `animate` pops a newly lit pip. */
   set(score: readonly [number, number], round: number, animate: boolean): void;
   /** The match is over: the banner names the winner, or a draw for null. */
-  finish(winner: Seat | null, animate: boolean): void;
+  finish(winner: DuelSeat | null, animate: boolean): void;
   /** A tap at a seat's station: `accepted` pops its square, a refused one shakes its slab. */
-  tap(seat: Seat, accepted: boolean): void;
+  tap(seat: DuelSeat, accepted: boolean): void;
 }
 
 export function createStanding(places: StandingPlaces): Standing {
@@ -40,7 +41,7 @@ export function createStanding(places: StandingPlaces): Standing {
     const plate = el("div", `sd-plate s${seat}`);
     place(plate, r);
     const avatar = el("div", "sd-avatar", `P${seat + 1}`);
-    const name = el("b");
+    const name = ensName("", "sd-name", { split: true });
     const stake = el("span");
     const who = el("div", "sd-who");
     who.append(name, stake);
@@ -79,7 +80,7 @@ export function createStanding(places: StandingPlaces): Standing {
       const money = stake !== null && stake > 0;
       plates.forEach((p, seat) => {
         const name = players[seat]?.name ?? "";
-        if (p.name.textContent !== name) p.name.textContent = name;
+        setEns(p.name, name);
         p.stake.replaceChildren(...(money ? ["STAKE ", el("em", "", `${stake} USDC`)] : []));
       });
       pot.hidden = stake === null;

@@ -27,7 +27,7 @@ import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
-import { other, type Seat } from "@egb/sdk";
+import { isDuelSeat, other, type DuelSeat } from "@egb/sdk";
 import { DECOY_MS, fouler, MAX_WAIT_MS, MIN_WAIT_MS, reactionMs, ROUNDS_TO_WIN } from "./rules.ts";
 import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";
@@ -154,7 +154,7 @@ const RAYS = 860;
 type Tone = "count" | "wait" | "decoy" | "draw" | "won" | "foul" | "again";
 
 /** What a seat's plate reads once a round is decided. */
-function verdict(s: QuickDrawState, seat: Seat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
+function verdict(s: QuickDrawState, seat: DuelSeat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
   const tap = s.taps[seat];
   if (tap !== null && tap < s.drawAt) return { word: "FOUL!", early: true };
   const ms = reactionMs(s, seat);
@@ -190,7 +190,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   const sign = createSign();
   place(sign.el, g.sign);
 
-  const makePlate = (seat: Seat): HTMLElement => {
+  const makePlate = (seat: DuelSeat): HTMLElement => {
     const plate = el("div", `qd-plate qd-plate--p${seat + 1}`);
     place(plate, g.plates[seat]);
     return plate;
@@ -219,7 +219,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   const hud = el("div", "qd-hud");
   place(hud, g.hud);
   /** Each seat's pips, in the order they fill: outward from the seat's tag. */
-  const pipRow = (seat: Seat): { readonly row: HTMLElement; readonly dots: readonly HTMLElement[] } => {
+  const pipRow = (seat: DuelSeat): { readonly row: HTMLElement; readonly dots: readonly HTMLElement[] } => {
     const row = el("span", `qd-hud-pips qd-hud-pips--p${seat + 1}`);
     const dots = Array.from({ length: ROUNDS_TO_WIN }, () => el("i", "qd-hud-pip"));
     const tag = el("span", "qd-hud-tag", `P${seat + 1}`);
@@ -333,7 +333,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
 
   /** One idle beat for a figure while the two wait: a gun checked (with its click) or the hat touched. The gun check
    *  settles the hand, so the breathing starts again after it. */
-  async function idleBeat(seat: Seat, n: number): Promise<void> {
+  async function idleBeat(seat: DuelSeat, n: number): Promise<void> {
     const f = figures[seat];
     await ((n + seat) % 2 === 0 ? f.cock(() => ctx.sound.play("cock", { seat })) : f.tipHat());
     if (walking && alive) f.breathe();
@@ -411,7 +411,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     await Promise.all(figures.map(async (f, seat) => {
       await wait(seat * COCK_GAP_MS);
       if (!walking || !alive) return;
-      await f.cock(() => ctx.sound.play("cock", { seat: seat as Seat }));
+      await f.cock(() => ctx.sound.play("cock", { seat: seat as DuelSeat }));
     }));
     if (!walking || !alive) return;
     // Ready to draw, but the stakes aren't in yet: the sign follows them, and the two wait on their marks.
@@ -641,7 +641,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     await sign.flip(instant);
   }
 
-  function fillPlate(seat: Seat, s: QuickDrawState): void {
+  function fillPlate(seat: DuelSeat, s: QuickDrawState): void {
     const plate = plates[seat];
     const v = verdict(s, seat);
     const value = el("span", "qd-plate-value");
@@ -744,7 +744,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     update(state: BoxState, event: BoxEvent) {
       if (state.phase === "stake") {
         // Both have signed: the stakes are on their way into the pot.
-        if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
+        if (event.type === "tap" && event.accepted && isDuelSeat(event.seat)) figures[event.seat].twitch();
         showWire(state);
         holdSign();
         if (!walked) void walkOut();
@@ -752,7 +752,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
       }
       const s = quickDraw(state);
       if (!s) return;
-      if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
+      if (event.type === "tap" && event.accepted && isDuelSeat(event.seat)) figures[event.seat].twitch();
       if (event.type === "cue" && event.cue === "draw" && shown === "wait") {
         shownKey = `${s.standoff}:draw`;
         shown = "draw";

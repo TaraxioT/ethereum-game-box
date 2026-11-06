@@ -30,7 +30,9 @@ function box(patch: Partial<BoxState>): BoxState {
     games: TEAM_GAMES,
     focus: "quick-draw",
     seats: [EMPTY, EMPTY],
+    fewest: 2,
     chain: { block: 50, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
+    fetching: false,
     stake: 10,
     playFor: "usdc",
     board: null,
@@ -97,7 +99,7 @@ describe("bot intents", () => {
       calledOff: false,
       endedAt: null,
       refunded: [false, false] as const,
-      lines: null,
+      settlement: null,
     };
     const playing = botIntent(box({ phase: "playing", seats: [human(true), bot(true)], match }), NOW, BOT_BADGE);
     expect(state.phase).toBe("wait");
@@ -185,7 +187,7 @@ describe("bot scheduler", () => {
       calledOff: false,
       endedAt: null,
       refunded: [false, false] as const,
-      lines: null,
+      settlement: null,
     });
     const tap = vi.fn(() => {
       duel = stockDuel.step(duel, { type: "tap", seat: 1, now: clock.now(), roll: 1 });

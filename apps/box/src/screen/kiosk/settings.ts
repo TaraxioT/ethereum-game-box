@@ -301,7 +301,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   }
 
   /** What LIVE NOW was last drawn from: it is drawn again only when that changes (a title lapsing or a cup ending
-   *  included), so a name's drift and a swipe aren't reset every second; the countdowns move on their own. */
+   *  included), so a name's scroll isn't reset every second; the countdowns move on their own. */
   let liveDrawn = "";
   let pickerDrawn = "";
 

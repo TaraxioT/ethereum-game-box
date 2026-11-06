@@ -15,6 +15,13 @@ import { prepareExecute } from './requests/execute.ts';
 import { preparePopup } from './requests/popup.ts';
 import { prepareResult } from './requests/result.ts';
 import { prepareSeat } from './requests/seat.ts';
+import {
+  prepareStoreOpen,
+  prepareStoreRefund,
+  prepareStoreSettle,
+  prepareStoreTopup,
+  prepareStoreVoid,
+} from './requests/store-pot.ts';
 import { prepareTopup } from './requests/topup.ts';
 import type { Submitted } from './sender.ts';
 
@@ -43,6 +50,11 @@ const prepare: Record<string, (ctx: Context, body: unknown) => Promise<Prepared>
   '/duel/refund': prepareDuelRefund,
   '/players/box-claim': prepareSeat,
   '/cup/close': prepareCupClose,
+  '/store/open': prepareStoreOpen,
+  '/store/settle': prepareStoreSettle,
+  '/store/void': prepareStoreVoid,
+  '/store/refund': prepareStoreRefund,
+  '/store/topup': prepareStoreTopup,
 };
 
 const json = (status: number, body: unknown, headers: Record<string, string>) =>

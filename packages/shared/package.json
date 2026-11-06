@@ -6,7 +6,8 @@
     "./names": "./src/names/index.ts",
     "./admin": "./src/admin/index.ts",
     "./web": "./src/web/index.ts",
-    "./swap": "./src/swap/index.ts"
+    "./swap": "./src/swap/index.ts",
+    "./store": "./src/store/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

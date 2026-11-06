@@ -5,7 +5,7 @@
 // - CUPS: each game's open cup (its ENS name, prize, countdown and top three, PLAY FOR IT at the cup's stake, or ENDED
 //   until it is closed), then WON FOREVER: the closed cups, each name now its winner's with no expiry.
 // - LEADERBOARD: `gamebox.eth`'s `leaderboard` record, the top ten over every game, the seated players lit.
-// Every ENS name is shown whole (`ensName`: one that doesn't fit drifts sideways). A tap on either station takes a seat,
+// Every ENS name is shown whole (`ensName`: one that doesn't fit scrolls past). A tap on either station takes a seat,
 // as on Home, so PLAY FOR IT goes straight to Stake once both are seated. The boards are read every few seconds while
 // the hall shows; the countdowns run every second without redrawing a card. BACK returns Home.
 import type { Board, BoxState, GameInfo, Leader, PlayFor } from "../../core/types.ts";
@@ -13,7 +13,7 @@ import { MODE_STAKES } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
-import type { Rect } from "../shell/layout.ts";
+import { shiftRect, type Rect } from "../shell/layout.ts";
 import { el, place } from "../shell/dom.ts";
 import { ensName } from "../shell/ens-name.ts";
 import { timeLeft } from "./board.ts";
@@ -46,8 +46,6 @@ const PORTRAIT: HallLayout = {
   keys: { x: 60, y: 966, w: 600, h: 76 },
 };
 
-const shift = (r: Rect, dx: number): Rect => ({ ...r, x: r.x + dx });
-
 /** The games a card can be played for: the team games on chain, in rack order. */
 const chainGames = (state: BoxState): GameInfo[] => state.games.filter((g) => g.kind === "team" && state.boards[g.id] !== undefined);
 
@@ -66,7 +64,7 @@ export function hallView(ctx: ViewContext): View {
   const root = el("div", "page hall");
 
   const head = el("div", "hall-head");
-  place(head, shift(base.head, dx));
+  place(head, shiftRect(base.head, dx));
   head.append(
     el("span", "hall-head-title", "TITLES & CUPS"),
     el("span", "hall-head-live", "LIVE ON ENS"),
@@ -76,7 +74,7 @@ export function hallView(ctx: ViewContext): View {
   const panel = (rect: Rect, kicker: string, className: string): { readonly frame: EgbPanel; readonly body: HTMLElement } => {
     const frame = document.createElement("egb-panel") as EgbPanel;
     frame.classList.add("hall-panel", className);
-    place(frame, shift(rect, dx));
+    place(frame, shiftRect(rect, dx));
     const body = el("div", "hall-body");
     frame.append(el("div", "hall-kicker", kicker), body);
     return { frame, body };
@@ -86,7 +84,7 @@ export function hallView(ctx: ViewContext): View {
   const leaders = panel(base.leaders, "LEADERBOARD · GAMEBOX.ETH", "hall-leaders");
 
   const keys = el("div", "page-keys hall-keys");
-  place(keys, shift(base.keys, dx));
+  place(keys, shiftRect(base.keys, dx));
   const back = document.createElement("egb-key") as EgbKey;
   back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
@@ -134,7 +132,7 @@ export function hallView(ctx: ViewContext): View {
     const card = el("section", `hall-card${live ? "" : " ended"}`);
     const top = el("div", "hall-card-top");
     top.append(
-      el("span", "hall-game", `${game.title.toUpperCase()}${cup.prize > 0 ? ` · ${cup.prize} USDC PRIZE` : ""}`),
+      el("span", "hall-game", game.title.toUpperCase()),
       live ? countdown(cup.ends, "ENDS IN ") : el("span", "hall-tag", "ENDED"),
     );
     const rows = el("ol", "hall-rows");
@@ -147,7 +145,8 @@ export function hallView(ctx: ViewContext): View {
             return li;
           })),
     );
-    card.append(top, ensName(cup.name, "hall-name"), rows, playKey(game, "cup", live));
+    const prize = cup.prize > 0 ? `the leader at the close wins ${cup.prize} USDC and the name, forever` : "the leader at the close wins the name, forever";
+    card.append(top, ensName(cup.name, "hall-name"), el("div", "hall-meta", prize), rows, playKey(game, "cup", live));
     return card;
   }
 
@@ -187,7 +186,7 @@ export function hallView(ctx: ViewContext): View {
     return list;
   }
 
-  /** What each panel was last drawn from: a panel is redrawn only when it changes, so names keep their drift. */
+  /** What each panel was last drawn from: a panel is redrawn only when it changes, so names keep scrolling. */
   const drawn = { titles: "", cups: "", leaders: "" };
 
   function draw(state: BoxState): void {
