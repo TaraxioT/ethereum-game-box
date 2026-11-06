@@ -5,6 +5,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 import { rpc, sepoliaClient } from './chain.ts';
 import type { Env } from './env.ts';
+import { guarded } from './guard.ts';
 import { deployedAddresses } from './request.ts';
 import { type Relayer, handle } from './routes.ts';
 
@@ -12,20 +13,21 @@ export { Sender } from './sender.ts';
 
 export default {
   fetch(request, env) {
-    const sender = env.SENDER.get(env.SENDER.idFromName('sepolia'));
-    return handle(request, {
-      ctx: {
-        client: sepoliaClient(rpc(env.SEPOLIA_RPC_URL)),
-        relayer: privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex).address,
-        // Read when a route needs them, so `/health` and `/tx` answer even before the contracts are deployed.
-        get addresses() {
-          return deployedAddresses();
+    return guarded(() =>
+      handle(request, {
+        ctx: {
+          client: sepoliaClient(rpc(env.SEPOLIA_RPC_URL)),
+          relayer: privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex).address,
+          // Read when a route needs them, so `/health` and `/tx` answer even before the contracts are deployed.
+          get addresses() {
+            return deployedAddresses();
+          },
+          now: () => Math.floor(Date.now() / 1000),
+          dripWei: parseEther(env.DRIP_ETH ?? '0.0003'),
         },
-        now: () => Math.floor(Date.now() / 1000),
-        dripWei: parseEther(env.DRIP_ETH ?? '0.0003'),
-      },
-      relayer: sender as unknown as Relayer,
-      allowedOrigins: env.ALLOWED_ORIGINS,
-    });
+        relayer: env.SENDER.get(env.SENDER.idFromName('sepolia')) as unknown as Relayer,
+        allowedOrigins: env.ALLOWED_ORIGINS,
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

@@ -2,6 +2,7 @@
 // alarm is running.
 
 import { corsHeaders, originAllowed } from '@egb/relayer/cors';
+import { guarded } from '@egb/relayer/guard';
 
 import type { DemoBox } from './box.ts';
 import type { Env } from './env.ts';
@@ -21,19 +22,24 @@ export default {
     const cors = corsHeaders(origin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
-    const box = demoBox(env);
-    await box.start();
-    const { pathname } = new URL(request.url);
-    if (pathname === '/box' && request.method === 'GET') return json(200, await box.view(), cors);
-    if (pathname === '/result' && request.method === 'POST') {
-      const body: unknown = await request.json().catch(() => null);
-      const reply = await box.report(body, request.headers.get('cf-connecting-ip') ?? 'unknown');
-      return json(reply.status, reply.body, cors);
-    }
-    return json(404, { error: 'not found' }, cors);
+    return guarded(async () => {
+      const box = demoBox(env);
+      await box.start();
+      const { pathname } = new URL(request.url);
+      if (pathname === '/box' && request.method === 'GET') return json(200, await box.view(), cors);
+      if (pathname === '/result' && request.method === 'POST') {
+        const body: unknown = await request.json().catch(() => null);
+        const reply = await box.report(body, request.headers.get('cf-connecting-ip') ?? 'unknown');
+        return json(reply.status, reply.body, cors);
+      }
+      return json(404, { error: 'not found' }, cors);
+    }, cors);
   },
 
   async scheduled(_controller, env) {
-    await demoBox(env).start();
+    await guarded(async () => {
+      await demoBox(env).start();
+      return new Response(null, { status: 204 });
+    });
   },
 } satisfies ExportedHandler<Env>;

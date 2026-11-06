@@ -2,8 +2,8 @@
 
 import type { RelayerHealth, TxView } from '@egb/shared/names';
 
-import { describe } from './chain.ts';
 import { corsHeaders, originAllowed } from './cors.ts';
+import { guarded } from './guard.ts';
 import { Refusal } from './refusal.ts';
 import type { Context, Prepared } from './request.ts';
 import { prepareClaim } from './requests/claim.ts';
@@ -43,14 +43,19 @@ export async function handle(request: Request, deps: Deps): Promise<Response> {
   const cors = corsHeaders(origin);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
-  try {
+  return guarded(async () => {
     const { pathname } = new URL(request.url);
     const route = prepare[pathname];
     if (route && request.method === 'POST') {
-      const body = await request.json().catch(() => {
-        throw new Refusal(400, 'body: expected JSON');
-      });
-      const checked = await route(deps.ctx, body);
+      const body: unknown = await request.json().catch(() => undefined);
+      if (body === undefined) return json(400, { error: 'body: expected JSON' }, cors);
+      let checked: Prepared;
+      try {
+        checked = await route(deps.ctx, body);
+      } catch (error) {
+        if (!(error instanceof Refusal)) throw error;
+        return json(error.status, { error: error.message, ...(error.revert && { revert: error.revert }) }, cors);
+      }
       const sent = await deps.relayer.submit(checked, request.headers.get('cf-connecting-ip') ?? 'unknown');
       return sent.ok ? json(202, sent.tx, cors) : json(sent.status, { error: sent.error }, cors);
     }
@@ -63,12 +68,5 @@ export async function handle(request: Request, deps: Deps): Promise<Response> {
       if (pathname === '/health') return json(200, await deps.relayer.health(), cors);
     }
     return json(404, { error: 'not found' }, cors);
-  } catch (error) {
-    if (error instanceof Refusal) {
-      return json(error.status, { error: error.message, ...(error.revert && { revert: error.revert }) }, cors);
-    }
-    const message = describe(error);
-    console.error(message);
-    return json(502, { error: `upstream: ${message}` }, cors);
-  }
+  }, cors);
 }

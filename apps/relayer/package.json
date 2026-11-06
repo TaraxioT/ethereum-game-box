@@ -5,6 +5,7 @@
   "exports": {
     "./chain": "./src/chain.ts",
     "./cors": "./src/cors.ts",
+    "./guard": "./src/guard.ts",
     "./limits": "./src/limits.ts",
     "./store": "./src/store.ts",
     "./test/memory-store": "./test/memory-store.ts",
