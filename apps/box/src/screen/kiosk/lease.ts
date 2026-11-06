@@ -5,11 +5,13 @@
 // - Not leased (or not read yet): BOX OFFLINE over the stage, under the gear, with the name and why. On the kiosk's
 //   own page, with a staker on the Box, a slider picks how long to stake for, shows what it costs against what the
 //   staker holds, and STAKE turns the Box back on.
+// - On both, the ENS map (lease-ens.ts) shows what the lease writes in ENS and which record keeps the Box offline.
 // - The simulator (no Sepolia, gate `off`) shows none of it.
 // It reads the Box every 2 s; its clocks count down every second in between, on the chain's time. None of its pointer
 // or key events reach the stage.
 import "./kiosk.css";
 import "./lease.css";
+import "./lease-ens.css";
 import type { AdminJob } from "../../server/admin-wire.ts";
 import { LEASE, type LeaseReply, type LeaseStatus, type StakeBody } from "../../server/lease-wire.ts";
 import { framed } from "../parts/frame.ts";
@@ -18,6 +20,7 @@ import { ensName, setEns } from "../shell/ens-name.ts";
 import { playerWord } from "../views/board.ts";
 import { getJson, hasLauncherToken, postJson } from "../views/builder-link.ts";
 import type { Sound } from "../views/view.ts";
+import { ensMap } from "./lease-ens.ts";
 import { clock, gbxWord, hourStops, hoursWord, timeOfDay } from "./lease-words.ts";
 import { slideToConfirm } from "./slide.ts";
 
@@ -103,7 +106,8 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
   timer.append(el("span", "lease-label", "TIME LEFT"), left, bar, span);
   const nameRow = el("div", "lease-name-row");
   nameRow.append(name, standing);
-  panel.append(head, nameRow, timer, facts);
+  const ens = ensMap();
+  panel.append(head, nameRow, ens.node, timer, facts);
   if (acts) panel.append(slide.node, slideHint);
   panel.append(job, out);
   page.append(panel);
@@ -136,7 +140,8 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
   pick.append(el("span", "lease-label", "STAKE GBX TO HOST"), pickHead, range, rangeEnds, gateFacts, stakeKey);
   const gateJob = el("p", "lease-job");
   const gateOut = el("p", "set-out");
-  gatePanel.append(el("div", "lease-offline", "BOX OFFLINE"), gateName, why, pick, gateJob, gateOut);
+  const gateEns = ensMap();
+  gatePanel.append(el("div", "lease-offline", "BOX OFFLINE"), gateName, why, gateEns.node, pick, gateJob, gateOut);
   gate.append(gatePanel);
 
   host.append(gate, tag, page);
@@ -250,6 +255,8 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
 
   /** The clocks, on the chain's time now. */
   function tick(): void {
+    // Both maps, so the one shown next remembers the values before and plays the write that changed them.
+    if (last) for (const map of [ens, gateEns]) map.draw(last, chainNow());
     const status = last?.status;
     if (!status || last?.gate !== "open" || !status.endsAt) return;
     const now = chainNow();

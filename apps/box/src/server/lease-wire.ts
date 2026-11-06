@@ -37,6 +37,22 @@ export interface LeaseStatus {
   readonly maxHours: number;
   /** The staker's GBX; null with no admin key. */
   readonly gbx: string | null;
+  /** The contracts a stake or unstake goes through, and the ENS ones it writes. */
+  readonly ens: LeaseEns;
+}
+
+/**
+ * `BoxLease` calls `GameBoxNames`, which writes ENS: a first stake registers `<label>` on gamebox.eth's registry and
+ * makes the name's resolver (addr, `boxKey`, `status` = active); a stake renews the name's expiry on the registry and
+ * sets `status` back to active; an unstake or lapse sets only `status` = suspended. The expiry is never cut short.
+ */
+export interface LeaseEns {
+  readonly lease: string;
+  readonly names: string;
+  /** gamebox.eth's registry (an ENSv2 `UserRegistry`): the name's owner and expiry. */
+  readonly registry: string;
+  /** The name's `PermissionedResolver`; null with no name. */
+  readonly resolver: string | null;
 }
 
 export interface LeaseReply {

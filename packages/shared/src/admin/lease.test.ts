@@ -17,6 +17,7 @@ function view(over: Partial<LeaseView> = {}): LeaseView {
     name: 'mumbai-01.gamebox.eth',
     standing: 'active',
     expiry: NOW + 86_400,
+    resolver: '0x00000000000000000000000000000000000000E5',
     key: KEY,
     lease: { operator: ADMIN, stake: parseEther('300'), start: NOW - 3_600, end: NOW + 7_200 },
     now: NOW,

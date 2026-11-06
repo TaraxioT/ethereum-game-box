@@ -19,6 +19,7 @@ function leased(end = NOW + 7_200, operator: Address = ADMIN): LeaseView {
     name: "mumbai-01.gamebox.eth",
     standing: "active",
     expiry: NOW + 30 * 86_400,
+    resolver: "0x00000000000000000000000000000000000000E5",
     key: KEY,
     lease: { operator, stake: parseEther("300"), start: NOW - 3_600, end },
     now: NOW,

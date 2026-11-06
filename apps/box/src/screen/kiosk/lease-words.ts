@@ -42,3 +42,11 @@ export function timeOfDay(unix: number, today = new Date()): string {
     ? hm
     : `${at.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()} ${hm}`;
 }
+
+/** A span in its largest whole unit: `23D`, `4H`, `12M`, `0M`. */
+export function spanWord(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s >= 86_400) return `${Math.floor(s / 86_400)}D`;
+  if (s >= 3_600) return `${Math.floor(s / 3_600)}H ${Math.floor((s % 3_600) / 60)}M`;
+  return `${Math.floor(s / 60)}M`;
+}

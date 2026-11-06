@@ -30,6 +30,8 @@ export interface LeaseView {
   standing: BoxStanding;
   /** The name's expiry (unix seconds); 0 with no name. */
   expiry: number;
+  /** The name's own ENS resolver (its `status` text and address); null with no name. */
+  resolver: Address | null;
   /** The key the name is registered with; null with no name. */
   key: { qx: Hex; qy: Hex } | null;
   /** Null when nothing is staked. */
@@ -82,6 +84,7 @@ export function leaseReads(client: PublicClient): LeaseReads {
         name: fullName(label),
         standing,
         expiry: Number(box.expiry),
+        resolver: standing === 'none' ? null : box.resolver,
         key: standing === 'none' ? null : { qx: box.qx, qy: box.qy },
         lease: held.operator === zeroAddress
           ? null

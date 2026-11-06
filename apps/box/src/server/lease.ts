@@ -15,6 +15,7 @@ import {
   stakeCalls,
   unstakeCall,
 } from "@egb/shared/admin";
+import { contractAddress, namesProxies } from "@egb/shared/names";
 import { sepoliaClient } from "@egb/shared/web";
 import { type Address, type Hex, createWalletClient, formatEther, http as rpc, isAddressEqual } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -89,6 +90,12 @@ function statusOf(view: LeaseView): LeaseStatus {
     minHours: view.minHours,
     maxHours: view.maxHours,
     gbx: view.staker ? formatEther(view.staker.gbx) : null,
+    ens: {
+      lease: contractAddress("BoxLease"),
+      names: contractAddress("GameBoxNames"),
+      registry: namesProxies().registry,
+      resolver: view.resolver,
+    },
   };
 }
 

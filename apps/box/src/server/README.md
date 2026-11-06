@@ -154,7 +154,7 @@ approving GBX first when the allowance is short. Paths and replies are in `lease
 
 | Route | What |
 |---|---|
-| `GET /api/lease` | `{ gate, now, status, staker, error, jobs }`: the chain's time, the lease (`label`, `name`, `standing`, `expiry`, `startedAt`, `endsAt`, `stake`, `operator`, `ratePerHour`, `minHours`, `maxHours`, the staker's `gbx`), who stakes from here, and the latest jobs. |
+| `GET /api/lease` | `{ gate, now, status, staker, error, jobs }`: the chain's time, the lease (`label`, `name`, `standing`, `expiry`, `startedAt`, `endsAt`, `stake`, `operator`, `ratePerHour`, `minHours`, `maxHours`, the staker's `gbx`, and `ens`: the `BoxLease`, `GameBoxNames`, gamebox.eth registry and name resolver addresses a stake or unstake goes through), who stakes from here, and the latest jobs. |
 | `POST /api/lease/stake` | `{ hours }` (`minHours` to `maxHours`): approve if needed, then `BoxLease.stake` with the Box's P-256 key, so a Box with no name gets one and a Box with one keeps it. 202 with the job. |
 | `POST /api/lease/unstake` | `BoxLease.unstake`, by the lease's operator only. 202. |
 
