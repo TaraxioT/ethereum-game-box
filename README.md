@@ -20,7 +20,8 @@ https://plans.georgekm.com/ethereum-game-box-2026-11-05/.
 | [`apps/relayer`](apps/relayer/README.md) | The Cloudflare Worker that pays gas for Box-signed requests |
 | [`apps/web`](apps/web/README.md) | The public site, read straight from ENS and the contracts |
 | [`packages/sdk`](packages/sdk/README.md) | `@egb/sdk`: the contract between the Box and its games (rules, station views, manifests, the rules-runner and frame protocols) |
-| [`packages/shared`](packages/shared/README.md) | Message digests, the badge entry, ABIs and addresses, shared by every app |
+| [`packages/shared`](packages/shared/README.md) | Message digests, the badge entry, ABIs and addresses, shared by every app; `@egb/shared/web` for the sites' browser code |
+| [`packages/ui`](packages/ui/README.md) | `@egb/ui`: the sites' Schematic look, element builder, Sepolia tag and transaction strip |
 | [`contracts`](contracts/README.md) | Foundry: the registry, games, token, hook, staking and names |
 | [`deployments`](deployments/README.md) | Every deployed address, one file per chain |
 | [`firmware/tap-station`](firmware/tap-station/README.md) | The ESP32 tap stations and their receiver |
