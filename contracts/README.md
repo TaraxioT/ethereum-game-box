@@ -282,6 +282,28 @@ forge script script/DeployStaking.s.sol --rpc-url sepolia --account sepolia-depl
 `test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against the fork's `FakeUSDC` and a
 fresh `GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.
 
+## Lease
+
+`staking/BoxLease.sol` turns a Box on for as long as GBX is staked on it. It holds `LICENSOR_ROLE` on `GameBoxNames`.
+
+| Rule | |
+|---|---|
+| Stake | `stake(label, qx, qy, hours)` takes `hours × 100` GBX (1 to 720 hours) and makes `<label>.gamebox.eth` Active until the lease ends: registered to the staker with that P-256 key if the Box had no name, else the same key is checked, a suspension lifted and the expiry moved out. The name and its records are kept |
+| More time | The same operator staking again while the lease runs adds the hours to its end and the GBX to its stake. Anyone else is refused (`LeaseHeld`) until it runs out |
+| Unstake | `unstake(label)`, the operator only, at any time: every GBX back, and the name suspended at once. `BoxCheck` (and so every Box-signed call, the swap hook's included) refuses a Box that isn't Active |
+| Lapse | Once the lease has run out, anyone may `lapse(label)`: the GBX back to the operator, the name suspended. Staking on a lapsed lease pays the last operator back first |
+| Revoked | The admin's `setBoxStatus(label, Revoked)` is a ban: a revoked Box can't be staked |
+
+The stake is a deposit, not a fee. Deploy over the recorded `GameBoxNames`, GBX and `P256AccountFactory` (it grants the
+role and skips what is done):
+
+```sh
+forge script script/DeployLease.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+`test/staking/BoxLease.t.sol` runs on the same Sepolia fork as the names tests.
+
 ## Swap hook
 
 `hook/GameBoxHook.sol` is the Uniswap v4 hook of the GBX/USDC pool (dynamic fee, tick spacing 60). It is the only

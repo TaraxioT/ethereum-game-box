@@ -25,6 +25,7 @@ Node.
 |---|---|
 | `calls.ts` | Each call built and checked before anything is sent (`AdminInputError`): `addGameCall` (a title term of a minute to a year), `openCupCall` (a run of a minute to 90 days, never named `champion`), `closeCupCall`, and `openCupCalls`, which mints the prize's shortfall and approves `Championships` first. Calls that create storage carry `CREATES_STORAGE_GAS` |
 | `reads.ts` | `boardReads(client).view()`: at one block, every game (from `GameAdded`, scanned once then incrementally) with its title and open championship, and the latest 10 championships with an open one's leader; `adminReads(client, admin).view()` adds the admin's ETH, USDC and roles |
+| `lease.ts` | A Box's lease in `BoxLease`: `leaseReads(client).view(label, staker?)` (the lease, the name's standing and expiry, the rate and bounds, the staker's GBX and allowance, at one block), `leaseOpen` and `leaseLeft`, and the calls `stakeCalls` (approving first when short), `unstakeCall` and `lapseCall` |
 | `send.ts` | `adminSender(wallet, client)`: one call at a time, each `eth_call`ed first (`AdminRefused` with the contract's error name), sent, and waited for; a nonce clash (the relayer shares the key) retried once |
 
 ## `src/names/`
