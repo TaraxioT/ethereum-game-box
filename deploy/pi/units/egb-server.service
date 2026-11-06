@@ -1,0 +1,27 @@
+[Unit]
+Description=Ethereum Game Box server (taps, games, Forge, voice)
+# One process owns the receiver's serial port, and the screen is served on 8790: the previous Box's units and the
+# ESP monitor can't run beside this one. Starting the server stops them.
+Conflicts=gamebox-server.service gamebox-ui.service esp-monitor.service esp-monitor-ui.service
+# A crash loop must never turn into "failed, gave up": the Box keeps trying.
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=%h/egb/current
+# The settings and the keys (setup.sh creates it from env.example). Optional, so a missing file means defaults.
+EnvironmentFile=-%h/.config/egb/env
+# Node 26 lives in ~/.local/bin (setup.sh); a bare `node` in ExecStart would be looked up on systemd's own path.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node apps/box/src/server/main.ts
+Restart=always
+RestartSec=2
+# Taps come first: a higher priority than the browser and the builds. A user manager can only lower nice with a raised
+# RLIMIT_NICE; setup.sh raises it (limits.d), and without it this line fails the unit with status 201/NICE.
+Nice=-5
+# The server exits 143 on SIGTERM; that is a clean stop, not a failure.
+SuccessExitStatus=143
+# It caps its own shutdown at 10 s.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
