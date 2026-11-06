@@ -9,7 +9,9 @@
 //     kiosk's CSP (frame-src 'self') keeps it on the Box's own pages, but any page it lands on isn't the game's frame
 //     and is out from under the frame's CSP (connect-src 'none'). The iframe's first `load` is its page (its src is
 //     set before it is inserted, so no about:blank load comes first); a second means it left, and the channel closes
-//     for good: nothing more goes out, nothing more comes in.
+//     for good: nothing more goes out, nothing more comes in. A page that leaves before its own `load` gets past that
+//     count, as the first is then the landing page's: a built game only draws, and a store page must answer the kiosk
+//     after that load (bundle-view.ts).
 import { MAX_MESSAGE, type FrameSeat, type FromFrame, type ToFrame } from "@egb/sdk";
 
 /** Scripts only, no same-origin, no features, no referrer. Set in this order, ahead of the src. */
