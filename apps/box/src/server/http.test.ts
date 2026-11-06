@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { LINK_PATH } from "../core/wire.ts";
-import { localOrigin, within } from "./http.ts";
+import { loopbackHost, sameOrigin, within } from "./http.ts";
 import { CSP, LAUNCHER_HEADER } from "./security.ts";
 import { busy } from "./api.ts";
 import { PAGE, post, startTestBox, type TestBox } from "./testing.ts";
@@ -22,26 +22,80 @@ async function start(): Promise<TestBox> {
 
 const NAVIGATION = { "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" };
 
-/** A plain GET with exactly these headers (fetch sets its own Sec-Fetch-* headers). */
-function page(url: string, headers: Record<string, string>): Promise<string> {
+/** A plain GET with exactly these headers (fetch sets its own Sec-Fetch-* headers, and its own Host). */
+function getRaw(url: string, headers: Record<string, string>): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     get(url, { headers }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk: string) => (body += chunk));
-      res.on("end", () => resolve(body));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
     }).on("error", reject);
   });
 }
 
-describe("the local-origin rule", () => {
-  it("allows only this machine, and requests without an Origin", () => {
-    for (const origin of [undefined, "http://localhost", "http://localhost:5173", "http://127.0.0.1:8790", "http://[::1]:8790"]) {
-      expect(localOrigin(origin), String(origin)).toBe(true);
+const page = async (url: string, headers: Record<string, string>): Promise<string> => (await getRaw(url, headers)).body;
+
+/** The status a WebSocket upgrade is refused with, or 101 when it opens. */
+function upgrade(url: string, options: { origin?: string; headers?: Record<string, string> }): Promise<number> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(url, options);
+    ws.on("open", () => {
+      ws.close();
+      resolve(101);
+    });
+    ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+  });
+}
+
+describe("the loopback-host and same-origin rules", () => {
+  it("takes only this machine's names as the Host, any port", () => {
+    for (const host of ["localhost", "localhost:5173", "127.0.0.1:8790", "[::1]:8790", "LOCALHOST:8790"]) expect(loopbackHost(host), host).toBe(true);
+    for (const host of [undefined, "", "evil.example", "evil.example:8790", "localhost.evil.example", "127.0.0.1.nip.io:8790", "127.0.0.2:8790", "0.0.0.0:8790", "box:8790"]) {
+      expect(loopbackHost(host), String(host)).toBe(false);
     }
-    for (const origin of ["http://evil.example", "http://localhost.evil.example", "https://localhost", "http://127.0.0.1.nip.io", "null"]) {
-      expect(localOrigin(origin), origin).toBe(false);
+  });
+
+  it("allows only the origin the request was sent to, port and all, and requests without an Origin", () => {
+    expect(sameOrigin(undefined, "127.0.0.1:8790")).toBe(true);
+    expect(sameOrigin("http://127.0.0.1:8790", "127.0.0.1:8790")).toBe(true);
+    // The dev server passes the page's requests through with its own Host.
+    expect(sameOrigin("http://localhost:5173", "localhost:5173")).toBe(true);
+    const refused: [string, string | undefined][] = [
+      ["http://localhost:3000", "127.0.0.1:8790"], // another local server's page
+      ["http://127.0.0.1:9999", "127.0.0.1:8790"],
+      ["http://localhost:8790", "127.0.0.1:8790"],
+      ["http://evil.example:8790", "evil.example:8790"], // a rebound name
+      ["https://127.0.0.1:8790", "127.0.0.1:8790"],
+      ["null", "127.0.0.1:8790"],
+      ["http://127.0.0.1:8790", undefined],
+    ];
+    for (const [origin, host] of refused) expect(sameOrigin(origin, host), `${origin} → ${String(host)}`).toBe(false);
+  });
+
+  it("refuses every request and every link addressed to another name (DNS rebinding)", async () => {
+    const { box } = await start();
+    const rebound = { host: `evil.example:${box.port}` };
+    for (const path of ["/", "/api/state", "/api/box", "/assets/app-1234.js"]) {
+      expect((await getRaw(`${box.url}${path}`, { ...rebound, ...NAVIGATION })).status, path).toBe(421);
     }
+    const opened = await getRaw(`${box.url}/`, { ...rebound, ...NAVIGATION });
+    expect(opened.body).not.toContain(box.token);
+    expect((await getRaw(`${box.url}/api/state`, { host: `localhost:${box.port}` })).status).toBe(200);
+    const link = `${box.url.replace("http", "ws")}${LINK_PATH}`;
+    expect(await upgrade(link, { headers: rebound })).toBe(421);
+    expect(await upgrade(link, { headers: rebound, origin: `http://evil.example:${box.port}` })).toBe(421);
+  });
+
+  it("refuses a POST and a link from another port on this machine, and takes them from the Box's own origin", async () => {
+    const { box } = await start();
+    const badge = `0x${"ab".repeat(20)}`;
+    const own = new URL(box.url).origin;
+    expect((await post(box, "/api/taps/inject", { seat: 0, badge }, { origin: "http://127.0.0.1:5999" })).status).toBe(403);
+    expect((await post(box, "/api/taps/inject", { seat: 0, badge }, { origin: own })).status).toBe(200);
+    const link = `${box.url.replace("http", "ws")}${LINK_PATH}`;
+    expect(await upgrade(link, { origin: "http://localhost:5999" })).toBe(403);
+    expect(await upgrade(link, { origin: own })).toBe(101);
   });
 
   it("keeps file paths inside the screen's folder", () => {

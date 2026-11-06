@@ -7,7 +7,7 @@ import { createEditLock } from "../builder/designer/lock.ts";
 import { createForge, type ForgeService } from "../builder/forge/service.ts";
 import type { Env } from "../builder/llm/claude-env.ts";
 import { createModelClient } from "../builder/llm/model.ts";
-import type { ForgeJob, ForgeProvider } from "../builder/types.ts";
+import { isFinished, type ForgeJob, type ForgeProvider } from "../builder/types.ts";
 import { createVoice } from "../builder/voice/select.ts";
 import { createBuilderStream, type BuilderStream } from "./builder-stream.ts";
 import type { BuilderStatus } from "./builder-wire.ts";
@@ -45,7 +45,6 @@ export interface Builder {
 }
 
 const PROVIDERS: readonly ForgeProvider[] = ["claude", "sim"];
-const FINISHED = new Set(["done", "failed"]);
 
 /** EGB_FORGE_PROVIDER: `claude` (the default) or `sim`. Anything else stops the start: a typo must not build blind. */
 export function forgeProvider(env: Env): ForgeProvider {
@@ -87,7 +86,7 @@ export function startBuilder(options: BuilderOptions): Builder {
   const stopDesigner = designer.onChange((state) => stream.send("designer", state));
   const stopForge = forge.subscribe((event) => stream.send("forge", event));
 
-  const unfinished = (): ForgeJob[] => forge.list().filter((job) => !FINISHED.has(job.status));
+  const unfinished = (): ForgeJob[] => forge.list().filter((job) => !isFinished(job.status));
 
   return {
     designer,

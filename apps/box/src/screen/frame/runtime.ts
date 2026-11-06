@@ -3,12 +3,11 @@
 // back only `ready` and `error`, and never anything else: the frame only draws.
 //
 // Platform-free (no window, no parent): frame.ts wires it to the page, and the tests drive it directly.
-import type { FromFrame, ToFrame } from "@egb/sdk";
+import { MAX_MESSAGE, type FromFrame, type ToFrame } from "@egb/sdk";
 import type { GameScreen } from "@egb/sdk/screen";
 
 /** Errors the frame reports, at most; a screen that throws every frame would otherwise flood the kiosk. */
 export const MAX_ERRORS = 10;
-const MAX_MESSAGE = 300;
 
 export interface FrameRuntimeOptions {
   /** Where the screen draws: the frame page's one element. */

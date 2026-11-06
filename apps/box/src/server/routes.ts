@@ -1,9 +1,10 @@
-// The HTTP handler: the API routes, then the built screen. Every request that isn't a GET needs a local origin; the
-// routes marked `launcher` also need this boot's launcher token.
+// The HTTP handler: the API routes, then the built screen. Every request must be addressed to this machine by name
+// (a loopback Host); every one that isn't a GET also needs this server's own origin; the routes marked `launcher`
+// also need this boot's launcher token.
 import type http from "node:http";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { HttpError, localOrigin, sendFile, sendText, within } from "./http.ts";
+import { HttpError, loopbackHost, sameOrigin, sendFile, sendText, within } from "./http.ts";
 import { CSP, hasToken, isTopNavigation, withToken } from "./security.ts";
 
 export interface Route {
@@ -70,7 +71,8 @@ export function createHandler(options: HandlerOptions): (req: http.IncomingMessa
     const url = new URL(req.url ?? "/", "http://box");
     const method = req.method ?? "GET";
     const read = method === "GET" || method === "HEAD";
-    if (!read && !localOrigin(req.headers.origin)) return sendText(res, 403, "only pages from this machine may do that");
+    if (!loopbackHost(req.headers.host)) return sendText(res, 421, "the Box answers only to this machine's own names");
+    if (!read && !sameOrigin(req.headers.origin, req.headers.host)) return sendText(res, 403, "only the Box's own pages may do that");
     if (url.pathname.startsWith("/api/")) return api(req, res, url, method);
     if (options.games && (await options.games(req, res, url))) return;
     if (!read) return sendText(res, 405, "method not allowed");
