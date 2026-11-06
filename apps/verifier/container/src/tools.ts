@@ -63,9 +63,9 @@ function readArguments(call: ToolCall): Record<string, unknown> {
   try {
     args = JSON.parse(call.function.arguments);
   } catch {
-    throw new RunFailure(`${call.function.name}'s arguments aren't JSON`);
+    throw new RunFailure("a tool call's arguments aren't JSON");
   }
-  if (!isRecord(args)) throw new RunFailure(`${call.function.name}'s arguments aren't an object`);
+  if (!isRecord(args)) throw new RunFailure("a tool call's arguments aren't an object");
   return args;
 }
 
