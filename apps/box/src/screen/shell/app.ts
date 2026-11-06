@@ -1,22 +1,28 @@
-// The app: the screen area (the window, less the desk in Demo mode), the stage scaled into it, the machine on the
-// stage and the router in the machine's view layer. It feeds every Box state change to both, rebuilds the stage when
-// the window turns between landscape and portrait, and runs the boot.
-import type { BoxLink } from "../../core/types.ts";
+// The app: the screen area (the whole window), the stage scaled into it, the machine on the stage and the router in
+// the machine's view layer. It feeds every Box state change to both, rebuilds the stage when the window turns
+// between landscape and portrait, and runs the boot. In Demo mode the screen also stands in for the tap stations:
+// touching a player's frame taps that seat, and so does touching their half of the screen in a game.
+import type { Badge, BoxLink, Seat } from "../../core/types.ts";
 import type { Sound, ViewContext } from "../views/view.ts";
 import { layoutFor, orientationFor, type Layout } from "./layout.ts";
-import { applyFit, createStage, fit } from "./stage.ts";
+import { applyFit, createStage, fit, type Fit } from "./stage.ts";
 import { createMachine, type MachineView } from "./machine.ts";
 import { createRouter, type Router, type Routes } from "./router.ts";
 import { boot } from "./boot.ts";
-import { calm, el } from "./dom.ts";
+import { calm, el, play } from "./dom.ts";
 
 export interface AppOptions {
   readonly link: BoxLink;
   readonly sound: Sound;
   readonly routes: Routes;
-  /** The height the desk takes at the bottom of the window (Demo mode), for a window size. */
-  readonly deskHeight?: (viewW: number, viewH: number) => number;
+  /** Demo mode: taps a seat from the screen. Box mode has none: the real stations are the only taps. */
+  readonly onSeatTap?: (seat: Seat) => void;
+  /** Demo mode: whether a badge is the bot's (its port wears a BOT tag). */
+  readonly isBot?: (badge: Badge) => boolean;
 }
+
+/** In a game, a touch below the overlay (stage px) taps the seat whose half it lands in. */
+const OVERLAY_FOOT = { landscape: 130, portrait: 150 } as const;
 
 export function startApp(host: HTMLElement, options: AppOptions): void {
   const { link, sound, routes } = options;
@@ -30,13 +36,7 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
   let machine: MachineView | null = null;
   let router: Router | null = null;
   let scale = 0;
-
-  function measure(): { w: number; h: number } {
-    const w = window.innerWidth;
-    const h = window.innerHeight - (options.deskHeight?.(w, window.innerHeight) ?? 0);
-    area.style.height = `${h}px`;
-    return { w, h };
-  }
+  let placed: Fit = { scale: 1, x: 0, y: 0 };
 
   function build(next: Layout, s: number): void {
     router?.dispose();
@@ -45,7 +45,8 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
     layout = next;
     scale = s;
     stage = createStage(next);
-    machine = createMachine(next, s);
+    machine = createMachine(next, s, options.isBot ? { isBot: options.isBot } : {});
+    if (options.onSeatTap) machine.parts.ports.forEach((port, i) => port.setAttribute("key", i === 0 ? "A" : "L"));
     stage.append(machine.root);
     area.append(stage);
     const ctx: ViewContext = { link, machine, sound, layout: next, calm: calm() };
@@ -56,16 +57,39 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
   }
 
   function resize(): void {
-    const { w, h } = measure();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
     const next = layoutFor(orientationFor(w, h));
-    const f = fit(next, w, h);
-    if (next !== layout) build(next, f.scale);
-    else if (Math.abs(f.scale - scale) / scale > 0.04) {
-      scale = f.scale;
-      machine?.rescale(f.scale);
+    placed = fit(next, w, h);
+    if (next !== layout) build(next, placed.scale);
+    else if (Math.abs(placed.scale - scale) / scale > 0.04) {
+      scale = placed.scale;
+      machine?.rescale(placed.scale);
     }
-    if (stage) applyFit(stage, f);
+    if (stage) applyFit(stage, placed);
   }
+
+  /** A touch that taps a seat: on a player's frame (`data-seat`), or below the overlay in a game. */
+  function seatTap(e: PointerEvent): void {
+    const tap = options.onSeatTap;
+    if (!tap || !layout || !machine || !stage || link.state().phase === "boot") return;
+    const frame = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-seat]") : null;
+    let seat: Seat | null = frame ? (Number(frame.dataset.seat) as Seat) : null;
+    if (seat === null && machine.root.dataset.pose === "game") {
+      const box = area.getBoundingClientRect();
+      const x = (e.clientX - box.left - placed.x) / placed.scale;
+      const y = (e.clientY - box.top - placed.y) / placed.scale;
+      if (y > OVERLAY_FOOT[layout.orientation]) {
+        seat = x < layout.width / 2 ? 0 : 1;
+        ripple(stage, seat, x, y);
+      }
+    }
+    if (seat === null) return;
+    // The tap is the seat's alone: it doesn't also start attract or press what lies under it.
+    e.stopPropagation();
+    tap(seat);
+  }
+  area.addEventListener("pointerdown", seatTap, { capture: true });
 
   let pending: ReturnType<typeof setTimeout> | undefined;
   window.addEventListener("resize", () => {
@@ -91,4 +115,13 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
       link.send({ type: "booted" });
     });
   }
+}
+
+/** A ring of the seat's light swelling out from the touch and fading: the half-screen tap landed. */
+function ripple(stage: HTMLElement, seat: Seat, x: number, y: number): void {
+  const ring = el("i", `tap-ripple seat-${seat}`);
+  ring.style.left = `${x - 60}px`;
+  ring.style.top = `${y - 60}px`;
+  stage.append(ring);
+  void play(ring, [{ transform: "scale(0.2)", opacity: 0.9 }, { transform: "scale(1.6)", opacity: 0 }], { duration: 360, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "forwards" }).then(() => ring.remove());
 }

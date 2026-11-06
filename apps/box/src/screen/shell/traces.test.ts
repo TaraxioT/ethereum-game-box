@@ -15,7 +15,6 @@ function anchor(l: Layout, name: TraceName): Point {
 
 /** What is read on the stage, and which bundles may pass through each (a port leaves its own module). */
 function readRects(l: Layout): { what: string; rect: Rect; allow: string[] }[] {
-  const g = l.gauge;
   return [
     { what: "title", rect: l.title, allow: [] },
     { what: "facts", rect: l.facts, allow: [] },
@@ -24,8 +23,8 @@ function readRects(l: Layout): { what: string; rect: Rect; allow: string[] }[] {
     { what: "port1", rect: l.ports[1].module, allow: ["port1"] },
     // A trace starting on an edge touches it: test the interior.
     { what: "clock", rect: inflate(l.clock, -1), allow: [] },
-    { what: "gauge", rect: { x: g.centre.x - g.radius, y: g.centre.y - g.radius, w: g.radius * 2, h: g.radius * 2 }, allow: [] },
-    // The LCD lies over the board: only the clock's feed runs under it.
+    { what: "gas", rect: l.gas, allow: [] },
+    // The transaction strip lies over the Grid: only the clock's feed runs under it.
     { what: "txbar", rect: l.txbar, allow: ["clock"] },
     ...l.rack.map((r) => ({ what: "rack", rect: inflate(r, -1), allow: [] })),
   ];

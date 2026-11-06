@@ -105,8 +105,8 @@ export interface MatchLog {
 }
 
 /**
- * Where a tap came from. Only a station's tap is one the Box saw: injected taps (the test page) and the demo's drawn
- * desk play like any other, but they are not evidence for a counted result.
+ * Where a tap came from. Only a station's tap is one the Box saw: injected taps (the test page) and Demo mode's
+ * screen play like any other, but they are not evidence for a counted result.
  */
 export type TapSource = "station" | "injected";
 

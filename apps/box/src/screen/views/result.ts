@@ -4,8 +4,9 @@
 import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import type { EgbPlate } from "../parts/plate.ts";
-import { el, place, play } from "../shell/dom.ts";
+import type { EgbPanel } from "../parts/panel.ts";
+import { el, fitFont, place } from "../shell/dom.ts";
+import { rez } from "../shell/rez.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
 
@@ -20,15 +21,16 @@ export function resultView(ctx: ViewContext): View {
     return panel;
   });
 
-  const banner = document.createElement("egb-plate") as EgbPlate;
-  banner.setAttribute("variant", "brass");
+  const banner = document.createElement("egb-panel") as EgbPanel;
   banner.classList.add("page-plate", "result-banner");
   place(banner, page.plate);
+  const bannerText = el("span", "result-banner-text");
+  banner.append(bannerText);
 
   const keys = el("div", "page-keys");
   place(keys, page.keys);
   const home = document.createElement("egb-key") as EgbKey;
-  home.setAttribute("variant", "metal");
+  home.setAttribute("variant", "ghost");
   home.textContent = "HOME";
   home.addEventListener("click", () => {
     sound.play("tap");
@@ -53,14 +55,16 @@ export function resultView(ctx: ViewContext): View {
       else if (winner === i) panels[i]?.set(s, `WINNER · +${m.stake * 2} EGB`, "win");
       else panels[i]?.set(s, `−${m.stake} EGB`, "lose");
     });
-    banner.textContent = m.voided ? "VOID · THE GAME FAILED" : winner === null ? "DRAW" : `PLAYER ${winner + 1} WINS`;
+    bannerText.textContent = m.voided ? "VOID · THE GAME FAILED" : winner === null ? "DRAW · STAKES RETURNED" : `PLAYER ${winner + 1} WINS`;
+    bannerText.className = `result-banner-text ${winner === null ? "draw" : `seat-${winner}`}`;
+    fitFont(bannerText, page.plate.w - 72, 40);
   }
 
   return {
     el: root,
     update(state, event) {
       draw(state);
-      if (event.type === "init") void play(banner, [{ transform: "scale(1.3)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 520, delay: 200, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "backwards" });
+      if (event.type === "init") void rez(banner, { delay: 380 });
     },
   };
 }

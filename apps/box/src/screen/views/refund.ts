@@ -4,7 +4,7 @@
 import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
-import type { EgbPlate } from "../parts/plate.ts";
+import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
@@ -20,8 +20,7 @@ export function refundView(ctx: ViewContext): View {
     return panel;
   });
 
-  const plate = document.createElement("egb-plate") as EgbPlate;
-  plate.setAttribute("variant", "metal");
+  const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate", "refund-plate");
   place(plate, page.plate);
   const head = el("div", "refund-head", "SETTLE MISSED");
@@ -32,6 +31,7 @@ export function refundView(ctx: ViewContext): View {
   place(keys, page.keys);
   const note = el("div", "page-note", "THE BOX WENT OFFLINE BEFORE IT SETTLED. THE GAME CONTRACT HOLDS BOTH STAKES.");
   const both = document.createElement("egb-key") as EgbKey;
+  both.setAttribute("variant", "alert");
   both.textContent = "REFUND ALL";
   both.addEventListener("click", () => {
     sound.play("tap");
@@ -44,7 +44,8 @@ export function refundView(ctx: ViewContext): View {
     const m = state.match;
     if (!m) return;
     const left = Math.max(0, m.refundBlock - state.chain.block);
-    line.textContent = left > 0 ? `UNLOCKS AT BLOCK ${m.refundBlock.toLocaleString("en-US")}` : "UNLOCKED · TAP YOUR BADGE";
+    if (left > 0) line.replaceChildren("UNLOCKS AT BLOCK ", el("span", "refund-count", m.refundBlock.toLocaleString("en-US")));
+    else line.textContent = "UNLOCKED · TAP YOUR BADGE";
     const owed = m.refunded.some((done, i) => !done && !state.txs.some((tx) => tx.kind === "refund" && tx.seat === i));
     both.toggleAttribute("disabled", left > 0 || !owed);
     state.seats.forEach((s, i) => {

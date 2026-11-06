@@ -1,10 +1,12 @@
 // The screen's entry. One codebase, two builds: `VITE_EGB_MODE=demo` (the default) runs the whole Box in the browser
-// (SimLink) and draws the missing hardware on a desk below the screen; `box` is the bare screen for the Pi's kiosk,
-// on LiveLink to the Box server that served it. In box mode the real stations tap: the keyboard taps nothing.
+// (SimLink), lets the screen stand in for the tap stations and adds the DEMO tag; `box` is the bare screen for the
+// Pi's kiosk, on LiveLink to the Box server that served it. In box mode the real stations tap: neither the screen nor
+// the keyboard taps anything.
 import "./fonts.css";
 import "./tokens.css";
 import "./shell/shell.css";
 import "./views/views.css";
+import type { Badge, Seat } from "../core/types.ts";
 import { registerParts } from "./parts/register.ts";
 import { createSound } from "./shell/sound.ts";
 import { startApp } from "./shell/app.ts";
@@ -13,7 +15,7 @@ import { LINK_PATH } from "../core/wire.ts";
 import { connectLive } from "./link/live.ts";
 import { createSimLink } from "./link/sim.ts";
 import { bindTapKeys } from "./demo/keys.ts";
-import { mountDesk } from "./demo/desk.ts";
+import { mountDemoTag } from "./demo/demo-tag.ts";
 import { showIntroOnce } from "./demo/intro.ts";
 
 registerParts();
@@ -26,7 +28,14 @@ if (import.meta.env.VITE_EGB_MODE === "box") {
 } else {
   const sim = createSimLink();
   bindTapKeys(sim);
-  const desk = mountDesk(document.body, sim, sound);
-  startApp(document.body, { link: sim, sound, routes, deskHeight: (w: number, h: number) => desk.height(w, h) });
-  showIntroOnce(document.body);
+  startApp(document.body, {
+    link: sim,
+    sound,
+    routes,
+    // The screen taps the seats, and the bot's port says so.
+    onSeatTap: (seat: Seat) => sim.tap(seat),
+    isBot: (badge: Badge) => badge.address === sim.botBadge.address,
+  });
+  mountDemoTag(document.body, sim, sound);
+  showIntroOnce(document.body, sim);
 }

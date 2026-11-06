@@ -14,7 +14,7 @@ type Update = Extract<ToFrame, { t: "update" }>;
 const STYLE = `
 .qd { position: absolute; inset: 0; overflow: hidden; display: grid; grid-template-rows: 1fr auto auto; align-items: center; justify-items: center;
   padding: 4% 5% 5%; gap: 3vmin; font-family: var(--display); color: var(--fg);
-  background: radial-gradient(120% 70% at 50% 100%, #ff9b3d 0%, #b8452c 22%, #4a1d4f 52%, #160b2b 80%), var(--room); }
+  background: radial-gradient(120% 70% at 50% 100%, #ff9b3d 0%, #b8452c 22%, #4a1d4f 52%, #160b2b 80%), var(--void); }
 .qd-sun { position: absolute; left: 50%; bottom: -28vmin; width: 70vmin; height: 70vmin; margin-left: -35vmin; border-radius: 50%;
   background: radial-gradient(circle, #ffe0a0 0%, #ffb547 45%, rgb(255 155 61 / 0) 70%); opacity: .9; }
 .qd-ridge { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; background: #120a1f;

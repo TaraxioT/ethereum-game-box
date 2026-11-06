@@ -2,7 +2,7 @@
 //
 // A result counts only on the evidence of taps the Box saw (the free-result rules): both seated badges tapped a
 // station from Stake to the end of the match, at least FREE_MIN_MATCH_MS passed since the first of those taps, and
-// the pair has had fewer than FREE_PER_PAIR_HOUR counted results in the hour before. Injected taps and the demo's desk
+// the pair has had fewer than FREE_PER_PAIR_HOUR counted results in the hour before. Injected taps and Demo mode's screen
 // are no evidence; a result that doesn't count is still logged. Pure.
 import type { Seat, Transcript, TranscriptTap } from "@egb/sdk";
 import type { MatchLog } from "./ports.ts";

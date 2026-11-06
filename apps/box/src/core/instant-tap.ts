@@ -1,4 +1,4 @@
-// A whole tap at once, at the core's now: the `touch`, then its `done` with the badge already known. The demo desk
+// A whole tap at once, at the core's now: the `touch`, then its `done` with the badge already known. Demo mode's screen
 // and the bot tap this way, and so do the server's injected taps. The roll goes with the tap only when the plan asks
 // for one, as a real station's would. None of these is a tap the Box saw at a station: they are `injected`.
 import type { Seat } from "@egb/sdk";

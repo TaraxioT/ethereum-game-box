@@ -1,5 +1,4 @@
-// Defines every part once. The seven-segment display comes first: the port and the clock build theirs as they are
-// constructed.
+// Defines every part once.
 import { EgbCart } from "./cart.ts";
 import { EgbClock } from "./clock.ts";
 import { EgbCore } from "./core.ts";
@@ -7,14 +6,13 @@ import { EgbFact } from "./fact.ts";
 import { EgbGauge } from "./gauge.ts";
 import { EgbKey } from "./key.ts";
 import { EgbLcd } from "./lcd.ts";
-import { EgbPlate } from "./plate.ts";
+import { EgbPanel } from "./panel.ts";
 import { EgbPort } from "./port.ts";
 import { EgbSeg } from "./seg.ts";
 import { EgbTxbar } from "./txbar.ts";
 
 const PARTS: readonly (readonly [string, CustomElementConstructor])[] = [
-  ["egb-seg", EgbSeg],
-  ["egb-plate", EgbPlate],
+  ["egb-panel", EgbPanel],
   ["egb-core", EgbCore],
   ["egb-port", EgbPort],
   ["egb-clock", EgbClock],
@@ -24,6 +22,7 @@ const PARTS: readonly (readonly [string, CustomElementConstructor])[] = [
   ["egb-cart", EgbCart],
   ["egb-txbar", EgbTxbar],
   ["egb-lcd", EgbLcd],
+  ["egb-seg", EgbSeg],
 ];
 
 export function registerParts(): void {
@@ -32,8 +31,7 @@ export function registerParts(): void {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "egb-seg": EgbSeg;
-    "egb-plate": EgbPlate;
+    "egb-panel": EgbPanel;
     "egb-core": EgbCore;
     "egb-port": EgbPort;
     "egb-clock": EgbClock;
@@ -43,5 +41,6 @@ declare global {
     "egb-cart": EgbCart;
     "egb-txbar": EgbTxbar;
     "egb-lcd": EgbLcd;
+    "egb-seg": EgbSeg;
   }
 }

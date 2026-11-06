@@ -1,49 +1,55 @@
 /* The shell: the window, the scaled stage, the machine's layers and its three poses. */
-.app { position: fixed; inset: 0; overflow: hidden; background: var(--room); }
-.screen-area { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; }
-.screen-area::before {
-  /* The room round the stage when the window's shape differs from it: Devcon's night, a violet dawn high left. */
-  content: ""; position: absolute; inset: 0;
-  background:
-    radial-gradient(60% 70% at 8% 0%, rgb(143 107 255 / 0.18), transparent 70%),
-    radial-gradient(55% 60% at 100% 100%, rgb(255 140 210 / 0.08), transparent 70%),
-    linear-gradient(180deg, #1c1538, #140e2b 70%);
-}
+.app { position: fixed; inset: 0; overflow: hidden; background: var(--void); }
+/* The whole window; the room round the stage, where the window's shape differs from it, is the void. */
+.screen-area { position: absolute; inset: 0; overflow: hidden; }
 .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; contain: layout paint; }
 
 .machine, .machine > * { position: absolute; inset: 0; }
-.board { transition: opacity var(--t-page) var(--ease-out); }
-.board > canvas { position: absolute; left: 0; top: 0; }
-.board-dimmer { background: rgb(9 5 22 / 0.62); opacity: 0; pointer-events: none; transition: opacity var(--t-page) var(--ease-out); }
+.grid { transition: opacity var(--t-page) var(--ease-out); }
+.grid > canvas { position: absolute; left: 0; top: 0; }
+.grid-dimmer { background: var(--void); opacity: 0; pointer-events: none; transition: opacity var(--t-page) var(--ease-out); }
 .core-host { inset: auto; display: grid; place-items: center; pointer-events: none; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 .view-layer { pointer-events: none; }
-.view-layer > .view { position: absolute; inset: 0; pointer-events: auto; transform-origin: 50% 45%; }
+.view-layer > .view { position: absolute; inset: 0; pointer-events: auto; }
 .overlay { pointer-events: none; }
 .overlay > * { pointer-events: auto; transition: transform var(--t-page) var(--ease-out), opacity var(--t-page) var(--ease-out); }
 
-/* Page: the board dims and the core sinks back a little; the ports and clock stay up. */
-.machine[data-pose="page"] .board-dimmer { opacity: 1; }
+/* Page: the Grid dims and the core sinks back a little; the ports and clock stay up. */
+.machine[data-pose="page"] .grid-dimmer { opacity: 0.7; }
 .machine[data-pose="page"] .core-host { transform: scale(0.82); }
 
 /* Game: only the thin overlay of the Box stays — ports, clock and the stake. */
-.machine[data-pose="game"] .board, .machine[data-pose="game"] .core-host { opacity: 0; }
+.machine[data-pose="game"] .grid, .machine[data-pose="game"] .core-host { opacity: 0; }
 .machine[data-pose="game"] egb-gauge, .machine[data-pose="game"] egb-txbar { opacity: 0; pointer-events: none; }
 .machine[data-pose="game"] egb-clock { transform: translateY(-14px) scale(0.78); }
 .machine[data-pose="game"] .view-layer { z-index: 0; }
+/* The game screens keep the text colour and face they inherited before the launcher took the Grid's. */
+.machine[data-pose="game"] .view-layer { color: #f5f1ff; font: 18px/1.4 var(--body); }
 
 .stake-chip {
-  position: absolute; left: 50%; top: 104px; transform: translateX(-50%); padding: 6px 16px;
-  font: 700 15px/1 var(--display); letter-spacing: 0.06em; color: var(--brass-ink);
-  background: linear-gradient(180deg, #ecd58f, var(--brass) 40%, var(--brass-lo));
-  border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--brass-hi), 0 0 0 1.5px #3e2a06, 0 3px 0 var(--brass-edge);
+  position: absolute; left: 50%; top: 104px; transform: translateX(-50%); padding: 7px 16px; white-space: nowrap;
+  font: 700 15px/1 var(--mono); letter-spacing: 0.04em; color: var(--fg); --panel-line: 0.6;
   opacity: 0;
 }
 .machine[data-pose="game"] .stake-chip:not([hidden]) { opacity: 1; }
 [data-orientation="portrait"] .stake-chip { top: 40px; }
 
-/* The boot's cover: dark with a hole at the core; scaled up, it uncovers the board outward from the core. */
+/* Demo mode: a touch on a player's half of the screen in a game. */
+.tap-ripple {
+  position: absolute; width: 120px; height: 120px; border-radius: 50%; pointer-events: none; opacity: 0;
+  --seat: var(--p1); --seat-bloom: var(--p1-bloom);
+  border: 2px solid var(--seat); box-shadow: 0 0 8px var(--seat-bloom), 0 0 18px var(--seat-bloom), inset 0 0 8px var(--seat-bloom);
+}
+.tap-ripple.seat-1 { --seat: var(--p2); --seat-bloom: var(--p2-bloom); }
+
+/* The boot's cover: the void with a hole at the core; scaled up, it uncovers the Grid outward from the core. */
 .boot-cover {
   inset: auto; left: calc(var(--cx) - 1400px); top: calc(var(--cy) - 1400px); width: 2800px; height: 2800px;
-  background: radial-gradient(circle at center, transparent 0 330px, var(--room) 520px);
+  background: radial-gradient(circle at center, transparent 0 330px, var(--void) 520px);
   transform: scale(0.5); pointer-events: none;
+}
+/* The boot's horizon: a hot line drawn out from under the core before the Grid shows. */
+.boot-horizon {
+  inset: auto; left: 0; right: 0; height: 2px; pointer-events: none;
+  background: var(--sys-hot); box-shadow: 0 0 8px var(--sys-bloom), 0 0 20px var(--sys-bloom); transform: scaleX(0);
 }

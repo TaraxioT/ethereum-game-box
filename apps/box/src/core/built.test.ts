@@ -9,12 +9,12 @@ import { createCore, END_HOLD_MS, type Core } from "./core.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
 import { memoryLedgerStore } from "./ledger.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
-import { DESK_BADGES } from "./badges.ts";
+import { DEMO_BADGES } from "./badges.ts";
 import { ANCHOR_AT, BLOCK_MS } from "./chain.ts";
 import { instantTap } from "./instant-tap.ts";
 
 const START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
-const [NOVA, KITE] = DESK_BADGES as [Badge, Badge];
+const [NOVA, KITE] = DEMO_BADGES as [Badge, Badge];
 
 function manifest(taps: GameManifest["taps"]): GameManifest {
   return { id: "tap-three", title: "Tap Three", blurb: "Three taps wins.", players: 2, minutes: 1, stakes: [1, 5], tier: "refereed", taps, kind: "built", budgetMs: 50 };

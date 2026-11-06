@@ -1,21 +1,22 @@
-// The Build screen: the World Computer making a new game. It stands on the whole lit board. Left: what is being
-// built (a kicker with the build's state, the game's title, the step at work, the time it has run on an amber LCD)
-// over a mint LCD of the agent's own words. Right: the brief it was built from. In the middle the core takes a packet
-// for every tool call the agent makes, along the trace for its kind of work (reading down Player 1's copper, writing
-// down Player 2's, the build check down the clock's feed). Along the bottom, in the rack's housings, the four compile
-// plates (manifest, type check, bundle, icon), each lighting as its check lands and sending a packet up its housing's
-// trace. The result: the game's title and HOME, or the error in plain words and a key back to the Designer. A sim build
-// says SIMULATED.
+// The Build screen: the World Computer making a new game. It stands on the whole lit Grid. Left: what is being built
+// (a kicker with the build's state, the game's title, the step at work, the time it has run on a mono readout) over a
+// log of the agent's own words. Right: the brief it was built from. In the middle the core takes a packet of the
+// system's light for every tool call the agent makes, along the trace for its kind of work (reading down Player 1's
+// trace, writing down Player 2's, the build check down the clock's feed). Along the bottom, where the rack's programs
+// stand, the four compile checks (manifest, type check, bundle, icon), each lighting as its check lands and sending a
+// packet up its slot's trace. The result: the game's title and HOME, or the error in plain words and a key back to the
+// Designer. A sim build says SIMULATED.
 //
 // It draws from ForgeEvents. Events older than a moment are a replay (a screen that came in late): they set the end
 // state without moving anything. Only transform and opacity animate; under reduced motion it shows end states.
 import type { CompileStep, ForgeEvent, ForgeJob, ForgeStatus } from "../../builder/types.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbLcd } from "../parts/lcd.ts";
-import type { EgbPlate } from "../parts/plate.ts";
 import type { EgbSeg } from "../parts/seg.ts";
-import { el, fitFont, place, play } from "../shell/dom.ts";
-import { NEON, type TraceName } from "../shell/traces.ts";
+import { chamferClip, fitFrame } from "../parts/frame.ts";
+import { el, facesReady, fitFont, place } from "../shell/dom.ts";
+import { flicker, rez } from "../shell/rez.ts";
+import { LIGHT, type TraceName } from "../shell/traces.ts";
 import { createBriefPlates } from "./brief-plates.ts";
 import { buildLayout, compileSlot } from "./builder-layout.ts";
 import type { ViewContext } from "./view.ts";
@@ -38,24 +39,28 @@ const COMPILE: readonly { readonly step: CompileStep; readonly label: string }[]
   { step: "icon", label: "ICON" },
 ];
 
+/** A compile check is cut like a program in the rack, whose place it takes. */
+const COMPILE_CHAMFER = 16;
+
 /** An event this much older than the Box's clock is a replay: it draws its end state, without a moment. */
 const LIVE_MS = 2_000;
 
-/** A tool's kind of work, its trace into the core and its packet's colour. */
-function wire(name: string): { readonly trace: TraceName; readonly colour: string; readonly verb: string } {
-  if (name.endsWith("build_game")) return { trace: "clock", colour: NEON.gold, verb: "CHECKING THE BUILD" };
-  if (name === "Write") return { trace: "port1", colour: NEON.mint, verb: "WRITING" };
-  if (name === "Edit") return { trace: "port1", colour: NEON.mint, verb: "EDITING" };
-  if (name === "Glob" || name === "Grep") return { trace: "port0", colour: NEON.lav, verb: "SEARCHING" };
-  return { trace: "port0", colour: NEON.lav, verb: "READING" };
+/** A tool's kind of work and its trace into the core. Every packet is the system's light, even on a port's trace: a
+ * seat's colour would say a player did it. */
+function wire(name: string): { readonly trace: TraceName; readonly verb: string } {
+  if (name.endsWith("build_game")) return { trace: "clock", verb: "CHECKING THE BUILD" };
+  if (name === "Write") return { trace: "port1", verb: "WRITING" };
+  if (name === "Edit") return { trace: "port1", verb: "EDITING" };
+  if (name === "Glob" || name === "Grep") return { trace: "port0", verb: "SEARCHING" };
+  return { trace: "port0", verb: "READING" };
 }
 
 const base = (path: string | null): string => (path ? (path.split("/").pop() ?? path) : "");
 
-/** mm.ss on the seven-segment cells (they have no colon). */
+/** mm:ss. */
 function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}.${String(s % 60).padStart(2, "0")}`;
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export interface BuildScreen {
@@ -84,7 +89,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
   place(head, at.head);
   const kickerRow = el("div", "build-kicker-row");
   const kicker = el("div", "build-kicker");
-  const sim = document.createElement("egb-plate") as EgbPlate;
+  const sim = document.createElement("egb-panel");
   sim.classList.add("build-sim");
   sim.textContent = "SIMULATED";
   sim.hidden = job.provider !== "sim";
@@ -108,12 +113,15 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
   const plates = COMPILE.map(({ label }, i) => {
     const plate = el("div", "compile-plate");
     plate.dataset.state = "idle";
+    const fill = el("i", "frame-fill");
+    fill.style.clipPath = chamferClip(COMPILE_CHAMFER, "tr-bl");
     const lamp = el("i", "compile-lamp");
     const name = el("span", "compile-name", label);
     const word = el("span", "compile-word", "WAITING");
-    plate.append(lamp, name, word);
-    const housing = layout.rack[i];
-    if (housing) place(plate, compileSlot(housing));
+    plate.append(fill, lamp, name, word);
+    fitFrame(plate, { chamfer: COMPILE_CHAMFER, corners: "tr-bl" });
+    const slot = layout.rack[i];
+    if (slot) place(plate, compileSlot(slot));
     return { plate, word };
   });
 
@@ -132,10 +140,10 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
   const flying = new Set<TraceName>();
 
   title.textContent = job.brief.title ?? job.brief.template.replace(/-/g, " ");
-  void document.fonts.ready.then(() => fitFont(title, at.head.w, layout.orientation === "portrait" ? 40 : 44));
+  void facesReady().then(() => fitFont(title, at.head.w, layout.orientation === "portrait" ? 40 : 44));
   fitFont(title, at.head.w, layout.orientation === "portrait" ? 40 : 44);
 
-  function packet(trace: TraceName, colour: string, reverse = false): void {
+  function packet(trace: TraceName, colour: string = LIGHT.sys, reverse = false): void {
     if (flying.has(trace)) return;
     flying.add(trace);
     void machine.run(trace, { colour, reverse }).then(() => {
@@ -159,7 +167,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
   }
 
   function drawKeys(): void {
-    const key = (label: string, variant: "brass" | "metal", act: () => void): EgbKey => {
+    const key = (label: string, variant: "primary" | "ghost", act: () => void): EgbKey => {
       const k = document.createElement("egb-key") as EgbKey;
       k.setAttribute("variant", variant);
       k.textContent = label;
@@ -170,8 +178,8 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
       return k;
     };
     const home = () => link.send({ type: "home" });
-    if (status === "done") keys.replaceChildren(key("HOME", "brass", home));
-    else if (status === "failed") keys.replaceChildren(key("DESIGNER", "brass", hooks.toDesigner), key("HOME", "metal", home));
+    if (status === "done") keys.replaceChildren(key("HOME", "primary", home));
+    else if (status === "failed") keys.replaceChildren(key("DESIGNER", "primary", hooks.toDesigner), key("HOME", "ghost", home));
     else keys.replaceChildren();
   }
 
@@ -206,20 +214,20 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
         step.textContent = event.path ? `${w.verb} ${base(event.path).toUpperCase()}` : w.verb;
         // A build check starts over: every plate waits for its new answer.
         if (event.name.endsWith("build_game")) plates.forEach((_, i) => setPlate(i, "checking", "CHECKING"));
-        if (live) packet(w.trace, w.colour);
+        if (live) packet(w.trace);
         break;
       }
       case "tool_done":
-        if (!event.ok && live) packet("clock", "#ff6b6b", true);
+        if (!event.ok && live) packet("clock", LIGHT.alert, true);
         break;
       case "compile": {
         const i = COMPILE.findIndex((c) => c.step === event.step);
         setPlate(i, event.ok ? "ok" : "bad", event.ok ? "OK" : "FAILED");
         if (!event.ok) lcd.push(`${COMPILE[i]?.label ?? event.step}: ${event.text}`, "bad");
         if (live && i >= 0) {
-          packet(`slot${i}` as TraceName, event.ok ? NEON.mint : "#ff6b6b");
+          packet(`slot${i}` as TraceName, event.ok ? LIGHT.sys : LIGHT.alert);
           sound.play(event.ok ? "tick" : "error");
-          void play(plates[i]!.plate, [{ transform: "translateY(5px)" }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+          flicker(plates[i]!.plate);
         }
         break;
       }
@@ -239,7 +247,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
         if (live) {
           sound.play(event.ok ? "win" : "lose");
           if (event.ok) machine.coin();
-          void play(keys, [{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }], { duration: 360, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+          void rez(keys);
         }
         break;
     }

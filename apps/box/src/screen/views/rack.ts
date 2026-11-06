@@ -1,10 +1,11 @@
-// The cartridge rack: one keycap cartridge per entry, standing in its housing along the bottom of the board. Home
-// focuses one; attract shows them idle. An entry is a game's cartridge or the blank NEW GAME one that opens the game
-// builder (the Box's own screen only); more entries than the layout has housings continue along the row.
+// The cartridge rack: one program per entry, standing on the Grid's floor along the bottom of the stage. Home focuses
+// one; attract shows them idle. An entry is a game's program or the blank NEW GAME one that opens the game builder
+// (the Box's own screen only); more entries than the layout has slots continue along the row.
 import type { GameInfo } from "../../core/types.ts";
 import type { Layout, Rect } from "../shell/layout.ts";
 import type { EgbCart } from "../parts/cart.ts";
-import { el, place, play } from "../shell/dom.ts";
+import { el, place } from "../shell/dom.ts";
+import { rez } from "../shell/rez.ts";
 
 export interface RackCart {
   /** A game's id, or NEW_GAME's. */
@@ -33,8 +34,8 @@ export const rackOf = (games: readonly GameInfo[]): RackCart[] => [...games.map(
 const MARGIN = 16;
 
 /**
- * Where each of `count` cartridges stands: the layout's housings (each fed by a trace), then on along the row at the
- * same pitch. A row too long for the stage closes up to fit, its housings scaled about their feet.
+ * Where each of `count` cartridges stands: the layout's slots (each fed by a trace), then on along the row at the
+ * same pitch. A row too long for the stage closes up to fit, its slots scaled about their feet.
  */
 export function rackSlots(layout: Layout, count: number): Rect[] {
   const base = layout.rack;
@@ -56,10 +57,10 @@ export interface Rack {
   focus(id: string | null): void;
   /** The launch: the focused cartridge seats down. */
   press(id: string): void;
-  /** Boot and attract: the cartridges rise into their housings one after another. */
-  rise(): Promise<void>;
-  /** A game just installed: its cartridge slides down into its housing. */
-  slideIn(id: string): void;
+  /** Attract: after `delay` ms the cartridges rez in, left to right, 90 ms apart. */
+  rez(delay: number): Promise<void>;
+  /** A game just installed: its cartridge rezzes in where it stands. */
+  arrive(id: string): void;
 }
 
 export function createRack(layout: Layout, entries: readonly RackCart[], onPick?: (id: string) => void): Rack {
@@ -69,6 +70,7 @@ export function createRack(layout: Layout, entries: readonly RackCart[], onPick?
     const cart = document.createElement("egb-cart") as EgbCart;
     cart.setAttribute("game", entry.art);
     cart.setAttribute("title", entry.title);
+    cart.setAttribute("slot", String(i + 1));
     if (entry.icon) cart.setAttribute("icon", entry.icon);
     cart.toggleAttribute("sealed", entry.sealed);
     const slot = slots[i];
@@ -86,18 +88,12 @@ export function createRack(layout: Layout, entries: readonly RackCart[], onPick?
     press(id) {
       carts.forEach((cart, i) => cart.toggleAttribute("pressed", entries[i]?.id === id));
     },
-    async rise() {
-      await Promise.all(
-        carts.map((cart, i) =>
-          play(cart, [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }], {
-            duration: 420, delay: i * 90, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "backwards",
-          }),
-        ),
-      );
+    async rez(delay) {
+      await Promise.all(carts.map((cart, i) => rez(cart, { delay: delay + i * 90 })));
     },
-    slideIn(id) {
+    arrive(id) {
       const cart = carts[entries.findIndex((entry) => entry.id === id)];
-      if (cart) void play(cart, [{ opacity: 0, transform: "translateY(-120px)" }, { opacity: 1, transform: "none" }], { duration: 640, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+      if (cart) void rez(cart);
     },
   };
 }

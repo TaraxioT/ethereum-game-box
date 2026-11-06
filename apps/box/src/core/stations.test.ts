@@ -4,11 +4,11 @@ import type { Match, MatchPlay, Phase, SeatState, StationView } from "./types.ts
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
 import { DEAL_MS, frontCard, rules as stockDuel } from "../games/stock-duel/rules.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
-import { DESK_BADGES } from "./badges.ts";
+import { DEMO_BADGES } from "./badges.ts";
 import { stationView, type StationInput } from "./stations.ts";
 
 const NOW = 5_000_000;
-const [NOVA, KITE] = DESK_BADGES as [(typeof DESK_BADGES)[0], (typeof DESK_BADGES)[0]];
+const [NOVA, KITE] = DEMO_BADGES as [(typeof DEMO_BADGES)[0], (typeof DEMO_BADGES)[0]];
 const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
 
 function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EMPTY], match: Match | null = null): StationInput {

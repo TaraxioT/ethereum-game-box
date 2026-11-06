@@ -1,9 +1,9 @@
-// The brief so far as engraved plates screwed to the board, one per field in the Designer's order: gunmetal once
-// settled, brass for the question being asked, a dim blank for one still open. A field that fills presses its plate
-// in and says which it was, so the page can send a packet into the core.
+// The brief so far as panels of light, one per field in the Designer's order: at rest once settled, lit with its bloom
+// for the question being asked, faint for one still open. A field that fills flickers its panel and says which it was,
+// so the page can send a packet into the core.
 import type { DesignerStep, GameBrief } from "../../builder/types.ts";
-import type { EgbPlate } from "../parts/plate.ts";
-import { el, play } from "../shell/dom.ts";
+import { el } from "../shell/dom.ts";
+import { flicker } from "../shell/rez.ts";
 
 type Field = Exclude<DesignerStep, "confirm">;
 
@@ -42,7 +42,7 @@ export function createBriefPlates(): BriefPlates {
   const root = el("div", "brief");
   root.append(el("div", "brief-head", "THE BRIEF"));
   const rows = FIELDS.map(({ label }) => {
-    const plate = document.createElement("egb-plate") as EgbPlate;
+    const plate = document.createElement("egb-panel");
     plate.classList.add("brief-plate");
     const name = el("span", "brief-label", label);
     const value = el("span", "brief-value");
@@ -62,16 +62,10 @@ export function createBriefPlates(): BriefPlates {
         const { plate, value } = rows[i]!;
         const text = values[i];
         value.textContent = text ?? "—";
-        plate.setAttribute("variant", field === asking ? "brass" : "metal");
+        plate.toggleAttribute("lit", field === asking);
         plate.toggleAttribute("open", text === null && field !== asking);
       });
-      if (animate) {
-        changed.forEach((i, n) =>
-          void play(rows[i]!.plate, [{ transform: "translateX(-14px)", opacity: 0.3 }, { transform: "none", opacity: 1 }], {
-            duration: 320, delay: n * 110, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "backwards",
-          }),
-        );
-      }
+      if (animate) changed.forEach((i, n) => flicker(rows[i]!.plate, n * 110));
       return changed;
     },
   };

@@ -50,19 +50,9 @@ export function blockie(address: string): Blockie {
 
 const round = (n: number): number => Math.round(n * 10) / 10;
 
-/** The blockie in its own colours, `size` px square, crisp at any scale. */
-export function blockieSvg(address: string, size: number): string {
-  const b = blockie(address);
-  let rects = "";
-  b.cells.forEach((c, i) => {
-    if (c) rects += `<rect x="${i % 8}" y="${Math.floor(i / 8)}" width="1" height="1" fill="${c === 1 ? b.color : b.spot}"/>`;
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect width="8" height="8" fill="${b.bg}"/>${rects}</svg>`;
-}
-
 /**
  * The blockie as an LED matrix, `size` px square: one rounded LED per cell, classed `c0` (off), `c1` (colour) or `c2`
- * (spot) for the caller to light in its own colours (a port lights them in its seat's neon).
+ * (spot) for the caller to light in its own colours (the launcher lights them in the seat's colour).
  */
 export function blockieLedSvg(address: string, size: number): string {
   const b = blockie(address);
