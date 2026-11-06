@@ -138,7 +138,9 @@ async function frozenCup(d: Directory, cup: CupView): Promise<HTMLElement> {
 
 function historyRow(d: Directory, cup: CupEntry): HTMLElement {
   const status = !cup.closed
-    ? h("span", {}, "open · ends ", countdownEl(cup.ends))
+    ? cup.ends <= BigInt(nowSeconds())
+      ? h("span", {}, "ended · waiting to close")
+      : h("span", {}, "open · ends in ", countdownEl(cup.ends))
     : hasWinner(cup)
       ? h("span", {}, "won by ", h("b", { style: "color:var(--fg)" }, playerOf(d, cup.closed.winner)), ` · ${usdcText(cup.closed.prize)}`)
       : h("span", {}, "nobody played · the prize went back and the name was unregistered");
