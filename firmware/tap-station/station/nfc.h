@@ -23,7 +23,7 @@ struct Held {
   uint8_t misses;       // presence checks in a row without it
   bool talked;          // a block was exchanged since it was activated: it answers the R(NAK) presence check now
   bool pristine;        // nothing but the station's own applet select since it was activated
-  bool deaf;            // it failed the presence check before anything talked to it: re-read it instead
+  bool deaf;            // it failed the presence check: re-read it with a field cycle instead, from here on
 };
 extern Held held;
 

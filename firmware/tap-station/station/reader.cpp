@@ -4,7 +4,9 @@
 // and a halted chip ignores the next read: a resting chip needs another way to show it's still there, or it reads as
 // lifted 33 ms after it landed. An ISO-DEP chip (a HaLo) gets a presence check every PRESENCE_MS that leaves it
 // selected, so the Pi's APDUs carry on (Pn532::present(), an R(NAK): ~4.3 ms); any other chip, or one that doesn't
-// answer the check before anything has talked to it, is read again after a short field cycle (~40 ms). For QUIET_MS
+// answer the check, is read again after a short field cycle (~40 ms). Some HaLos stop answering R(NAK) even after a
+// block was exchanged (one with SAK 28 did, right after the station's own select): such a chip is re-read too, never
+// counted gone for a missed check alone. For QUIET_MS
 // after a request there are no checks at all: the Pi is mid-session, and the chip's own answers show it's there.
 #include "reader.h"
 
@@ -113,6 +115,9 @@ void lost() {
   g.chip = held.chip;
   link::sendReliable(&g, sizeof g);
   forgetSelect();
+  // A chip still on the reader after a gone (two re-reads missed it) stays in its active ISO-DEP state and ignores the
+  // activation a plain list sends; a field cycle lets it come back as a fresh tap instead of never.
+  pn532.resetField();
   lastStartUs = micros();
   led::show();
   oled::poke();
@@ -197,10 +202,10 @@ static void run(void *) {
     }
     now = millis();
     if (on && egb::sinceMs(now, held.servedMs) < (int32_t)QUIET_MS) continue;
-    bool there = false, cycle = !on || !held.chip.isoDep() || (!held.talked && held.deaf);
+    bool there = false, cycle = !on || !held.chip.isoDep() || held.deaf;
     if (!cycle) {
       there = pn532.present();
-      if (!there && !held.talked) held.deaf = cycle = true;  // never answered it: re-read it, now and from here on
+      if (!there) held.deaf = cycle = true;  // it doesn't answer the check: re-read it, now and from here on
     }
     if (cycle) {
       if (on) {
