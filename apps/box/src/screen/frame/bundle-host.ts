@@ -6,7 +6,8 @@ import { createBundleRuntime } from "./bundle-runtime.ts";
 const kiosk = new URL(location.href).origin;
 const runtime = createBundleRuntime({ post: (message) => window.parent.postMessage(message, kiosk), name: window.name });
 
-Object.defineProperty(window, "egb", { value: runtime.egb, enumerable: true });
+// A plain property: against a fixed one, a game's own `const egb = window.egb` would be a SyntaxError.
+Object.assign(window, { egb: runtime.egb });
 window.addEventListener("message", (event) => {
   if (event.source === window.parent && event.origin === kiosk) runtime.receive(event.data);
 });

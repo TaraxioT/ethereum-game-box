@@ -238,7 +238,8 @@ window.addEventListener("load", () => {
 
 /** What a game can do: reads its players on its first line, loads its own files, hears a tap and answers. */
 const GAME = `
-const first = { egb: typeof window.egb, keys: Object.keys(window.egb).sort(), players: window.egb.players.map((p) => p.name), script: document.scripts[0].getAttribute("src") };
+const egb = window.egb;
+const first = { egb: typeof egb, keys: Object.keys(egb).sort(), players: egb.players.map((p) => p.name), script: document.scripts[0].getAttribute("src") };
 const violations = [];
 document.addEventListener("securitypolicyviolation", (event) => violations.push(event.blockedURI + " " + event.effectiveDirective));
 window.addEventListener("load", async () => {
