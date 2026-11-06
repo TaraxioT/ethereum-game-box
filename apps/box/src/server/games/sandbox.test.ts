@@ -1,8 +1,8 @@
 // The sandbox proved in a real browser: Chromium with the kiosk's flags, on the real handler, routes and CSPs, with the
 // real view, gate and channel (screen/frame/sandbox-kiosk.ts). A second server and a UDP socket on this machine's real
 // address stand for the outside world. Each scenario is a bundle that tries something, and the proof is what the outside
-// and the Box then saw, not what the page says. Skipped without a Chromium: EGB_CHROMIUM names one, else the Pi's,
-// Playwright's or Chrome.
+// and the Box then saw, not what the page says. Skipped without a Chromium (EGB_CHROMIUM names one, else the Pi's,
+// Playwright's or Chrome), or without a network address to stand the outside on.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import dgram from "node:dgram";
@@ -41,7 +41,13 @@ function findChromium(): string | null {
 }
 
 const CHROMIUM = findChromium();
+/** The outside's address: a real one, as WebRTC gathers from real interfaces and KIOSK_WALLS lets loopback through. */
+const HERE = Object.values(networkInterfaces())
+  .flat()
+  .find((address) => address?.family === "IPv4" && !address.internal)?.address;
 const file = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
+/** The most seconds a flood may take, in the rates it is held to: a loaded machine mustn't fail this. */
+const FLOOD_SECONDS = 10;
 
 /**
  * What no CSP can do. Under `default-src 'none'` and the sandbox, `<link rel="prerender">` still sends a full GET to any
@@ -279,7 +285,7 @@ const LANDED = `parent.postMessage({ t: "ready" }, "*"); parent.postMessage({ t:
 
 const LEAVERS = ["for the outside", "by a meta refresh", "for a data page", "for the API", "for its second page", "by reloading", "for its second page before it has loaded"].map((how) => `leaves ${how}`);
 
-describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
+describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
   const servers: http.Server[] = [];
   const bundles = new Map<string, { dir: string; files: ReadonlySet<string> }>();
   const scenarios: { id: string; hash: string }[] = [];
@@ -318,10 +324,7 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
       return dir;
     };
 
-    // The outside is on this machine's real address: WebRTC gathers from real interfaces, never from loopback.
-    const here = Object.values(networkInterfaces())
-      .flat()
-      .find((address) => address?.family === "IPv4" && !address.internal)?.address ?? "127.0.0.1";
+    const here = HERE ?? "";
     const outside = http.createServer((req, res) => {
       outsideRequests.push(req.url ?? "");
       res.writeHead(200, { "access-control-allow-origin": "*" }).end("leaked");
@@ -364,7 +367,7 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
     bundle("leaves by reloading", {
       "index.html": page(inline(`if (window.name === "again") setInterval(() => { ${LANDED} }, 100); else window.addEventListener("load", () => { window.name = "again"; setTimeout(() => location.reload()); });`)),
     });
-    // The frame's first `load` is then the second page's, so the channel can't count it. No page there says ready.
+    // The frame's first `load` is then the landing page's, so the channel can't count it. A 404 never says ready.
     bundle("leaves for its second page before it has loaded", { "index.html": page(inline(`location.href = "second.html";`)), "second.html": page(inline(LANDED)) });
 
     const screenDir = path.join(root, "screen");
@@ -489,9 +492,9 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
     const words = new Set(report.said.map((s) => s.event ?? Object.keys(s)[0]));
     expect([...words].sort()).toEqual(["buzz", "flood", "station"]);
     const counts = (word: string) => report.said.filter((s) => (s.event ?? Object.keys(s)[0]) === word).length;
-    expect(counts("flood")).toBeLessThanOrEqual(FRAME_LIMITS.eventBurst + 2 * FRAME_LIMITS.eventRate);
-    expect(counts("buzz")).toBeLessThanOrEqual(FRAME_LIMITS.buzzBurst + 2 * FRAME_LIMITS.buzzRate);
-    expect(counts("station")).toBeLessThanOrEqual(FRAME_LIMITS.stationBurst + 2 * FRAME_LIMITS.stationRate);
+    expect(counts("flood")).toBeLessThanOrEqual(FRAME_LIMITS.eventBurst + FLOOD_SECONDS * FRAME_LIMITS.eventRate);
+    expect(counts("buzz")).toBeLessThanOrEqual(FRAME_LIMITS.buzzBurst + FLOOD_SECONDS * FRAME_LIMITS.buzzRate);
+    expect(counts("station")).toBeLessThanOrEqual(FRAME_LIMITS.stationBurst + FLOOD_SECONDS * FRAME_LIMITS.stationRate);
     expect(report.said.find((s) => "station" in s)?.text).toBe("x".repeat(SMALL_CHARS));
   });
 

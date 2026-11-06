@@ -60,9 +60,9 @@ is decided on the kiosk's side, before a message goes further:
 - One `ready`, at most 10 errors, and nothing at all after `end`.
 
 **The second-load rule stays:** a frame that navigates loses its channel for good. A page that leaves before its own
-`load` is the one way past it, since the landing page's `load` is then the first. The Box answers such a landing with
-a 404, because `index.html` is the only page of a bundle it will show in a frame, so nothing says `ready` and the view's
-timeout loses the page.
+`load` gets past the count, since the landing page's `load` is then the first. So the Box shows no other page of a
+bundle in a frame: a navigation to one is a 404, and it never says `ready`, so the view's timeout loses the page. The
+Box's other pages have nothing of the game's in them, and a landing page is under the gate like any other.
 
 **Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
 that never says ready, or leaves, is lost: the frame goes, and `powers.end("lost")` closes the match at once. A stray
