@@ -3,7 +3,7 @@
 // PAY_MS after it. No hashes: nothing here is on Sepolia, and the screen shows none. The Box itself runs the real port
 // (`src/chain/`).
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Board, GameId, PlayerCard } from "./types.ts";
+import type { Board, GameId, PlayerCard, PlayerRecord } from "./types.ts";
 import { BLOCK_MS, TOPUP_USDC } from "./core.ts";
 import { chainLabel } from "./catalogue.ts";
 import { createTimers } from "./timers.ts";
@@ -37,6 +37,18 @@ export function createDemoChain(clock: Clock): DemoChain {
   const names = new Map<Address, string>();
   const pots = new Map<number, Pot>();
   const titles = new Map<string, { holder: Address; streak: number }>();
+  /** Each badge's wins, losses and draws, by `<chain label>|<address>`. */
+  const records = new Map<string, { wins: number; losses: number; draws: number }>();
+  const recordOf = (game: GameId, address: Address): PlayerRecord | null => {
+    const label = chainLabel(game);
+    if (label === null) return null;
+    return { game, ...(records.get(`${label}|${address}`) ?? { wins: 0, losses: 0, draws: 0 }) };
+  };
+  const score = (label: string, address: Address, field: "wins" | "losses" | "draws"): void => {
+    const key = `${label}|${address}`;
+    const now = records.get(key) ?? { wins: 0, losses: 0, draws: 0 };
+    records.set(key, { ...now, [field]: now[field] + 1 });
+  };
   const listeners = new Set<(head: ChainHead) => void>();
   /** Transactions sent and waiting for the next head. */
   const waiting = new Set<() => void>();
@@ -86,7 +98,8 @@ export function createDemoChain(clock: Clock): DemoChain {
     refundAfterMs: DEMO_REFUND_MS,
     stakeNeedsName: false,
     balance: (address) => Promise.resolve(balanceOf(address)),
-    player: (address): Promise<PlayerCard> => Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address) }),
+    player: (address, game): Promise<PlayerCard> =>
+      Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address), record: recordOf(game, address) }),
     board(game): Promise<Board> {
       const label = chainLabel(game) ?? game;
       const title = titles.get(label);
@@ -109,10 +122,15 @@ export function createDemoChain(clock: Clock): DemoChain {
         pots.delete(order.round);
         if (pot) paid.set(order.round, order.winner === null ? pot.amount : pot.amount * 2);
         if (pot && order.winner === null) for (const address of pot.badges) credit(address, pot.amount);
-        if (order.winner === null) return;
-        const winner = order.badges[order.winner];
-        if (pot) credit(winner, pot.amount * 2);
         const label = chainLabel(order.game) ?? order.game;
+        if (order.winner === null) {
+          for (const address of order.badges) score(label, address, "draws");
+          return;
+        }
+        const winner = order.badges[order.winner];
+        score(label, winner, "wins");
+        score(label, order.badges[order.winner === 0 ? 1 : 0], "losses");
+        if (pot) credit(winner, pot.amount * 2);
         const title = titles.get(label);
         titles.set(label, { holder: winner, streak: title?.holder === winner ? title.streak + 1 : 1 });
       });

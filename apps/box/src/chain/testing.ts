@@ -63,6 +63,8 @@ export function mockRelayer(): MockRelayer {
 export interface MemoryReads extends Reads {
   readonly balances: Map<Address, number>;
   readonly names: Map<Address, string>;
+  /** Records by `<game label>|<address>`. */
+  readonly records: Map<string, { wins: number; losses: number; draws: number }>;
   /** Rounds the chain has seen, and pots still open. */
   readonly taken: Set<number>;
   readonly openPots: Set<number>;
@@ -72,18 +74,21 @@ export interface MemoryReads extends Reads {
 export function memoryReads(): MemoryReads {
   const balances = new Map<Address, number>();
   const names = new Map<Address, string>();
+  const records = new Map<string, { wins: number; losses: number; draws: number }>();
   const taken = new Set<number>();
   const openPots = new Set<number>();
   const board: Board = { title: null, cup: null };
   const reads: MemoryReads = {
     balances,
     names,
+    records,
     taken,
     openPots,
     settledAs: null,
     head: async () => ({ block: 12_080_000, at: 0, gasGwei: 1 }),
     balance: async (address) => balances.get(address) ?? 0,
     nameOf: async (address) => names.get(address) ?? null,
+    record: async (address, game) => records.get(`${game}|${address}`) ?? { wins: 0, losses: 0, draws: 0 },
     roundTaken: async (_box, round) => taken.has(round),
     potOpen: async (_box, round) => openPots.has(round),
     board: async () => board,

@@ -31,8 +31,9 @@ import type { Rounds } from "./rounds.ts";
 export const DEADLINE_S = 600;
 /** `DuelPot.REFUND_DELAY` (one hour after the open), and a minute's margin for the head's lag. */
 export const REFUND_AFTER_MS = 61 * 60_000;
-/** How often a request's progress is asked for, and when the Box stops asking. */
-export const POLL_MS = 3_000;
+/** How often a request's progress is asked for (the match waits on its pot's block, so this is short), and when the
+ *  Box stops asking. */
+export const POLL_MS = 1_000;
 export const GIVE_UP_MS = 10 * 60_000;
 /** How often the head is read for the screen's block clock. */
 export const HEAD_MS = 4_000;
@@ -151,6 +152,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
       const key = `${step}:${view.hash ?? ""}:${view.block ?? ""}`;
       if (step && key !== last) {
         last = key;
+        if (step === "in-block") log(`chain: ${what} in block ${view.block ?? "?"}`);
         watch({ step, hash: view.hash ?? null, etherscan: view.etherscan ?? null, block: view.block ?? null, error: view.error ?? null });
       }
       if (step === "paid" || step === "failed") {
@@ -210,9 +212,14 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
     balance: (address) => reads.balance(address),
-    async player(address) {
-      const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);
-      return { address, name, balance };
+    async player(address, game) {
+      const onChain = chainLabel(game);
+      const [name, balance, record] = await Promise.all([
+        reads.nameOf(address),
+        reads.balance(address),
+        onChain === null ? null : reads.record(address, onChain),
+      ]);
+      return { address, name, balance, record: record && { game, ...record } };
     },
     board: async (game) => reads.board(label(game)),
     open(order, watch) {

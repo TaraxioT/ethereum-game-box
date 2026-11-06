@@ -83,8 +83,8 @@ The live smoke test prints the gas each request used, with its Etherscan link.
 - **Gas** is spent only after every check passes. A forged or replayed request costs nothing.
 - **Gas limits**: a call that creates a resolver, a registry or an account (`claimPlayer`, `BoxSeats.claim`,
   `openPopup`, `deploy`, `Championships.close`) is sent with `2^24 + 4M`, and so is an account's call or a result whose
-  estimate is above 1M (it creates storage, which the estimate undercounts); the rest with `eth_estimateGas` plus 50%. The tip is `TIP_GWEI` (1 in `wrangler.jsonc`; 2 if unset), the fee cap twice the base fee
-  plus the tip.
+  estimate is above 1M (it creates storage, which the estimate undercounts); the rest with `eth_estimateGas` plus 50%. The tip is `TIP_GWEI` (2 gwei, in `wrangler.jsonc` and if unset), the fee cap three base fees
+  plus the tip, so a send lands in the next block even if the base fee climbs. Receipts are polled every 1.5 s.
 - **One nonce queue**: requests are sent one at a time from the Durable Object. On a nonce error it reads the nonce
   from the chain and retries once.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one

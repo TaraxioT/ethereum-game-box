@@ -14,7 +14,7 @@ key (`src/signer/`), and never holds an Ethereum key.
 | A player name for a badge | `POST /players/box-claim { seat, r, s }` | `Seat` ("Game Box Seats" v1, `BoxSeats`): a HaLo badge can't sign a `ClaimName` |
 
 At start the server logs whether the signer's key is the one `GameBoxNames` holds for `EGB_BOX` (`checkKey`): if not,
-the relayer refuses every request. Every request is followed on `GET /tx/:id` every 3 s until `done` (the tx bar's `paid`) or `failed`, and each step,
+the relayer refuses every request. Every request is followed on `GET /tx/:id` every second until `done` (the tx bar's `paid`) or `failed`, and each step,
 with the real hash and its Etherscan link, goes to the core's watch. A refusal (a 4xx with the contract's error) fails
 the request at once. Deadlines are 10 minutes.
 

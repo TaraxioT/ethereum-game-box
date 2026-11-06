@@ -151,9 +151,12 @@ on `BoxEvent`s and acts only through `link.send`.
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
-  loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby), a panel under the core and keys
-  at the bottom. Stakes are USDC on Sepolia for the team games; a built game isn't on chain and plays for nothing
-  (`FREE PLAY`). Result's banner names the winner by their player name in the winner's colour (a draw in system
+  loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
+  `4W 1L 0D · 90 USDC`, its record in the focused game and its balance, read from chain, popping in on its tap), a
+  panel under the core and keys at the bottom. Stakes are USDC on Sepolia for the team games; a built game isn't on
+  chain and plays for nothing (`FREE PLAY`). Once both seats sign, Stake's panel shows the pot opening
+  (`LOCKING 20 USDC IN THE POT`, SIGNED › SENT › IN BLOCK with the next step breathing, the hash and the seconds) until
+  it is in a block and the match begins; an open that fails turns the panel red and both sign again. Result's banner names the winner by their player name in the winner's colour (a draw in system
   light), and under it the lines the Box read from chain after the result's receipt (the payout, the title, the
   championship), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
   pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,

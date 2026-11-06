@@ -74,6 +74,12 @@
 .seat-panel-name { font: 700 26px/1.1 var(--hud-body); letter-spacing: 0.02em; color: var(--fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat-panel:not([seated]) .seat-panel-name { font: 600 18px/1.45 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-4); }
 
+/* The badge's stats: its record in the focused game and its USDC. Empty (and no height) until it is read. */
+.seat-panel-stats { display: flex; gap: 10px; justify-content: center; min-height: 18px; font: 700 15px/1.2 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; color: var(--fg-2); }
+.seat-stat.win { color: var(--seat); }
+.seat-stat.usdc { color: var(--fg-3); }
+.seat-stat.usdc:not(:first-child)::before { content: "·"; margin-right: 10px; color: var(--fg-4); }
+
 /* The status line, with a lit copy of its words over it for the asking tone's breathing bloom. */
 .seat-panel-status { display: grid; font: 600 17px/1.2 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); text-align: center; }
 .seat-panel-status > * { grid-area: 1 / 1; }
@@ -94,8 +100,21 @@
 [data-orientation="portrait"] .seat-panel-socket::after { inset: 7px; }
 [data-orientation="portrait"] .seat-panel-tile { width: 58px; height: 58px; }
 [data-orientation="portrait"] .seat-panel-status { font-size: 15px; }
+[data-orientation="portrait"] .seat-panel-stats { font-size: 13px; gap: 8px; min-height: 16px; }
 
 .page-plate { display: grid; place-items: center; text-align: center; padding: 0 28px; font: 600 19px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); }
+.page-plate[alert] { --frame-tone: var(--alert); color: var(--alert); }
+
+/* Stake, both signed: the pot opening, step by step, the next step breathing until it lands. */
+.stake-wait { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.stake-wait-head { font: 700 20px/1.1 var(--hud-display); letter-spacing: 0.04em; color: var(--sys); text-shadow: var(--glow-text); }
+.stake-wait-steps { display: flex; gap: 8px; align-items: center; font: 600 14px/1 var(--hud-body); letter-spacing: 0.14em; }
+.stake-wait-step { padding: 5px 10px; border: 1px solid var(--fg-4); border-radius: 3px; color: var(--fg-4); }
+.stake-wait-step[done] { border-color: var(--sys); color: var(--sys); }
+.stake-wait-step[current] { border-color: var(--sys); color: var(--fg); animation: wait-breathe 1.1s ease-in-out infinite alternate; }
+.stake-wait-line { font: 600 14px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg-3); }
+@keyframes wait-breathe { from { box-shadow: 0 0 0 transparent; opacity: 0.55; } to { box-shadow: 0 0 10px var(--sys); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .stake-wait-step[current] { animation: none; } }
 .result-banner-text { display: inline-block; white-space: nowrap; font: 700 40px/1.1 var(--hud-display); letter-spacing: 0.02em; color: var(--sys); text-shadow: var(--glow-text); }
 .result-banner-text.seat-0 { color: var(--p1); text-shadow: 0 0 4px rgb(255 155 61 / 0.9), 0 0 14px rgb(255 155 61 / 0.4); }
 .result-banner-text.seat-1 { color: var(--p2); text-shadow: 0 0 4px rgb(63 217 255 / 0.9), 0 0 14px rgb(63 217 255 / 0.4); }

@@ -30,6 +30,7 @@ import type {
   Match,
   MatchPlay,
   Phase,
+  PlayerRecord,
   ScreenCommand,
   SeatState,
   StationView,
@@ -230,6 +231,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** Each badge's USDC and player name, as last read from chain (absent: not read yet). */
   const balances = new Map<string, number>();
   const names = new Map<string, string | null>();
+  /** Each badge's record in the game it was last read for. */
+  const records = new Map<string, PlayerRecord | null>();
   /** USDC on its way to each address: top-ups, payouts and refunds not yet paid. */
   const incoming = new Map<string, number>();
   let lobby: Lobby = { badge: null, card: null, proposal: null, board: null, from: "home" };
@@ -280,6 +283,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return games.find((info) => info.id === id);
   }
 
+  /** A seated badge's record, while it is the focused game's. */
+  function recordFor(badge: Badge | null): PlayerRecord | null {
+    const record = badge ? records.get(badge.address) : null;
+    return record && record.game === focus ? record : null;
+  }
+
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
     return {
@@ -288,6 +297,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       ens: badge ? (names.get(badge.address) ?? null) : null,
       balance: badge ? (balances.get(badge.address) ?? null) : null,
       pending: badge ? (incoming.get(badge.address) ?? 0) : 0,
+      record: recordFor(badge),
     };
   }
 
@@ -417,12 +427,16 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     else incoming.delete(address);
   }
 
-  /** Reads a badge's balance and player name from chain; the seats and the lobby show them when they come back. */
+  /**
+   * Reads a badge's balance, player name and record in the focused game from chain; the seats and the lobby show them
+   * when they come back.
+   */
   function read(badge: Badge): void {
-    port.player(badge.address).then(
+    port.player(badge.address, focus).then(
       (card) => {
         balances.set(card.address, card.balance);
         names.set(card.address, card.name);
+        records.set(card.address, card.record);
         if (sameBadge(lobby.badge, badge)) {
           lobby = { ...lobby, card, proposal: card.name ? null : (lobby.proposal ?? proposeLabel(badge, proposals, ports.random())) };
           emit({ type: "lobby" });
@@ -489,42 +503,61 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   }
 
   /**
-   * Both seats signed: the match opens now, and the stakes go to the pot on chain (a Box-signed `Stake`) without
-   * waiting for it. A pot that fails to open leaves the match played for nothing; its result is still reported.
+   * Both seats signed. A game on chain first moves both stakes into the pot (a Box-signed `Stake`): the Box stays on
+   * Stake, showing the open's progress, until it is in a block, and then the match begins. An open that fails sends
+   * both players back to sign again, with nothing staked. A game off chain (a built game) begins at once.
    */
   function openMatch(): void {
     if (!game) throw new Error("no game was chosen");
+    const chosen = game;
     const badges = addresses();
     const id = ++matchCount;
+    if (!port.onChain(chosen)) return beginMatch(id, chosen, badges, 0, 0);
+    const round = port.nextRound();
+    const amount = stake;
+    const waiting = epoch;
+    let begun = false;
+    const pot: { state: "pending" | "open" | "none"; then: (() => void) | null } = { state: "pending", then: null };
+    pots.set(id, pot);
+    send(
+      { kind: "open", seat: null, direction: "in", amount: amount * 2 },
+      (watch) =>
+        port.open({ round, game: chosen, badges, amount }, (update) => {
+          watch(update);
+          // Only the wait that sent it acts on it: a reset or a new phase since has moved on.
+          if (begun || epoch !== waiting || phase !== "stake") return;
+          if (update.step === "in-block" || update.step === "paid") {
+            begun = true;
+            beginMatch(id, chosen, badges, round, amount);
+          } else if (update.step === "failed") {
+            pots.delete(id);
+            cue("error");
+            setPhase("stake");
+          }
+        }),
+      (tx) => {
+        pot.state = tx.step === "paid" ? "open" : "none";
+        for (const badge of badges) refreshBalance(badge);
+        const settleNow = pot.then;
+        pot.then = null;
+        settleNow?.();
+      },
+    );
+  }
+
+  /** The match begins: its stakes (`amount` each, 0 off chain) are in the pot's block, or there are none. */
+  function beginMatch(id: number, chosen: GameId, badges: [`0x${string}`, `0x${string}`], round: number, amount: number): void {
     const now = clock.now();
-    const onChain = port.onChain(game);
-    const round = onChain ? port.nextRound() : 0;
     // The seed takes fresh randomness, so nobody can work out the draw from the seats and the round.
     seed = hash32("match", id, badges[0], badges[1], round, ports.random());
     matchStartedAt = now;
     matchTaps = [];
     refunding = false;
-    if (onChain) {
-      const amount = stake;
-      const pot: { state: "pending" | "open" | "none"; then: (() => void) | null } = { state: "pending", then: null };
-      pots.set(id, pot);
-      send(
-        { kind: "open", seat: null, direction: "in", amount: amount * 2 },
-        (watch) => port.open({ round, game: game ?? "", badges, amount }, watch),
-        (tx) => {
-          pot.state = tx.step === "paid" ? "open" : "none";
-          for (const badge of badges) refreshBalance(badge);
-          const settleNow = pot.then;
-          pot.then = null;
-          settleNow?.();
-        },
-      );
-    }
     const opened = (play: MatchPlay): Match => ({
       id,
-      game: game ?? play.game,
+      game: chosen,
       round,
-      stake: onChain ? stake : 0,
+      stake: amount,
       openedBlock: head.block,
       refundAt: now + port.refundAfterMs,
       play,
@@ -534,8 +567,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       refunded: [false, false],
       lines: null,
     });
-    if (gameOf(game)?.kind === "built") return openBuilt(game, now, opened);
-    const play = startPlay(game as TeamGameId, seed, now);
+    if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
+    const play = startPlay(chosen as TeamGameId, seed, now);
     match = opened(play);
     lastFronts = fronts(play, now);
     setPhase("playing");
@@ -968,6 +1001,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase !== "home" || cmd.game === focus || !gameOf(cmd.game)) return;
         focus = cmd.game;
         emit({ type: "focus", game: focus });
+        // The seats show their record in the focused game.
+        readSeats();
         return;
       case "play": {
         const info = gameOf(focus);
