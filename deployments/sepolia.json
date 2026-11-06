@@ -3,5 +3,7 @@
   "external": {
     "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   },
-  "contracts": {}
+  "contracts": {
+    "GBX": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A"
+  }
 }
