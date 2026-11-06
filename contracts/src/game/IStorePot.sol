@@ -17,6 +17,9 @@ import {IFakeUSDC} from "../token/IFakeUSDC.sol";
 ///      only by position, so it can't pay anyone else, and it must pay out exactly what the pot took. No names, titles
 ///      or stats are touched, and there is no fee.
 ///
+///      The Box is trusted to name the players. No badge signs and `amount` has no cap, so a dishonest Box can stake a
+///      badge that never tapped, up to its whole balance. Only a licensor makes a Box, and the token has no value.
+///
 ///      The signed messages are EIP-712, domain `Game Box Store Pots`, version `1`, chain id and this contract:
 ///      - `Stake(string box,bytes32 bundle,uint256 round,address[] players,uint256 amount,uint256 deadline)`, with the
 ///        Box's P-256 key (`GameBoxNames.boxKey`) over the raw digest, low `s`.

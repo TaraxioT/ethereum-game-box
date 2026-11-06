@@ -380,6 +380,33 @@ contract StorePotTest is NamesFork {
         _expectRefused(s, abi.encodeWithSelector(IBoxSigned.UnknownBox.selector, "egbt-nobox"));
     }
 
+    /// @dev Anyone can open a pop-up, so it mustn't count as a Box: it would hold the power the next test shows.
+    function test_aPopupCantOpenAPot() public {
+        registerBox(licences.BOX(), 1 days);
+        licences.openPopup("egbt");
+        IStorePot.Stake memory s = _stake(1, 2);
+        s.box = "popup-egbt";
+        _expectRefused(s, abi.encodeWithSelector(IBoxSigned.UnknownBox.selector, "popup-egbt"));
+    }
+
+    /// @dev A limit, not a goal: the game store plan's section 3 states it. A badge signs nothing, so `open` takes the
+    ///      Box's word for who is playing, and a licensed Box can empty a badge that never tapped into a pot it then
+    ///      wins. Only a licensor makes a Box, and Store USDC has no value.
+    function test_theBoxAloneNamesThePlayers() public {
+        address stranger = account("stranger");
+        vm.prank(admin);
+        usdc.mint(stranger, 25e6);
+
+        address[] memory players = new address[](2);
+        (players[0], players[1]) = (seat[0], stranger);
+        _open(IStorePot.Stake(BOX, BUNDLE, 1, players, 25e6, block.timestamp + 1 hours));
+        assertEq(usdc.balanceOf(stranger), 0);
+
+        _settle(_verdict(1, _two(50e6, 0)));
+        assertEq(usdc.balanceOf(seat[0]), START + 25e6);
+        assertEq(usdc.balanceOf(stranger), 0);
+    }
+
     function test_aPotThatIsntTheGameSpenderTakesNothing() public {
         vm.prank(admin);
         StorePot unwired = new StorePot(names, usdc, admin);
