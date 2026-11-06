@@ -39,10 +39,7 @@ export async function join(box: RunningBox, game: string): Promise<void> {
   await toHome(box, game);
   box.link.send({ type: 'play' });
   await box.link.until(({ phase }) => phase === 'join', 'Join');
-  for (const seat of seats) {
-    const player = PLAYERS[seat];
-    await box.tap(player.name, seat);
-  }
+  for (const seat of seats) if (box.link.state().seats[seat].badge === null) await box.tap(PLAYERS[seat].name, seat);
 }
 
 /** Both badges sign `amount`, and the Box sends the stake. */

@@ -57,4 +57,9 @@ describe('the fake 0G', () => {
     const reply = (await (await fetch(`${running.url}/__fake`)).json()) as { chats: number };
     expect(reply.chats).toBeGreaterThan(0);
   });
+
+  it('hands back what reached 0G Storage', async () => {
+    running.fake.segments.push({ root: '0xabc', data: 'aGk=' });
+    expect(await (await fetch(`${running.url}/__fake/segments`)).json()).toEqual([{ root: '0xabc', data: 'aGk=' }]);
+  });
 });

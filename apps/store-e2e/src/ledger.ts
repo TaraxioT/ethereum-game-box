@@ -30,6 +30,7 @@ export function ledger({ client }: Chain, { pot, usdc: token }: Contracts, box: 
   const events = {
     listed: async (bundle: Hex) => client.getContractEvents({ ...potContract, eventName: 'BundleListed', args: { bundle }, ...fromStart }),
     opened: async (round: bigint) => client.getContractEvents({ ...potContract, eventName: 'PotOpened', args: { round }, ...fromStart }),
+    allOpened: async () => client.getContractEvents({ ...potContract, eventName: 'PotOpened', ...fromStart }),
     settled: async (round: bigint) => client.getContractEvents({ ...potContract, eventName: 'PotSettled', args: { round }, ...fromStart }),
     voided: async (round: bigint) => client.getContractEvents({ ...potContract, eventName: 'PotVoided', args: { round }, ...fromStart }),
     refunded: async (round: bigint) => client.getContractEvents({ ...potContract, eventName: 'PotRefunded', args: { round }, ...fromStart }),
@@ -43,10 +44,11 @@ export function ledger({ client }: Chain, { pot, usdc: token }: Contracts, box: 
     potBalance: () => client.readContract({ ...tokenContract, functionName: 'balanceOf', args: [pot] }),
     pot: (round: bigint) => client.readContract({ ...potContract, functionName: 'getPot', args: [box, round] }),
     listed: (bundle: Hex) => client.readContract({ ...potContract, functionName: 'listed', args: [bundle] }),
-    /** Every Store USDC transfer out of the pot in the block of `blockHash`. */
-    async paidOut(blockHash: Hex): Promise<Transfer[]> {
+    /** Every Store USDC transfer out of the pot in the transaction `hash`. */
+    async paidOut(hash: Hex): Promise<Transfer[]> {
+      const { blockHash } = await client.getTransactionReceipt({ hash });
       const logs = await client.getContractEvents({ ...tokenContract, eventName: 'Transfer', args: { from: pot }, blockHash });
-      return logs.map(({ args }) => ({ to: args.to as Address, value: args.value as bigint }));
+      return logs.filter(({ transactionHash }) => transactionHash === hash).map(({ args }) => ({ to: args.to as Address, value: args.value as bigint }));
     },
   };
 }

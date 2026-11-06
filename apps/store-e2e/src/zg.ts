@@ -17,13 +17,25 @@ export interface ZgSeen {
   readonly shellOutput: unknown;
 }
 
+/** A piece of a file on 0G Storage, as the SDK sent it. */
+interface Segment {
+  readonly root: string;
+  readonly data: string;
+  readonly index: number;
+  readonly fileSize: number;
+}
+
 export interface FakeZgControl {
   readonly url: string;
-  /** Sets how it behaves from now on. */
-  set(settings: Partial<FakeZgSettings>): Promise<ZgSeen>;
+  /** Sets how it behaves from now on: an honest 0G, but for `settings`. */
+  script(settings: Partial<FakeZgSettings>): Promise<void>;
   seen(): Promise<ZgSeen>;
+  /** The text of the file at `root`, as it reached 0G Storage. */
+  file(root: string): Promise<string>;
   stop(): Promise<void>;
 }
+
+const HONEST: Partial<FakeZgSettings> = { chat: 'none', payouts: null, shellTurns: 1, shellCommand: 'jq .header log.json', storageUp: true };
 
 export async function startZg(): Promise<FakeZgControl> {
   const url = local(PORTS.zg);
@@ -32,8 +44,14 @@ export async function startZg(): Promise<FakeZgControl> {
   const control = `${url}/__fake`;
   return {
     url,
-    set: async (settings) => (await fetch(control, { method: 'POST', body: JSON.stringify(settings) })).json() as Promise<ZgSeen>,
+    script: async (settings) => void (await fetch(control, { method: 'POST', body: JSON.stringify({ ...HONEST, ...settings }) })),
     seen: async () => (await fetch(control)).json() as Promise<ZgSeen>,
+    async file(root) {
+      const segments = (await (await fetch(`${control}/segments`)).json()) as Segment[];
+      const mine = segments.filter((segment) => segment.root === root).sort((a, b) => a.index - b.index);
+      const bytes = Buffer.concat(mine.map(({ data }) => Buffer.from(data, 'base64')));
+      return bytes.subarray(0, mine[0]?.fileSize ?? 0).toString('utf8');
+    },
     stop: () => child.stop(),
   };
 }

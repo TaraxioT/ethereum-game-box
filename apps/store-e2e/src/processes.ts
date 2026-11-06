@@ -3,6 +3,12 @@
 
 import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
 
+/** What is running now, so a run that dies leaves nothing behind. */
+const running = new Set<ChildProcess>();
+process.on('exit', () => {
+  for (const { pid } of running) if (pid) process.kill(-pid, 'SIGKILL');
+});
+
 /** How long a process gets to stop on its own. */
 const STOP_MS = 5000;
 /** The output kept for a failure's message. */
@@ -19,6 +25,8 @@ export interface Child {
 
 export function start(name: string, command: string, args: readonly string[], options: SpawnOptions): Child {
   const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  running.add(child);
+  child.once('exit', () => running.delete(child));
   let said = '';
   const hear = (chunk: Buffer) => {
     said = (said + String(chunk)).slice(-TAIL_CHARS);

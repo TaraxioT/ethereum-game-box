@@ -157,7 +157,8 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 
 `pnpm --filter @egb/verifier fake-zg [port]` serves the Router, a provider's signature endpoint, 0G's chain and 0G
 Storage on one port, and prints the Worker vars that point at it. `@egb/verifier/test/fake-zg` is the same thing as a
-`fetch`. `POST /__fake` sets how it behaves, and `GET /__fake` says what it has seen:
+`fetch`. `POST /__fake` sets how it behaves, `GET /__fake` says what it has seen, and `GET /__fake/segments` hands back
+what reached 0G Storage:
 
 ```sh
 curl -d '{"payouts":["10000000","0"]}' http://127.0.0.1:8790/__fake     # the split the agent submits

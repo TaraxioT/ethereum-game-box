@@ -262,9 +262,6 @@ importers:
 
   apps/store-e2e:
     dependencies:
-      '@egb/box':
-        specifier: workspace:*
-        version: link:../box
       '@egb/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk

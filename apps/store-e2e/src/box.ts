@@ -2,8 +2,7 @@
 // screen in a real browser. Only `apps/box/src/server/main.ts` runs here, as it runs on the Pi. It can be stopped and
 // started on its data folder, as a power cut would.
 
-import { type ChildProcess, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { CHROMIUM, headlessFlags } from '../../box/src/server/games/chromium.ts';
@@ -51,9 +50,9 @@ export interface RunningBox {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function kiosk(url: string, work: string): ChildProcess {
+function kiosk(url: string, work: string): Child {
   if (!CHROMIUM) throw new Error('no Chromium here: set EGB_CHROMIUM');
-  return spawn(CHROMIUM, [...headlessFlags(path.join(work, 'kiosk-profile')), url], { stdio: 'ignore' });
+  return start('the kiosk', CHROMIUM, [...headlessFlags(mkdtempSync(path.join(work, 'kiosk-'))), url], {});
 }
 
 export async function startBox(options: BoxOptions): Promise<RunningBox> {
@@ -110,8 +109,7 @@ export async function startBox(options: BoxOptions): Promise<RunningBox> {
     reset: () => post('/api/box/reset'),
     async stop() {
       link.close();
-      browser.kill('SIGKILL');
-      await child.stop();
+      await Promise.all([browser.stop(), child.stop()]);
     },
   };
 }
