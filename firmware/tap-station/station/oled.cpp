@@ -44,6 +44,7 @@ uint32_t stackLeft() { return task ? uxTaskGetStackHighWaterMark(task) : 0; }
 // The Pi's screen changed: redraw, and a result still showing gives way to it (feedback.h).
 static void newScreen(uint32_t now) {
   specVersion++;
+  feedback.mode = spec.mode;
   feedback.screenMs = now;
   feedback.screenSet = true;
 }
@@ -75,8 +76,8 @@ static void takeScreen(uint32_t now) {
 }
 
 static ScreenView viewFor(const Snapshot &s, const Shown &v, uint32_t now) {
-  static const char *const BIG[FB_COUNT] = {"HOLD", "HOLD STILL", "DONE", "AGAIN"};
-  static const char *const SMALL[FB_COUNT] = {"reading", "signing", "", "tap again"};
+  static const char *const BIG[FB_COUNT] = {"HOLD", "HOLD STILL", "DONE", "AGAIN", "NOT NOW"};
+  static const char *const SMALL[FB_COUNT] = {"reading", "signing", "", "tap again", "not your turn"};
   ScreenView w;
   memset(&w, 0, sizeof w);  // compared whole with memcmp, padding included
   w.look = v.look;
@@ -84,6 +85,7 @@ static ScreenView viewFor(const Snapshot &s, const Shown &v, uint32_t now) {
   w.linked = link::linked(now);
   w.led = led::mine();
   w.sweep = v.sweep;
+  w.mode = spec.mode;
   if (!radioUp) {  // nothing from the Pi can reach a station without its radio
     w.look = LOOK_FAULT;
     w.big = "NO RADIO";
@@ -93,6 +95,9 @@ static ScreenView viewFor(const Snapshot &s, const Shown &v, uint32_t now) {
     w.big = s.sclStuck ? "REPLUG" : "NO READER";
     w.small = s.sclStuck ? "reader hung" : "check wiring";
     w.tag = "";
+  } else if (v.look == LOOK_IDLE && !haveSpec && !w.linked) {  // booted, or the Box is out of reach
+    w.big = "EGB";
+    w.small = "ethereum game box - looking for the Box";
   } else if (v.look == LOOK_IDLE) {
     w.big = spec.idle.given ? spec.idle.big : "TAP";
     w.small = spec.idle.small;
@@ -149,8 +154,8 @@ static void run(void *) {
     ScreenView v;
     uint32_t specVersion;
   } drawn = {}, now = {};
-  bool first = true;
-  uint32_t wait = 0;
+  bool first = true, scrolling = false;
+  uint32_t wait = 0, scrollFrom = 0;
   for (;;) {
     uint32_t bits = 0;
     xTaskNotifyWait(0, UINT32_MAX, &bits, pdMS_TO_TICKS(wait));
@@ -161,9 +166,14 @@ static void run(void *) {
     Shown v = shown(s, t, led::mine());
     now.v = viewFor(s, v, t);
     now.specVersion = specVersion;
+    // A marquee starts again, resting at the left, whenever the text changes.
+    if (first || now.v.look != drawn.v.look || now.v.big != drawn.v.big || now.v.small != drawn.v.small ||
+        now.specVersion != drawn.specVersion)
+      scrollFrom = t;
+    now.v.tick = scrolling ? (t - scrollFrom) / SCROLL_MS : 0;
     bool changed = first || memcmp(&now.v, &drawn.v, sizeof now.v) || now.specVersion != drawn.specVersion;
     if (changed) {
-      drawScreen(display.getU8g2(), now.v);
+      scrolling = drawScreen(display.getU8g2(), now.v);
       sendChangedRows();
       drawn = now;
       first = false;
@@ -171,6 +181,10 @@ static void run(void *) {
     if (bits & BIT_FRAME) printFrame();
     int32_t next = nextChangeMs(s, t);
     wait = next >= 0 && next < (int32_t)IDLE_WAKE_MS ? (uint32_t)next : IDLE_WAKE_MS;
+    if (scrolling) {
+      uint32_t step = SCROLL_MS - (t - scrollFrom) % SCROLL_MS;
+      if (step < wait) wait = step;
+    }
   }
 }
 

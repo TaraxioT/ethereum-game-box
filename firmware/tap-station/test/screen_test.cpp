@@ -21,10 +21,10 @@ TEST(a_screen_payload) {
 
 TEST(screen_limits_and_odd_bytes) {
   ScreenSpec s;
-  const char p[] = "tag=ABCD\nbig=abcdefghijklm\nhold=WAIT\nfail=\nttl=99999999999\nsmall=a\x01" "b";
+  const char p[] = "tag=ABCD\nbig=abcdefghijklmnopqrstuvwxyz\nhold=WAIT\nfail=\nttl=99999999999\nsmall=a\x01" "b";
   screenParse(p, sizeof p - 1, s);
   CHECK_STR(s.tag, "ABC");
-  CHECK_STR(s.idle.big, "ABCDEFGHIJ");
+  CHECK_STR(s.idle.big, "ABCDEFGHIJKLMNOPQRSTUVWX");  // 24: longer than the screen, so it scrolls
   CHECK_STR(s.feedback[FB_HOLD].big, "WAIT");
   CHECK_STR(s.feedback[FB_HOLD].small, "");  // no bar: no small line
   CHECK(!s.feedback[FB_FAIL].given);           // empty: the default
@@ -165,7 +165,7 @@ TEST(big_text_gets_the_largest_font_that_fits) {
     int f = fitBigFont(d, s, SCREEN_W, area);
     check::checks()++;
     if (f < BIG_FONT_COUNT - 1 && width(s, f) > SCREEN_W) check::fail(__FILE__, __LINE__, std::string("too wide: ") + s);
-    if (strlen(s) <= BIG_MAX && width(s, BIG_FONT_COUNT - 1) > SCREEN_W)
+    if (strlen(s) <= BIG_FIT && width(s, BIG_FONT_COUNT - 1) > SCREEN_W)
       check::fail(__FILE__, __LINE__, std::string("ten characters must fit the last font: ") + s);
   }
   // Under a small line there's less height, so a smaller font.
@@ -183,4 +183,73 @@ TEST(every_look_draws) {
     check::checks()++;
     if (lit == 0 || lit == SCREEN_W * SCREEN_H) check::fail(__FILE__, __LINE__, "blank frame for look " + std::to_string(look));
   }
+}
+
+TEST(the_mode_key) {
+  ScreenSpec s;
+  screenParse("mode=shut\nnope=WAIT|for the game", 32, s);
+  CHECK_EQ(s.mode, MODE_SHUT);
+  CHECK_STR(s.feedback[FB_NOPE].big, "WAIT");
+  CHECK_STR(s.feedback[FB_NOPE].small, "for the game");
+  screenParse("mode=play", 9, s);
+  CHECK_EQ(s.mode, MODE_PLAY);
+  screenParse("mode=open", 9, s);
+  CHECK_EQ(s.mode, MODE_OPEN);
+  screenParse("mode=bogus", 10, s);
+  CHECK_EQ(s.mode, MODE_NONE);
+}
+
+TEST(the_idle_led_follows_the_mode) {
+  Snapshot s = {};
+  s.nfcOk = true;
+  CHECK_EQ(shown(s, 1000, false).led, 0u);  // no mode: off, as before
+  s.mode = MODE_SHUT;
+  CHECK_EQ(shown(s, 1000, false).led, SHUT_AMBER);
+  CHECK_EQ(shown(s, 1000, true).led, WHITE);  // the receiver's white wins
+  s.mode = MODE_OPEN;
+  uint32_t low = shown(s, 0, false).led, high = shown(s, OPEN_BREATH_MS / 2, false).led;
+  CHECK(low != high);
+  CHECK_EQ(high, CYAN);
+  CHECK_EQ(nextChangeMs(s, 1010), 30);  // the next breath step
+  s.mode = MODE_PLAY;
+  CHECK_EQ(shown(s, PLAY_BREATH_MS / 2, false).led, PLAY_GREEN);
+}
+
+TEST(an_unwelcome_tap_is_not_now_at_once) {
+  Snapshot s = held(PH_DETECTED, 1000);
+  s.mode = MODE_SHUT;
+  s.nope = true;
+  Shown v = shown(s, 1000, false);
+  CHECK_EQ(v.look, LOOK_NOPE);
+  CHECK_EQ(v.fb, FB_NOPE);
+  CHECK_EQ(v.led, RED);
+  CHECK_EQ(shown(s, 1100, false).led, AMBER);  // flickering
+  CHECK_EQ(shown(s, 1700, false).led, AMBER);  // then amber
+  s.phase = PH_READING;  // the Pi reads the chip anyway: no HOLD, no DONE
+  s.activeMs = s.goodMs = 1300;
+  CHECK_EQ(shown(s, 2300, false).look, LOOK_IDLE);
+  CHECK_EQ(shown(s, 2300, false).led, SHUT_AMBER);
+  CHECK_EQ(nextChangeMs(s, 1150), 50);
+}
+
+TEST(a_long_line_scrolls) {
+  u8g2_t *d = display();
+  CHECK_EQ(scrollOffset(0, 100), 0);
+  CHECK_EQ(scrollOffset(SCROLL_REST, 100), 0);
+  CHECK_EQ(scrollOffset(SCROLL_REST + 3, 100), 3 * SCROLL_PX);
+  CHECK_EQ(scrollOffset(SCROLL_REST + (100 + SCROLL_GAP) / SCROLL_PX, 100), 0);  // round again, resting
+  ScreenView v = {LOOK_IDLE, "TAP", "to join", "P1", true, false, 0, MODE_OPEN, 0};
+  CHECK(!drawScreen(d, v));
+  v.small = "saithyasivadas.gamebox.eth  20 USDC";
+  CHECK(drawScreen(d, v));
+  v.small = "";
+  v.big = "SAITHYASIVADAS";
+  CHECK(drawScreen(d, v));
+  v.big = "NOVA";
+  v.small = "nova.eth";
+  CHECK(!drawScreen(d, v));
+  v.look = LOOK_NOPE;
+  v.big = "NOT NOW";
+  v.small = "not your turn";
+  CHECK(!drawScreen(d, v));
 }

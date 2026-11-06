@@ -174,16 +174,22 @@ whole (a key left out goes back to its default).
 | Key | Shows | Default |
 |---|---|---|
 | `tag` | up to 3 characters in the top-left badge (`P1`, `P2`); empty = none | none |
-| `big` | the idle big line, up to 10 characters, upper-cased (`TAP`, `WAIT`, `SIGN`, `WIN`); empty = none | `TAP` |
-| `small` | the idle small line, up to 20 characters as given (a player name, `10 EGB`, `to join`) | none |
+| `big` | the idle big line, up to 24 characters, upper-cased (`TAP`, `WAIT`, `SIGN`, `WIN`); empty = none. Up to 10 always fit (the font shrinks); a longer one that would need a font under 14 px scrolls | `TAP` |
+| `small` | the idle small line, up to 40 characters as given (an ENS name, `10 EGB`, `to join`); one too wide for the screen scrolls | none |
+| `mode` | what a tap means now: `open` (welcome, no game: cyan breathing LED), `play` (a game waits for it: green breathing, a play triangle), `shut` (not welcome: dim amber, a padlock, and a chip that lands gets `nope` and two short buzzes from the station itself, no round trip; the tap still goes to the Pi) | none: the LED stays off |
 | `hold` | `BIG\|small` while the chip is held and the app reads it (no `\|`: no small line) | `HOLD\|reading` |
 | `sign` | the same while a `sign` request runs | `HOLD STILL\|signing` |
 | `done` | read done, or signature back | `DONE` |
 | `fail` | sign failed, or lifted mid-sign | `AGAIN\|tap again` (lifted: `TOO SOON\|tap again`) |
+| `nope` | a tap while `mode=shut` (1.2 s; the Pi reading the chip after it shows nothing) | `NOT NOW\|not your turn` |
 | `ttl` | seconds the screen stays without being sent again; 0 or none = until the link drops | 0 |
 
 The station drops the Pi's screen (back to every default) when its `ttl` runs out or 3 s after the link drops; it
-doesn't come back with the link, so the Pi sends it again on relink. The Box sends each station's screen on change,
+doesn't come back with the link, so the Pi sends it again on relink. With no screen and no link it shows `EGB` and
+`ethereum game box - looking for the Box`, scrolling.
+
+A scrolling line rests at the left edge for 0.75 s, then slides left 2 px every 30 ms with its next copy 18 px behind,
+and comes round again; it starts over whenever the text changes. The Box sends each station's screen on change,
 on relink, and every 5 s with `ttl=15`.
 
 Example: `tag=P1\nbig=TAP\nsmall=NOVA` is `7461673d50310a6269673d5441500a736d616c6c3d4e4f5641`.

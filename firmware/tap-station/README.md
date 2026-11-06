@@ -77,7 +77,7 @@ is plain C++, and so are the pure station and receiver headers, so the host test
 | `feedback.h` | The LED/OLED table as one pure function of the shared state (written by the NFC task only, every field atomic) |
 | `screen_model.h` | The Pi's screen payload parsed |
 | `screen_draw.h` | One OLED frame, drawn with U8g2's C API |
-| `oled.cpp` | The OLED task (lowest priority, core 0): draws on change, sends only changed rows, blinks the LED, prints `frame` |
+| `oled.cpp` | The OLED task (lowest priority, core 0): draws on change, sends only changed rows, steps the marquee, blinks and breathes the LED, prints `frame` |
 | `led.cpp`, `motor.cpp` | The RGB LED (written only on change, under a lock) and the motor (on at once, off by a timer) |
 | `cli.cpp`, `stats.h` | The station's own serial commands, and the stats both it and the link report |
 
@@ -151,15 +151,17 @@ The OLED words are the defaults; the Pi may reword each (`hold`, `sign`, `done`,
 | green | check mark, `DONE` | two 60 ms | the signature is back |
 | red for a second | cross, `AGAIN` / `tap again` | | the sign failed and the Pi didn't retry within 0.6 s |
 | red for a second | cross, `TOO SOON` / `tap again` | | the chip left mid-sign |
-| white or off | the Pi's screen (`big`, `small`), or `TAP` | | anything else, a chip resting on the reader included; the receiver's BOOT toggles the white |
+| red/amber flicker, then amber | cross, `NOT NOW` / `not your turn` (1.2 s) | two 35 ms | a chip landed while the Pi's screen says `mode=shut`: decided on the station, no round trip. What the Pi reads off that chip shows nothing |
+| the mode's colour | the Pi's screen (`big`, `small`), or `TAP` | | anything else, a chip resting on the reader included: cyan breathing (`mode=open`), green breathing and a play triangle (`play`), dim amber and a padlock (`shut`), off (no mode). The receiver's BOOT toggles a white that wins over them |
 
 A result (`DONE`, `AGAIN`, `TOO SOON`) shows for 1.5 s, or until the Pi sends a different screen, whichever comes
 first. Then the Pi's screen is back even while the chip stays on the reader: players leave badges on the readers, and
 the station follows the game (a resend of the same screen doesn't cut a result short). A reader in trouble wins over
 everything: `NO READER` / `check wiring`, or `REPLUG` / `reader hung`; a radio that didn't start shows `NO RADIO` /
 `esp-now failed`. The screen has a big line in the largest font that fits (28 px tall for three letters, down to 8 px for ten) and a small line under it; in the top
-corners the Pi's `tag` (left), the link dot (filled = linked) and a square while the LED is on (right). Screens from
-the Pi: `protocol.md`, "Screens".
+corners the Pi's `tag` (left), the link dot (filled = linked), a square while the LED is on and the mode's icon
+(right). A line too wide for the screen (an ENS name, a big line over ten letters) scrolls as a marquee, redrawn every
+30 ms on the OLED's own bus and core, so it costs a read nothing. Screens from the Pi: `protocol.md`, "Screens".
 
 ### The first-command bug, found and fixed
 
@@ -182,7 +184,7 @@ Pi: after a power cycle, a command sent the moment the port opens is answered.
 ```bash
 pnpm firmware:test    # host tests (clang++ or g++), with U8g2's C library for the font tests
 pnpm firmware:build   # both sketches, --warnings all, must compile clean; bins in firmware/tap-station/build/
-pnpm firmware:flash   # [receiver|p1|p2|all]: copies the merged bins to the Pi and flashes them there
+pnpm firmware:flash   # [receiver|df3b9c|df3d88|all]: copies the merged bins to the Pi and flashes them there
 ```
 
 - **Tools:** arduino-cli with the esp32 core 3.3.x (`arduino-cli core install esp32:esp32`) and U8g2

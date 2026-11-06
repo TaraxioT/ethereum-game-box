@@ -11,8 +11,8 @@
 namespace st {
 
 constexpr size_t TAG_MAX = 3;
-constexpr size_t BIG_MAX = 10;
-constexpr size_t SMALL_MAX = 20;
+constexpr size_t BIG_MAX = 24;    // ten fit the screen at once; a longer line scrolls (screen_draw.h)
+constexpr size_t SMALL_MAX = 40;  // the same: an ENS name scrolls past
 constexpr uint32_t TTL_MAX_S = 1000000;  // ~11 days is as good as for ever (and still fits in ms)
 
 struct ScreenText {
@@ -27,6 +27,7 @@ struct ScreenSpec {
   ScreenText idle;  // given: `big` was sent, even empty
   ScreenText feedback[FB_COUNT];
   uint32_t ttlS;  // 0: until the link drops
+  uint8_t mode;   // Mode (feedback.h): MODE_NONE when not sent
 };
 
 // Printable ASCII only (anything else shows as '?'), at most `max` characters; big text upper-cased.
@@ -44,7 +45,7 @@ inline void screenCopy(char *out, size_t max, const char *v, size_t n, bool uppe
 // Fills `s` from a payload. Unknown keys and lines without '=' are skipped, so the Pi can add keys with no reflash;
 // a key sent twice keeps its last value.
 inline void screenParse(const char *p, size_t len, ScreenSpec &s) {
-  static const char *const FB_KEYS[FB_COUNT] = {"hold", "sign", "done", "fail"};
+  static const char *const FB_KEYS[FB_COUNT] = {"hold", "sign", "done", "fail", "nope"};
   memset(&s, 0, sizeof s);
   for (size_t i = 0; i < len;) {
     size_t end = i;
@@ -65,6 +66,9 @@ inline void screenParse(const char *p, size_t len, ScreenSpec &s) {
       s.idle.given = true;
     } else if (is("small")) {
       screenCopy(s.idle.small, SMALL_MAX, v, vn, false);
+    } else if (is("mode")) {
+      auto val = [&](const char *name) { return strlen(name) == vn && !memcmp(v, name, vn); };
+      s.mode = val("open") ? MODE_OPEN : val("play") ? MODE_PLAY : val("shut") ? MODE_SHUT : MODE_NONE;
     } else if (is("ttl")) {
       uint32_t ttl = 0;
       bool digits = vn > 0;

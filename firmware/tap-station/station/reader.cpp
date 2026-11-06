@@ -30,6 +30,7 @@ Held held;
 constexpr uint8_t GONE_MISSES = 2;        // checks in a row without the chip before it counts as lifted
 constexpr uint32_t QUIET_MS = 150;
 constexpr uint16_t TAP_BUZZ_MS = 80;
+constexpr uint16_t NOPE_BUZZ_MS = 35;     // two of them: an unwelcome tap
 constexpr uint8_t SILENT_LISTS = 3;       // reads in a row the PN532 didn't answer before it's checked as lost
 constexpr uint32_t REBOOT_AFTER_MS = 3000;  // a PN532 that worked this boot and won't come back: restart the S3
 
@@ -55,7 +56,11 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
     held.chip = c;
     return false;
   }
-  motor::buzz(TAP_BUZZ_MS);  // on the station, at once: no round trip
+  // On the station, at once: no round trip. A tap the Pi's screen says isn't welcome gets NOT NOW and two short buzzes
+  // here and now; it still goes to the Pi, which decides what it means.
+  bool nope = feedback.mode == MODE_SHUT;
+  if (nope) motor::buzz(NOPE_BUZZ_MS, 2);
+  else motor::buzz(TAP_BUZZ_MS);
   if (on) {
     egb::Gone g;
     egb::head(g, egb::K_GONE, 0);
@@ -81,6 +86,7 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   feedback.goodMs = 0;
   feedback.phase = PH_DETECTED;
   feedback.tooSoon = false;
+  feedback.nope = nope;
   feedback.chipOn = true;
   feedback.taps = feedback.taps + 1;
   led::show();

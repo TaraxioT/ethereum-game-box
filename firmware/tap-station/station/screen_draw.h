@@ -4,7 +4,10 @@
 // corners: the Pi's tag (P1, P2) as a white badge on the left; on the right, the link as a dot (filled = linked,
 // hollow = not) and this board's LED as a small square while it's on. While the chip is held the screen is inverted
 // with a bar sweeping along the bottom (faster while signing): black on white says "keep holding" from across a table.
-// Done gets a check mark, fail a cross.
+// Done gets a check mark, fail and NOT NOW a cross. A line too long for the screen (an ENS name) scrolls as a
+// marquee: it rests at the left edge, slides out to the left, and comes round again, its next copy following a gap
+// behind. In the top right, beside the LED square, a padlock says taps aren't welcome (mode=shut) and a play
+// triangle that a game waits for this station (mode=play).
 #pragma once
 
 #include <clib/u8g2.h>
@@ -22,7 +25,33 @@ struct ScreenView {
   const char *big, *small, *tag;
   bool linked, led;
   uint32_t sweep;  // the sweep's step
+  uint8_t mode;    // Mode: the padlock or the play triangle
+  uint32_t tick;   // the marquee's step since the text last changed (0 while nothing scrolls)
 };
+
+constexpr uint32_t SCROLL_MS = 30;     // the marquee's step: ~33 frames a second ...
+constexpr int SCROLL_PX = 2;           // ... of 2 px: ~67 px a second, about four big letters
+constexpr int SCROLL_GAP = 18;         // between the end of the text and its next copy
+constexpr uint32_t SCROLL_REST = 25;   // steps resting at the left edge each time round (0.75 s)
+constexpr size_t BIG_FIT = 10;         // a big line this long or shorter never scrolls: the fonts go down to fit it
+constexpr int SCROLL_FONT_MIN = 8;     // a longer one that needs a font smaller than this one (fub14) scrolls
+
+// The marquee's offset at step `tick` for text `textW` wide: resting, then sliding one copy's length.
+inline int scrollOffset(uint32_t tick, int textW) {
+  uint32_t slide = (uint32_t)(textW + SCROLL_GAP + SCROLL_PX - 1) / SCROLL_PX;
+  uint32_t t = tick % (SCROLL_REST + slide);
+  return t < SCROLL_REST ? 0 : (int)((t - SCROLL_REST) * SCROLL_PX);
+}
+
+// Draws `str` scrolled into the window x0..x0+w (baseline y, `top`..`bottom` rows), clipped to it.
+inline void drawMarquee(u8g2_t *d, const char *str, int x0, int w, int y, int top, int bottom, uint32_t tick) {
+  int tw = u8g2_GetStrWidth(d, str);
+  int x = x0 - scrollOffset(tick, tw);
+  u8g2_SetClipWindow(d, x0, top, x0 + w, bottom + 1);
+  u8g2_DrawStr(d, x, y, str);
+  u8g2_DrawStr(d, x + tw + SCROLL_GAP, y, str);
+  u8g2_SetMaxClipWindow(d);
+}
 
 // Tallest first; the first that fits is used. At about the same height the bold fub comes before the condensed
 // logisoso (thicker strokes read better across a table), logisoso takes over when fub is too wide, and the bold
@@ -54,20 +83,32 @@ inline int fitBigFont(u8g2_t *d, const char *s, int w, int h) {
   return BIG_FONT_COUNT - 1;
 }
 
-// Sets that font and returns the text's width. The last fit is kept, so redrawing the same text (a sweep step, an LED
-// change) doesn't measure it in every font again.
-inline int setBigFont(u8g2_t *d, const char *s, int w, int h) {
+// The big line's font: the largest that fits, down to the smallest for up to BIG_FIT characters. A longer line that
+// would need a font under SCROLL_FONT_MIN scrolls instead, in the tallest font the height takes (`scroll` says so).
+inline int bigFontFor(u8g2_t *d, const char *s, int w, int h, bool &scroll) {
+  int f = fitBigFont(d, s, w, h);
+  scroll = strlen(s) > BIG_FIT && (f > SCROLL_FONT_MIN || (f == BIG_FONT_COUNT - 1 && u8g2_GetStrWidth(d, s) > w));
+  if (scroll) f = fitBigFont(d, s, 0x7fff, h);
+  return f;
+}
+
+// Sets that font and returns the text's width. The last fit is kept, so redrawing the same text (a sweep step, a
+// marquee step, an LED change) doesn't measure it in every font again.
+inline int setBigFont(u8g2_t *d, const char *s, int w, int h, bool &scroll) {
   static char fitS[BIG_MAX + 1];
   static int fitW = -1, fitH = -1, fitFont = -1;
+  static bool fitScroll = false;
   bool keep = strlen(s) <= BIG_MAX;
   int f = fitFont;
+  scroll = fitScroll;
   if (!(keep && f >= 0 && w == fitW && h == fitH && !strcmp(s, fitS))) {
-    f = fitBigFont(d, s, w, h);
+    f = bigFontFor(d, s, w, h, scroll);
     if (keep) {
       strcpy(fitS, s);
       fitW = w;
       fitH = h;
       fitFont = f;
+      fitScroll = scroll;
     }
   }
   u8g2_SetFont(d, BIG_FONTS[f]);
@@ -75,15 +116,31 @@ inline int setBigFont(u8g2_t *d, const char *s, int w, int h) {
   return u8g2_GetStrWidth(d, s);
 }
 
-// The small line, centred with its baseline at `y`: the bold font if it fits, else the narrow one, else cut with "..".
-inline void drawSmall(u8g2_t *d, const char *s, int y) {
+// The small line with its baseline at `y`: centred in the bold font if it fits, else in the narrow one, else the bold
+// font scrolls. Returns whether it scrolls.
+inline bool drawSmall(u8g2_t *d, const char *s, int y, uint32_t tick) {
+  u8g2_SetFont(d, ST_SMALL_FALLBACK);
+  bool narrowFits = u8g2_GetStrWidth(d, s) <= SCREEN_W;
   u8g2_SetFont(d, ST_SMALL_FONT);
-  if (u8g2_GetStrWidth(d, s) > SCREEN_W) u8g2_SetFont(d, ST_SMALL_FALLBACK);
-  char buf[SMALL_MAX + 3];
-  strncpy(buf, s, SMALL_MAX);
-  buf[SMALL_MAX] = 0;
-  for (size_t n = strlen(buf); n > 0 && u8g2_GetStrWidth(d, buf) > SCREEN_W; n--) strcpy(buf + n - 1, "..");
-  u8g2_DrawStr(d, (SCREEN_W - u8g2_GetStrWidth(d, buf)) / 2, y, buf);
+  if (u8g2_GetStrWidth(d, s) > SCREEN_W) {
+    if (!narrowFits) {
+      drawMarquee(d, s, 0, SCREEN_W, y, y - 8, y + 1, tick);
+      return true;
+    }
+    u8g2_SetFont(d, ST_SMALL_FALLBACK);
+  }
+  u8g2_DrawStr(d, (SCREEN_W - u8g2_GetStrWidth(d, s)) / 2, y, s);
+  return false;
+}
+
+// A padlock (taps not welcome) or a play triangle (a game waits for this station), 6 x 7 at (x, 0).
+inline void drawModeIcon(u8g2_t *d, uint8_t mode, int x) {
+  if (mode == MODE_SHUT) {
+    u8g2_DrawFrame(d, x + 1, 0, 4, 4);
+    u8g2_DrawBox(d, x, 3, 6, 4);
+  } else if (mode == MODE_PLAY) {
+    u8g2_DrawTriangle(d, x + 1, 0, x + 1, 7, x + 5, 3);
+  }
 }
 
 // A check mark or a cross, 3 px strokes, in the size x size square at (x, y).
@@ -100,10 +157,12 @@ inline void drawIcon(u8g2_t *d, bool check, int x, int y, int size) {
   }
 }
 
-// Draws the frame into the buffer (the caller sends it).
-inline void drawScreen(u8g2_t *d, const ScreenView &v) {
+// Draws the frame into the buffer (the caller sends it). Returns whether a line scrolls: the caller draws again every
+// SCROLL_MS, with the next tick.
+inline bool drawScreen(u8g2_t *d, const ScreenView &v) {
   bool sweep = v.look == LOOK_HOLD || v.look == LOOK_SIGN;
-  bool icon = v.look == LOOK_DONE || v.look == LOOK_FAIL;
+  bool icon = v.look == LOOK_DONE || v.look == LOOK_FAIL || v.look == LOOK_NOPE;
+  bool scrolls = false;
   const char *big = v.big ? v.big : "", *small = v.small ? v.small : "";
   u8g2_ClearBuffer(d);
   u8g2_SetFontMode(d, 0);
@@ -118,31 +177,40 @@ inline void drawScreen(u8g2_t *d, const ScreenView &v) {
   if (v.linked) u8g2_DrawDisc(d, SCREEN_W - 3, 2, 2, U8G2_DRAW_ALL);
   else u8g2_DrawCircle(d, SCREEN_W - 3, 2, 2, U8G2_DRAW_ALL);
   if (v.led) u8g2_DrawBox(d, SCREEN_W - 10, 1, 3, 3);
+  if (v.look == LOOK_IDLE) drawModeIcon(d, v.mode, SCREEN_W - 18);
 
   // The small line sits at the bottom (above the sweep), its one-row descenders on the last row.
   int bottom = SCREEN_H - 1 - (sweep ? BAR_ROWS : 0);
   int bigBottom = bottom;
   if (*small) {
     int base = bottom - 1;
-    drawSmall(d, small, base);
+    scrolls = drawSmall(d, small, base, v.tick);
     bigBottom = base - 7 - 1;  // its caps are 7 rows, with one blank row above them
   }
   int left = icon ? ICON + ICON_GAP : 0;
   int areaH = bigBottom - TOP + 1;
   int w = 0, cap = 0;
+  bool bigScrolls = false;
   if (*big) {
-    w = setBigFont(d, big, SCREEN_W - left, areaH);
+    w = setBigFont(d, big, SCREEN_W - left, areaH, bigScrolls);
     cap = u8g2_GetAscent(d);
   }
-  if (icon) {  // the icon and the text centred together; the icon shrinks under a small line
+  if (icon) {  // the icon and the text centred together (a scrolling text: the icon at the left); it shrinks under a small line
     int size = areaH < ICON ? areaH : ICON;
-    int x = (SCREEN_W - (*big ? size + ICON_GAP + w : size)) / 2;
+    int x = bigScrolls ? 0 : (SCREEN_W - (*big ? size + ICON_GAP + w : size)) / 2;
     drawIcon(d, v.look == LOOK_DONE, x, TOP + (areaH - size) / 2, size);
     left = x + size + ICON_GAP;
   } else {
-    left = (SCREEN_W - w) / 2;
+    left = bigScrolls ? 0 : (SCREEN_W - w) / 2;
   }
-  if (*big) u8g2_DrawStr(d, left, TOP + (areaH - cap) / 2 + cap - 1, big);
+  int baseline = TOP + (areaH - cap) / 2 + cap - 1;
+  if (*big && bigScrolls) {
+    // The font was set by setBigFont; the window spans the big line's rows.
+    drawMarquee(d, big, left, SCREEN_W - left, baseline, TOP, bigBottom, v.tick);
+    scrolls = true;
+  } else if (*big) {
+    u8g2_DrawStr(d, left, baseline, big);
+  }
 
   if (sweep) {
     int step = v.look == LOOK_SIGN ? 9 : 5;
@@ -153,6 +221,7 @@ inline void drawScreen(u8g2_t *d, const ScreenView &v) {
     u8g2_DrawBox(d, 0, 0, SCREEN_W, SCREEN_H);
     u8g2_SetDrawColor(d, 1);
   }
+  return scrolls;
 }
 
 }  // namespace st
