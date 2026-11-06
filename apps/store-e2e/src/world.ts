@@ -43,6 +43,8 @@ export interface World {
   startBox(): Promise<RunningBox>;
   /** Stops the verifier's Worker. Its state stays. */
   stopVerifier(): Promise<void>;
+  /** Kills it and its containers, as a crash would. Its state stays. */
+  crashVerifier(): Promise<void>;
   startVerifier(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -149,6 +151,11 @@ export async function startWorld(): Promise<World> {
     },
     async stopVerifier() {
       await verifier?.stop();
+      verifier = null;
+      removeAgents();
+    },
+    async crashVerifier() {
+      await verifier?.kill();
       verifier = null;
       removeAgents();
     },

@@ -28,6 +28,8 @@ export interface Child {
   /** Resolves once it says something matching `text`; rejects if it stops first or `ms` runs out. */
   says(text: RegExp, ms: number): Promise<void>;
   stop(): Promise<void>;
+  /** Stops it at once, as a crash would. */
+  kill(): Promise<void>;
 }
 
 export function start(name: string, command: string, args: readonly string[], options: SpawnOptions): Child {
@@ -70,6 +72,10 @@ export function start(name: string, command: string, args: readonly string[], op
       const late = setTimeout(() => signal('SIGKILL'), STOP_MS);
       await stopped;
       clearTimeout(late);
+    },
+    async kill() {
+      signal('SIGKILL');
+      await stopped;
     },
   };
 }

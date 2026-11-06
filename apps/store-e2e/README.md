@@ -64,8 +64,9 @@ after an hour away.
 - Real Cloudflare. `wrangler dev` isn't the platform, and its container network isn't either. Its sidecar takes every TCP
   connection and then drops it, so a bare connect from the agent's shell succeeds here. Scenario 6 needs an answer back to
   call a way out open.
-- A killed Worker. A run's Durable Object wakes 9 minutes after it dies, too long for this run: `apps/verifier`'s tests
-  cover it. Scenario 5 kills the container.
+- A killed Worker, unless asked. Scenario 5 kills the container. A run's Durable Object wakes 9 minutes after the Worker
+  dies, too long for every run, so `EGB_E2E_SLOW=1` adds the scenario that kills the Worker mid-run, which takes 10 minutes
+  more.
 - The badges and the Pi. Taps come from the fake receiver.
 - More than two seats: the Box seats two for now.
 

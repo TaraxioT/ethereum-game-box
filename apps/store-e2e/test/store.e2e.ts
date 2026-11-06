@@ -441,6 +441,35 @@ describe('the game store, end to end', () => {
     expect(await recordOnStorage(round, UPLOAD_RETRY)).toMatchObject({ attempts: 1, verdict: { kind: 'split' } });
   });
 
+  // A run's Durable Object wakes 9 minutes after it dies, so this one is only on request.
+  it.runIf(process.env.EGB_E2E_SLOW)("carries on on a fresh container when the verifier's Worker dies mid-run", { timeout: 15 * 60_000 }, async () => {
+    const split = [usdc(12), usdc(8)] as const;
+    await world.zg.script({ payouts: split.map(String), shellCommand: 'sleep 300' });
+    const { chats: chatsBefore } = await world.zg.seen();
+    const before = await chain.balances(BADGES);
+    const round = await stakeAndPlayFrom();
+    await vi.waitFor(async () => {
+      expect(runningAgents()).toHaveLength(1);
+      expect((await world.zg.seen()).chats).toBeGreaterThan(chatsBefore);
+    }, { timeout: 90_000, interval: 200 });
+
+    await world.crashVerifier();
+    say('killed the Worker, workerd and its container mid-run');
+    await world.zg.script({ payouts: split.map(String) });
+    await world.startVerifier();
+    expect(await judged(round)).toMatchObject({ state: 'judging' });
+
+    const started = Date.now();
+    const shown = await box.link.until(({ phase }) => phase === 'result', 'Result', 12 * 60_000).then(judgedOf);
+    say(`the pot's object woke after ${Math.round((Date.now() - started) / 1000)} s`);
+    expect(shown).toMatchObject({ step: 'paid', payouts: [12, 8] });
+    const [settled] = await chain.events.settled(round);
+    expect(settled?.args.payouts).toEqual(split);
+    expect(await chain.balances(BADGES)).toEqual(before.map((balance, seat) => balance - usdc(STAKE) + (split[seat] as bigint)));
+    say(`PotSettled ${settled?.transactionHash}: ${usdcList(split)}`);
+    expect(await recordOnStorage(round)).toMatchObject({ attempts: 2, verdict: { kind: 'split' } });
+  });
+
   it('refunds after the delay with the verifier down', async () => {
     await world.stopVerifier();
     await world.zg.script({});
