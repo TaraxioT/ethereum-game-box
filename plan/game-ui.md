@@ -263,6 +263,6 @@ interface BoxLink {
 - [x] 1280×800, 1920×1080 and 390×844 all work.
 - [x] `pnpm typecheck`, `pnpm test` and `pnpm build` pass.
 - [x] The demo is live at a public URL: https://ethereum-game-box.pages.dev/.
-- [ ] The Grid look on every launcher screen (boot, attract, Home, Join, Stake, Result, Refund, the in-game overlay)
+- [x] The Grid look on every launcher screen (boot, attract, Home, Join, Stake, Result, Refund, the in-game overlay)
       is deployed to the demo.
 - [ ] 60 fps on the Pi 5 at 1280×800 (checked so far in a laptop browser at 4× CPU throttling).
