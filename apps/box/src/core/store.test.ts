@@ -407,10 +407,28 @@ describe("a store game", () => {
     await settle(r, END_HOLD_MS);
     r.store.judges[1]?.watch(said("paid", { payouts: [10, 10], hash: TX }));
     await settle(r);
+    // Gone from the rack and back again takes the focus away; the rematch brings it back.
+    r.rack(TEAM_GAMES);
+    r.rack([...TEAM_GAMES, STORE_GAME]);
+    expect(r.core.state().phase).toBe("result");
+    r.core.send({ type: "rematch" });
+    expect(r.core.state()).toMatchObject({ phase: "join", focus: "tap-rush" });
+    r.core.send({ type: "back" });
+    r.core.send({ type: "play" });
+    r.bundles.arrive();
+    await settle(r, JOIN_SETTLE_MS);
+    await tap(r, 0, NOVA);
+    await tap(r, 1, KITE);
+    r.store.opens[2]?.watch(paid());
+    await settle(r);
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    r.store.judges[2]?.watch(said("paid", { payouts: [10, 10], hash: TX }));
+    await settle(r);
     r.rack(TEAM_GAMES);
     r.core.send({ type: "rematch" });
     expect(r.core.state().phase).toBe("home");
-    expect(r.bundles.fetched).toHaveLength(2);
+    expect(r.bundles.fetched).toHaveLength(4);
   });
 
   it("goes back to sign when the pot's open fails, with the bundle kept", async () => {
@@ -529,7 +547,7 @@ describe("a store game", () => {
     await tap(opening, 0, NOVA);
     await tap(opening, 1, KITE);
     opening.rack(TEAM_GAMES);
-    expect(opening.core.state().phase).toBe("stake");
+    expect(opening.core.state()).toMatchObject({ phase: "stake", focus: "tap-rush" });
     opening.store.opens[0]?.watch(paid());
     await settle(opening);
     expect(opening.core.state().phase).toBe("playing");
@@ -541,9 +559,15 @@ describe("a store game", () => {
     playing.core.send({ type: "frame", word: { t: "end", why: "game" } });
     await settle(playing, END_HOLD_MS);
     expect(playing.store.judges[0]?.order.entries.map((e) => e.t)).toEqual(["tap", "end"]);
+    // The money is still Store USDC, with the game gone from the rack.
+    playing.store.balances.set(NOVA.address, 120);
     playing.store.judges[0]?.watch(said("paid", { payouts: [20, 0], hash: TX }));
     await settle(playing);
     expect(playing.core.state().phase).toBe("result");
+    expect(playing.core.state().seats[0].balance).toBe(120);
+    // Home is the first place it must let go of the focus.
+    playing.core.send({ type: "home" });
+    expect(TEAM_GAMES.map((g) => g.id)).toContain(playing.core.state().focus);
   });
 
   it("can't play on a Box with no bundle port", async () => {

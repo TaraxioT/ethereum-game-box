@@ -446,6 +446,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       // A store game's bundle goes with the game too: nothing is kept between matches.
       stopStore();
       dropBundle();
+      keepFocus();
     }
     if (to === "stake") {
       seen[0] = null;
@@ -500,9 +501,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     else incoming.delete(address);
   }
 
-  /** The focused game is a store game: its money is Store USDC, through this port, and not the Box's USDC. */
+  /** A store game is in hand: its money is Store USDC, through this port, and not the Box's USDC. */
   function storeFocus(): StoreChainPort | undefined {
-    return gameOf(focus)?.kind === "store" ? port.store : undefined;
+    return wanted || match?.play.game === "store" || gameOf(focus)?.kind === "store" ? port.store : undefined;
   }
 
   /** A badge's card, its balance in what the focused game stakes. */
@@ -776,6 +777,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     ports.bundles?.drop();
   }
 
+  /** The focus stays on a game in the rack, unless a store game that left it is still under way. */
+  function keepFocus(): void {
+    if (!gameOf(focus) && !wanted && games[0]) focus = games[0].id;
+  }
+
   /** A store game that left the rack (its index can't be reached) with nothing staked on it yet: back Home. */
   function leaveLostGame(): void {
     if (!wanted || gameOf(wanted.id)) return;
@@ -984,8 +990,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function claimRefund(): TapMeaning {
     if (!match || match.refunded[0] || refunding || clock.now() < match.refundAt) return "ignored";
     const { id, round, stake: amount } = match;
-    const pot = match.play.game === "store" ? port.store : port;
-    if (!pot || (pot === port && !port.onChain(match.game)) || amount === 0) {
+    const store = match.play.game === "store";
+    const pot = store ? port.store : port;
+    if (!pot || (!store && !port.onChain(match.game)) || amount === 0) {
       match = { ...match, refunded: [true, true] };
       timers.after(REFUND_DONE_MS, () => phase === "refund" && match?.id === id && setPhase("home"));
       return "refund";
@@ -1323,6 +1330,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (match?.play.game !== "store") return setPhase(bothSeated() ? "stake" : "join");
         // A store game is fetched again for every match, if it is still in the rack and can play.
         if (!info?.ready) return setPhase("home");
+        focus = info.id;
         fetchBundle(info);
         return setPhase("join");
       }
@@ -1368,7 +1376,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   const unwatchLibrary = ports.library.subscribe(() => {
     games = ports.library.games();
-    if (!gameOf(focus) && games[0]) focus = games[0].id;
+    keepFocus();
     emit({ type: "games" });
     leaveLostGame();
   });
