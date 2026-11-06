@@ -2,7 +2,7 @@
 // store's and the verifier's Workers and in a browser (no Node, no DOM): whoever opens a bundle judges it with this one
 // policy. A bundle is index.html, manifest.json and any assets the page uses by relative path, in the one zip shape of
 // pack.ts and read.ts. Its code is untrusted and runs only in the kiosk's sandboxed frame.
-import { isRecord, strayKey } from "../check.ts";
+import { hasOneReading, isRecord, strayKey } from "../check.ts";
 import { PLAYER_LIMITS, sharedManifestProblems, type TapNeed } from "../manifest.ts";
 import { printable } from "../station.ts";
 
@@ -125,9 +125,8 @@ function parseManifest(bytes: Uint8Array): BundleManifest {
   } catch {
     refuse(`${MANIFEST_FILE} isn't JSON`);
   }
-  // Layout is free, but with the space between tokens gone the text must be what JSON.stringify makes. A repeated key
-  // isn't: a reader who sees the first `instructions` and a parser that keeps the last would judge two different games.
-  if (text.replace(/("(?:[^"\\]|\\.)*")|\s+/g, "$1") !== JSON.stringify(value)) refuse(`${MANIFEST_FILE} repeats a key, or spells a value oddly`);
+  // A reader who sees the first `instructions` and a parser that keeps the last would judge two different games.
+  if (!hasOneReading(text, value)) refuse(`${MANIFEST_FILE} repeats a key, or spells a value oddly`);
   const [problem] = bundleManifestProblems(value);
   if (problem) refuse(`${MANIFEST_FILE}: ${problem}`);
   return value as BundleManifest;
