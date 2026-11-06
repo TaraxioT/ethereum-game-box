@@ -3,5 +3,87 @@
   "external": {
     "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   },
-  "contracts": {}
+  "contracts": {
+    "GameBoxNames": {
+      "address": "0xb090ae6dD89b25d1B79718853c439D1354Bf62c5",
+      "deployBlock": 12075390,
+      "txHash": "0xcfdbc18db2242855faced12948dec204d0b971542db69e9c5310440583985ce1",
+      "verified": true
+    },
+    "PlayerStats": {
+      "address": "0xed859863f70358e66E5B5e90dF7da43a047c7e14",
+      "deployBlock": 12075391,
+      "txHash": "0x66e031ed203520748a90eb0a380396d9f99dcd2ad0b0e2f810ede2c6f99bb1a3",
+      "verified": true
+    },
+    "BoxResults": {
+      "address": "0x925Fe55Fb22bbe7666eC0Fe14d7d0f3CaEF7ccdA",
+      "deployBlock": 12075392,
+      "txHash": "0xe9056c7cf008866364a53284955b1e60e9b2ab6c53883bc263422a102d0aada7",
+      "verified": true
+    },
+    "DemoBoxAccount": {
+      "address": "0x3dfbC6D78B0D28134178a03041468D0E9A18d082",
+      "deployBlock": 12075393,
+      "txHash": "0xf3036a19289aae9eb9614103171ba300d8cdd463479d761ef2d0855d55b97133",
+      "verified": true
+    },
+    "DemoLicences": {
+      "address": "0x22609BB56f41EA3a995560536d249e5b46c12830",
+      "deployBlock": 12075394,
+      "txHash": "0x4ae926d95c6476be92c23d846265ed5241b497fb0cd33a654033768dcdccc326",
+      "verified": true
+    }
+  },
+  "ens": {
+    "UniversalResolver": {
+      "address": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UpgradableUniversalResolverProxy.json"
+    },
+    "RootRegistry": {
+      "address": "0xB458D6a3a77919449d03e7A6903C26827c1eC43f",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/RootRegistry.json"
+    },
+    "ETHRegistry": {
+      "address": "0xD4eBcbBdF463C9c45784603Db0dDD499BC44A8B4",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/ETHRegistry.json"
+    },
+    "ETHRegistrar": {
+      "address": "0xf633e7FC17e2bbE0D0965D18ec1821dcB754a3d3",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/ETHRegistrar.json"
+    },
+    "VerifiableFactory": {
+      "address": "0xDa70306C98E97eCe36F997a21368e53298572991",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/VerifiableFactory.json"
+    },
+    "VerifiableProxyLogic": {
+      "address": "0xC41576B4B809B99CF0fF2e5B41b4F147cd9b6BDd",
+      "source": "https://github.com/ensdomains/verifiable-factory/blob/c1090aec465ab30d494c96bd7d2a147b4f0b0173/src/UUPSProxyLogic.sol"
+    },
+    "UserRegistryImpl": {
+      "address": "0x9BD8a88719068D09ecee662f36C0E3856708366a",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UserRegistryImpl.json"
+    },
+    "PermissionedResolverImpl": {
+      "address": "0x115eb53F0c60696633855F90b138178Fb40b2b2C",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/PermissionedResolverImpl.json"
+    },
+    "DefaultReverseRegistrar": {
+      "address": "0x4F382928805ba0e23B30cFB75fC9E848e82DFD47",
+      "source": "DefaultReverseRegistrarAdapter.DEFAULT_REVERSE_REGISTRAR() on Sepolia; https://github.com/ensdomains/ens-contracts/blob/f0151aaf8a53b5b8f725a584fc194997c8226fbd/contracts/reverseRegistrar/DefaultReverseRegistrar.sol"
+    },
+    "ReverseRegistrar": {
+      "address": "0xA0a1AbcDAe1a2a4A2EF8e9113Ff0e02DD81DC0C6",
+      "source": "ReverseRegistrarAdapter.REVERSE_REGISTRAR() on Sepolia; https://github.com/ensdomains/ens-contracts/blob/f0151aaf8a53b5b8f725a584fc194997c8226fbd/contracts/reverseRegistrar/ReverseRegistrar.sol"
+    }
+  },
+  "names": {
+    "registry": "0xE6F0f5e2f77b2aE21B2Df9C9E3b305A9A842594e",
+    "titleResolver": "0x910DE3EC48fBB13fBE2AD578919a0a3e1cdc2960",
+    "gameResolver": "0xb604dD8294F9726C9aAA9AE9E33dE158F7c0dE03",
+    "titles": {
+      "stockduel": "0xee271396124CE5FD69E8D57A4ee93B543Ffb6Ba2",
+      "quickdraw": "0x4211D4aD598Fa488966a71035f6cFb274426201c"
+    }
+  }
 }
