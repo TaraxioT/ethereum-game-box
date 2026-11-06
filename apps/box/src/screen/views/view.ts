@@ -19,7 +19,8 @@ export interface View {
 export type Pose =
   | "home" // the whole machine: Home and attract
   | "page" // the Grid dimmed, the core and rack sunk back, ports and clock up: Join, Stake, Result, Refund, the lobby
-  | "game"; // the thin overlay only (ports, clock, stake): inside a game
+  | "game" // the thin overlay only (ports, clock, stake): inside a game
+  | "full"; // nothing of the machine: a game that draws the whole stage, the top band included
 
 export interface Machine {
   pose(pose: Pose): void;

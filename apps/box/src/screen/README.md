@@ -96,7 +96,8 @@ Modules go with them, each pure one tested:
   a short fade under reduced motion), `flicker(node)` and the flicker budget (three a second at most). The keyframes
   are pure and tested in `rez.test.ts`.
 - `machine.ts`: the objects that stay across views (Grid, packets, core, ports, clock, gas bar, transaction strip,
-  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin` (the core turns and
+  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`, and `full`
+  for a game that draws the whole stage, its top band included, with none of the machine showing), `coin` (the core turns and
   every trace flares), `feed`, `run` (a packet along a named trace, into the core or out of it) and `swell`. It turns transaction steps into moments: a packet from the port when a stake is sent,
   a swell when it lands in a block, a packet out to the port for a payout. It shakes a port on a refused tap and runs
   attract's ambience.
@@ -134,7 +135,8 @@ the page, at `/link` on the same origin. Views read the Box's clock from `link.n
 `views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
 on `BoxEvent`s and acts only through `link.send`.
 
-- `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`).
+- `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`; a Stock
+  Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes.
 - `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, and the rack (`rack.ts`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
@@ -270,44 +272,49 @@ How it moves:
 ## Stock Duel
 
 `games/stock-duel/screen.ts` exports `stockDuelScreen`, the `ViewFactory` the router mounts while a Stock Duel match
-plays. It draws from `state.match.play` (game `stock-duel`) on the whole stage, in its own look: a painted study
-that comes alive, a dark wood-panelled room with a warm brass lamp on Player 1's half and a cyan-glass lamp on Player
-2's. The Box's thin overlay sits over the top ~130 px (landscape) / ~150 px (portrait), which holds nothing important.
-Each orientation has its own geometry table in `screen.ts`: landscape stands the Rolodexes at the two ends of the
-desk with the astrolabe between them on the wall; portrait puts the Rolodexes side by side at the top, the
-astrolabe and the tallies in the middle, and the played cards along the bottom.
+plays. It draws from `state.match.play` (game `stock-duel`) on the whole stage, in its own look, the Slab: a dark
+room with each player's colour pooling up from their side, thick graphite slabs lit from above, chunky Unbounded
+type, and the seat colours as fills and rims; no theme, no lines or grid. Its route takes the `full` pose, so the
+game draws the top band itself: each player's slab (the badge's name, or `PLAYER n`, the stake in USDC and a pip per
+round to win), the round and the pot. Each orientation has its own geometry table in `screen.ts`: landscape stands a
+Rolodex down each side with the tray between them (the stat wheel over the two wells); portrait puts the Rolodexes
+side by side under the band and the tray along the bottom. The comp it was built to is in
+`games/stock-duel/look/` (see the blueprint).
 
 | Module | What it is | API |
 |---|---|---|
-| `screen.ts` | The view: places the parts, draws a state as it stands when it mounts, animates each change after that, and runs the drums' frame loop only during the pick. | `stockDuelScreen: ViewFactory` |
-| `scene.ts` | The study, drawn once in CSS: raised wall panels, a rail, a walnut desk with a tooled leather blotter, the two lamps on their arms, each lamp's cone and pool of light, a vignette; brushed paint texture from layered gradients. | `createScene(places): { el, flare(seat, holdMs), hold(seat \| null) }` |
-| `rolodex.ts` | One hand as a classic Rolodex: a black drum with brass bands and knobs on a lacquered stand, the cards on its rail. Every card has an index tab in the stock's colour at its own place across the top, so all the hand's tickers show; the front card is face up with its colour band, ticker, name, a draining ring and a `?` where the stats go. A plinth line says `TAP TO PLAY` or `LAST TURN`. | `createRolodex(seat, placement, sound): { el, show(hand, front, animate, played), turnTo(front), drain(share), deal(hand, front, delays), lift(card): Rect, note(text, hot), dispose() }` |
-| `dial.ts` | The brass astrolabe: a bevelled rim, a band of four engraved stat sectors (`PRICE`, `AVG PRICE`, `24H MOVE`, `LIQUIDITY` in roll order, clockwise from the top left), degree ticks, a dark enamel plate, and the rete (a pierced brass pointer) under a fixed boss. SVG. | `createDial(centre, radius): { el, spin(stat, elapsedMs): Promise<void>, show(stat), rest(), dispose() }` |
-| `reveal.ts` | The played cards on the blotter: face down, a cream manuscript back folded like an envelope with a wax seal (and `AUTO` stamped on it when the card was played for the player); face up, aged paper with ink rules, the ticker and company, the stock's colour as an ink band, the round's stat large and the other three below. Wax seals (SVG): green `FINALIZED`, red `SLASHED`; a brass `TIE · REPLAY` plate for a tie. | `createReveal(rests): { el, place(seat, auto, from), flip(record, animate): Promise<void>, clear(animate), dispose() }` |
-| `score.ts` | The standing: a lacquered tally per seat (`PLAYER n` and three round pips that light in the seat's colour), an engraved `ROUND n` plate, and the end banner. | `createStanding(places): { els, set(score, round, animate), finish(winner, animate) }` |
+| `screen.ts` | The view: places the parts, draws a state as it stands when it mounts, animates each change after that, runs the drums' frame loop only during the pick, and keeps the band's players and stakes current. | `stockDuelScreen: ViewFactory` |
+| `scene.ts` | The room, drawn once in CSS: the dark backdrop lit faintly from above, each seat's colour pooling up from its side (a brighter copy fades in for its moments), and the raised tray in the middle. | `createScene(places): { el, flare(seat, holdMs), hold(seat \| null) }` |
+| `rolodex.ts` | One hand as a Rolodex: graphite cards upright on a drum with seat-colour end caps, over a foot. Every card has an index tab in the stock's colour at its own place across the top, so all the hand's tickers show; each card further back stands higher, a little smaller and darker. The front card shows the stock's colour along its top, the ticker and name, four hidden stats and a `?` the draining ring runs round; a rim in the seat's colour lights it while its player picks. The plinth's pill says `TAP TO PLAY`, `LAST TURN` (lit, breathing) or `CARD DOWN`. | `createRolodex(seat, placement, sound): { el, show(hand, front, animate, played), turnTo(front), drain(share), deal(hand, front, delays), lift(card): Rect, note(text, tone), dispose() }` |
+| `dial.ts` | The stat wheel: a dark disc of four graphite quarters (`PRICE`, `AVG PRICE`, `24H MOVE`, `LIQUIDITY` in roll order, clockwise from the top left), each named beside it, and a white pointer round a hub. At rest the hub shows `?` and a line under the wheel says how the stat is picked. | `createDial(centre, radius): { el, spin(stat, elapsedMs): Promise<void>, show(stat), rest(), dispose() }` |
+| `reveal.ts` | The played cards on the tray: a dark well per seat (it says `LAST TURN` while its seat is on its last turn); face down, a slab in the seat's colour with a big `?` (and `AUTO` when the card was played for the player); face up, the stock's colour across the top with the ticker and company, the round's stat large and the other three below. The winner's card lifts with a seat-colour rim and a `+1 ROUND` badge, the loser's sinks and dims; the line under the cards names who took it, or `TIE · REPLAY`, and during the next pick recalls the last round. | `createReveal(places, label): { el, place(seat, auto, from), waiting(seat, on), flip(record, animate): Promise<void>, recall(record, play), clear(animate), dispose() }` |
+| `score.ts` | The band: a slab per player (a seat-colour square with `P1`/`P2`, the name, the stake, the pips), the round and the pot between them, and the end slab over the wheel. A player's square pops when their tap lands; a refused tap shakes their slab. | `createStanding(places): { els, players(players, stake), set(score, round, animate), finish(winner, animate), tap(seat, accepted) }` |
 | `stock-duel.css` | All its styles, imported by `screen.ts`. | |
 
 How it moves:
 
-- **Deal**: the cards drop onto each drum's rail one at a time, the two drums half a beat apart, the front card last;
-  each lands with a `tick`. Nothing is ever laid out on the desk.
+- **Deal**: the cards drop onto each drum one at a time, the two drums half a beat apart, the front card last; each
+  lands with a `tick`. Nothing is ever laid out on the tray.
 - **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` at the Box's clock
   (`link.now()`). When the front card changes the drum indexes one card: the old front card rises and tips back over
-  the top of the drum (rotateX about the rail, edge-on at the midpoint), then stands up again at the back while the
+  the top of the drum (rotateX about its foot, edge-on at the midpoint), then stands up again at the back while the
   others step forward; it always ends upright. While a chip on the reader is still rolling, its seat's front card is
-  held (the rules' `held`): the drum stays on it and its ring stops. The ring drains with transforms only (two half rings turning in clipped windows). A
-  played card lifts off the rail and flies face down onto its rest on the blotter, and that seat's lamp flares. Once
-  one seat has played, the other's plinth reads `LAST TURN`.
-- **Dial**: the astrolabe wakes from dim, the rete spins three turns, swings a few degrees past the stat and settles
-  on it; then the sector lights. A screen joining mid-spin carries on from where the spin has got to.
-- **Reveal**: both cards turn over together (rotateY); then the seals come down, squash and settle (scale and
-  opacity), the winner's pip lights with a pop and its lamp flares; a tie shows the `TIE · REPLAY` plate instead. The
-  next pick clears the desk and the drums close up round the cards that are left.
-- **Over**: the final reveal stays, the engraved brass banner (`PLAYER 1 WINS`, `PLAYER 2 WINS` or `DRAW`, with a
-  seat-coloured rule) drops in, and the winner's lamp stays bright.
+  held (the rules' `held`): the drum stays on it and its ring stops. The ring drains with transforms only (two half
+  rings turning in clipped windows). A played card lifts off the drum and flies face down into its well, the cards
+  behind it step forward, and that seat's glow flares. Once one seat has played, the other's plinth reads `LAST TURN`
+  and so does its well.
+- **Dial**: the wheel wakes (the hub's `?` and the hint go), the pointer spins three turns, swings a few degrees past
+  the stat and settles on it; then its quarter lights white and its name is underlined. A screen joining mid-spin
+  carries on from where the spin has got to.
+- **Reveal**: both cards turn over together (rotateY); then the winner's card lifts on a spring with its rim and
+  badge, the loser's sinks and tilts, the result line pops in, the winner's pip lights with a pop and its glow
+  flares; a tie moves neither card and says `TIE · REPLAY`. The next pick clears the tray, the line recalls the round
+  just played, and the drums close up round the cards that are left.
+- **Over**: the final reveal stays, the end slab (`NOVA WINS` in the winner's colour, or `A DRAW`) drops in over the
+  wheel, the round reads `FINAL`, and the winner's glow stays bright.
 - Sounds: the Box cues `tick` on each drum step, `flip` at the reveal and `seal` when a round scores; the screen adds
   only the deal's `tick`s.
-- Only transform and opacity animate; every shadow and gradient is static. Each card's shade keeps a layer of its
-  own, so a drum step fades it without the Pi rastering both drums' cards again. Under reduced motion it shows end
-  states: the drum jumps to the next card, cards appear on their rests, the rete is already on the stat, the faces and seals
-  are already down.
+- Only transform and opacity animate; every shadow and glow is static and reaches at most 24 px. Each card's shade
+  keeps a layer of its own, and the front card's rim is one layer that stays put while the cards turn under it, so a
+  drum step never rasters a card's shadow again. Under reduced motion it shows end states: the drum jumps to the next
+  card, cards appear in their wells, the pointer is already on the stat, the faces and the outcome are already shown.

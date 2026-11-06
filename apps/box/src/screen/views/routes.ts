@@ -31,7 +31,9 @@ export const routes: Routes = (state) => {
     case "playing": {
       const key = `play-${state.match?.id ?? 0}`;
       const game = state.match?.play.game;
-      return { key, pose: "game", view: game === "built" ? builtScreen : game === "stock-duel" ? stockDuelScreen : quickDrawScreen };
+      // Stock Duel draws its own top band (players, score, pot); the others play under the machine's thin overlay.
+      if (game === "stock-duel") return { key, pose: "full", view: stockDuelScreen };
+      return { key, pose: "game", view: game === "built" ? builtScreen : quickDrawScreen };
     }
     case "result":
       return { key: "result", pose: "page", view: resultView };

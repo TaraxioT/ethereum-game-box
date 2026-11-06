@@ -92,9 +92,12 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
   // A packet on a port's trace is that player's colour.
   const seatColour = [LIGHT.p1, LIGHT.p2] as const;
 
+  /** Inside a game the Grid and the core are hidden: nothing is sent along them. */
+  const inGame = (): boolean => pose === "game" || pose === "full";
+
   /** Runs a packet along a port's trace (into the core, or out of it for a payout); resolves when it lands. */
   function packet(from: "port" | "core", seat: Seat | null): Promise<void> {
-    if (pose === "game") return Promise.resolve();
+    if (inGame()) return Promise.resolve();
     const seats: Seat[] = seat === null ? [0, 1] : [seat];
     return Promise.all(seats.map((s) => packets.run(`port${s}`, { colour: seatColour[s], reverse: from === "core" }))).then(
       () => undefined,
@@ -156,7 +159,7 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
       }
       if (event.type === "init" || event.type === "block") clock.block = state.chain.block;
       if (event.type === "init" || event.type === "gas") gauge.gwei = state.chain.gasGwei;
-      if (event.type === "block" && pose !== "game") core.swell();
+      if (event.type === "block" && !inGame()) core.swell();
       if (event.type === "tap") {
         if (event.accepted) ports[event.seat].pulse();
         else ports[event.seat].refuse();
