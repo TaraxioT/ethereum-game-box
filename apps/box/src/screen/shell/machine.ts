@@ -172,7 +172,7 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
       // Written only when it changes: rewriting the same text on every event repainted the chip and the wide tiles
       // under it on each block, gas reading and transaction step.
       const m = state.match;
-      const stake = m ? (m.stake > 0 ? `${m.stake * 2} USDC AT STAKE` : "FREE PLAY") : "";
+      const stake = !m ? "" : m.stake > 0 ? `${m.stake * 2} USDC AT STAKE` : m.playFor === "title" ? "FOR THE TITLE" : m.playFor === "cup" ? "FOR THE CUP" : "FREE PLAY";
       if (stakeChip.textContent !== stake) stakeChip.textContent = stake;
       if (stakeChip.hidden !== !m) stakeChip.hidden = !m;
     },

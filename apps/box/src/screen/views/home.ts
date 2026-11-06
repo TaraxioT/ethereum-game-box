@@ -85,7 +85,7 @@ export function homeView(ctx: ViewContext): View {
     link.send({ type: "lobby" });
   });
 
-  const board = createBoardPanel(layout);
+  const board = createBoardPanel(layout, link);
   root.append(title, facts, playKey, lobbyKey, rack.el, ...(board ? [board.el] : []));
   for (const entry of arrived) rack.arrive(entry.id);
 

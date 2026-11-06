@@ -19,9 +19,11 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     seats,
     chain: { block: 100, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
     stake: 10,
+    playFor: "usdc",
+    board: null,
     match,
     txs: [],
-    lobby: { badge: null, card: null, proposal: null, board: null, from: "home" },
+    lobby: { badge: null, card: null, proposal: null, from: "home" },
   };
 }
 
@@ -33,6 +35,7 @@ function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
   return {
     id: 1,
     game: play.game,
+    playFor: "usdc",
     round: 1,
     stake: 10,
     openedBlock: 98,

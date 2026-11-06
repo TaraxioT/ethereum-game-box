@@ -27,6 +27,11 @@ export function chainLabel(id: GameId): string | null {
   return isTeamGame(id) ? CHAIN_LABELS[id] : null;
 }
 
+/** The team game whose chain label is `label` (`stockduel`), or null for one this Box doesn't ship. */
+export function gameOfLabel(label: string): GameInfo | null {
+  return TEAM_GAMES.find((g) => chainLabel(g.id) === label) ?? null;
+}
+
 /** A game whose rules run in the core. */
 export function isTeamGame(id: GameId): id is TeamGameId {
   return id === "quick-draw" || id === "stock-duel";

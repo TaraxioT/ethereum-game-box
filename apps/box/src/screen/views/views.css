@@ -105,6 +105,19 @@
 .page-plate { display: grid; place-items: center; text-align: center; padding: 0 28px; font: 600 19px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); }
 .page-plate[alert] { --frame-tone: var(--alert); color: var(--alert); }
 
+/* Stake's plate: what the match is played for. A small kicker (the tier, LIVE), the headline (the pot, the title, the
+   championship), and the line under it (the holder, the leader, the countdown). */
+.stake-plate { display: flex; flex-direction: column; justify-content: center; padding: 0 22px; }
+.stake-plate > span { display: block; text-align: center; text-transform: none; }
+.stake-kicker { margin-bottom: 7px; font: 600 12px/1 var(--hud-body); letter-spacing: 0.16em; color: var(--fg-3); }
+.stake-head { font: 700 26px/1.1 var(--hud-display); letter-spacing: 0.03em; color: var(--sys-hot); text-shadow: var(--glow-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.stake-detail { margin-top: 6px; font: 600 14px/1.3 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.stake-plate[alert] .stake-kicker, .stake-plate[alert] .stake-head { color: var(--alert); text-shadow: none; }
+.stake-keys egb-key { flex: 0 1 160px; }
+.stake-keys egb-key:first-child { margin-right: 24px; }
+[data-orientation="portrait"] .stake-head { font-size: 22px; }
+[data-orientation="portrait"] .stake-keys { gap: 8px; }
+
 .result-banner-text { display: inline-block; white-space: nowrap; font: 700 40px/1.1 var(--hud-display); letter-spacing: 0.02em; color: var(--sys); text-shadow: var(--glow-text); }
 .result-banner-text.seat-0 { color: var(--p1); text-shadow: 0 0 4px rgb(255 155 61 / 0.9), 0 0 14px rgb(255 155 61 / 0.4); }
 .result-banner-text.seat-1 { color: var(--p2); text-shadow: 0 0 4px rgb(63 217 255 / 0.9), 0 0 14px rgb(63 217 255 / 0.4); }
@@ -133,8 +146,13 @@
 .lobby-name.none { color: var(--fg-3); }
 .lobby-proposal { font: 600 17px/1.3 var(--mono); color: var(--sys); text-transform: none; overflow-wrap: anywhere; min-height: 1.3em; }
 .lobby-balance { margin-top: 18px; font: 700 34px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
-.lobby-title, .lobby-cup { font: 600 15px/1.35 var(--hud-body); color: var(--fg-2); text-transform: none; letter-spacing: 0.02em; }
-.lobby-ens { font-family: var(--mono); color: var(--fg); }
+.lobby-game { font: 700 15px/1.2 var(--hud-display); letter-spacing: 0.14em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); margin-bottom: 4px; }
+.lobby-board .lobby-kicker { margin-top: 12px; }
+.lobby-holder { font: 700 24px/1.15 var(--hud-display); color: var(--sys-hot); text-shadow: var(--glow-text); }
+.lobby-holder.none { color: var(--fg-3); text-shadow: none; }
+.lobby-ens { font: 600 13px/1.3 var(--mono); color: var(--fg-3); text-transform: none; overflow-wrap: anywhere; }
+.lobby-cup { font: 600 15px/1.35 var(--hud-body); color: var(--fg); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+.lobby-cup.none { color: var(--fg-3); }
 .lobby-standings { margin: 4px 0 0; padding: 0; list-style: none; font: 600 14px/1.5 var(--mono); color: var(--fg-2); text-transform: none; letter-spacing: 0; }
 .lobby-standings li { display: grid; grid-template-columns: 3em 1fr auto; gap: 8px; }
 .lobby-standings li.empty { display: block; color: var(--fg-3); }
@@ -146,16 +164,22 @@
 [data-orientation="portrait"] .lobby-balance { font-size: 26px; }
 [data-orientation="portrait"] .lobby-standings { font-size: 12px; }
 
-/* The board, right of the core on Home and Attract: two short lists in a glass panel, each line the game or
-   championship, who holds or leads it, and the time left. */
-.home-board { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; font-size: 15px; }
+/* The board, right of the core on Home and Attract: game by game, its title and its championship, each a line with
+   a kind (TITLE, CUP), what (the holder, the championship and its leader) and when (the time left). Lit while live,
+   dim once done, faint when there is nothing. */
+.home-board { display: flex; flex-direction: column; gap: 10px; padding: 16px 20px; }
 .home-board[hidden] { display: none; }
-.home-board-head { margin-top: 6px; font: 700 13px/1 var(--hud-display); letter-spacing: 0.14em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
-.home-board-head:first-child { margin-top: 0; }
-.home-board-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.home-board-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "game when" "who who"; gap: 2px 12px; padding: 6px 0; border-bottom: 1px solid rgb(207 232 246 / 0.08); }
-.home-board-line:last-child { border-bottom: 0; }
-.home-board-game { grid-area: game; font: 700 15px/1.2 var(--hud-display); letter-spacing: 0.04em; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-board-who { grid-area: who; font: 600 15px/1.2 var(--hud-body); letter-spacing: 0.08em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-board-when { grid-area: when; font: 600 14px/1.2 var(--mono); color: var(--fg-2); white-space: nowrap; }
-.home-board-none { grid-column: 1 / -1; font: 600 14px/1.2 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); }
+.home-board-head { display: flex; justify-content: space-between; align-items: center; font: 700 12px/1 var(--hud-display); letter-spacing: 0.16em; color: var(--fg-3); }
+.home-board-live { display: inline-flex; align-items: center; gap: 6px; color: var(--sys); }
+.home-board-live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--sys-glow); box-shadow: 0 0 6px var(--sys-glow); animation: board-live 2s ease-in-out infinite; }
+@keyframes board-live { 50% { opacity: 0.3; } }
+.home-board-games { display: flex; flex-direction: column; gap: 10px; }
+.home-board-game { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid rgb(207 232 246 / 0.1); }
+.home-board-name { font: 700 16px/1.1 var(--hud-display); letter-spacing: 0.08em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
+.home-board-line { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
+.home-board-kind { font: 600 11px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
+.home-board-what { font: 600 15px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-when { font: 600 14px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
+.home-board-line[data-tone="done"] :is(.home-board-what, .home-board-when) { color: var(--fg-2); }
+.home-board-line[data-tone="none"] :is(.home-board-what, .home-board-when) { color: var(--fg-3); }
+@media (prefers-reduced-motion: reduce) { .home-board-live::before { animation: none; } }

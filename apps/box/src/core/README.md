@@ -41,11 +41,20 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 
 ## Stakes, results and the lobby
 
+- **What it's played for** (`playFor`). Play starts every game at its default stake (10 USDC), played for USDC.
+  On Stake, `stake` picks 5, 10 or 25 USDC; `play-for` picks the `title` or the `cup` (only while the game's
+  championship is open; one that closes before anyone signs falls back to the title). A title or championship match
+  has no pot and needs no balance: it begins as soon as both sign, and its result alone goes on chain. Every result
+  takes the title and scores the open championship, whatever it was played for. The match keeps what it was played
+  for (`match.playFor`).
+- **The board** (`board`). The chosen game's title and open championship (in the lobby, the focused game's, or Stock
+  Duel's for a game not on chain), read when Stake, the lobby or the result opens and every `BOARD_MS` (5 s) while it
+  shows; stopped on any other phase.
 - **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
   Stake tap whose balance can't cover the stake (or isn't read yet), or with no player name where the port stakes only
   named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
-  badge, with Back returning to Stake.
-- **Open.** When both seats have signed, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
+  badge, with Back returning to Stake. A title or championship match asks only for the name.
+- **Open.** When both seats have signed for USDC, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
   `nextRound`) and the Box waits on Stake until the open is in a block: then the match begins. The screen shows the wait
   in the game's own screen (Quick Draw's walk-out, Stock Duel's pre-market), with the open's progress (SIGNED › SENT ›
   IN BLOCK, its hash and the seconds so far). Taps and Back do nothing while
@@ -61,8 +70,8 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
   one left by a reset, stays on chain until the server refunds it.
 - **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name and
   USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
-  and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The title and the
-  open championship of the focused game (Stock Duel's, for a game not on chain) are read when it opens. It goes Home
+  and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The board
+  shows the focused game's title and championship. It goes Home
   after `IDLE_MS` alone.
 
 ## Built games
@@ -107,7 +116,7 @@ opens; a result already decided is still sent once its pot lands.
 
 | Module | What it is | API |
 |---|---|---|
-| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState` (with `lobby`), `BoxEvent` (a `tap` says what it did, its `TapMeaning`; a `touch` is a chip still being read; a `cue` is a match's moment with its seat, which the screen turns into sound), `ScreenCommand` (`lobby`, `topup`, `propose`, `claim` among them), `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art, `sealed`, `manifest`), `SeatState` (`ens`, `balance` in USDC or null before its read, `pending`), `Match` (`round`, `refundAt`, `voided`, `lines`), `MatchPlay` (with `BuiltPlay`), `Tx` (`hash`, `etherscan`, `error`; steps up to `paid` or `failed`), `Lobby`, `PlayerCard`, `Board`, `Standing`. `StationView` is `@egb/sdk`'s. | types |
+| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState` (with `lobby`, `playFor` and `board`), `BoxEvent` (a `tap` says what it did, its `TapMeaning`; a `touch` is a chip still being read; a `cue` is a match's moment with its seat, which the screen turns into sound), `ScreenCommand` (`lobby`, `topup`, `propose`, `claim` among them), `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art, `sealed`, `manifest`), `SeatState` (`ens`, `balance` in USDC or null before its read, `pending`), `PlayFor`, `Match` (`playFor`, `round`, `refundAt`, `voided`, `lines`), `MatchPlay` (with `BuiltPlay`), `Tx` (`hash`, `etherscan`, `error`; steps up to `paid` or `failed`), `Lobby`, `PlayerCard`, `Board`, `Standing`. `StationView` is `@egb/sdk`'s. | types |
 | `ports.ts` | `CorePorts` and the types that cross them: `Clock`, `StationsPort`, `ChainPort` (with `StakeOrder`, `ResultOrder`, `ChainHead`, `ChainTxUpdate`, `TxWatch`), `LibraryPort`, `RulesRunnerPort`, `MatchLog`, `TapEvent`, `TapPlan`. | types |
 | `wire.ts` | The link's messages (`LinkDown`, `LinkUp`), `LINK_PATH`, `LINK_COALESCE_MS`, and `STATE_ONLY`: the one event that goes out as a coalesced `state` message. | types, constants |
 | `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
@@ -115,7 +124,7 @@ opens; a result already decided is still sent once its pot lands.
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
-| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `chainLabel` |
+| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `chainLabel`, `gameOfLabel` |
 | `txs.ts` | The transactions on screen: signed at once, then each step its chain port reports (sent, in a block, paid, or failed, keeping the hash, block and Etherscan link), `ended` once, then on screen `LINGER_MS` more. | `createTxBook(hooks, clock)` |
 | `demo-chain.ts` | The chain port in memory, for the browser demo and the tests: a head every 12 s, every badge starting with 100 USDC, each transaction sent 0.4 s after it is signed, in the next head, paid 0.9 s later, with no hashes; pots refund after a minute; names, top-ups and a title per game. `sent` lists every request. | `createDemoChain(clock)` |
 | `labels.ts` | The short words badges are named with: the roster's local labels, and the lobby's proposals (a badge's own label first, then `word-NN`), each a valid ENS label. Pure. | `LABELS`, `ownLabel`, `proposeLabel` |

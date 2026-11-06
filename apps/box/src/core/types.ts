@@ -110,9 +110,17 @@ export type MatchPlay =
   | { readonly game: "stock-duel"; readonly state: StockDuelState }
   | BuiltPlay;
 
+/**
+ * What a match is played for. `usdc`: both stake `BoxState.stake` and the winner takes the pot. `title`: no money, the
+ * game's title on the line. `cup`: no money, points in the game's open championship. Every result on chain takes the
+ * title and scores the open championship whatever it was played for: `title` and `cup` only leave the USDC out.
+ */
+export type PlayFor = "usdc" | "title" | "cup";
+
 export interface Match {
   readonly id: number;
   readonly game: GameId;
+  readonly playFor: PlayFor;
   /** The Box's round: the `Stake` and the `Result` of this match carry it. */
   readonly round: number;
   /** USDC per seat; 0 for a game that isn't on chain. */
@@ -168,14 +176,13 @@ export interface Board {
   } | null;
 }
 
-/** The lobby: whoever tapped last, their card, a label to claim, and the game's title and championship. */
+/** The lobby: whoever tapped last, their card and a label to claim. */
 export interface Lobby {
   readonly badge: Badge | null;
   /** null while it is read. */
   readonly card: PlayerCard | null;
   /** A label the badge may claim, when it has no name. */
   readonly proposal: string | null;
-  readonly board: Board | null;
   /** Where Back goes: Home, or the Stake screen a short balance came from. */
   readonly from: "home" | "stake";
 }
@@ -185,11 +192,11 @@ export type Phase =
   | "attract" // TAP TO START
   | "home" // the library
   | "join" // both seats tap a badge
-  | "stake" // pick a stake, both tap to sign
+  | "stake" // pick what to play for (USDC, the title, the championship), both tap to sign
   | "playing" // a game runs
   | "result" // the winner is paid
   | "refund" // the Box missed its settle: each seat takes its stake back
-  | "lobby" // a badge's name, balance and top-up; the title and the championship
+  | "lobby" // a badge's name, balance and top-up; the game's title and championship
   | "build"; // the game builder: the Designer and the Build screen (the Box's own screen only, never the demo)
 
 export interface BoxState {
@@ -198,8 +205,15 @@ export interface BoxState {
   readonly focus: GameId;
   readonly seats: readonly [SeatState, SeatState];
   readonly chain: ChainState;
-  /** The stake chosen on the Stake screen, in USDC. */
+  /** The stake chosen on the Stake screen, in USDC: what a `usdc` match puts in. */
   readonly stake: number;
+  /** What the next match is played for (Stake's choice): USDC, the title or the championship. */
+  readonly playFor: PlayFor;
+  /**
+   * The chosen (else focused) game's title and open championship, read from chain on Stake, the lobby and the result
+   * and again every few seconds while one shows; null before the first read, or for a game that isn't on chain.
+   */
+  readonly board: Board | null;
   readonly match: Match | null;
   /** Transactions still on screen, newest last. */
   readonly txs: readonly Tx[];
@@ -258,8 +272,12 @@ export type BoxEvent =
   | { readonly type: "stations" }
   /** The library changed: a game was installed or removed. */
   | { readonly type: "games" }
-  /** The lobby's badge, card, proposal or board changed. */
+  /** The lobby's badge, card or proposal changed. */
   | { readonly type: "lobby" }
+  /** The game's title or championship was read again. */
+  | { readonly type: "board" }
+  /** What the next match is played for changed. */
+  | { readonly type: "play-for"; readonly target: PlayFor }
   | { readonly type: "buzz"; readonly seat: Seat }
   | { readonly type: "cue"; readonly cue: Cue; readonly seat: Seat | null };
 
@@ -269,7 +287,10 @@ export type ScreenCommand =
   | { readonly type: "start" } // TAP TO START
   | { readonly type: "focus"; readonly game: GameId }
   | { readonly type: "play" } // Play on Home
+  /** A USDC stake: the match is played for USDC. */
   | { readonly type: "stake"; readonly amount: number }
+  /** Play for the title or the open championship, with no USDC. */
+  | { readonly type: "play-for"; readonly target: Exclude<PlayFor, "usdc"> }
   | { readonly type: "back" }
   | { readonly type: "rematch" }
   | { readonly type: "home" }

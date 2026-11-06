@@ -1,5 +1,5 @@
 // The board on the Box: every game's title and the latest championships, read from Sepolia (SEPOLIA_RPC_URL) at most
-// every 10 s and answered to anyone on `GET /api/board`, for Home. It is public chain data; without an RPC (the
+// every 3 s and answered to anyone on `GET /api/board`, for Home. It is public chain data; without an RPC (the
 // simulator) the route says the board isn't available. Errors leave here with their URLs replaced by `<rpc>`.
 import { type BoardReads, type BoardView, boardReads } from "@egb/shared/admin";
 import { formatUsdc } from "@egb/shared/names";
@@ -10,7 +10,7 @@ import { sendJson } from "./http.ts";
 import type { Route } from "./routes.ts";
 
 /** A board younger than this is answered from memory. */
-export const BOARD_TTL_MS = 10_000;
+export const BOARD_TTL_MS = 3_000;
 
 /** The chain's board as JSON can carry it: ids and amounts as strings. */
 export function wireBoard(view: BoardView): Board {

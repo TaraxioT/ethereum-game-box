@@ -30,7 +30,7 @@ export function attractView(ctx: ViewContext): View {
 
   const entries = rackOf(link.state().games);
   const rack = createRack(layout, entries);
-  const board = createBoardPanel(layout);
+  const board = createBoardPanel(layout, link);
   root.append(title, start, rack.el, ...(board ? [board.el] : []));
   // In order, after the router's rez of the view: the title, the cartridges, then TAP TO START, which then breathes.
   void rez(title, { delay: REZ_MS });

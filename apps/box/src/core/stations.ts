@@ -41,7 +41,7 @@ function seated(state: SeatState): Lines {
 function staking(input: StationInput, seat: Seat): Lines {
   const mine = input.seats[seat];
   if (!mine.badge) return seated(mine);
-  if (!mine.signed) return lines("SIGN", `${input.stake} USDC`);
+  if (!mine.signed) return lines("SIGN", input.playFor === "usdc" ? `${input.stake} USDC` : input.playFor === "cup" ? "for the cup" : "for the title");
   const bothSigned = input.seats[0].signed && input.seats[1].signed;
   return lines("SIGNED", bothSigned ? "opening" : "waiting");
 }

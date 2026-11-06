@@ -255,12 +255,12 @@ describe("SimLink on the demo chain", () => {
     expect(link.state().phase).toBe("lobby");
     expect(link.state().lobby.badge).toBeNull();
     link.tap(0);
-    await until((state) => state.lobby.card !== null && state.lobby.board !== null);
+    await until((state) => state.lobby.card !== null && state.board !== null);
     const { lobby } = link.state();
     expect(lobby.badge?.name).toBe("nova.gamebox.eth");
     expect(lobby.card).toMatchObject({ name: null, balance: 100 });
     expect(lobby.proposal).toBe("nova");
-    expect(lobby.board).toEqual({ title: null, cup: null });
+    expect(link.state().board).toEqual({ title: null, cup: null });
 
     link.send({ type: "propose" });
     expect(link.state().lobby.proposal).toMatch(/^[a-z]+-\d\d$/);

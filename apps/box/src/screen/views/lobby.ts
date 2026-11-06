@@ -2,15 +2,17 @@
 // proposed name with ANOTHER and CLAIM (the Box vouches for the badge with its own key: a badge can't sign a claim);
 // its USDC and TOP UP 100 USDC. Beside it, the game's title (`champion.<game>.gamebox.eth`, its holder and streak)
 // and its open championship (the standings, the prize and a countdown to the close), read through the Universal
-// Resolver. The transaction bar follows each claim and top-up. BACK returns Home, or to Stake when a short balance
+// Resolver every few seconds while the lobby shows. The transaction bar follows each claim and top-up. BACK returns Home, or to Stake when a short balance
 // sent the player here.
 import type { Board, BoxState, Lobby } from "../../core/types.ts";
+import { DEFAULT_FOCUS } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { clock } from "./refund.ts";
+import { cupLabel, shortName } from "./play-for.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
 
@@ -33,12 +35,12 @@ export function lobbyView(ctx: ViewContext): View {
   const board = document.createElement("egb-panel") as EgbPanel;
   board.classList.add("lobby-board");
   place(board, page.seats[1]);
-  const titleHead = el("div", "lobby-kicker", "TITLE");
-  const title = el("div", "lobby-title");
-  const cupHead = el("div", "lobby-kicker", "CHAMPIONSHIP");
+  const gameHead = el("div", "lobby-game");
+  const title = el("div", "lobby-holder");
+  const titleName = el("div", "lobby-ens");
   const cup = el("div", "lobby-cup");
   const standings = el("ol", "lobby-standings");
-  board.append(titleHead, title, cupHead, cup, standings);
+  board.append(gameHead, el("div", "lobby-kicker", "TITLE"), title, titleName, el("div", "lobby-kicker", "CHAMPIONSHIP"), cup, standings);
 
   const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate");
@@ -93,38 +95,39 @@ export function lobbyView(ctx: ViewContext): View {
             : "TAP ANOTHER BADGE TO SEE IT";
   }
 
-  function drawBoard(b: Board | null): void {
+  function drawBoard(state: BoxState): void {
+    const about = state.games.find((g) => g.id === state.focus && g.kind === "team") ?? state.games.find((g) => g.id === DEFAULT_FOCUS);
+    gameHead.textContent = about?.title.toUpperCase() ?? "";
+    const b: Board | null = state.board;
     if (!b) {
-      title.textContent = "reading…";
-      cup.textContent = "reading…";
+      title.textContent = "READING…";
+      titleName.textContent = "";
+      cup.textContent = "";
       standings.replaceChildren();
       return;
     }
-    title.replaceChildren(
-      ...(b.title
-        ? [el("span", "lobby-ens", b.title.name), el("span", "", ` held by ${b.title.holder} · streak ${b.title.streak}`)]
-        : [el("span", "", "nobody holds the title yet")]),
-    );
+    title.textContent = b.title ? `${shortName(b.title.holder)}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS";
+    title.classList.toggle("none", !b.title);
+    titleName.textContent = b.title ? b.title.name : "win a match to take it";
     const c = b.cup;
-    if (!c) {
-      cup.textContent = "no championship open";
+    const left = c ? c.ends - link.now() : 0;
+    if (!c || left <= 0) {
+      cup.textContent = c ? `${cupLabel(c.name)} HAS ENDED · THE WINNER IS PAID AT THE CLOSE` : "NONE OPEN";
+      cup.classList.add("none");
       standings.replaceChildren();
       return;
     }
-    const left = c.ends - link.now();
-    cup.replaceChildren(
-      el("span", "lobby-ens", c.name),
-      el("span", "", ` · ${usdc(c.prize)} prize · ${left > 0 ? `closes in ${clock(left)}` : "closed for scoring"}`),
-    );
+    cup.classList.remove("none");
+    cup.textContent = `${cupLabel(c.name)}${c.prize > 0 ? ` · ${usdc(c.prize)} PRIZE` : ""} · ${clock(left)} LEFT`;
     standings.replaceChildren(
       ...(c.standings.length === 0
-        ? [el("li", "empty", "no results yet")]
+        ? [el("li", "empty", "no results yet · win 3, draw 1")]
         : c.standings.map((row, i) => {
             const li = el("li");
             li.append(
               el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
-              el("span", "who", row.name),
-              el("span", "pts", `${row.points} pts ${row.wins}-${row.draws}-${row.losses}`),
+              el("span", "who", shortName(row.name)),
+              el("span", "pts", `${row.points} PTS · ${row.wins}-${row.draws}-${row.losses}`),
             );
             return li;
           })),
@@ -133,11 +136,11 @@ export function lobbyView(ctx: ViewContext): View {
 
   function draw(state: BoxState): void {
     drawCard(state.lobby, state);
-    drawBoard(state.lobby.board);
+    drawBoard(state);
   }
 
   // The championship's countdown runs between the Box's events.
-  const ticker = setInterval(() => drawBoard(link.state().lobby.board), 1000);
+  const ticker = setInterval(() => drawBoard(link.state()), 1000);
 
   return {
     el: root,

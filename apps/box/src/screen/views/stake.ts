@@ -1,9 +1,12 @@
-// Stake: pick the stake (USDC) on the light keys, see the game's trust tier, then each player taps to sign the entry.
-// Both signed, one Box-signed transaction moves both stakes into the pot on Sepolia; the game's own screen shows it on
+// Stake: pick what the match is played for on the light keys (5, 10 or 25 USDC, 10 lit first; the TITLE; the CUP while
+// the game has a championship open), read on the plate what is on the line (the pot, who holds the title, who leads
+// the championship and its countdown, kept live), then each player taps to sign the entry. Every result takes the
+// title and scores the open championship; TITLE and CUP leave the USDC out.
+// Signed for USDC, one Box-signed transaction moves both stakes into the pot on Sepolia; the game's own screen shows it on
 // its way (the routes send both signatures there) until it is in a block and the match begins. One that fails comes
 // back here and says so, and both players sign again. A seat short of the stake is told to tap: its tap
 // takes it to the lobby to top up. A game that isn't on chain (a built game) plays for nothing.
-import type { BoxState, GameInfo, SeatState } from "../../core/types.ts";
+import type { BoxState, GameInfo, PlayFor, SeatState } from "../../core/types.ts";
 import { isTeamGame } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -12,12 +15,14 @@ import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel, type SeatTone } from "./seat-panel.ts";
 import { latestOpen } from "./open-tx.ts";
+import { liveCup, onTheLine } from "./play-for.ts";
 
 const TIER: Record<GameInfo["tier"], string> = {
-  refereed: "REFEREED · THE BOX SAW IT, ITS STAKE BACKS ITS WORD",
-  verified: "VERIFIED · THE CHAIN CHECKS THE RESULT",
+  refereed: "REFEREED BY THE BOX",
+  verified: "VERIFIED ON CHAIN",
 };
 
+const TICK_MS = 1_000;
 
 export function stakeView(ctx: ViewContext): View {
   const { layout, link, sound } = ctx;
@@ -31,11 +36,15 @@ export function stakeView(ctx: ViewContext): View {
   });
 
   const plate = document.createElement("egb-panel") as EgbPanel;
-  plate.classList.add("page-plate");
+  plate.classList.add("page-plate", "stake-plate");
   place(plate, page.plate);
+  const kicker = el("span", "stake-kicker");
+  const head = el("span", "stake-head");
+  const detail = el("span", "stake-detail");
+  plate.append(kicker, head, detail);
 
-  const keys = el("div", "page-keys");
-  place(keys, page.keys);
+  const keys = el("div", "page-keys stake-keys");
+  place(keys, layout.orientation === "portrait" ? page.keys : { ...page.keys, x: 96, w: 1088 });
   const back = document.createElement("egb-key") as EgbKey;
   back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
@@ -61,45 +70,77 @@ export function stakeView(ctx: ViewContext): View {
     });
     return { amount, key };
   });
-  keys.append(back, ...amounts.map((a) => a.key));
+  const goals = money
+    ? (["title", "cup"] as const).map((target) => {
+        const key = document.createElement("egb-key") as EgbKey;
+        key.textContent = target === "title" ? "TITLE" : "CUP";
+        key.addEventListener("click", () => {
+          sound.play("ui-select");
+          link.send({ type: "play-for", target });
+        });
+        return { target, key };
+      })
+    : [];
+  keys.append(back, ...amounts.map((a) => a.key), ...goals.map((g) => g.key));
 
-  function status(s: SeatState, stake: number): [string, SeatTone] {
+  const FOR: Record<Exclude<PlayFor, "usdc">, string> = { title: "THE TITLE", cup: "THE CUP" };
+
+  function status(s: SeatState, state: BoxState): [string, SeatTone] {
     if (s.signed) return ["SIGNED", "done"];
     if (!money) return ["TAP TO START", "ask"];
+    if (state.playFor !== "usdc") return [`TAP TO PLAY FOR ${FOR[state.playFor]}`, "ask"];
     if (s.balance === null) return ["READING BALANCE…", "idle"];
-    if (s.balance < stake) return [`NEEDS ${stake} USDC · TAP TO TOP UP`, "alert"];
-    return [`TAP TO SIGN ${stake} USDC`, "ask"];
+    if (s.balance < state.stake) return [`NEEDS ${state.stake} USDC · TAP TO TOP UP`, "alert"];
+    return [`TAP TO SIGN ${state.stake} USDC`, "ask"];
+  }
+
+  function say(k: string, h: string, d: string, alert = false): void {
+    plate.toggleAttribute("alert", alert);
+    kicker.textContent = k;
+    head.textContent = h;
+    detail.textContent = d;
   }
 
   function draw(state: BoxState): void {
     const anySigned = state.seats.some((s) => s.signed);
     state.seats.forEach((s, i) => {
-      const [text, tone] = status(s, state.stake);
+      const [text, tone] = status(s, state);
       panels[i]?.set(s, text, tone);
     });
     for (const { amount, key } of amounts) {
-      key.toggleAttribute("selected", amount === state.stake);
-      key.toggleAttribute("disabled", anySigned && amount !== state.stake);
+      const lit = state.playFor === "usdc" && amount === state.stake;
+      key.toggleAttribute("selected", lit);
+      key.toggleAttribute("disabled", anySigned && !lit);
+    }
+    const cupOpen = liveCup(state.board, link.now()) !== null;
+    for (const { target, key } of goals) {
+      const lit = state.playFor === target;
+      key.toggleAttribute("selected", lit);
+      key.toggleAttribute("disabled", (anySigned && !lit) || (target === "cup" && !cupOpen && !lit));
     }
     back.toggleAttribute("disabled", anySigned);
-    const opening = state.seats.every((s) => s.signed);
+    if (!game) return say("", "", "");
+    if (!money) return say("FREE PLAY", "THIS GAME ISN'T ON CHAIN", "NO USDC, NO TITLE");
     const open = latestOpen(state);
-    plate.toggleAttribute("alert", false);
-    if (!anySigned && money && open?.step === "failed") {
-      plate.toggleAttribute("alert", true);
-      plate.textContent = `THE STAKES DIDN'T GO IN${open.error ? ` · ${open.error.toUpperCase()}` : ""} · TAP BOTH BADGES TO TRY AGAIN`;
-      return;
+    if (!anySigned && state.playFor === "usdc" && open?.step === "failed") {
+      return say("THE STAKES DIDN'T GO IN", open.error ? open.error.toUpperCase() : "THE OPEN FAILED", "TAP BOTH BADGES TO TRY AGAIN", true);
     }
-    plate.textContent = opening
-      ? "OPENING THE MATCH"
-      : game ? (money ? TIER[game.tier] : "FREE PLAY · THIS GAME ISN'T ON CHAIN") : "";
+    const line = onTheLine(state, game.title, link.now());
+    const opening = state.seats.every((s) => s.signed);
+    say(opening ? "OPENING THE MATCH" : `${TIER[game.tier]} · ${state.board ? "LIVE" : "READING SEPOLIA…"}`, line.head, line.detail);
   }
+
+  // The championship's countdown runs between the Box's events.
+  const ticker = setInterval(() => draw(link.state()), TICK_MS);
 
   return {
     el: root,
     update(state, event) {
       if (event.type === "tap" && event.accepted) panels[event.seat]?.pulse();
       draw(state);
+    },
+    dispose() {
+      clearInterval(ticker);
     },
   };
 }

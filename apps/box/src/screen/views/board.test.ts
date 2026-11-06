@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdminCup, AdminGame, Board } from "../../server/admin-wire.ts";
-import { boardRows, playerWord } from "./board.ts";
+import { boardGames, playerWord } from "./board.ts";
 
 const NOW = 1_800_000_000;
 const NOVA = "0x84914AEf7D5Bd45a8ed6e47009828FaCf937C763";
@@ -35,22 +35,30 @@ describe("the board", () => {
     expect(playerWord(null, NOVA)).toBe("0x8491…C763");
   });
 
-  it("lists only titles still held, with streak and time left", () => {
-    const rows = boardRows(board([game("quickdraw", NOVA, NOW + 250, 3), game("stockduel", NOVA, NOW - 5), game("tapwar", null, 0)], []), NOW);
-    expect(rows.champions).toEqual([["QUICKDRAW", "NOVA ×3", "4M 10S"]]);
-  });
-
-  it("lists open championships with their leader and prize, and an ended one as won", () => {
-    const leader = { address: NOVA, name: "nova.gamebox.eth", points: 6 };
-    const rows = boardRows(board([], [cup("4", { leader, prize: "25" }), cup("3", { ends: NOW - 1, leader }), cup("2", { closed: true, winner: NOVA })]), NOW);
-    expect(rows.cups).toEqual([
-      ["CUP-4", "NOVA 6 PTS", "25 USDC · 4M"],
-      ["CUP-3", "NOVA WINS", "ENDED"],
+  it("shows the games this Box plays, each with its title holder, streak and time left", () => {
+    const rows = boardGames(board([game("quickdraw", NOVA, NOW + 250, 3), game("stockduel", NOVA, NOW - 5), game("tapwar", null, 0)], []), NOW);
+    expect(rows.map((r) => [r.game, r.title.what, r.title.when])).toEqual([
+      ["QUICK DRAW", "NOVA ×3", "4M 10S"],
+      ["STOCK DUEL", "UP FOR GRABS", ""],
     ]);
   });
 
-  it("shows the last closed championship when none is open", () => {
-    const rows = boardRows(board([], [cup("2", { closed: true, winner: NOVA, winnerName: "nova.gamebox.eth" }), cup("1", { closed: true })]), NOW);
-    expect(rows.cups).toEqual([["CUP-2", "WON BY NOVA", "CLOSED"]]);
+  it("puts each championship under its own game: open with its leader and prize, ended, or none", () => {
+    const leader = { address: NOVA, name: "nova.gamebox.eth", points: 6 };
+    const games = [game("quickdraw", null, 0), game("stockduel", null, 0)];
+    const live = boardGames(board(games, [cup("4", { leader, prize: "25" })]), NOW);
+    expect(live.map((r) => r.cup)).toEqual([
+      { what: "CUP-4 · 25 USDC · NOVA 6 PTS", when: "4M", tone: "live" },
+      { what: "NONE OPEN", when: "", tone: "none" },
+    ]);
+    const ended = boardGames(board(games, [cup("3", { ends: NOW - 1, leader })]), NOW);
+    expect(ended[0]?.cup).toEqual({ what: "CUP-3 · NOVA WINS", when: "ENDED", tone: "done" });
+  });
+
+  it("shows a championship closed in the last hour with its winner, and drops an older one", () => {
+    const games = [game("quickdraw", null, 0)];
+    const won = cup("2", { closed: true, winner: NOVA, winnerName: "nova.gamebox.eth", ends: NOW - 60 });
+    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "CUP-2 · WON BY NOVA", when: "CLOSED", tone: "done" });
+    expect(boardGames(board(games, [{ ...won, ends: NOW - 7_200 }]), NOW)[0]?.cup.what).toBe("NONE OPEN");
   });
 });

@@ -64,7 +64,7 @@ export function resultView(ctx: ViewContext): View {
     state.seats.forEach((s, i) => {
       if (m.voided) panels[i]?.set(s, money ? `VOID · ${m.stake} USDC BACK` : "VOID", "done");
       else if (winner === null) panels[i]?.set(s, money ? `DRAW · ${m.stake} USDC BACK` : "DRAW", "done");
-      else if (winner === i) panels[i]?.set(s, money ? `WINNER · +${m.stake * 2} USDC` : "WINNER", "win");
+      else if (winner === i) panels[i]?.set(s, money ? `WINNER · +${m.stake * 2} USDC` : m.playFor === "title" ? "WINNER · TAKES THE TITLE" : "WINNER", "win");
       else panels[i]?.set(s, money ? `−${m.stake} USDC` : "LOSE", "lose");
     });
     const named = winner === null ? null : nameOf(state.seats[winner]);
@@ -73,7 +73,8 @@ export function resultView(ctx: ViewContext): View {
       : winner === null
         ? money ? "DRAW · STAKES RETURNED" : "DRAW"
         : `${named ?? `PLAYER ${winner + 1}`} WINS`;
-    const lines = m.lines ?? (money && !m.voided ? ["reading the result from Sepolia…"] : []);
+    const onChain = money || m.playFor !== "usdc";
+    const lines = m.lines ?? (onChain && !m.voided ? ["reading the result from Sepolia…"] : []);
     chainLines.replaceChildren(...lines.map((text) => el("li", m.lines ? "" : "pending", text)));
     bannerText.className = `result-banner-text ${winner === null ? "draw" : `seat-${winner}`}`;
     fitFont(bannerText, page.plate.w - 72, 40);

@@ -13,7 +13,7 @@ const VIEW: BoardView = {
 };
 
 describe("the board", () => {
-  it("answers the chain's board as JSON, read again only once it is 10 s old, with no RPC URL in an error", async () => {
+  it("answers the chain's board as JSON, read again only once it is BOARD_TTL_MS old, with no RPC URL in an error", async () => {
     let reads = 0;
     let fail = false;
     let now = 0;

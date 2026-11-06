@@ -4,6 +4,7 @@
 // tap lands; a tap that meant nothing shakes their slab.
 import type { Rect } from "../../screen/shell/layout.ts";
 import type { Seat } from "@egb/sdk";
+import type { PlayFor } from "../../core/types.ts";
 import { el, fitFont, place, play } from "../../screen/shell/dom.ts";
 import { ROUNDS_TO_WIN } from "./rules.ts";
 
@@ -23,8 +24,9 @@ export interface Player {
 export interface Standing {
   /** Its parts, each placed on the stage. */
   readonly els: readonly HTMLElement[];
-  /** Who sits in each seat and what each staked (USDC; null before a match has a stake). */
-  players(players: readonly [Player, Player], stake: number | null): void;
+  /** Who sits in each seat, what each staked (USDC; null before a match has a stake) and what it is played for: a
+   *  title or championship match shows FOR THE TITLE (THE CUP) where the pot would be. */
+  players(players: readonly [Player, Player], stake: number | null, playFor: PlayFor): void;
   /** Lights each seat's won rounds and shows the round number; `animate` pops a newly lit pip. */
   set(score: readonly [number, number], round: number, animate: boolean): void;
   /** The match is over: the banner names the winner, or a draw for null. */
@@ -53,8 +55,9 @@ export function createStanding(places: StandingPlaces): Standing {
   place(mid, places.mid);
   const roundText = el("div", "sd-round", "ROUND 1");
   const pot = el("div", "sd-pot");
+  const potLabel = el("i", "", "POT");
   const potText = el("span");
-  pot.append(el("i", "", "POT"), potText);
+  pot.append(potLabel, potText);
   mid.append(roundText, pot);
 
   const banner = el("div", "sd-banner");
@@ -71,15 +74,17 @@ export function createStanding(places: StandingPlaces): Standing {
 
   return {
     els: [...plates.map((p) => p.plate), mid, banner],
-    players(players, stake) {
+    players(players, stake, playFor) {
       names = players;
+      const money = playFor === "usdc" && stake !== null;
       plates.forEach((p, seat) => {
         const name = players[seat]?.name ?? "";
         if (p.name.textContent !== name) p.name.textContent = name;
-        p.stake.replaceChildren(...(stake === null ? [] : ["STAKE ", el("em", "", `${stake} USDC`)]));
+        p.stake.replaceChildren(...(money ? ["STAKE ", el("em", "", `${stake} USDC`)] : []));
       });
       pot.hidden = stake === null;
-      potText.textContent = stake === null ? "" : `${stake * 2} USDC`;
+      potLabel.textContent = money ? "POT" : "FOR";
+      potText.textContent = stake === null ? "" : money ? `${stake * 2} USDC` : playFor === "cup" ? "THE CUP" : "THE TITLE";
     },
     set(next, round, animate) {
       score = next;

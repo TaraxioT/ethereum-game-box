@@ -57,6 +57,8 @@ export function parseCommand(data: string): ScreenCommand | null {
       return typeof c.game === "string" && c.game.length <= 64 ? { type: "focus", game: c.game } : null;
     case "stake":
       return isNumber(c.amount) ? { type: "stake", amount: c.amount } : null;
+    case "play-for":
+      return c.target === "title" || c.target === "cup" ? { type: "play-for", target: c.target } : null;
     default:
       return null;
   }

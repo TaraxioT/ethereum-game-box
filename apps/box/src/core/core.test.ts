@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -795,7 +795,7 @@ describe("the lobby", () => {
     expect(r.chain.boards).toEqual(["quick-draw", "stock-duel"]);
     r.core.send({ type: "lobby" });
     await flush();
-    expect(r.core.state().lobby.board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
+    expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
   });
 
   it("goes back Home after IDLE_MS with nobody there", () => {
@@ -905,5 +905,76 @@ describe("the build phase", () => {
     expect(r.core.state().phase).toBe("build");
     r.clock.advance(1);
     expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("what a match is played for", () => {
+  /** A recording port whose game has a championship open until `ends`. */
+  const withCup = (ends: number) => (): Recording => {
+    const port = recordingPort();
+    const cup = { name: "cup-1.quickdraw.gamebox.eth", ends, prize: 50, standings: [] };
+    return { ...port, board: (game) => port.board(game).then((board) => ({ ...board, cup })) };
+  };
+
+  async function toStake<C extends ChainPort>(r: Rig<C>): Promise<void> {
+    await seated(r);
+    r.core.send({ type: "focus", game: "quick-draw" });
+    r.core.send({ type: "play" });
+    await flush();
+  }
+
+  it("starts every game at 10 USDC, played for USDC, whatever the last match was played for", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    expect(r.core.state()).toMatchObject({ phase: "stake", stake: 10, playFor: "usdc" });
+    r.core.send({ type: "stake", amount: 25 });
+    r.core.send({ type: "back" });
+    r.core.send({ type: "play" });
+    expect(r.core.state()).toMatchObject({ stake: 10, playFor: "usdc" });
+    r.core.send({ type: "play-for", target: "title" });
+    expect(r.core.state().playFor).toBe("title");
+    r.core.send({ type: "stake", amount: 10 });
+    expect(r.core.state()).toMatchObject({ stake: 10, playFor: "usdc" });
+  });
+
+  it("plays for the title with no pot: no balance needed, and the result alone goes on chain", async () => {
+    const r = rigOn(recordingPort);
+    r.chain.balances.set(KITE.address, 0);
+    await toStake(r);
+    r.core.send({ type: "play-for", target: "title" });
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.core.state().phase).toBe("playing");
+    expect(r.chain.sent).toEqual([]);
+    expect(r.core.state().match).toMatchObject({ playFor: "title", stake: 0, round: 41 });
+    await quickWin(r, 1);
+    expect(r.chain.sent.map((sent) => [sent.kind, sent.order])).toEqual([["settle", { round: 41, game: "quick-draw", badges: [NOVA.address, KITE.address], winner: 1 }]]);
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 0 });
+  });
+
+  it("offers the championship only while one is open, and falls back to the title once it closes", async () => {
+    const closed = rigOn(recordingPort);
+    await toStake(closed);
+    closed.core.send({ type: "play-for", target: "cup" });
+    expect(closed.core.state().playFor).toBe("usdc");
+
+    const r = rigOn(withCup(START + 60_000));
+    await toStake(r);
+    r.core.send({ type: "play-for", target: "cup" });
+    expect(r.core.state().playFor).toBe("cup");
+    await until(r, (state) => state.playFor !== "cup", 120_000);
+    expect(r.core.state().playFor).toBe("title");
+  });
+
+  it("reads the game's board on Stake and every few seconds after, and stops off it", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    expect(r.core.state().board?.title?.holder).toBe("kite.gamebox.eth");
+    const reads = r.chain.boards.length;
+    r.clock.advance(BOARD_MS);
+    expect(r.chain.boards.length).toBe(reads + 1);
+    r.core.send({ type: "back" });
+    r.clock.advance(BOARD_MS * 3);
+    expect(r.chain.boards.length).toBe(reads + 1);
   });
 });

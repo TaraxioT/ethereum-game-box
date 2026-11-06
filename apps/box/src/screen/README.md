@@ -141,10 +141,12 @@ on `BoxEvent`s and acts only through `link.send`.
   Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes; the
   board right of the core.
-- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel of the live champions
-  (each game's title holder, streak and time left) and the championships (the open ones with their leader, prize and
-  time left, else the last one closed and its winner), read from `GET /api/board` every 15 s and counted down every
-  second. Hidden where there's no board (the simulator in a browser). `boardRows(board, now)` is its words, tested.
+- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel, TITLES &
+  CHAMPIONSHIPS with a LIVE lamp, then game by game (the games this Box plays) its TITLE (the holder, streak and time
+  left, or UP FOR GRABS) and its CUP (the open championship with its prize, leader and countdown; ENDED until it is
+  closed; one closed in the last hour with its winner; else NONE OPEN). Read from `GET /api/board` every 4 s and at
+  once when a result is paid, counted down every second. Hidden where there's no board (the simulator in a browser).
+  `boardGames(board, now)` is its words, tested.
 - `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, the board (`board.ts`)
   right of the core, and the rack (`rack.ts`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
@@ -157,6 +159,11 @@ on `BoxEvent`s and acts only through `link.send`.
 - `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, then NEW GAME where the Box has the builder)
   and where each stands (`rackSlots`: the layout's slots, each fed by a trace, then on along the row; a row too long
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
+- `stake.ts`: what the match is played for, on one row of keys: `BACK`, `5 USDC`, `10 USDC` (lit first), `25 USDC`,
+  `TITLE` and `CUP` (dark while the game has no championship open). The plate under the core says what is on the
+  line (`play-for.ts`, tested): `WINNER TAKES 20 USDC` and that the win also takes the title and scores the
+  championship; `FOR THE STOCK DUEL TITLE` and who holds it; `FOR CUP-1921` with its leader, prize and countdown. It
+  follows the board live and counts down every second.
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
   loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
@@ -172,9 +179,9 @@ on `BoxEvent`s and acts only through `link.send`.
   rules failed.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
   shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
-  `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's title (its holder and streak) and its open
-  championship (the prize, a countdown to the close, the top five with points and W-D-L), read through the
-  Universal Resolver. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
+  `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
+  name) and its open championship (the prize, a countdown to the close, the top five with points and W-D-L), from the
+  Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
 - Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
   frame (`frame/`, its own README), which gives it `<egb-key>`, `<egb-fact>`, `<egb-seg>` and `<egb-plate>` (a panel,
   lit unless `metal`; a `metal` key draws as `ghost`, so games written before the Grid keep working).
@@ -226,7 +233,7 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 
 | Module | What it is | API |
 |---|---|---|
-| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`): CHAMPIONSHIPS (pick the game, how long it runs, the prize, a made-up name; OPEN; each championship with its leader or winner, and CLOSE & PAY once one has ended), GAMES AND TITLES (each game's champion and term; a title term and ADD GAME) and the latest jobs. Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
+| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`), two columns. LIVE NOW: a card per game (this Box's games first), its TITLE (the holder, streak and time left, or lapsed) and its CUP (the open championship, its leader, prize and countdown; OPENING… or CLOSING… while a job runs; CLOSE & PAY once it has ended), then the championships closed lately. OPEN A CHAMPIONSHIP (the game, a game with one open greyed out; how long it runs; the prize; a made-up name), ACTIVITY (the latest jobs as they send) and ADD A GAME (a title term and a label). Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open and counts down every second; the status line says how fresh the read is. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
 | `kiosk.css` | The tag's and the page's styles. | |
 
 ## Sound

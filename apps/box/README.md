@@ -35,7 +35,8 @@
 
 ## Stakes on chain
 
-Players stake fake USDC (5, 10 or 25) on Sepolia. When both seats sign, the match opens at once and the Box sends a
+Players stake fake USDC (5, 10 or 25; 10 first) on Sepolia, or play for the game's title or its open championship
+with no USDC (the result alone goes on chain). When both seats sign, the match opens at once and the Box sends a
 `Stake` (its round from `rounds.json`) to the relayer's `/duel/open`; the result goes as a `Result` with the same round
 to `/box/result` once the open is done, and one transaction pays the pot, moves the title and scores the championship.
 The tx bar shows each transaction's real hash, linked to Etherscan. The lobby tops a badge up and claims its player

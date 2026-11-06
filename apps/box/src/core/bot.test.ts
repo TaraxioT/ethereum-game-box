@@ -32,9 +32,11 @@ function box(patch: Partial<BoxState>): BoxState {
     seats: [EMPTY, EMPTY],
     chain: { block: 50, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
     stake: 10,
+    playFor: "usdc",
+    board: null,
     match: null,
     txs: [],
-    lobby: { badge: null, card: null, proposal: null, board: null, from: "home" },
+    lobby: { badge: null, card: null, proposal: null, from: "home" },
     stations: [stationView("", "", ""), stationView("", "", "")],
     ...patch,
   };
@@ -80,6 +82,7 @@ describe("bot intents", () => {
     const match = {
       id: 4,
       game: "quick-draw" as const,
+      playFor: "usdc" as const,
       round: 4,
       stake: 10,
       openedBlock: 48,
@@ -162,6 +165,7 @@ describe("bot scheduler", () => {
     const matchOf = () => ({
       id: 2,
       game: "stock-duel" as const,
+      playFor: "usdc" as const,
       round: 4,
       stake: 10,
       openedBlock: 48,

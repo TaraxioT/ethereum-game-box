@@ -19,6 +19,7 @@ import type { ChainHead, CorePorts, ResultOrder, RulesSnapshot, TapEvent, TapPla
 import type { TranscriptTap } from "@egb/sdk";
 import type {
   Badge,
+  Board,
   BoxEvent,
   BoxLink,
   BoxState,
@@ -31,6 +32,7 @@ import type {
   MatchPlay,
   Phase,
   PlayerRecord,
+  PlayFor,
   ScreenCommand,
   SeatState,
   StationView,
@@ -69,6 +71,8 @@ export const END_HOLD_MS = 2_400;
 export const REFUND_DONE_MS = 2_000;
 /** The lobby's top-up, in USDC (the relayer mints it). */
 export const TOPUP_USDC = 100;
+/** The game's title and championship are read again this often while Stake, the lobby or the result shows. */
+export const BOARD_MS = 5_000;
 /** Sepolia's pace, for the screen's block clock between heads. */
 export const BLOCK_MS = 12_000;
 
@@ -237,6 +241,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   const focused = gameOf(focus);
   if (!focused) throw new Error("the library has no games");
   let stake = defaultStake(focused);
+  let playFor: PlayFor = "usdc";
+  /** The chosen (else focused) game's title and championship, as last read; null for a game off chain. */
+  let board: Board | null = null;
+  let boardTimer: TimerHandle | null = null;
   let game: GameId | null = null;
   /** The running built game's rules, through the runner; null for a team game or none. */
   let built: BuiltDriver | null = null;
@@ -249,7 +257,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   const records = new Map<string, PlayerRecord | null>();
   /** USDC on its way to each address: top-ups, payouts and refunds not yet paid. */
   const incoming = new Map<string, number>();
-  let lobby: Lobby = { badge: null, card: null, proposal: null, board: null, from: "home" };
+  let lobby: Lobby = { badge: null, card: null, proposal: null, from: "home" };
   /** How many labels the lobby has proposed to the badge on show. */
   let proposals = 0;
   /**
@@ -323,6 +331,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       seats: [seatState(0), seatState(1)],
       chain: { block: head.block, blockAt: head.at, blockMs: BLOCK_MS, gasGwei: head.gasGwei },
       stake,
+      playFor,
+      board,
       match,
       txs: book.list(),
       lobby,
@@ -397,6 +407,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     resetIdle();
     emit({ type: "phase", from, to });
     if (to === "join") maybeLeaveJoin();
+    followBoard();
   }
 
   function bothSeated(): boolean {
@@ -506,7 +517,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     // sent to the lobby to top up or claim one.
     const balance = balances.get(mine.badge.address);
     const nameless = port.stakeNeedsName && !names.get(mine.badge.address);
-    if (staked() && (balance === undefined || balance < stake || nameless)) {
+    const short = playFor === "usdc" && (balance === undefined || balance < stake);
+    if (staked() && (short || nameless)) {
       openLobby(mine.badge, "stake");
       return "refused";
     }
@@ -529,6 +541,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const id = ++matchCount;
     if (!port.onChain(chosen)) return beginMatch(id, chosen, badges, 0, 0);
     const round = port.nextRound();
+    // The title and the championship are played for with no pot: the result alone goes on chain.
+    if (playFor !== "usdc") return beginMatch(id, chosen, badges, round, 0);
     const amount = stake;
     const waiting = epoch;
     let begun = false;
@@ -571,6 +585,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const opened = (play: MatchPlay): Match => ({
       id,
       game: chosen,
+      playFor: port.onChain(chosen) ? playFor : "usdc",
       round,
       stake: amount,
       openedBlock: head.block,
@@ -808,9 +823,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** Opens the lobby (Home's LOBBY, or a Stake tap that can't cover the stake), showing `badge` if one tapped. */
   function openLobby(badge: Badge | null, from: Lobby["from"]): void {
-    lobby = { badge: null, card: null, proposal: null, board: null, from };
+    lobby = { badge: null, card: null, proposal: null, from };
     setPhase("lobby");
-    readBoard();
     if (badge) showInLobby(badge);
   }
 
@@ -826,14 +840,51 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return "card";
   }
 
-  /** The title and the championship of the game the lobby is about: the focused game, if it is on chain. */
+  // ── The board: the game's title and championship ────────────────────────────────────────────────────────────
+
+  /**
+   * The game the board is about: on Stake and the result the chosen game, if it is on chain; in the lobby the focused
+   * game, or Stock Duel's for a game that isn't.
+   */
+  function boardGame(): GameId | null {
+    if (phase === "lobby") return port.onChain(focus) ? focus : DEFAULT_FOCUS;
+    return game !== null && port.onChain(game) ? game : null;
+  }
+
+  /** The game's championship is open for scoring now. */
+  function cupOpen(): boolean {
+    return board?.cup != null && board.cup.ends > clock.now();
+  }
+
+  /** Reads the board while Stake, the lobby or the result shows, and every `BOARD_MS` after; stops on any other. */
+  function followBoard(): void {
+    timers.cancel(boardTimer);
+    boardTimer = null;
+    if (phase !== "stake" && phase !== "lobby" && phase !== "result") return;
+    readBoard();
+    boardTimer = timers.every(BOARD_MS, readBoard);
+  }
+
   function readBoard(): void {
-    const about = port.onChain(focus) ? focus : DEFAULT_FOCUS;
+    const about = boardGame();
+    if (about === null) {
+      if (board !== null) {
+        board = null;
+        emit({ type: "board" });
+      }
+      return;
+    }
+    const asked = epoch;
     port.board(about).then(
-      (board) => {
-        if (phase !== "lobby") return;
-        lobby = { ...lobby, board };
-        emit({ type: "lobby" });
+      (read) => {
+        if (epoch !== asked || boardGame() !== about) return;
+        board = read;
+        // A championship that closed while it was chosen falls back to the title, before anyone signs.
+        if (playFor === "cup" && !cupOpen() && phase === "stake" && nobodySigned()) {
+          playFor = "title";
+          emit({ type: "play-for", target: playFor });
+        }
+        emit({ type: "board" });
       },
       () => {},
     );
@@ -1027,18 +1078,28 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         game = info.id;
         // A built game's child starts now, at Join, so its first step pays no start-up cost.
         if (info.kind === "built") ports.rules?.prepare(info.id);
-        if (!info.stakes.includes(stake)) {
+        // Every game starts at its default stake, played for USDC.
+        board = null;
+        if (stake !== defaultStake(info) || playFor !== "usdc") {
           stake = defaultStake(info);
+          playFor = "usdc";
           emit({ type: "stake", amount: stake });
         }
         setPhase(bothSeated() ? "stake" : "join");
         return;
       }
       case "stake":
-        if (phase !== "stake" || !nobodySigned() || cmd.amount === stake) return;
+        if (phase !== "stake" || !nobodySigned() || (cmd.amount === stake && playFor === "usdc")) return;
         if (!game || !gameOf(game)?.stakes.includes(cmd.amount)) return;
         stake = cmd.amount;
+        playFor = "usdc";
         emit({ type: "stake", amount: stake });
+        return;
+      case "play-for":
+        if (phase !== "stake" || !nobodySigned() || cmd.target === playFor) return;
+        if (!game || !port.onChain(game) || (cmd.target === "cup" && !cupOpen())) return;
+        playFor = cmd.target;
+        emit({ type: "play-for", target: playFor });
         return;
       case "back":
         if (phase === "lobby") setPhase(lobby.from === "stake" && bothSeated() && game ? "stake" : "home");

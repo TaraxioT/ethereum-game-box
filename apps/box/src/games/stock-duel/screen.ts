@@ -177,11 +177,12 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   /** The band's players and stakes, written only when they change. Before the match, the stake being staked. */
   function band(state: BoxState): void {
     const stake = state.match?.stake ?? (state.phase === "stake" ? state.stake : null);
+    const playFor = state.match?.playFor ?? state.playFor;
     players = playersOf(state);
-    const key = `${players[0].name}|${players[1].name}|${stake}`;
+    const key = `${players[0].name}|${players[1].name}|${stake}|${playFor}`;
     if (key === shownPlayers) return;
     shownPlayers = key;
-    standing.players(players, stake);
+    standing.players(players, stake, playFor);
   }
 
   /** Draws a state as it stands, for a screen joining mid-match. Moments already under way carry on from now. */

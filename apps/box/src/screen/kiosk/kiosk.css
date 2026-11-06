@@ -70,6 +70,27 @@
 .set-name { font: 700 13px/1.2 var(--hud-display); letter-spacing: 0.04em; color: var(--fg); overflow-wrap: anywhere; }
 .set-who { font: 600 14px/1.2 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); overflow-wrap: anywhere; }
 .set-when { font: 600 13px/1.2 var(--mono); color: var(--fg-2); }
+.set-empty { display: block; min-height: 0; padding: 8px 0; font: 600 13px/1.2 var(--hud-body); letter-spacing: 0.1em; color: var(--fg-3); }
+.set-sub { margin: 12px 0 0; font: 700 12px/1 var(--hud-display); letter-spacing: 0.14em; color: var(--fg-3); }
+.set-past .set-item { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) auto; min-height: 36px; }
+
+/* Live now: a card per game, its name and ENS name, then a line for its title and one for its championship: the kind,
+   what (the holder, the leader), when (time left, ENDED) and an action. Lit while live, dim once done, faint when
+   there is nothing. */
+.set-games { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.set-game { padding: 10px 14px; border: 1px solid rgb(207 232 246 / 0.14); background: rgb(207 232 246 / 0.03); }
+.set-game-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.set-game-name { font: 700 18px/1.1 var(--hud-display); letter-spacing: 0.08em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
+.set-game-ens { font: 600 12px/1 var(--mono); color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-line { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 34px; }
+.set-kind { font: 600 12px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
+.set-what { font: 600 15px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-line .set-when { font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
+.set-line[data-tone="done"] :is(.set-what, .set-when) { color: var(--fg-2); }
+.set-line[data-tone="none"] :is(.set-what, .set-when) { color: var(--fg-3); }
+.set-line .set-key { min-height: 38px; }
+.set-segment:disabled { opacity: 0.3; cursor: default; }
+.set-key:disabled { opacity: 0.35; cursor: default; }
 .set-jobs { flex: none; }
 .set-jobs .set-item { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; }
 .set-jobs .set-item[data-status="failed"] .set-who { color: var(--alert); }
