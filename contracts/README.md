@@ -18,12 +18,14 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 ## Setup
 
 `forge init` conventions; libraries (`lib/`) are installed, not committed: `pnpm contracts:install`. Sepolia gas
-estimates run low: deploy with `cast estimate` plus 50%, or a fixed high `--gas-limit`.
+estimates run low (see [Gas on Sepolia](#gas-on-sepolia)): forge priced the GBX deploy at about 584k gas and Sepolia
+charged 3.71M, so send with `--skip-simulation -g 150`.
 
 Deploy (from `contracts/`, with `SEPOLIA_RPC_URL` exported):
 
 ```sh
-forge script script/DeployGBX.s.sol --rpc-url sepolia --account sepolia-deployer --broadcast
+forge script script/DeployGBX.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
 ```
 
 Scripts write each address into `deployments/sepolia.json` and refuse to on any chain but Sepolia. Addresses we use
