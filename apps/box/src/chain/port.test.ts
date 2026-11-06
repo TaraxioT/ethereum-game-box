@@ -215,7 +215,7 @@ describe("the Sepolia port on a mocked relayer", () => {
 
   it("reads the board and the head through its reads, and stops polling on stop", async () => {
     const r = rig();
-    expect(await r.chain.board("stock-duel")).toEqual({ title: null, cup: null, leaders: [] });
+    expect(await r.chain.board("stock-duel")).toEqual({ title: null, cup: null, leaders: [], won: [] });
     await expect(r.chain.board("lantern-race")).rejects.toThrow(/isn't on chain/);
     const heads: number[] = [];
     const unwatch = r.chain.watchHead((head) => heads.push(head.block));

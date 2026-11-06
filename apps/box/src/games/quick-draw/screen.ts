@@ -8,8 +8,12 @@
 //
 // Before that, while both stakes go into the pot (the routes bring this screen up on the second signature), the two
 // stand back to back by the sign, pace ten paces apart as the sign counts them, turn, and each raises a revolver and
-// thumbs its hammer back. A brass wire plate over the sign follows the transaction. The standoff begins when the
-// stakes are confirmed on chain, never before: if that comes before the walk is done, the two hurry to their marks.
+// thumbs its hammer back. A brass wire plate over the sign follows the transaction. If the stakes are still on their
+// way after that (on Sepolia they take longer than the walk), the two keep moving on their marks: a slow step back and
+// in again, a gun checked, a hat touched, a tumbleweed now and then while the sun sinks; the sign holds a word that
+// follows the transaction (HOLD…, SENT…, BLOCK), never READY. The standoff begins when the stakes are confirmed on
+// chain, never before: the sign says READY for a moment, then WAIT…; if the stakes land before the walk is done, the
+// two hurry to their marks.
 import { stakeOf } from "../../core/catalogue.ts";
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
@@ -108,6 +112,22 @@ const BACK_TO_BACK = 96;
 /** How long the two take to reach their marks when the stakes land before the walk is done. */
 const HURRY_MS = 380;
 
+/** What the sign holds while the stakes are still on their way after the walk-out: one word per `OPEN_STEPS` step. */
+const HOLD_WORDS: readonly string[] = ["HOLD…", "SENT…", "BLOCK", "BLOCK"];
+/** How far each steps back off its mark and in again while it waits (stage pixels), and how long a step takes. */
+const MILL_STEP = 26;
+const MILL_STEP_MS = 760;
+/** The pause between the waiting moves, and every how many moves an idle beat (a gun check, a hat) comes. */
+const MILL_REST_MS = 900;
+const MILL_BEAT_EVERY = 3;
+/** A tumbleweed blows through every this many waiting moves. */
+const MILL_WEED_EVERY = 8;
+/** How far the sun sinks over a long wait (stage pixels), and over how long. */
+const SUN_SINK = 26;
+const SUN_SINK_MS = 40_000;
+/** How long the sign says READY once the stakes are in, before the standoff's WAIT… (well inside the shortest wait). */
+const READY_MS = 900;
+
 /** What a seat's plate reads at the end. */
 function verdict(s: QuickDrawState, seat: Seat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
   const tap = s.taps[seat];
@@ -180,9 +200,15 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   let heart: Animation[] = [];
   let quicken: ReturnType<typeof setTimeout> | undefined;
   let dimming: Animation | null = null;
-  /** The walk-out: `walking` while it runs (a newer phase stops it), `walked` once it began on this screen. */
+  /** The walk-out: `walking` while it runs or the two wait on their marks after it (a newer phase stops it), `walked`
+   *  once it began on this screen. */
   let walking = false;
   let walked = false;
+  /** The sign follows the transaction (the walk is done, the stakes aren't in), and the word it holds. */
+  let holding = false;
+  let held = "";
+  let sinking: Animation | null = null;
+  let readyTimer: ReturnType<typeof setTimeout> | undefined;
   let wireTx: Tx | null = null;
   let wireSince = 0;
   let wireTicker: ReturnType<typeof setInterval> | null = null;
@@ -217,6 +243,57 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     }
   }
 
+  /** While holding, the sign says how far the stakes have got. */
+  function holdSign(): void {
+    if (!holding) return;
+    const word = HOLD_WORDS[Math.max(0, wireTx ? openStepIndex(wireTx) : 0)] ?? HOLD_WORDS[0] ?? "";
+    if (word === held) return;
+    held = word;
+    sign.say(word);
+  }
+
+  /** A tumbleweed blows across the land behind the two, once. */
+  function blowWeed(delay: number): void {
+    void play(weed, [
+      { transform: "translate(0, 0) rotate(0deg)" },
+      { transform: `translate(${g.scene.width * 0.3}px, -22px) rotate(300deg)`, offset: 0.28 },
+      { transform: `translate(${g.scene.width * 0.55}px, 0) rotate(560deg)`, offset: 0.5 },
+      { transform: `translate(${g.scene.width * 0.8}px, -14px) rotate(820deg)`, offset: 0.74 },
+      { transform: `translate(${g.scene.width + 160}px, 0) rotate(1120deg)` },
+    ], { duration: 9000, delay, easing: "linear" });
+  }
+
+  /** One idle beat for a figure while the two wait: a gun checked (with its click) or the hat touched. The gun check
+   *  settles the hand, so the breathing starts again after it. */
+  async function idleBeat(seat: Seat, n: number): Promise<void> {
+    const f = figures[seat];
+    await ((n + seat) % 2 === 0 ? f.cock(() => ctx.sound.play("cock", { seat })) : f.tipHat());
+    if (walking && alive) f.breathe();
+  }
+
+  /** After the walk-out, until the stakes are in: each steps back off its mark and in again, slowly, with an idle beat
+   *  every few moves and a tumbleweed now and then, while the sun sinks. Stops wherever it is once `walking` drops. */
+  async function mill(): Promise<void> {
+    sinking = scene.sun.animate([{ translate: "0 0" }, { translate: `0 ${SUN_SINK}px` }], { duration: SUN_SINK_MS, easing: "linear", fill: "forwards" });
+    for (let n = 1; walking && alive; n++) {
+      // Back off the mark (away from the other figure), then in again: Player 2's back is to the right.
+      await Promise.all(figures.map((f, seat) => f.pace(0, seat === 0 ? -MILL_STEP : MILL_STEP, MILL_STEP_MS, 0)));
+      if (!walking || !alive) return;
+      await Promise.all(figures.map((f, seat) => f.pace(seat === 0 ? -MILL_STEP : MILL_STEP, 0, MILL_STEP_MS, 1)));
+      if (!walking || !alive) return;
+      await Promise.all(figures.map((f) => f.plant(200)));
+      if (n % MILL_WEED_EVERY === 0) blowWeed(0);
+      // The beat comes to one figure, then the other a little later, so the two never move as one.
+      if (n % MILL_BEAT_EVERY === 0) {
+        await Promise.all(([0, 1] as const).map(async (seat) => {
+          await wait(seat * 520);
+          if (walking && alive) await idleBeat(seat, n / MILL_BEAT_EVERY);
+        }));
+      }
+      await wait(MILL_REST_MS);
+    }
+  }
+
   function hideWire(): void {
     if (wireTicker !== null) clearInterval(wireTicker);
     wireTicker = null;
@@ -232,18 +309,13 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     sign.reset();
     if (ctx.calm) {
       for (const f of figures) f.stand(0, false);
-      sign.say("READY");
+      holding = true;
+      holdSign();
       return;
     }
     figures.forEach((f, seat) => f.stand(startOffsets[seat] ?? 0, true));
     sign.say("PACES");
-    void play(weed, [
-      { transform: "translate(0, 0) rotate(0deg)" },
-      { transform: `translate(${g.scene.width * 0.3}px, -22px) rotate(300deg)`, offset: 0.28 },
-      { transform: `translate(${g.scene.width * 0.55}px, 0) rotate(560deg)`, offset: 0.5 },
-      { transform: `translate(${g.scene.width * 0.8}px, -14px) rotate(820deg)`, offset: 0.74 },
-      { transform: `translate(${g.scene.width + 160}px, 0) rotate(1120deg)` },
-    ], { duration: 9000, delay: 900, easing: "linear" });
+    blowWeed(900);
     await wait(FIRST_PACE_MS);
     for (let pace = 1; pace <= PACES; pace++) {
       if (!walking || !alive) return;
@@ -274,13 +346,19 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
       await f.cock(() => ctx.sound.play("cock", { seat: seat as Seat }));
     }));
     if (!walking || !alive) return;
-    sign.say("READY");
+    // Ready to draw, but the stakes aren't in yet: the sign follows them, and the two wait on their marks.
+    holding = true;
+    holdSign();
     for (const f of figures) f.breathe();
+    await mill();
   }
 
-  /** The stakes are in: the walk-out stops, and the two get to their marks if they aren't there yet. */
+  /** The stakes are in: the walk-out (or the wait after it) stops, and the two get to their marks if they aren't there
+   *  yet. The sun stays where it sank to. */
   async function endWalk(): Promise<void> {
     hideWire();
+    holding = false;
+    sinking?.pause();
     if (!walking) return;
     walking = false;
     if (ctx.calm) return;
@@ -303,7 +381,15 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
 
   function standoff(s: QuickDrawState): void {
     drawn = false;
+    // On this screen the stakes just landed: the sign says READY for a moment before WAIT….
+    const landed = walked;
     sign.reset();
+    if (landed) {
+      sign.say("READY");
+      readyTimer = setTimeout(() => {
+        if (alive && shown === "wait" && !drawn) sign.reset();
+      }, READY_MS);
+    }
     void endWalk().then(() => {
       if (!alive || shown !== "wait") return;
       for (const f of figures) {
@@ -417,6 +503,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
         // Both have signed: the stakes are on their way into the pot.
         if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
         showWire(state);
+        holdSign();
         if (!walked) void walkOut();
         return;
       }
@@ -433,6 +520,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     dispose() {
       alive = false;
       walking = false;
+      clearTimeout(readyTimer);
       if (wireTicker !== null) clearInterval(wireTicker);
       stopHeart();
       for (const a of root.getAnimations({ subtree: true })) a.cancel();

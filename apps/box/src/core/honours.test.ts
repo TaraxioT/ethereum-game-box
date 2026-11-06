@@ -5,8 +5,8 @@ import type { Board } from "./types.ts";
 const NOW = 1_800_000_000_000;
 const standings = (name: string) => [{ name, points: 6, wins: 2, draws: 0, losses: 0 }];
 const boards: Record<string, Board> = {
-  "stock-duel": { title: { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2 }, cup: { name: "cup-1.stockduel.gamebox.eth", ends: NOW + 60_000, prize: 0, standings: standings("orbit.gamebox.eth") }, leaders: [] },
-  "quick-draw": { title: null, cup: { name: "cup-2.quickdraw.gamebox.eth", ends: NOW + 60_000, prize: 50, standings: standings("nova.gamebox.eth") }, leaders: [] },
+  "stock-duel": { title: { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2, expires: NOW + 60_000 }, cup: { name: "cup-1.stockduel.gamebox.eth", ends: NOW + 60_000, prize: 0, standings: standings("orbit.gamebox.eth") }, leaders: [], won: [] },
+  "quick-draw": { title: null, cup: { name: "cup-2.quickdraw.gamebox.eth", ends: NOW + 60_000, prize: 50, standings: standings("nova.gamebox.eth") }, leaders: [], won: [] },
 };
 
 describe("what a player holds", () => {

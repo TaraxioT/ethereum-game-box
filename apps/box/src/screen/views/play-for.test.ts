@@ -3,9 +3,9 @@ import type { Board } from "../../core/types.ts";
 import { onTheLine } from "./play-for.ts";
 
 const NOW = 1_800_000_000_000;
-const title = { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2 };
+const title = { name: "champion.stockduel.gamebox.eth", holder: "nova.gamebox.eth", streak: 2, expires: 1_800_000_600_000 };
 const cup = { name: "cup-1921.stockduel.gamebox.eth", ends: NOW + 192_000, prize: 50, standings: [{ name: "orbit.gamebox.eth", points: 6, wins: 2, draws: 0, losses: 0 }] };
-const board = (over: Partial<Board> = {}): Board => ({ title, cup, leaders: [], ...over });
+const board = (over: Partial<Board> = {}): Board => ({ title, cup, leaders: [], won: [], ...over });
 
 describe("what Stake's plate says is on the line", () => {
   it("a USDC match: the pot, and the title and championship it also counts for", () => {

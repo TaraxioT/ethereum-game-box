@@ -19,7 +19,8 @@ import { createNameKeys } from "./name-keys.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { clock } from "./refund.ts";
-import { cupLabel, shortName } from "./play-for.ts";
+import { cupLabel } from "./play-for.ts";
+import { ensName, setEns } from "../shell/ens-name.ts";
 import { honoursOf } from "../../core/honours.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
@@ -39,7 +40,7 @@ export function lobbyView(ctx: ViewContext): View {
   card.classList.add("lobby-card");
   place(card, page.seats[0]);
   const kicker = el("div", "lobby-kicker", "PLAYER");
-  const name = el("div", "lobby-name");
+  const name = ensName("—", "lobby-name");
   // The name to claim, typed over the proposal. Keys typed here are the field's alone.
   const field = document.createElement("input");
   Object.assign(field, { type: "text", className: "lobby-input", maxLength: 32, autocomplete: "off", spellcheck: false, placeholder: "your-name" });
@@ -62,8 +63,8 @@ export function lobbyView(ctx: ViewContext): View {
   board.classList.add("lobby-board");
   place(board, page.seats[1]);
   const gameHead = el("div", "lobby-game");
-  const title = el("div", "lobby-holder");
-  const titleName = el("div", "lobby-ens");
+  const title = ensName("", "lobby-holder");
+  const titleName = ensName("", "lobby-ens");
   const cup = el("div", "lobby-cup");
   const standings = el("ol", "lobby-standings");
   const leaders = el("ol", "lobby-standings lobby-leaders");
@@ -147,10 +148,10 @@ export function lobbyView(ctx: ViewContext): View {
     card.toggleAttribute("lit", lobby.badge !== null);
     const naming = Boolean(lobby.badge && c && !c.name);
     if (!lobby.badge) {
-      name.textContent = "—";
+      setEns(name, "—");
       balance.textContent = "";
     } else {
-      name.textContent = c === null ? "reading…" : (c.name ?? "NO NAME YET");
+      setEns(name, c === null ? "reading…" : (c.name ?? "NO NAME YET"));
       name.classList.toggle("none", c !== null && c.name === null);
       balance.textContent = c ? usdc(c.balance) : "… USDC";
     }
@@ -170,7 +171,7 @@ export function lobbyView(ctx: ViewContext): View {
     held.replaceChildren(
       ...honoursOf(c?.name ?? null, state.boards, link.now()).map((h) => {
         const row = el("div", `lobby-honour ${h.kind}`);
-        row.append(el("b", "", h.kind === "title" ? `♛ TITLE${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS · ${h.count} PTS`), el("span", "", ` ${h.name} → ${c?.name ?? ""}`));
+        row.append(el("b", "", h.kind === "title" ? `♛ TITLE${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS · ${h.count} PTS`), ensName(`${h.name} → ${c?.name ?? ""}`));
         return row;
       }),
     );
@@ -228,7 +229,7 @@ export function lobbyView(ctx: ViewContext): View {
             const li = el("li", row.name === you ? "you" : "");
             li.append(
               el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
-              el("span", "who", row.name),
+              ensName(row.name, "who"),
               el("span", "pts", `${row.wins}W ${row.losses}L${row.streak > 0 ? ` · STREAK ${row.streak}` : ""}`),
             );
             return li;
@@ -241,17 +242,17 @@ export function lobbyView(ctx: ViewContext): View {
     gameHead.textContent = about?.title.toUpperCase() ?? "";
     const b: Board | null = state.board;
     if (!b) {
-      title.textContent = "READING…";
-      titleName.textContent = "";
+      setEns(title, "READING…");
+      setEns(titleName, "");
       cup.textContent = "";
       standings.replaceChildren();
       leaders.replaceChildren();
       return;
     }
     drawLeaders(b.leaders, state.lobby.card?.name ?? null);
-    title.textContent = b.title ? `${shortName(b.title.holder)}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS";
+    setEns(title, b.title ? `${b.title.holder}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS");
     title.classList.toggle("none", !b.title);
-    titleName.textContent = b.title ? `${b.title.name} → ${b.title.holder}` : "win a match to take it";
+    setEns(titleName, b.title ? b.title.name : "win a match to take it");
     const c = b.cup;
     const left = c ? c.ends - link.now() : 0;
     if (!c || left <= 0) {
@@ -269,7 +270,7 @@ export function lobbyView(ctx: ViewContext): View {
             const li = el("li");
             li.append(
               el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
-              el("span", "who", row.name),
+              ensName(row.name, "who"),
               el("span", "pts", `${row.points} PTS · ${row.wins}-${row.draws}-${row.losses}`),
             );
             return li;

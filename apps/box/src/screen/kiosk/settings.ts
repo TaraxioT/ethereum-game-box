@@ -4,14 +4,18 @@
 // - The head: sound on or off, reload the screen, and EXIT TO DESKTOP (a first tap arms it, a second asks the Box to
 //   close the kiosk's browser, POST /api/box/exit; the Box keeps running).
 // - With EGB_ADMIN_KEY on the Box (gamebox.eth's admin, `/api/admin/…`), two columns. LIVE NOW: game by game, who
-//   holds its title and for how long, and its championship (the leader, the prize and a countdown; CLOSE & PAY once
-//   it has ended; OPENING… while its job runs), then the championships closed lately. On the right: OPEN A
-//   CUP on a game for a few minutes with a prize, the ACTIVITY of every job as its transactions go, and ADD A
-//   GAME. Presets for every choice, since the kiosk has no keyboard; the labels are made up and can be typed over.
+//   holds its title and for how long, and its cup (the leader, the prize and a countdown; CLOSE & PAY once it has
+//   ended; OPENING… while its job runs), then the cups closed lately and ADD A GAME. On the right, OPEN A CUP in four
+//   steps (1 GAME, a game with a cup open shown taken with that cup and its time left; 2 HOW LONG; 3 PRIZE; 4 NAME,
+//   with NEW NAME), the cup's full ENS name as it will be registered, a summary of what OPEN does and OPEN; then the
+//   ACTIVITY of every job as its transactions go. Presets for every choice, since the kiosk has no keyboard; the
+//   labels are made up and can be typed over. Every ENS name shows whole, scrolling sideways when it doesn't fit.
 // It reads the Box every 3 s while open, and its clocks count down every second in between.
 // None of its pointer or key events reach the stage.
 import "./kiosk.css";
+import { ensName, setEns } from "../shell/ens-name.ts";
 import { formatSeconds } from "@egb/shared/admin";
+import { championshipLabelProblem, championshipName } from "@egb/shared/names";
 import { gameOfLabel } from "../../core/catalogue.ts";
 import { ADMIN, type AdminCup, type AdminGame, type AdminJob, type AdminReply, type AdminView } from "../../server/admin-wire.ts";
 import { framed } from "../parts/frame.ts";
@@ -34,6 +38,12 @@ const RUNS = [
   ["1 HOUR", 3_600],
 ] as const;
 const PRIZES = ["0", "10", "50", "100"] as const;
+/** What a new cup is opened with unless picked otherwise: a short demo. */
+const DEFAULT_RUN = 300;
+const DEFAULT_PRIZE = "50";
+const DEFAULT_GAME = "quickdraw";
+/** Words a made-up cup label starts with. */
+const CUP_WORDS = ["dusk", "mesa", "canyon", "sunset", "gold", "comet", "frontier", "outlaw", "sheriff", "mumbai"] as const;
 const TERMS = [
   ["2 MIN", 120],
   ["15 MIN", 900],
@@ -87,8 +97,9 @@ function row(...children: HTMLElement[]): HTMLElement {
   return r;
 }
 
-/** A made-up label: `cup-1907`, `game-k3x9`. */
-const cupLabel = (): string => `cup-${new Date().toTimeString().slice(0, 5).replace(":", "")}`;
+/** A made-up label: `dusk-cup-42`, `game-k3x9`. A closed cup's name is its winner's for good, so each is new. */
+const cupLabel = (): string =>
+  `${CUP_WORDS[Math.floor(Math.random() * CUP_WORDS.length)]}-cup-${10 + Math.floor(Math.random() * 90)}`;
 const gameLabel = (): string => `game-${Math.random().toString(36).slice(2, 6)}`;
 
 /** A game's name on screen: the Box's title for its own games (`QUICK DRAW`), else its label. */
@@ -100,7 +111,18 @@ function ordered(games: readonly AdminGame[]): AdminGame[] {
   return [...games].sort((a, b) => known(a) - known(b));
 }
 
-/** The running job that opens or closes `game`'s championship, if any (by its `what`, as `@egb/shared/admin` words it). */
+/** A countdown to `ends` (unix seconds) that `tickCountdowns` keeps current without redrawing its line. */
+function countdown(ends: number, prefix = ""): HTMLElement {
+  const span = el("span", "set-countdown");
+  span.dataset.ends = String(ends);
+  span.dataset.prefix = prefix;
+  return span;
+}
+
+/** `19:07`, the Box's local time `seconds` (unix) stands for. */
+const clockAt = (seconds: number): string => new Date(seconds * 1000).toTimeString().slice(0, 5);
+
+/** The running job that opens or closes `game`'s cup, if any (by its `what`, as `@egb/shared/admin` words it). */
 function jobFor(jobs: readonly AdminJob[], game: string): AdminJob | undefined {
   return jobs.find((job) => job.status === "running" && (job.what.includes(`.${game}.gamebox.eth`) || job.what.startsWith(`close ${game}'s`)));
 }
@@ -158,21 +180,35 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   const pastList = el("ul", "set-list set-past");
   const live = section("Live now", liveList, el("h3", "set-sub", "Closed lately"), pastList);
 
-  // --- Open a championship ---
+  // --- Open a cup, in four steps ---
   const cupGame = el("div", "set-segments");
   let pickedGame = "";
   const cupName = field("cup label", cupLabel());
-  const run = segments(RUNS, 300);
-  const prize = segments(PRIZES.map((p) => [p === "0" ? "NONE" : `${p} USDC`, p] as const), "0");
-  const openKey = key("OPEN", () => void act(openCup), "set-key set-go");
+  const run = segments(RUNS, DEFAULT_RUN);
+  const prize = segments(PRIZES.map((p) => [p === "0" ? "NONE" : `${p} USDC`, p] as const), DEFAULT_PRIZE);
+  const openKey = key("OPEN", () => void act(openCup), "set-key set-go set-open");
+  const preview = el("div", "set-preview");
+  const previewName = ensName("", "set-preview-name");
+  preview.append(el("span", "set-preview-kind", "WILL REGISTER"), previewName);
+  const summary = el("p", "set-summary");
+  const step = (n: number, label: string, ...children: HTMLElement[]): HTMLElement => {
+    const r = row(el("span", "set-step", String(n)), el("span", "set-label", label), ...children);
+    r.classList.add("set-step-row");
+    return r;
+  };
   const openSection = section(
     "Open a cup",
-    el("p", "set-hint", "Only that game's results score it (win 3, draw 1). Players pick CUP on the Stake screen; every result counts."),
-    row(el("span", "set-label", "GAME"), cupGame),
-    row(el("span", "set-label", "RUNS"), run.row),
-    row(el("span", "set-label", "PRIZE"), prize.row),
-    row(el("span", "set-label", "NAME"), cupName, openKey),
+    step(1, "GAME", cupGame),
+    step(2, "HOW LONG", run.row),
+    step(3, "PRIZE", prize.row),
+    step(4, "NAME", cupName, key("NEW NAME", () => ((cupName.value = cupLabel()), drawPlan()))),
+    preview,
+    row(summary, openKey),
+    el("p", "set-hint", "Every result in that game before the end scores it: win 3, draw 1. At the close the winner is paid the prize and owns the name forever: nobody can change or take it."),
   );
+  // Each choice redraws the plan: the name as it will be registered, and what OPEN does.
+  for (const node of [run.row, prize.row]) node.addEventListener("click", () => drawPlan());
+  cupName.addEventListener("input", () => drawPlan());
 
   // --- Activity, and games ---
   const jobsList = el("ul", "set-list set-jobs");
@@ -185,9 +221,9 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   );
 
   const left = el("div", "set-col");
-  left.append(live);
+  left.append(live, gamesSection);
   const right = el("div", "set-col");
-  right.append(openSection, section("Activity", jobsList), gamesSection);
+  right.append(openSection, section("Activity", jobsList));
   const cols = el("div", "set-cols");
   cols.append(left, right);
   const head = el("div", "set-head");
@@ -221,6 +257,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   const openCup = (): Promise<AdminJob> =>
     postJson<AdminJob>(ADMIN.openCup, { game: pickedGame, label: cupName.value, runSeconds: run.get(), prize: prize.get() }).then((job) => {
       cupName.value = cupLabel();
+      drawPlan();
       return job;
     });
   const addGame = (): Promise<AdminJob> =>
@@ -230,10 +267,12 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     });
   const closeCup = (game: string) => (): Promise<AdminJob> => postJson<AdminJob>(ADMIN.closeCup, { game });
 
-  function line(kind: string, what: string, when: string, tone: "live" | "done" | "none", action?: HTMLElement): HTMLElement {
+  function line(kind: string, what: string, when: string | HTMLElement, tone: "live" | "done" | "none", action?: HTMLElement): HTMLElement {
     const r = el("div", "set-line");
     r.dataset.tone = tone;
-    r.append(el("span", "set-kind", kind), el("span", "set-what", what), el("span", "set-when", when));
+    const whenEl = el("span", "set-when");
+    whenEl.append(when);
+    r.append(el("span", "set-kind", kind), ensName(what, "set-what"), whenEl);
     if (action) r.append(action);
     return r;
   }
@@ -242,31 +281,44 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     const t = g.title;
     const term = `TERM ${formatSeconds(g.titleTerm).toUpperCase()}`;
     if (!t.holder) return line("TITLE", "NOBODY YET · WIN A MATCH", term, "none");
-    if (t.expiry <= now) return line("TITLE", `${playerWord(t.holderName, t.holder)} · LAPSED, UP FOR GRABS`, term, "none");
+    if (t.expiry <= now) return line("TITLE", `${t.name} · LAPSED, UP FOR GRABS`, term, "none");
     // The title's ENS name resolves to its holder's.
     const map = `${t.name} → ${t.holderName ?? t.holder}${t.streak > 1 ? ` ×${t.streak}` : ""}`;
-    return line("TITLE", map, `${timeLeft(t.expiry - now)} LEFT`, "live");
+    return line("TITLE", map, countdown(t.expiry), "live");
   }
 
   function cupLine(g: AdminGame, view: AdminView, jobs: readonly AdminJob[], now: number): HTMLElement {
     const job = jobFor(jobs, g.label);
     const c = view.cups.find((cup) => cup.game === g.label && !cup.closed);
     if (!c) return job ? line("CUP", "OPENING…", `${job.steps.length} TX SENT`, "done") : line("CUP", "NONE OPEN", "", "none");
-    // The championship's ENS name resolves to its leader's.
+    // The cup's ENS name resolves to its leader's.
     const leader = c.leader ? `${c.name} → ${c.leader.name ?? c.leader.address} · ${c.leader.points} PTS` : `${c.name} · NO RESULTS YET`;
     const what = `${leader}${c.prize === "0" ? "" : ` · ${c.prize} USDC`}`;
-    if (c.ends > now) return line("CUP", what, `${timeLeft(c.ends - now)} LEFT`, "live");
+    if (c.ends > now) return line("CUP", what, countdown(c.ends), "live");
     if (job) return line("CUP", what, "CLOSING…", "done");
-    return line("CUP", what, "ENDED", "done", key("CLOSE & PAY", () => void act(closeCup(c.game)), "set-key set-go"));
+    const pay = key(c.prize === "0" ? "CLOSE IT" : `CLOSE & PAY ${c.prize} USDC`, () => void act(closeCup(c.game)), "set-key set-go set-pay");
+    return line("CUP", what, "ENDED", "live", pay);
   }
+
+  /** What LIVE NOW was last drawn from: it is drawn again only when that changes (a title lapsing or a cup ending
+   *  included), so a name's drift and a swipe aren't reset every second; the countdowns move on their own. */
+  let liveDrawn = "";
+  let pickerDrawn = "";
 
   function drawLive(view: AdminView, jobs: readonly AdminJob[]): void {
     const now = Date.now() / 1000 - skew;
+    const drawn = JSON.stringify([
+      view.games.map((g) => [g, g.title.expiry <= now]),
+      view.cups.map((c) => [c, c.ends <= now]),
+      jobs.map((j) => [j.what, j.status, j.steps.length]),
+    ]);
+    if (drawn === liveDrawn) return;
+    liveDrawn = drawn;
     liveList.replaceChildren(
       ...ordered(view.games).map((g) => {
         const card = el("div", "set-game");
         const top = el("div", "set-game-head");
-        top.append(el("span", "set-game-name", gameWord(g.label)), el("span", "set-game-ens", g.name));
+        top.append(el("span", "set-game-name", gameWord(g.label)), ensName(g.name, "set-game-ens"));
         card.append(top, titleLine(g, now), cupLine(g, view, jobs, now));
         return card;
       }),
@@ -276,8 +328,8 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
       ...past.map((c: AdminCup) => {
         const li = el("li", "set-item");
         li.append(
-          el("span", "set-name", `${c.label.toUpperCase()} · ${gameWord(c.game)}`),
-          el("span", "set-who", c.winner ? `WON BY ${playerWord(c.winnerName, c.winner)}` : "NOBODY PLAYED"),
+          ensName(c.name, "set-name"),
+          ensName(c.winner ? `→ ${c.winnerName ?? c.winner} · FOREVER` : "NOBODY PLAYED", "set-who"),
           el("span", "set-when", `${c.prize} USDC`),
         );
         return li;
@@ -286,23 +338,58 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     if (!past.length) pastList.replaceChildren(el("li", "set-item set-empty", "NONE YET"));
   }
 
+  /** Step 1: the games, Quick Draw first when it is free; one with a cup open shows that cup and its time left. */
   function drawPicker(view: AdminView): void {
+    const now = Date.now() / 1000 - skew;
     const games = ordered(view.games);
-    const free = (g: AdminGame): boolean => !view.cups.some((c) => c.game === g.label && !c.closed);
-    if (!games.some((g) => g.label === pickedGame && free(g))) pickedGame = games.find(free)?.label ?? "";
+    const openOn = (g: AdminGame): AdminCup | undefined => view.cups.find((c) => c.game === g.label && !c.closed);
+    const free = (g: AdminGame): boolean => !openOn(g);
+    if (!games.some((g) => g.label === pickedGame && free(g))) {
+      pickedGame = (games.find((g) => g.label === DEFAULT_GAME && free(g)) ?? games.find(free))?.label ?? "";
+    }
+    const drawn = JSON.stringify([pickedGame, games.map((g) => [g.label, openOn(g)?.name, (openOn(g)?.ends ?? 0) <= now])]);
+    if (drawn === pickerDrawn) return drawPlan();
+    pickerDrawn = drawn;
     cupGame.replaceChildren(
       ...games.map((g) => {
-        const b = key(gameWord(g.label), () => {
+        const b = key("", () => {
           pickedGame = g.label;
           drawPicker(view);
-        }, "set-segment");
+        }, "set-segment set-game-pick");
+        b.append(el("b", "", gameWord(g.label)));
+        const taken = openOn(g);
+        if (taken) {
+          const when = el("small");
+          when.append(taken.ends > now ? countdown(taken.ends, "OPEN · ") : "ENDED · CLOSE IT FIRST");
+          b.append(ensName(taken.name, "set-taken"), when);
+          b.disabled = true;
+        }
         b.setAttribute("aria-pressed", String(g.label === pickedGame));
-        b.disabled = !free(g);
-        if (!free(g)) b.title = "A cup is open on this game";
         return b;
       }),
     );
-    openKey.disabled = pickedGame === "";
+    drawPlan();
+  }
+
+  /** The cup as OPEN would make it: its full ENS name, its run, prize and end, and whether the label will do. */
+  function drawPlan(): void {
+    if (!pickedGame) {
+      setEns(previewName, "EVERY GAME HAS A CUP OPEN: CLOSE ONE FIRST");
+      preview.classList.add("bad");
+      summary.textContent = "";
+      openKey.disabled = true;
+      return;
+    }
+    const label = cupName.value;
+    const problem = championshipLabelProblem(label);
+    setEns(previewName, championshipName(label || "…", pickedGame));
+    preview.classList.toggle("bad", problem !== null);
+    const runWord = RUNS.find(([, seconds]) => seconds === run.get())?.[0] ?? `${run.get()} S`;
+    const ends = clockAt(Date.now() / 1000 - skew + run.get());
+    const pays = prize.get() === "0" ? "NO PRIZE" : `PRIZE ${prize.get()} USDC`;
+    summary.textContent = problem ? `THE NAME NEEDS ${problem.toUpperCase()}` : `OPENS FOR ${runWord} · ${pays} · ENDS AT ${ends}`;
+    summary.classList.toggle("bad", problem !== null);
+    openKey.disabled = problem !== null;
   }
 
   function drawJobs(jobs: readonly AdminJob[]): void {
@@ -334,10 +421,23 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
       .join(" · ");
   }
 
-  /** Redraws what moves with the clock: the countdowns and the status line's age. */
+  /** Each countdown on the page to its time left, as the Box's clock now says. */
+  function tickCountdowns(): void {
+    const now = Date.now() / 1000 - skew;
+    for (const span of page.querySelectorAll<HTMLElement>(".set-countdown")) {
+      span.textContent = `${span.dataset.prefix ?? ""}${timeLeft(Number(span.dataset.ends) - now)} LEFT`;
+    }
+  }
+
+  /** Redraws what moves with the clock: the countdowns, a title lapsing or a cup ending, the planned cup's end and the
+   *  status line's age. */
   function tick(): void {
     drawStatus();
-    if (last?.view) drawLive(last.view, last.jobs);
+    if (last?.view) {
+      drawLive(last.view, last.jobs);
+      drawPicker(last.view);
+    }
+    tickCountdowns();
   }
 
   async function refresh(): Promise<void> {
@@ -354,8 +454,8 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
       drawJobs(reply.jobs);
       if (reply.view) {
         skew = Date.now() / 1000 - reply.view.now;
-        drawPicker(reply.view);
       } else {
+        liveDrawn = "";
         liveList.replaceChildren(el("p", "set-hint", "READING SEPOLIA…"));
       }
       tick();

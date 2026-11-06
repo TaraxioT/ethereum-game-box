@@ -100,6 +100,7 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
     case "build":
       return lines("NEW GAME", "being designed");
     case "home":
+    case "hall":
     case "join":
       return seated(mine);
     case "stake":
@@ -108,6 +109,7 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
     case "result":
       if (!match) return seated(mine);
       if (match.voided) return lines("VOID", "stakes back");
+      if (match.calledOff) return lines("CALLED OFF", "stakes back");
       if (match.play.game === "built") return lines(match.play.stations[seat].big, match.play.stations[seat].small);
       return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat) : stockDuel(match.play.state, seat, now);
     case "refund":

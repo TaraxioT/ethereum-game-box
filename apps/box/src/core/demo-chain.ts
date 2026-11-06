@@ -14,6 +14,8 @@ export const SEND_MS = 400;
 export const PAY_MS = 900;
 /** The demo's pots refund after a minute, not an hour. */
 export const DEMO_REFUND_MS = 60_000;
+/** How long a title lasts after its holder's last win, by chain label: as on Sepolia (`AddGames`). */
+const TITLE_TERM_MS: Readonly<Record<string, number>> = { stockduel: 7 * 24 * 3_600_000, quickdraw: 15 * 60_000 };
 /** Where the demo's block numbers start: Sepolia's height in November 2026. */
 const FIRST_BLOCK = 12_065_134;
 
@@ -37,7 +39,7 @@ export function createDemoChain(clock: Clock): DemoChain {
   const balances = new Map<Address, number>();
   const names = new Map<Address, string>();
   const pots = new Map<number, Pot>();
-  const titles = new Map<string, { holder: Address; streak: number }>();
+  const titles = new Map<string, { holder: Address; streak: number; expires: number }>();
   /** Each badge's stats over every game, and when it reached its wins (the leaderboard's tiebreak). */
   const records = new Map<Address, PlayerRecord>();
   const reached = new Map<Address, number>();
@@ -107,10 +109,12 @@ export function createDemoChain(clock: Clock): DemoChain {
     board(game): Promise<Board> {
       const label = chainLabel(game) ?? game;
       const title = titles.get(label);
+      const live = title && title.expires > clock.now() ? title : null;
       return Promise.resolve({
-        title: title ? { name: `champion.${label}.gamebox.eth`, holder: nameOf(title.holder), streak: title.streak } : null,
+        title: live ? { name: `champion.${label}.gamebox.eth`, holder: nameOf(live.holder), streak: live.streak, expires: live.expires } : null,
         cup: null,
         leaders: leaders(),
+        won: [],
       });
     },
     open(order: StakeOrder, watch) {
@@ -137,7 +141,8 @@ export function createDemoChain(clock: Clock): DemoChain {
         score(order.badges[order.winner === 0 ? 1 : 0], "loss");
         if (pot) credit(winner, pot.amount * 2);
         const title = titles.get(label);
-        titles.set(label, { holder: winner, streak: title?.holder === winner ? title.streak + 1 : 1 });
+        const held = title && title.holder === winner && title.expires > clock.now();
+        titles.set(label, { holder: winner, streak: held ? title.streak + 1 : 1, expires: clock.now() + (TITLE_TERM_MS[label] ?? 0) });
       });
     },
     refund(round, watch) {

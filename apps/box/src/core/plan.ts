@@ -39,6 +39,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
     case "home":
     case "join":
     case "lobby":
+    case "hall":
       return "identify";
     case "stake":
       return mine.badge && !mine.signed ? "identify" : "none";

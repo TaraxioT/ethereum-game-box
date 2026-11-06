@@ -19,6 +19,7 @@ import { bindTapKeys } from "./demo/keys.ts";
 import { mountDemoTag } from "./demo/demo-tag.ts";
 import { showIntroOnce } from "./demo/intro.ts";
 import { mountSettings } from "./kiosk/settings.ts";
+import { mountExitKey } from "./shell/exit-key.ts";
 
 registerParts();
 const sound = createSound();
@@ -30,6 +31,7 @@ if (location.hash === BOARD_HASH) {
   const link = await connectLive({ url: `${scheme}//${location.host}${LINK_PATH}` });
   startApp(document.body, { link, sound, routes });
   mountSettings(document.body, sound);
+  mountExitKey(document.body, link, sound);
 } else {
   const sim = createSimLink();
   bindTapKeys(sim);
@@ -42,5 +44,6 @@ if (location.hash === BOARD_HASH) {
     isBot: (badge: Badge) => badge.address === sim.botBadge.address,
   });
   mountDemoTag(document.body, sim, sound);
+  mountExitKey(document.body, sim, sound);
   showIntroOnce(document.body, sim);
 }

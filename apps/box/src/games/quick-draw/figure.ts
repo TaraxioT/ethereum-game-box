@@ -27,6 +27,8 @@ export interface Figure {
   idle(): void;
   /** A small jolt when this seat's badge taps, so the player feels it land. */
   twitch(): void;
+  /** Touches the hat brim: up a little, a nod, and back. An idle beat while the stakes are still on their way. */
+  tipHat(): Promise<void>;
   /** Draws and fires: the arm comes up, a muzzle flash, a recoil, then smoke from the barrel. */
   win(): Promise<void>;
   /** Hit: rocks back, the hat flies, the knees go and the figure falls forward. */
@@ -388,6 +390,15 @@ export function createFigure(seat: Seat): Figure {
         { transform: `translate(${away * 5}px, -4px) rotate(${away * 1.2}deg)`, offset: 0.35 },
         { transform: "none" },
       ], { duration: 170, easing: "ease-out" });
+    },
+
+    async tipHat() {
+      await play(hat, [
+        { transform: "none" },
+        { transform: "translate(2px, -7px) rotate(-9deg)", offset: 0.35 },
+        { transform: "translate(1px, -5px) rotate(-6deg)", offset: 0.65 },
+        { transform: "none" },
+      ], { duration: 820, easing: "ease-in-out" });
     },
 
     async win() {

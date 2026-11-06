@@ -63,7 +63,7 @@ function recordingPort(): Recording {
     player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100, record: null }),
     board(game): Promise<Board> {
       boards.push(game);
-      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 }, cup: null, leaders: [] });
+      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER }, cup: null, leaders: [], won: [] });
     },
     open: take("open"),
     settle: take("settle"),
@@ -196,6 +196,51 @@ async function quickWin<C extends ChainPort>(r: Rig<C>, seat: Seat): Promise<voi
 }
 
 const lastTap = (r: Rig) => r.events.filter((event) => event.type === "tap").at(-1);
+
+describe("the hall", () => {
+  it("opens from Home, seats a tap, and plays a title from its card at the title's stake", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "hall" });
+    expect(r.core.state().phase).toBe("hall");
+    await flush();
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.core.state().seats.map((s) => s.badge?.address)).toEqual([NOVA.address, KITE.address]);
+    // No cup is open on the demo chain: a cup card can't be played.
+    r.core.send({ type: "challenge", game: "quick-draw", target: "cup" });
+    expect(r.core.state().phase).toBe("hall");
+    r.core.send({ type: "challenge", game: "quick-draw", target: "title" });
+    expect(r.core.state()).toMatchObject({ phase: "stake", focus: "quick-draw", playFor: "title" });
+  });
+
+  it("goes back Home on BACK, and by itself after IDLE_MS", () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "hall" });
+    r.core.send({ type: "back" });
+    expect(r.core.state().phase).toBe("home");
+    r.core.send({ type: "hall" });
+    r.clock.advance(IDLE_MS);
+    expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("EXIT", () => {
+  it("calls a match off as a draw: it settles on chain and both stakes go back", async () => {
+    const r = rig();
+    await toPlaying(r, "quick-draw");
+    r.core.send({ type: "quit" });
+    expect(r.core.state()).toMatchObject({ phase: "result", match: { calledOff: true, outcome: { winner: null } } });
+    await until(r, (state) => state.txs.some((tx) => tx.kind === "settle" && tx.step === "paid"));
+    expect(r.core.state().seats.map((s) => s.balance)).toEqual([100, 100]);
+    // Nothing to call off once it is over.
+    r.core.send({ type: "quit" });
+    expect(r.core.state().phase).toBe("result");
+  });
+});
 
 describe("the core on its ports", () => {
   it("plans each seat's taps from the phase", () => {
@@ -787,7 +832,7 @@ describe("the lobby", () => {
     expect(new Set(r.chain.boards)).toEqual(new Set(["quick-draw", "stock-duel"]));
     r.core.send({ type: "lobby" });
     await flush();
-    expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
+    expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER });
   });
 
   it("goes back Home after IDLE_MS with nobody there", () => {

@@ -4,15 +4,16 @@
 // On the Box, the rack ends in a blank NEW GAME cartridge: it focuses like a game (on this screen alone: the Box's
 // focus is always a game), and its key opens the game builder. Built games' cartridges stand before it, each with its
 // art from the Box; one that can't load is sealed, and focusing it says why. A game the Forge installs rezzes into the
-// rack. LOBBY, beside Play, opens the lobby: a badge's player name, its USDC and a top-up, the title and the
-// championship. Right of the core, the board shows the live champions and championships (board.ts).
+// rack. After the games stands the TITLES & CUPS program: focused, its key (ENTER) opens the hall (hall.ts). LOBBY,
+// beside Play, opens the lobby: a badge's player name, its USDC and a top-up, the title and the cup. Right of the
+// core, the board shows the live titles and cups, each line played for with a tap (board.ts).
 import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
 import type { EgbKey } from "../parts/key.ts";
 import { el, facesReady, fitFont, fitWidth, place } from "../shell/dom.ts";
 import { derez, rez } from "../shell/rez.ts";
-import { createRack, NEW_GAME, rackOf } from "./rack.ts";
+import { createRack, HALL, NEW_GAME, rackOf, type RackCart } from "./rack.ts";
 import { createBoardPanel } from "./board.ts";
 
 /** The rack's cartridges when Home last stood: a game installed since (on the Build screen) slides in on return. */
@@ -39,11 +40,11 @@ export function homeView(ctx: ViewContext): View {
   // The launch: the key flashes, the cartridge flashes and settles, the core turns as every trace flares; then the
   // router derezzes Home for the game (or the builder).
   playKey.addEventListener("click", () => {
-    if (newGame) {
+    if (special) {
       sound.play("ui-select");
-      rack.press(NEW_GAME.id);
+      rack.press(special);
       machine.coin();
-      link.send({ type: "build" });
+      link.send({ type: special === HALL.id ? "hall" : "build" });
       return;
     }
     if (!current?.ready) return;
@@ -55,8 +56,7 @@ export function homeView(ctx: ViewContext): View {
 
   const pick = (id: string): void => {
     sound.play("ui-focus");
-    if (id === NEW_GAME.id) focusNewGame(true);
-    else focusGame(id);
+    focusEntry(id);
   };
   let rack = createRack(layout, entries, pick);
   const arrived = racked ? entries.filter((entry) => !racked?.has(entry.id)) : [];
@@ -70,7 +70,7 @@ export function homeView(ctx: ViewContext): View {
     const next = createRack(layout, entries, pick);
     rack.el.replaceWith(next.el);
     rack = next;
-    rack.focus(newGame ? NEW_GAME.id : state.focus);
+    rack.focus(special ?? state.focus);
     for (const entry of entries) if (!had.has(entry.id)) rack.arrive(entry.id);
     current = undefined;
   }
@@ -90,13 +90,13 @@ export function homeView(ctx: ViewContext): View {
   for (const entry of arrived) rack.arrive(entry.id);
 
   let current: GameInfo | undefined;
-  /** NEW GAME is focused on this screen. */
-  let newGame = false;
+  /** NEW GAME's or the hall's cartridge is focused on this screen (its id), else a game is. */
+  let special: string | null = null;
   /** Bumped by each focus change, so a title swap that a newer one overtakes stops. */
   let turn = 0;
 
   function show(state: BoxState, animate: boolean): void {
-    if (newGame) return;
+    if (special) return;
     const game = state.games.find((g) => g.id === state.focus);
     if (!game || game === current) return;
     current = game;
@@ -109,21 +109,29 @@ export function homeView(ctx: ViewContext): View {
     retitle(game.title, game.sealed ?? "", animate);
   }
 
-  function focusNewGame(animate: boolean): void {
-    if (newGame) return;
-    newGame = true;
+  /** A cartridge by id: a game, NEW GAME or the hall. */
+  function focusEntry(id: string): void {
+    if (id === NEW_GAME.id) focusSpecial(NEW_GAME, "DESIGN", [fact("players", "2 PLAYERS"), fact("shield", "BUILT ON THE BOX")]);
+    else if (id === HALL.id) focusSpecial(HALL, "ENTER", [fact("clock", "TITLES EXPIRE"), fact("shield", "CUPS ARE FOREVER"), fact("players", "LEADERBOARD")]);
+    else focusGame(id);
+  }
+
+  /** NEW GAME or the hall: not a game, so the Box's focus stays where it is and the key opens it. */
+  function focusSpecial(cart: RackCart, key: string, about: HTMLElement[]): void {
+    if (special === cart.id) return;
+    special = cart.id;
     current = undefined;
-    playKey.textContent = "DESIGN";
+    playKey.textContent = key;
     playKey.removeAttribute("disabled");
-    facts.replaceChildren(fact("players", "2 PLAYERS"), fact("shield", "BUILT ON THE BOX"));
-    rack.focus(NEW_GAME.id);
+    facts.replaceChildren(...about);
+    rack.focus(cart.id);
     machine.feed(null);
-    retitle(NEW_GAME.title, "", animate);
+    retitle(cart.title, "", true);
   }
 
   function focusGame(id: string): void {
-    const fromNew = newGame;
-    newGame = false;
+    const fromNew = special !== null;
+    special = null;
     // Back from NEW GAME to the game the Box still has in focus: no event will come, so draw it now.
     if (fromNew && id === link.state().focus) show(link.state(), true);
     else link.send({ type: "focus", game: id });
@@ -158,7 +166,7 @@ export function homeView(ctx: ViewContext): View {
   void facesReady().then(fit);
 
   function onKey(e: KeyboardEvent): void {
-    const at = newGame ? NEW_GAME.id : current?.id;
+    const at = special ?? current?.id;
     if (!at) return;
     const i = entries.findIndex((entry) => entry.id === at);
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -166,8 +174,7 @@ export function homeView(ctx: ViewContext): View {
       const next = entries[(i + step + entries.length) % entries.length];
       if (next) {
         sound.play("ui-focus");
-        if (next.id === NEW_GAME.id) focusNewGame(true);
-        else focusGame(next.id);
+        focusEntry(next.id);
       }
     } else if (e.key === "Enter") {
       playKey.flash();
@@ -180,7 +187,7 @@ export function homeView(ctx: ViewContext): View {
     el: root,
     update(state, event) {
       // A focus the Box moved (another screen, a keyboard) takes over from NEW GAME.
-      if (event.type === "focus") newGame = false;
+      if (event.type === "focus") special = null;
       if (event.type === "games") restock(state);
       show(state, event.type === "focus");
     },

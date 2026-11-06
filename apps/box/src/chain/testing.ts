@@ -77,7 +77,7 @@ export function memoryReads(): MemoryReads {
   const statsByName = new Map<string, PlayerRecord>();
   const taken = new Set<number>();
   const openPots = new Set<number>();
-  const board: Board = { title: null, cup: null, leaders: [] };
+  const board: Board = { title: null, cup: null, leaders: [], won: [] };
   const reads: MemoryReads = {
     balances,
     names,

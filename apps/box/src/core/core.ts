@@ -380,7 +380,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function resetIdle(): void {
     timers.cancel(idleTimer);
     if (phase === "home") idleTimer = timers.after(IDLE_MS, () => setPhase("attract"));
-    else if (phase === "lobby") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
+    else if (phase === "lobby" || phase === "hall") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
     else if (phase === "build") idleTimer = timers.after(BUILD_IDLE_MS, () => setPhase("home"));
     else idleTimer = null;
   }
@@ -588,6 +588,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       play,
       outcome: null,
       voided: false,
+      calledOff: false,
       endedAt: null,
       refunded: [false, false],
       lines: null,
@@ -679,6 +680,44 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     built = null;
     timers.cancel(tickTimer);
     tickTimer = null;
+  }
+
+  /**
+   * A title or cup card's PLAY: from Home or the hall, the game comes into focus and the match is played for `target`
+   * at its stake, straight to Stake when both seats are taken (else Join). A cup only while it is open.
+   */
+  function challenge(id: GameId, target: PlayFor): void {
+    const info = gameOf(id);
+    if ((phase !== "home" && phase !== "hall") || !info?.ready || !isTeamGame(id) || !port.onChain(id)) return;
+    const cup = boards[id]?.cup;
+    if (target === "cup" && !(cup && cup.ends > clock.now())) return;
+    if (focus !== id) {
+      focus = id;
+      emit({ type: "focus", game: focus });
+    }
+    game = id;
+    stake = defaultStake(info);
+    playFor = target;
+    emit({ type: "stake", amount: stake });
+    emit({ type: "play-for", target: playFor });
+    setPhase(bothSeated() ? "stake" : "join");
+  }
+
+  /**
+   * EXIT inside a match: it ends now as a draw. A team game's result settles on chain as one, so both stakes go back
+   * at once (the players' stats count a draw); a built game's is void, as when its rules fail.
+   */
+  function callOff(): void {
+    if (phase !== "playing" || !match || match.outcome) return;
+    if (match.play.game === "built") {
+      voidBuilt(() => match as Match);
+      return;
+    }
+    timers.cancel(tickTimer);
+    tickTimer = null;
+    match = { ...match, outcome: { winner: null }, calledOff: true, endedAt: clock.now() };
+    emit({ type: "game" });
+    conclude();
   }
 
   // ── Playing ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -852,11 +891,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return cup != null && cup.ends > clock.now();
   }
 
-  /** Reads the boards while Stake, the lobby or the result shows, and every `BOARD_MS` after; stops on any other. */
+  /** Reads the boards while Stake, the lobby, the hall or the result shows, and every `BOARD_MS` after; stops on any
+   *  other. */
   function followBoard(): void {
     timers.cancel(boardTimer);
     boardTimer = null;
-    if (phase !== "stake" && phase !== "lobby" && phase !== "result") return;
+    if (phase !== "stake" && phase !== "lobby" && phase !== "hall" && phase !== "result") return;
     readBoards();
     boardTimer = timers.every(BOARD_MS, readBoards);
   }
@@ -943,6 +983,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         setPhase("home");
         return "wake";
       case "home":
+      case "hall":
       case "join":
         resetIdle();
         return takeSeat(seat, badge);
@@ -1099,7 +1140,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         return;
       case "back":
         if (phase === "lobby") setPhase(lobby.from === "stake" && bothSeated() && game ? "stake" : "home");
-        else if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
+        else if (phase === "join" || phase === "build" || phase === "hall" || (phase === "stake" && nobodySigned())) setPhase("home");
         return;
       case "rematch":
         if (phase !== "result") return;
@@ -1109,7 +1150,16 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         return;
       case "home":
         // From Refund too: a pot left unrefunded is refunded by the server once its delay has run.
-        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby") setPhase("home");
+        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby" || phase === "hall") setPhase("home");
+        return;
+      case "hall":
+        if (phase === "home" || phase === "attract") setPhase("hall");
+        return;
+      case "challenge":
+        challenge(cmd.game, cmd.target);
+        return;
+      case "quit":
+        callOff();
         return;
       case "build":
         // From Home, the builder opens; inside it, resetIdle() above was the point (a player is still there).

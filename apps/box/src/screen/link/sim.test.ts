@@ -260,7 +260,7 @@ describe("SimLink on the demo chain", () => {
     expect(lobby.badge?.name).toBe("nova.gamebox.eth");
     expect(lobby.card).toMatchObject({ name: null, balance: 100 });
     expect(lobby.proposal).toBe("nova");
-    expect(link.state().board).toEqual({ title: null, cup: null, leaders: [] });
+    expect(link.state().board).toEqual({ title: null, cup: null, leaders: [], won: [] });
 
     link.send({ type: "propose" });
     expect(link.state().lobby.proposal).toMatch(/^[a-z]+-\d\d$/);

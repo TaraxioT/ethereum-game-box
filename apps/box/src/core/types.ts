@@ -141,6 +141,8 @@ export interface Match {
   readonly outcome: { readonly winner: Seat | null } | null;
   /** The built game's rules failed (over budget, crashed): the match is void and both stakes go back. */
   readonly voided: boolean;
+  /** Called off from the screen mid-match (EXIT): it ends as a draw, so both stakes go back at the settle. */
+  readonly calledOff: boolean;
   /** When the game ended (ms since the epoch), or null while it runs. */
   readonly endedAt: number | null;
   /** Each seat has taken its stake back (Refund). */
@@ -182,8 +184,9 @@ export interface Standing {
 
 /** A game's title and its open cup, and the leaderboard over every game, read through the Universal Resolver. */
 export interface Board {
-  /** `champion.<game>.gamebox.eth`: its holder's name and streak, or null while nobody holds it. */
-  readonly title: { readonly name: string; readonly holder: string; readonly streak: number } | null;
+  /** `champion.<game>.gamebox.eth`: its holder's name, streak and when it lapses (ms since the epoch), or null while
+   *  nobody holds it. */
+  readonly title: { readonly name: string; readonly holder: string; readonly streak: number; readonly expires: number } | null;
   /** The open cup (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
   readonly cup: {
     readonly name: string;
@@ -196,6 +199,17 @@ export interface Board {
   /** `gamebox.eth`'s `leaderboard`: the top players over every game, in rank order (most wins, then who reached them
    *  first). */
   readonly leaders: readonly Leader[];
+  /** The game's closed cups, latest first: each name its winner holds forever. */
+  readonly won: readonly WonCup[];
+}
+
+/** A closed cup: its name, registered to its winner with no expiry, and the prize it paid. */
+export interface WonCup {
+  readonly name: string;
+  /** The winner's player name, or its address with none. */
+  readonly winner: string;
+  /** USDC. */
+  readonly prize: number;
 }
 
 /** The lobby: whoever tapped last, their card and a label to claim. */
@@ -214,11 +228,12 @@ export type Phase =
   | "attract" // TAP TO START
   | "home" // the library
   | "join" // both seats tap a badge
-  | "stake" // pick what to play for (USDC, the title, the championship), both tap to sign
+  | "stake" // pick what to play for (USDC, the title, the cup), both tap to sign
   | "playing" // a game runs
   | "result" // the winner is paid
   | "refund" // the Box missed its settle: each seat takes its stake back
-  | "lobby" // a badge's name, balance and top-up; the game's title and championship
+  | "lobby" // a badge's name, balance and top-up; the game's title and cup
+  | "hall" // every title and cup and the leaderboard, each one played for from its card
   | "build"; // the game builder: the Designer and the Build screen (the Box's own screen only, never the demo)
 
 export interface BoxState {
@@ -333,7 +348,13 @@ export type ScreenCommand =
   | { readonly type: "topup" }
   /** The lobby: another label to claim, or claim one: the label typed on the screen, else the one proposed. */
   | { readonly type: "propose" }
-  | { readonly type: "claim"; readonly label?: string };
+  | { readonly type: "claim"; readonly label?: string }
+  /** Home's TITLES & CUPS cartridge: the hall. */
+  | { readonly type: "hall" }
+  /** A title or cup card (the hall, Home's board): play `game` for `target` now, at its stake. */
+  | { readonly type: "challenge"; readonly game: GameId; readonly target: PlayFor }
+  /** EXIT inside a match: it is called off as a draw and both stakes go back. */
+  | { readonly type: "quit" };
 
 export interface BoxLink {
   state(): BoxState;

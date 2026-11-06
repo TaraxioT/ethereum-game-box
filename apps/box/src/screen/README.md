@@ -114,6 +114,9 @@ Modules go with them, each pure one tested:
   has already booted is sent `booted` at once. With `onSeatTap` (Demo mode) a touch on a `data-seat` element (a port,
   a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in, with a ring of that
   seat's light. `isBot` tags the bot's port.
+- `exit-key.ts`: EXIT, fixed to the window's bottom-left corner while a match runs: a first tap arms it for 4 s (alert
+  red, `TAP AGAIN · to call it off · both stakes go back`), a second sends `quit`. Its events never reach the stage.
+  `mountExitKey(host, link, sound)`, in both builds.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`,
   `fitWidth`, `facesReady`, `wait`, `calm`.
 
@@ -141,14 +144,23 @@ on `BoxEvent`s and acts only through `link.send`.
   Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes; the
   board right of the core.
-- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel, TITLES &
-  CHAMPIONSHIPS with a LIVE lamp, then game by game (the games this Box plays) its TITLE (the holder, streak and time
-  left, or UP FOR GRABS) and its CUP (the open championship with its prize, leader and countdown; ENDED until it is
-  closed; one closed in the last hour with its winner; else NONE OPEN). Read from `GET /api/board` every 4 s and at
-  once when a result is paid, counted down every second. Hidden where there's no board (the simulator in a browser).
-  `boardGames(board, now)` is its words, tested.
+- `board.ts`: the board on Attract and Home (landscape only, at `layout.board`): a glass panel, TITLES & CUPS with a
+  LIVE lamp and OPEN THE HALL (a tap on the head sends `hall`), then game by game (the games this Box plays) its TITLE
+  (the holder's whole ENS name, streak and time left, or UP FOR GRABS) and its CUP (the open cup with its prize, leader
+  and countdown; ENDED until it is closed; one closed in the last hour with its winner, FOREVER; else NONE OPEN), each
+  line with its own ENS name under it. A tap on a title line, or on a cup line while it scores, plays for it now
+  (`challenge`: PLAY ›). Read from `GET /api/board` every 4 s and at once when a result is paid; the times count down
+  in place every second, and a line is redrawn only when it changes. Hidden where there's no board (the simulator in a
+  browser). `boardGames(board, now)` is its words, tested.
+- `hall.ts`: the hall (`hall`, from Home's TITLES & CUPS program or the board's head): under the top band, TITLES (a
+  card per game on chain: the title's ENS name, its holder big, the streak, `EXPIRES IN` its time left, or VACANT · UP
+  FOR GRABS), CUPS (each open cup: its ENS name, prize, countdown and top three, or ENDED; then WON FOREVER, the closed
+  cups each → its winner) and the LEADERBOARD (`gamebox.eth`'s record, the top ten, the seated players lit). Each title
+  and open cup has PLAY FOR IT at its stake (`challenge`: Stake when both seats are taken, else Join). A tap takes a seat
+  as on Home. A card is redrawn only when it changes; the countdowns tick every second. BACK returns Home.
 - `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, the board (`board.ts`)
-  right of the core, and the rack (`rack.ts`). Touch or arrow keys focus: the
+  right of the core, and the rack (`rack.ts`). After the games the TITLES & CUPS program (a cup between two crowns):
+  focused, its facts say titles expire, cups are forever, and its key, ENTER, opens the hall (`hall`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
   derezzes and rezzes, the facts rez in turn and the `ui-focus` tick plays. Enter or Play launches: the key and program flash,
   the core turns and every trace flares. On the Box (`build:box`) the rack ends in the blank NEW GAME program: it
@@ -156,10 +168,14 @@ on `BoxEvent`s and acts only through `link.send`.
   Built games' programs stand before it with their art from the Box; one that can't load is sealed, and focusing it
   shows SEALED and why under the title. When the library changes (a `games` event) the rack is built again, and a
   game installed since Home last stood rezzes in where it stands.
-- `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, then NEW GAME where the Box has the builder)
+- `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, the hall's (`HALL`), then NEW GAME where the
+  Box has the builder)
   and where each stands (`rackSlots`: the layout's slots, each fed by a trace, then on along the row; a row too long
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
-- ENS names: the ports and seat panels print a player's ENS name in full (`nova` bright, `.gamebox.eth` dim) once
+- ENS names are never shortened. `shell/ens-name.ts` (`ensName`, `setEns`) is how every screen shows one: a single
+  line at full length in a box that scrolls sideways; one wider than its box drifts to its end and back (`.ens-name` in
+  `shell.css`, sized by a container query so it moves exactly the overflow) and can be swiped. The lobby, the hall,
+  Home's board and the settings panel use it. The ports and seat panels print a player's ENS name in full (`nova` bright, `.gamebox.eth` dim) once
   read, else the badge's label alone, so a `.gamebox.eth` name on screen always resolves; a seat panel adds the title
   the player holds or the championship they lead, by its own ENS name. `shell/ens-tags.ts`: on Attract and Home a tap
   shows a card under its port for a few seconds: the ENS name (or `no ENS name yet` and where to claim one) and each
@@ -243,7 +259,7 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 
 | Module | What it is | API |
 |---|---|---|
-| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`), two columns. LIVE NOW: a card per game (this Box's games first), its TITLE (the holder, streak and time left, or lapsed) and its CUP (the open championship, its leader, prize and countdown; OPENING… or CLOSING… while a job runs; CLOSE & PAY once it has ended), then the championships closed lately. OPEN A CHAMPIONSHIP (the game, a game with one open greyed out; how long it runs; the prize; a made-up name), ACTIVITY (the latest jobs as they send) and ADD A GAME (a title term and a label). Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open and counts down every second; the status line says how fresh the read is. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
+| `settings.ts` | The settings gear, fixed to the window's top-left corner (clear of the ports and the rack), dim until touched, and the Settings page it opens over the stage (CLOSE, Escape or the tag shut it). THE BOX: sound on or off, RELOAD SCREEN, and EXIT TO DESKTOP (a first tap arms it, alert red, 4 s; a second posts `/api/box/exit`, which closes the kiosk's browser so the Pi's desktop shows). With the Box's admin key (`/api/admin/…`), two columns. LIVE NOW: a card per game (this Box's games first), its TITLE (the title's ENS name → its holder's, the streak and time left, or lapsed) and its CUP (the open cup's ENS name → its leader's, the prize and countdown; OPENING… or CLOSING… while a job runs; a lit CLOSE & PAY with the prize once it has ended), then the cups closed lately (each name → its winner's, forever) and ADD A GAME (a title term and a label). OPEN A CUP in four numbered steps: 1 GAME (Quick Draw first when free; a game with a cup open is shown taken, with that cup's name and its time left), 2 HOW LONG, 3 PRIZE (5 MIN and 50 USDC to start), 4 NAME (a made-up label, NEW NAME for another); then the cup's full ENS name as it will be registered, a line saying how long it runs, its prize and when it ends (or what is wrong with the label), OPEN, and what happens (win 3, draw 1; at the close the winner is paid and owns the name forever). Then ACTIVITY (the latest jobs as they send). Every ENS name shows whole: one that doesn't fit drifts to its end and back and can be swiped. Presets for every choice, since the kiosk has no keyboard. It reads every 3 s while open and counts down every second, redrawing a line only when what it says changes; the status line says how fresh the read is. Its pointer and key events never reach the stage. | `mountSettings(host, sound)` |
 | `kiosk.css` | The tag's and the page's styles. | |
 
 ## Sound
@@ -257,7 +273,7 @@ looking at the screen. Every sound is synthesized with WebAudio; the music loop 
 | `synth.ts` | The instruments: one bus into a compressor (stacked sounds never clip), a second of noise, and `tone`, `noise`, `bell`, `brass`, `thump`. | `Synth` |
 | `sound.ts` | The `Sound` the views get: `play(name, { seat, pitch, volume })`, `music(on)`, `duck(on)`, the mute. A seat's sound leans to its side (a stereo pan), and is also pitched or voiced apart from the other seat's, since the speaker is mono. The same sound for the same seat within 25 ms is dropped. The kiosk's Chromium starts audio without a touch; a normal browser starts it on the first gesture. Muted (localStorage `gamebox-muted=1`), cues are silent and the music is paused. Nothing in it throws into a caller: with no audio, the Box runs silent. | `createSound(): Sound` |
 | `music.ts` | The one loop (`digital-dividend.mp3`) at 0.18 volume, fading in and out over 0.8 s, paused once faded out or while muted, and sunk to 30 % while a spoken clip plays. | `createMusic(url, muted)` |
-| `event-sounds.ts` | What each Box event sounds like, pure: a `touch` (a chip landed, still being read), a `tap` by its `meaning` and seat, a `cue` (a match's moment, with its seat), a block outside a match. And `musicFor(phase)`: the music plays in attract, Home, Join, the lobby and Result, and fades out for Stake, a match, the builder and Refund. `shell/app.ts` plays both on every event. | `soundsFor(state, event)`, `musicFor(phase)` |
+| `event-sounds.ts` | What each Box event sounds like, pure: a `touch` (a chip landed, still being read), a `tap` by its `meaning` and seat, a `cue` (a match's moment, with its seat), a block outside a match. And `musicFor(phase)`: the music plays in attract, Home, Join, the lobby, the hall and Result, and fades out for Stake, a match, the builder and Refund. `shell/app.ts` plays both on every event. | `soundsFor(state, event)`, `musicFor(phase)` |
 | `board.ts`, `board.css` | The sound board, a developer's page: every sound by its plain name, meaning and description; tap one to hear it (a seat's sound plays for Player 1, then Player 2; a rising one climbs), or PLAY ALL to hear them one after another; MUSIC, DUCK and the mute to try the loop. It is the page at `#sounds` in either build. On the Box's screen, **hold the block clock for two seconds** to open it; BACK TO THE BOX returns. | `mountSoundBoard(host, sound)`, `bindBoardHold(area)` |
 
 Tap feedback plays as the event reaches the screen: it never waits for a transaction or a chip's signature. The core

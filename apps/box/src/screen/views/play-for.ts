@@ -11,10 +11,6 @@ export interface OnTheLine {
   readonly detail: string;
 }
 
-/** `nova.gamebox.eth` as `NOVA`; a badge with no name, by its address, as `0x24af…17d4`. */
-export const shortName = (name: string): string =>
-  /^0x[0-9a-fA-F]{40}$/.test(name) ? `${name.slice(0, 6)}…${name.slice(-4)}` : name.replace(/\.gamebox\.eth$/, "").toUpperCase();
-
 /** `cup-1921.stockduel.gamebox.eth` as `CUP-1921`. */
 export const cupLabel = (name: string): string => (name.split(".")[0] ?? name).toUpperCase();
 

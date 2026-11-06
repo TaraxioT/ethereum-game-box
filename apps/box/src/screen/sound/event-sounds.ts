@@ -61,5 +61,5 @@ export function soundsFor(state: BoxState, event: BoxEvent): Heard[] {
 
 /** The music plays while people gather round the Box, and stops for the business of a match and for the builder. */
 export function musicFor(phase: Phase): boolean {
-  return phase === "attract" || phase === "home" || phase === "join" || phase === "lobby" || phase === "result";
+  return phase === "attract" || phase === "home" || phase === "join" || phase === "lobby" || phase === "hall" || phase === "result";
 }

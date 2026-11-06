@@ -75,6 +75,14 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
   and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The board
   shows the focused game's title and cup, and the leaderboard over every game (`Board.leaders`). It goes Home
   after `IDLE_MS` alone.
+- **Hall** (`hall` from Home or Attract). Every on-chain game's board: its title with when it lapses
+  (`Board.title.expires`), its open cup, its closed cups (`Board.won`, each name its winner's for good) and the
+  leaderboard, read every `BOARD_MS` while it shows. A tap takes a seat, as on Home. `challenge` (from a title or cup
+  card, here or on Home's board) brings the game into focus and plays it for the title or the open cup at its stake:
+  Stake when both seats are taken, else Join. BACK, or `IDLE_MS` alone, goes Home.
+- **EXIT** (`quit` while a match runs). A team game's match is called off (`Match.calledOff`) and ends as a draw: its
+  result settles on chain as one, so both stakes go back at once and the players' stats count a draw. A built game's is
+  void, as when its rules fail.
 
 ## Built games
 

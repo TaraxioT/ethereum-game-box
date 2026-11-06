@@ -22,9 +22,9 @@ import {
   titleName,
 } from "@egb/shared/names";
 import { sepoliaClient } from "@egb/shared/web";
-import { type Address, type Hex, type PublicClient, decodeEventLog, isAddressEqual } from "viem";
+import { type Address, type Hex, type PublicClient, decodeEventLog, isAddressEqual, zeroAddress } from "viem";
 import type { ChainHead } from "../core/ports.ts";
-import type { Board, Leader, PlayerRecord, Standing } from "../core/types.ts";
+import type { Board, Leader, PlayerRecord, Standing, WonCup } from "../core/types.ts";
 
 /** What a settled result did, read at its receipt's block. */
 export interface Settled {
@@ -63,6 +63,10 @@ export function redact(message: string): string {
 }
 
 const POT_OPEN = 1;
+/** How many of the latest cups (every game's) are looked through for a game's closed ones. */
+const CUPS_LOOKED_AT = 24;
+/** How many closed cups a game's board lists. */
+const WON_LISTED = 4;
 
 /** Runs a read and rethrows its failure as one redacted line. */
 async function safely<T>(what: string, run: () => Promise<T>): Promise<T> {
@@ -125,6 +129,27 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
     }
   }
 
+  /** When the game's title lapses (ms since the epoch), from `GameBoxNames.getTitle`. */
+  async function titleExpiry(game: string): Promise<number> {
+    const t = await client.readContract({ ...names, functionName: "getTitle", args: [game] });
+    return Number(t.expiry) * 1000;
+  }
+
+  /** The game's closed cups among the latest `CUPS_LOOKED_AT`, newest first: each name its winner holds forever. */
+  async function wonCups(game: string): Promise<WonCup[]> {
+    const count = Number(await client.readContract({ ...cups, functionName: "cupCount" }));
+    const ids = Array.from({ length: Math.min(count, CUPS_LOOKED_AT) }, (_, i) => BigInt(count - i));
+    const all = await Promise.all(ids.map((id) => client.readContract({ ...cups, functionName: "getCup", args: [id] })));
+    const won = all.filter((c) => c.game === game && c.closed && !isAddressEqual(c.winner, zeroAddress)).slice(0, WON_LISTED);
+    return Promise.all(
+      won.map(async (c) => ({
+        name: championshipName(c.label, game),
+        winner: (await nameOf(c.winner).catch(() => null)) ?? c.winner,
+        prize: Number(formatUsdc(c.prize)),
+      })),
+    );
+  }
+
   /** `gamebox.eth`'s `leaderboard` record: none yet (or one in another shape) is empty. */
   async function leaders(blockNumber?: bigint): Promise<Leader[]> {
     try {
@@ -172,9 +197,10 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
       }),
     board: (game) =>
       safely("the board", async () => {
-        const [held, open, top] = await Promise.all([title(game), cup(game), leaders()]);
+        const [held, open, top, won, expires] = await Promise.all([title(game), cup(game), leaders(), wonCups(game), titleExpiry(game)]);
+        const holder = held ? ((await nameOf(held.holder).catch(() => null)) ?? held.holder) : null;
         return {
-          title: held ? { name: held.name, holder: (await nameOf(held.holder).catch(() => null)) ?? held.holder, streak: held.streak } : null,
+          title: held && holder ? { name: held.name, holder, streak: held.streak, expires } : null,
           cup: open
             ? {
                 name: open.name,
@@ -184,6 +210,7 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
               }
             : null,
           leaders: top,
+          won,
         };
       }),
     settled: (game, badges, hash) =>

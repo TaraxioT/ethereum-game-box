@@ -72,6 +72,9 @@ describe("the screen's link", () => {
       topup: { type: "topup" },
       propose: { type: "propose" },
       claim: { type: "claim" },
+      hall: { type: "hall" },
+      challenge: { type: "challenge", game: "quick-draw", target: "cup" },
+      quit: { type: "quit" },
     };
     for (const command of Object.values(every)) expect(parseCommand(JSON.stringify({ t: "command", command }))).toEqual(command);
     const typed = { type: "claim", label: "alice" };
@@ -83,6 +86,7 @@ describe("the screen's link", () => {
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "stake", amount: 25, extra: 1 } }))).toEqual({ type: "stake", amount: 25 });
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "stake", amount: "25" } }))).toBeNull();
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "focus" } }))).toBeNull();
+    expect(parseCommand(JSON.stringify({ t: "command", command: { type: "challenge", game: "quick-draw", target: "all" } }))).toBeNull();
     for (const label of ["Alice", "al", "-alice", "alice.eth", 7]) {
       expect(parseCommand(JSON.stringify({ t: "command", command: { type: "claim", label } }))).toBeNull();
     }

@@ -1,6 +1,7 @@
 // The cartridge rack: one program per entry, standing on the Grid's floor along the bottom of the stage. Home focuses
-// one; attract shows them idle. An entry is a game's program or the blank NEW GAME one that opens the game builder
-// (the Box's own screen only); more entries than the layout has slots continue along the row.
+// one; attract shows them idle. An entry is a game's program, the TITLES & CUPS one that opens the hall, or the blank
+// NEW GAME one that opens the game builder (the Box's own screen only); more entries than the layout has slots continue
+// along the row.
 import type { GameInfo } from "../../core/types.ts";
 import type { Layout, Rect } from "../shell/layout.ts";
 import type { EgbCart } from "../parts/cart.ts";
@@ -22,13 +23,16 @@ export interface RackCart {
 /** The blank cartridge at the end of the rack: it opens the game builder. */
 export const NEW_GAME: RackCart = { id: "new-game", title: "NEW GAME", art: "new-game", icon: null, sealed: false };
 
+/** The hall's cartridge, after the games: every title and cup and the leaderboard, each played for from its card. */
+export const HALL: RackCart = { id: "hall", title: "TITLES & CUPS", art: "hall", icon: null, sealed: false };
+
 export const cartOf = (game: GameInfo): RackCart => ({ id: game.id, title: game.title, art: game.id, icon: game.icon, sealed: game.sealed !== null });
 
 /** The game builder is on the Box's own screen only: the demo's rack has no NEW GAME. */
 export const HAS_BUILDER = import.meta.env.VITE_EGB_MODE === "box";
 
-/** The rack for a library: every game in its order, then NEW GAME where the Box has the builder. */
-export const rackOf = (games: readonly GameInfo[]): RackCart[] => [...games.map(cartOf), ...(HAS_BUILDER ? [NEW_GAME] : [])];
+/** The rack for a library: every game in its order, the hall, then NEW GAME where the Box has the builder. */
+export const rackOf = (games: readonly GameInfo[]): RackCart[] => [...games.map(cartOf), HALL, ...(HAS_BUILDER ? [NEW_GAME] : [])];
 
 /** Keeps the row off the stage's edges. */
 const MARGIN = 16;

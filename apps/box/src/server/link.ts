@@ -52,7 +52,12 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "lobby":
     case "topup":
     case "propose":
+    case "hall":
+    case "quit":
       return { type: c.type };
+    case "challenge":
+      if (typeof c.game !== "string" || c.game.length > 64) return null;
+      return c.target === "usdc" || c.target === "title" || c.target === "cup" ? { type: "challenge", game: c.game, target: c.target } : null;
     case "claim":
       // A typed label must keep the label rule; with none, the proposed one is claimed.
       if (c.label === undefined) return { type: "claim" };
