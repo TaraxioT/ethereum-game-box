@@ -419,8 +419,9 @@ Join, Stake and Result draw two sides. This pass widens all of it to four.</p>
 <h2><span class="n">11</span>Steps</h2>
 <p>Each step ends with tests, and step 1 can stop the plan.</p>
 <ol>
-<li><strong>Prove 0G.</strong> On testnet: is there a private model, do tool calls work, and does <code>verify_tee</code> come back? Does the
-0G Storage SDK run in a Worker? If not, a second container with no agent does the upload.</li>
+<li><strong>Prove 0G.</strong> On mainnet: is there a private model, do tool calls work, and does <code>verify_tee</code> come back? Does the
+0G Storage SDK run in a Worker? Done: tool calls work, <code>tee_verified</code> doesn&#39;t come back so the Worker checks the
+enclave&#39;s signature itself, and the SDK runs in the Worker with a <code>fetch</code> transport, so no second container.</li>
 <li><strong>The bundle.</strong> The format, the reader and a sample game, Tap Rush.</li>
 <li><strong>The store.</strong> The Worker, R2, <code>store:publish</code> and a deploy.</li>
 <li><strong>The contract.</strong> <code>StorePot</code>, its forge tests, Store USDC, the deploy and the relayer&#39;s routes.</li>

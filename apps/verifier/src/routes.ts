@@ -3,6 +3,7 @@
 import { requireLabel } from '@egb/relayer/box';
 import { guarded } from '@egb/relayer/guard';
 import { Refusal } from '@egb/relayer/refusal';
+import { LOG_LIMITS } from '@egb/sdk';
 import type { JudgeStatus } from '@egb/shared/store';
 import type { Address } from 'viem';
 
@@ -28,6 +29,9 @@ const json = (status: number, body: unknown) => Response.json(body, { status });
 
 const POT_PATH = /^\/(judge|audit)\/([a-z0-9-]{1,63})\/([0-9]{1,78})$/;
 
+/** A log at its limit, escaped into a JSON string, with room for the rest of the body. */
+const MAX_BODY_BYTES = 3 * LOG_LIMITS.logBytes;
+
 async function read(pathname: string, deps: Deps): Promise<Response> {
   if (pathname === '/health') return json(200, { verifier: deps.verifier() });
   const [, route, box, round] = POT_PATH.exec(pathname) ?? [];
@@ -42,6 +46,7 @@ async function route(request: Request, deps: Deps): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (request.method === 'GET') return read(pathname, deps);
   if (request.method !== 'POST' || pathname !== '/judge') return json(404, { error: 'not found' });
+  if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES) return json(413, { error: 'body: too large' });
   const body: unknown = await request.json().catch(() => undefined);
   if (body === undefined) return json(400, { error: 'body: expected JSON' });
   const { fresh, status } = await admit(deps.ctx, deps.doors, body);

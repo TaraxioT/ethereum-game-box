@@ -5,7 +5,7 @@
 import { FakeChain } from '@egb/relayer/test/fake-chain';
 import { MemoryStore } from '@egb/relayer/test/memory-store';
 import { type Key, boxKey } from '@egb/relayer/test/world';
-import { packBundle } from '@egb/sdk/bundle';
+import { packBundle, readBundle } from '@egb/sdk/bundle';
 import type { MatchLog } from '@egb/sdk';
 import { gameBoxNamesAbi } from '@egb/shared/names';
 import { type AgentRunRequest, jsonTextHash, judgeDigest, storePotAbi } from '@egb/shared/store';
@@ -55,7 +55,6 @@ const encode = (text: string) => new TextEncoder().encode(text);
 
 /** A good zip of Tap Rush, and its hash. */
 export async function tapRushZip(): Promise<{ zip: Uint8Array; hash: Hex }> {
-  const { readBundle } = await import('@egb/sdk/bundle');
   const files = new Map([
     ['index.html', encode('<!doctype html><title>Tap Rush</title>')],
     ['manifest.json', encode(JSON.stringify(MANIFEST))],

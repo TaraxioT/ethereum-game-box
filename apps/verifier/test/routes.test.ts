@@ -50,6 +50,12 @@ describe('a malformed request', () => {
     expectNothingRan(world);
   });
 
+  it('is refused unread when the body is far too large', async () => {
+    const { deps } = await setup();
+    const request = new Request('http://verifier/judge', { method: 'POST', body: '{}', headers: { 'content-length': String(4 * 1024 * 1024) } });
+    expect((await handle(request, deps)).status).toBe(413);
+  });
+
   it('is refused with a log that is not JSON', async () => {
     const { world, deps } = await setup();
     const reply = await world.post(deps, world.signedRequest(world.log, { text: 'not json' }));
