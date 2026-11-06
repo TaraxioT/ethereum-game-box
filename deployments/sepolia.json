@@ -33,6 +33,12 @@
       "deployBlock": 12075394,
       "txHash": "0x4ae926d95c6476be92c23d846265ed5241b497fb0cd33a654033768dcdccc326",
       "verified": true
+    },
+    "GBX": {
+      "address": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
+      "deployBlock": 12075265,
+      "txHash": "0x30576b3df0ea0b74e830207c9f6b56e824e705afec5d9b3f570f84e0baeea59a",
+      "verified": false
     }
   },
   "ens": {
