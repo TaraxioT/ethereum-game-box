@@ -23,7 +23,7 @@ import { readManifestFile } from "../../builder/forge/shelf.ts";
 import { BUNDLE_FILES } from "../../builder/bundle/paths.ts";
 import { FALLBACK_ICON } from "../games/routes.ts";
 import type { RulesGame } from "../rules/host.ts";
-import type { StoreIndex, StoreListing } from "./store-index.ts";
+import type { StoreIndex, RackListing } from "./store-index.ts";
 
 export interface LibraryEntry {
   readonly info: GameInfo;
@@ -109,7 +109,7 @@ async function builtEntry(dir: string, sealed: ReadonlyMap<string, string>): Pro
 }
 
 /** A store game as the rack shows it: no folder and no manifest until its bundle is fetched for a match. */
-function storeEntry(listing: StoreListing, sealed: ReadonlyMap<string, string>): LibraryEntry {
+function storeEntry(listing: RackListing, sealed: ReadonlyMap<string, string>): LibraryEntry {
   const { id, title, stakes, hash, players } = listing;
   const problem = sealed.get(id) ?? (players.min > SEATS.length ? `it needs ${players.min} players, and this Box seats ${SEATS.length}` : null);
   const info: GameInfo = { id, kind: "store", title, players: SEATS.length, minutes: 0, stakes, tier: "judged", ready: problem === null, sealed: problem, icon: FALLBACK_ICON, manifest: null, bundle: hash };

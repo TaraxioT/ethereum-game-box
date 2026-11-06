@@ -122,6 +122,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   const storeUrl = chain.store ? settings.store?.storeUrl : undefined;
   const fetcher = options.storeFetch ?? fetch;
   const storeIndex = storeUrl ? createStoreIndex({ url: storeUrl, log, fetcher }) : null;
+  if (settings.store && !storeUrl) log("store: no store games: this chain has no StorePot");
   // The library answers with the catalogue until its first scan, which runs after the listen.
   const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log, store: storeIndex });
   const bundles = storeUrl ? createBundles({ url: storeUrl, dir: join(settings.dataDir, "store-bundles"), log, seal: library.seal, fetcher }) : null;

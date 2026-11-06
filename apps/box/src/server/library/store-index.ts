@@ -13,8 +13,8 @@ const INDEX_BYTES = 1024 * 1024;
 
 const HASH = /^0x[0-9a-f]{64}$/;
 
-/** A game the store offers, as much as the rack needs before anyone downloads it. */
-export interface StoreListing {
+/** What the rack reads of a store listing, before anyone downloads the game. */
+export interface RackListing {
   readonly id: string;
   readonly title: string;
   readonly players: { readonly min: number; readonly max: number };
@@ -27,7 +27,7 @@ export interface StoreListing {
 export interface StoreIndex {
   /** Reads the index again. Never rejects: a failed read empties it. */
   refresh(): Promise<void>;
-  listings(): readonly StoreListing[];
+  listings(): readonly RackListing[];
 }
 
 export interface StoreIndexOptions {
@@ -37,27 +37,27 @@ export interface StoreIndexOptions {
   readonly fetcher?: typeof fetch;
 }
 
-function isPlayers(value: unknown): value is StoreListing["players"] {
+function isPlayers(value: unknown): value is RackListing["players"] {
   if (typeof value !== "object" || value === null) return false;
   const { min, max } = value as Record<string, unknown>;
   return Number.isInteger(min) && Number.isInteger(max) && PLAYER_LIMITS.min <= (min as number) && (min as number) <= (max as number) && (max as number) <= PLAYER_LIMITS.max;
 }
 
 /** One entry of the index, or null when the rack can't show it. Only what the rack reads is kept. */
-function parseListing(value: unknown): StoreListing | null {
+function parseListing(value: unknown): RackListing | null {
   if (typeof value !== "object" || value === null) return null;
   const { id, title, players, stakes, hash } = value as Record<string, unknown>;
   // The fields a listing shares with a manifest are checked by the manifest's own rule.
   const shared = sharedManifestProblems({ id, title, blurb: "-", minutes: 1, stakes, taps: "identify" }, "USDC");
   if (shared.length > 0 || !isGameId(id) || !isPlayers(players) || typeof hash !== "string" || !HASH.test(hash)) return null;
-  return { id, title: (title as string).slice(0, MANIFEST_LIMITS.title), players, stakes: stakes as readonly number[], hash: hash as StoreListing["hash"] };
+  return { id, title: (title as string).slice(0, MANIFEST_LIMITS.title), players, stakes: stakes as readonly number[], hash: hash as RackListing["hash"] };
 }
 
 /** The good listings of `/index.json`, the first of any id that comes twice; null when it isn't an index at all. */
-export function parseIndex(value: unknown): readonly StoreListing[] | null {
+export function parseIndex(value: unknown): readonly RackListing[] | null {
   const listed = typeof value === "object" && value !== null ? (value as { listings?: unknown }).listings : null;
   if (!Array.isArray(listed)) return null;
-  const byId = new Map<string, StoreListing>();
+  const byId = new Map<string, RackListing>();
   for (const entry of listed) {
     const listing = parseListing(entry);
     if (listing && !byId.has(listing.id)) byId.set(listing.id, listing);
@@ -66,10 +66,10 @@ export function parseIndex(value: unknown): readonly StoreListing[] | null {
 }
 
 export function createStoreIndex({ url, log, fetcher = fetch }: StoreIndexOptions): StoreIndex {
-  let listings: readonly StoreListing[] = [];
+  let listings: readonly RackListing[] = [];
   let down = false;
 
-  async function read(): Promise<readonly StoreListing[]> {
+  async function read(): Promise<readonly RackListing[]> {
     const response = await fetcher(new URL("/index.json", url), { signal: AbortSignal.timeout(STORE_INDEX_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`it answered ${response.status}`);
     const parsed = parseIndex(JSON.parse(new TextDecoder().decode(await readCapped(response, INDEX_BYTES))));

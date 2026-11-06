@@ -64,13 +64,14 @@ describe("the downloader", () => {
     const zip = zipOf();
     const hash = await hashOf(zip);
     const r = rig(serving(zip));
-    expect(r.bundles.folder(hash)).toBeNull();
+    expect(r.bundles.held(hash)).toBeNull();
     expect(await r.bundles.fetch("tap-rush", hash)).toEqual({ minutes: 1, taps: "random" });
     expect(r.asked).toEqual([`https://store.example/bundles/${hash}.zip`]);
-    const folder = r.bundles.folder(hash) as string;
-    expect(path.dirname(folder)).toBe(r.dir);
-    expect(readFileSync(path.join(folder, "index.html"), "utf8")).toContain("Tap Rush");
-    expect(readFileSync(path.join(folder, "art/ring.svg"), "utf8")).toBe("<svg></svg>");
+    const held = r.bundles.held(hash);
+    expect(path.dirname(held?.dir ?? "")).toBe(r.dir);
+    expect([...(held?.files ?? [])].sort()).toEqual(["art/ring.svg", "index.html", "manifest.json"]);
+    expect(readFileSync(path.join(held?.dir ?? "", "index.html"), "utf8")).toContain("Tap Rush");
+    expect(readFileSync(path.join(held?.dir ?? "", "art/ring.svg"), "utf8")).toBe("<svg></svg>");
     expect(r.seals).toEqual([]);
   });
 
@@ -79,13 +80,13 @@ describe("the downloader", () => {
     const hash = await hashOf(zip);
     const r = rig(serving(zip));
     await r.bundles.fetch("tap-rush", hash);
-    const first = r.bundles.folder(hash) as string;
+    const first = r.bundles.held(hash)?.dir;
     r.bundles.drop();
-    expect(r.bundles.folder(hash)).toBeNull();
+    expect(r.bundles.held(hash)).toBeNull();
     await vi.waitFor(() => expect(r.left()).toEqual([]));
     await r.bundles.fetch("tap-rush", hash);
     expect(r.asked).toHaveLength(2);
-    expect(r.bundles.folder(hash)).not.toBe(first);
+    expect(r.bundles.held(hash)?.dir).not.toBe(first);
     expect(r.left()).toHaveLength(1);
   });
 
@@ -96,8 +97,8 @@ describe("the downloader", () => {
     const r = rig(async (url) => new Response(new Uint8Array(url.includes(first) ? one : two)));
     await r.bundles.fetch("tap-rush", first);
     await r.bundles.fetch("tap-rush-2", second);
-    expect(r.bundles.folder(first)).toBeNull();
-    await vi.waitFor(() => expect(r.left()).toEqual([path.basename(r.bundles.folder(second) as string)]));
+    expect(r.bundles.held(first)).toBeNull();
+    await vi.waitFor(() => expect(r.left()).toEqual([path.basename(r.bundles.held(second)?.dir ?? "")]));
   });
 
   it("seals the game for good on a zip that fails its checks, with nothing on disk", async () => {
@@ -121,7 +122,7 @@ describe("the downloader", () => {
       expect(r.seals[0]?.[0]).toBe("tap-rush");
       expect(r.seals[0]?.[1]).toMatch(/^its bundle failed: /);
       expect(r.seals[0]?.[2]).toBe(false);
-      expect(r.bundles.folder(hash)).toBeNull();
+      expect(r.bundles.held(hash)).toBeNull();
       expect(r.left()).toEqual([]);
     }
 

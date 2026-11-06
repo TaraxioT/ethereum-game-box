@@ -22,8 +22,8 @@ import type { Verifier } from "./verifier.ts";
 
 /** How often the verifier is asked how a match is going. */
 export const JUDGE_POLL_MS = 2_000;
-/** A run takes minutes, with its one retry and the transaction after it: past this, the Box stops waiting. */
-export const JUDGE_GIVE_UP_MS = 15 * 60_000;
+/** A run takes up to 7 minutes, then its one retry, then the transaction: past this, the Box stops waiting. */
+export const JUDGE_GIVE_UP_MS = 20 * 60_000;
 
 export interface StoreChainOptions {
   /** The Box's label, `mumbai-01`. */

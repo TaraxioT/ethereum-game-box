@@ -126,7 +126,7 @@ describe("a store game on the Box", () => {
 
     await seatAndPlay(tb);
     await vi.waitFor(() => expect(core.state().fetching).toBe(false));
-    const folder = tb.box.bundles?.folder(store.hash) as string;
+    const folder = tb.box.bundles?.held(store.hash)?.dir ?? "";
     expect(readdirSync(folder).sort()).toEqual(["index.html", "manifest.json"]);
     tb.advance(JOIN_SETTLE_MS);
     expect(core.state().phase).toBe("stake");
@@ -202,7 +202,7 @@ describe("a store game on the Box", () => {
     await vi.waitFor(() => expect(tb.box.core.state().phase).toBe("home"));
     expect(tapRush(tb)).toMatchObject({ ready: false, sealed: expect.stringMatching(/^its bundle failed: /) });
     expect(relayer.posted).toEqual([]);
-    expect(tb.box.bundles?.folder(store.hash)).toBeNull();
+    expect(tb.box.bundles?.held(store.hash)).toBeNull();
     expect(tb.logs.some((line) => line.startsWith("library: tap-rush is sealed: its bundle failed"))).toBe(true);
     tb.advance(STORE_INDEX_MS);
     await flush();

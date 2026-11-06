@@ -289,7 +289,7 @@ describe("the verifier's HTTP API", () => {
 
   it("posts a log, and tells a refusal from an outage", async () => {
     const seen: [string, RequestInit | undefined][] = [];
-    const answers = [reply({ state: "judging" }, 202), reply({ error: "bad signature" }, 401), reply({}, 503)];
+    const answers = [reply({ state: "judging" }, 202), reply({ error: "bad signature" }, 401), reply({}, 503), reply({ error: "rate limit" }, 429)];
     const verifier = verifierAt("https://verifier.example", async (url, init) => {
       seen.push([String(url), init]);
       return answers.shift() as Response;
@@ -297,6 +297,7 @@ describe("the verifier's HTTP API", () => {
     expect(await verifier.judge(request)).toEqual({ taken: true });
     expect(await verifier.judge(request)).toEqual({ taken: false, again: false, error: "bad signature" });
     expect(await verifier.judge(request)).toEqual({ taken: false, again: true, error: "the verifier answered 503" });
+    expect(await verifier.judge(request)).toEqual({ taken: false, again: true, error: "rate limit" });
     expect(seen[0]?.[0]).toBe("https://verifier.example/judge");
     expect(seen[0]?.[1]?.method).toBe("POST");
     expect(JSON.parse(seen[0]?.[1]?.body as string)).toEqual(request);

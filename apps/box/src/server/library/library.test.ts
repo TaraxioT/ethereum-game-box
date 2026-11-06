@@ -7,7 +7,7 @@ import { TEAM_GAMES } from "../../core/catalogue.ts";
 import { tempDir } from "../../builder/forge/test-helpers.ts";
 import { FALLBACK_ICON } from "../games/routes.ts";
 import { createLibrary, iconUrl } from "./library.ts";
-import type { StoreListing } from "./store-index.ts";
+import type { RackListing } from "./store-index.ts";
 
 const TEAM_DIR = fileURLToPath(new URL("../../games", import.meta.url));
 
@@ -44,9 +44,9 @@ function install(gamesDir: string, id: string, o: Install = {}): string {
   return dir;
 }
 
-const listing = (id: string, over: Partial<StoreListing> = {}): StoreListing => ({ id, title: "Tap Rush", players: { min: 2, max: 4 }, stakes: [5, 10, 25], hash: `0x${"ab".repeat(32)}`, ...over });
+const listing = (id: string, over: Partial<RackListing> = {}): RackListing => ({ id, title: "Tap Rush", players: { min: 2, max: 4 }, stakes: [5, 10, 25], hash: `0x${"ab".repeat(32)}`, ...over });
 
-function setup(listed?: () => readonly StoreListing[]) {
+function setup(listed?: () => readonly RackListing[]) {
   const gamesDir = path.join(tempDir("egb-library-"), "games");
   const logs: string[] = [];
   const store = listed ? { refresh: async () => {}, listings: listed } : null;
@@ -133,7 +133,7 @@ describe("the library", () => {
   });
 
   it("lists the store's games last, with the fallback icon, for as long as its index lasts", async () => {
-    let listed: readonly StoreListing[] = [listing("tap-rush")];
+    let listed: readonly RackListing[] = [listing("tap-rush")];
     const { gamesDir, library, changes } = setup(() => listed);
     install(gamesDir, "lantern-race");
     await library.rescan();
@@ -182,7 +182,7 @@ describe("the library", () => {
   });
 
   it("seals a store game whose bundle failed, for as long as it is listed", async () => {
-    let listed: readonly StoreListing[] = [listing("tap-rush")];
+    let listed: readonly RackListing[] = [listing("tap-rush")];
     const { library, logs, changes } = setup(() => listed);
     await library.rescan();
     library.seal("tap-rush", "its bundle failed: a bad zip");

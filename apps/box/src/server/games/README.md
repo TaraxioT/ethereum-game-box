@@ -8,6 +8,7 @@ handler, ahead of the screen's own files; it answers `false` for any path that i
 | `GET /games/<id>/icon.svg` | The cartridge art of any installed built game, sealed or not. One that fails the Forge's icon check is replaced by the Box's plain icon. |
 | `GET /games/<id>/screen.js` | The game's screen module (`dist/screen.js`), for a playable game only. |
 | `GET /games/<id>/frame.html` | The frame page (`page.ts`) under its own CSP, for a playable game only, to this machine only (a local Host). |
+| `GET /games/icon.svg` | The Box's plain icon, on every store game's cartridge. |
 | `GET /parts.js`, `/parts.css`, `/parts/<font>`, `/frame.js` | The frame's shared assets (`assets.ts`). |
 
 **The frame page** is loaded only into `<iframe sandbox="allow-scripts">`, so its origin is opaque. Its CSP:
@@ -28,7 +29,7 @@ service process is stopped once the build is done.
 
 | Module | What it is | API |
 |---|---|---|
-| `routes.ts` | The handler. | `createGameRoutes({ built, assets }): GameRoutes`, `BuiltLookup` |
+| `routes.ts` | The handler. | `createGameRoutes({ built, assets }): GameRoutes`, `BuiltLookup`, `FALLBACK_ICON` |
 | `page.ts` | The frame page and its CSP; the Box's origin from a Host header. | `framePage(title)`, `frameCsp(origin)`, `boxOrigin(host)` |
 | `assets.ts` | The frame's shared assets, built once. | `createFrameAssets(log): FrameAssets` |
 

@@ -28,9 +28,15 @@ export interface BundlesOptions {
   readonly fetcher?: typeof fetch;
 }
 
+/** A bundle on disk: its temporary folder, and every file it lists, by its exact path. */
+export interface HeldBundle {
+  readonly dir: string;
+  readonly files: ReadonlySet<string>;
+}
+
 export interface Bundles extends BundlePort {
-  /** The folder holding the bundle with this hash, once it is checked and written; null otherwise. */
-  folder(hash: string): string | null;
+  /** The bundle with this hash, once it is checked and written; null otherwise. The frame's routes serve from this. */
+  held(hash: string): HeldBundle | null;
   /** Empties the temporary folder: a power cut leaves what `drop` never got to. */
   clear(): Promise<void>;
 }
@@ -40,7 +46,8 @@ interface Current {
   readonly hash: string;
   readonly folder: string;
   readonly stop: AbortController;
-  written: boolean;
+  /** Set once it is written. */
+  held: HeldBundle | null;
 }
 
 /** Why a bundle that arrived can't be played here, or null. */
@@ -81,7 +88,7 @@ export function createBundles(options: BundlesOptions): Bundles {
   return {
     async fetch(game, hash): Promise<StoreBundle> {
       forget();
-      const mine: Current = { hash, folder: path.join(dir, `${hash.slice(2)}-${++count}`), stop: new AbortController(), written: false };
+      const mine: Current = { hash, folder: path.join(dir, `${hash.slice(2)}-${++count}`), stop: new AbortController(), held: null };
       current = mine;
       try {
         const opened = await readBundle(await download(hash, mine.stop));
@@ -93,7 +100,7 @@ export function createBundles(options: BundlesOptions): Bundles {
           await rm(mine.folder, { recursive: true, force: true });
           throw new Error("dropped");
         }
-        mine.written = true;
+        mine.held = { dir: mine.folder, files: new Set(opened.files.keys()) };
         log(`store: ${game} fetched and checked`);
         const { minutes, taps } = opened.manifest;
         return { minutes, taps };
@@ -108,7 +115,7 @@ export function createBundles(options: BundlesOptions): Bundles {
       }
     },
     drop: forget,
-    folder: (hash) => (current?.hash === hash && current.written ? current.folder : null),
+    held: (hash) => (current?.hash === hash ? current.held : null),
     async clear() {
       const left = await readdir(dir).catch(() => []);
       await Promise.all(left.map((name) => rm(path.join(dir, name), { recursive: true, force: true })));

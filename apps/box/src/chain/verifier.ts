@@ -7,7 +7,7 @@ import type { Hex } from "viem";
 /** A request to the verifier waits this long for its answer. */
 export const VERIFIER_TIMEOUT_MS = 15_000;
 
-/** The log was taken, or why not: `again` when asking later may work (it couldn't be reached, or was down). */
+/** The log was taken, or why not: `again` when asking later may work (it was down, busy, or couldn't be reached). */
 export type VerifierReply = { readonly taken: true } | { readonly taken: false; readonly again: boolean; readonly error: string };
 
 export interface Verifier {
@@ -16,6 +16,7 @@ export interface Verifier {
   status(box: string, round: number): Promise<JudgeStatus | null>;
 }
 
+const RATE_LIMITED = 429;
 const STATES: ReadonlySet<unknown> = new Set(["judging", "paying", "paid", "refunded", "failed"]);
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const BASE_UNITS = /^[0-9]{1,78}$/;
@@ -48,7 +49,7 @@ export function verifierAt(base: string, fetcher: typeof fetch = fetch): Verifie
       if (response.ok) return { taken: true };
       const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
       const error = typeof body?.error === "string" ? body.error : `the verifier answered ${response.status}`;
-      return { taken: false, again: response.status >= 500, error };
+      return { taken: false, again: response.status >= 500 || response.status === RATE_LIMITED, error };
     },
     async status(box, round) {
       try {
