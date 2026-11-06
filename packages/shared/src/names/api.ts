@@ -76,7 +76,63 @@ export interface DripRequest {
   badge: Address;
 }
 
-export type TxKind = 'claim' | 'execute' | 'deploy' | 'result' | 'popup' | 'drip';
+/** `POST /usdc/topup`: mints 100 test USDC to a player holding less than 25. */
+export interface TopupRequest {
+  /** The player: an address, or an ENS name that resolves to one (`nova.gamebox.eth`). */
+  player: string;
+}
+
+/** `POST /duel/open`: a match's stakes the Box's P-256 key signed (`stakeDigest`). */
+export interface StakeRequest {
+  stake: {
+    box: string;
+    game: string;
+    round: JsonUint;
+    a: Address;
+    b: Address;
+    /** Each player's stake, in USDC base units. */
+    amount: JsonUint;
+    deadline: JsonUint;
+  };
+  r: Hex;
+  s: Hex;
+}
+
+/** `POST /duel/refund`: refunds an open pot nobody settled, from an hour after it opened. */
+export interface RefundRequest {
+  box: string;
+  round: JsonUint;
+}
+
+/** `POST /players/box-claim`: a player name for a badge, vouched for by the Box's P-256 key (`seatDigest`). */
+export interface SeatRequest {
+  seat: {
+    label: string;
+    badge: Address;
+    box: string;
+    deadline: JsonUint;
+  };
+  r: Hex;
+  s: Hex;
+}
+
+/** `POST /cup/close`: closes the game's open championship once its `ends` has passed. */
+export interface CupCloseRequest {
+  game: string;
+}
+
+export type TxKind =
+  | 'claim'
+  | 'execute'
+  | 'deploy'
+  | 'result'
+  | 'popup'
+  | 'drip'
+  | 'topup'
+  | 'pot-open'
+  | 'pot-refund'
+  | 'seat'
+  | 'cup-close';
 export type TxStatus = 'signed' | 'sent' | 'in-block' | 'done' | 'failed';
 
 /** One transaction of a request. */
@@ -145,9 +201,21 @@ export interface ReportRequest {
   winner: Address;
   loser: Address;
   draw: boolean;
+  /** The round of a pot this Box opened (`POST /stake`), which the result settles. Omitted: the next round. */
+  round?: JsonUint;
 }
 
-/** The demo Box's answer: the relayer's request id and the round it signed. */
+/** `POST /stake` on the demo Box: opens a match's USDC pot, which a `POST /result` with its round settles. */
+export interface StakeReportRequest {
+  box: string;
+  game: string;
+  a: Address;
+  b: Address;
+  /** Each player's stake, in USDC base units. */
+  amount: JsonUint;
+}
+
+/** The demo Box's answer to `POST /result` and `POST /stake`: the relayer's request id and the round it signed. */
 export interface ReportResponse {
   id: string;
   round: number;
