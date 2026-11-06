@@ -1,7 +1,10 @@
-// Result: the winner's side lit and paid. The payout runs from the core to the winner's port on the LCD; a draw sends
-// both stakes back, and so does a void (a built game's rules failed). Rematch goes back to Stake with the same seats;
-// Home returns to the library.
-import type { BoxState } from "../../core/types.ts";
+// Result: the winner's side lit and paid, the winner named by their player name. The result goes to Sepolia (it pays
+// the pot, moves the title and scores the championship); once its receipt is in, what it did is read back from chain
+// and listed under the banner ("+20 USDC", "now holds champion.stockduel.gamebox.eth", "mumbai-cup: 2nd, 6 pts"),
+// never made up here. A draw sends both stakes back, and so does a void (a built game's rules failed); a free-play
+// game shows no money. Rematch goes back to Stake with the same seats; Home returns to the library.
+import type { BoxState, SeatState } from "../../core/types.ts";
+import { badgeLabel } from "../../core/badges.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
@@ -9,6 +12,12 @@ import { el, fitFont, place } from "../shell/dom.ts";
 import { rez } from "../shell/rez.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel } from "./seat-panel.ts";
+
+/** A seat's player name on chain, else its badge's label. */
+function nameOf(seat: SeatState | undefined): string | null {
+  if (!seat?.badge) return null;
+  return seat.ens ?? badgeLabel(seat.badge);
+}
 
 export function resultView(ctx: ViewContext): View {
   const { layout, link, sound } = ctx;
@@ -25,7 +34,9 @@ export function resultView(ctx: ViewContext): View {
   banner.classList.add("page-plate", "result-banner");
   place(banner, page.plate);
   const bannerText = el("span", "result-banner-text");
-  banner.append(bannerText);
+  /** The lines read from chain after the result's receipt. */
+  const chainLines = el("ul", "result-lines");
+  banner.append(bannerText, chainLines);
 
   const keys = el("div", "page-keys");
   place(keys, page.keys);
@@ -49,13 +60,21 @@ export function resultView(ctx: ViewContext): View {
     const m = state.match;
     if (!m?.outcome) return;
     const { winner } = m.outcome;
+    const money = m.stake > 0;
     state.seats.forEach((s, i) => {
-      if (m.voided) panels[i]?.set(s, `VOID · ${m.stake} EGB BACK`, "done");
-      else if (winner === null) panels[i]?.set(s, `DRAW · ${m.stake} EGB BACK`, "done");
-      else if (winner === i) panels[i]?.set(s, `WINNER · +${m.stake * 2} EGB`, "win");
-      else panels[i]?.set(s, `−${m.stake} EGB`, "lose");
+      if (m.voided) panels[i]?.set(s, money ? `VOID · ${m.stake} USDC BACK` : "VOID", "done");
+      else if (winner === null) panels[i]?.set(s, money ? `DRAW · ${m.stake} USDC BACK` : "DRAW", "done");
+      else if (winner === i) panels[i]?.set(s, money ? `WINNER · +${m.stake * 2} USDC` : "WINNER", "win");
+      else panels[i]?.set(s, money ? `−${m.stake} USDC` : "LOSE", "lose");
     });
-    bannerText.textContent = m.voided ? "VOID · THE GAME FAILED" : winner === null ? "DRAW · STAKES RETURNED" : `PLAYER ${winner + 1} WINS`;
+    const named = winner === null ? null : nameOf(state.seats[winner]);
+    bannerText.textContent = m.voided
+      ? "VOID · THE GAME FAILED"
+      : winner === null
+        ? money ? "DRAW · STAKES RETURNED" : "DRAW"
+        : `${named ?? `PLAYER ${winner + 1}`} WINS`;
+    const lines = m.lines ?? (money && !m.voided ? ["reading the result from Sepolia…"] : []);
+    chainLines.replaceChildren(...lines.map((text) => el("li", m.lines ? "" : "pending", text)));
     bannerText.className = `result-banner-text ${winner === null ? "draw" : `seat-${winner}`}`;
     fitFont(bannerText, page.plate.w - 72, 40);
   }

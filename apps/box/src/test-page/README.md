@@ -11,7 +11,7 @@ in `src/server/README.md`.
 |---|---|
 | Stations | The receiver (open, its path, the taps touched, done, failed and running); per station its link, RSSI, ping, reader, the chip on it and the screen it shows, with Buzz ok / no; the press round trip; the bench (samples, Run, median, p95, max per measurement). |
 | Badges | Identify and Roll the badge resting on each station (the verified number); injected taps per seat with a badge picker from the roster or an address; the roster; with `EGB_RECEIVER=fake`, the simulated badges to place on P1 or P2 and lift, the stations' links, and the receiver's cable. |
-| Box | The phase, the power switch (off: the Box misses its settle, so the match goes to Refund), Reset to Home, the badges' records, the whole state. |
+| Box | The phase (with the match's round on chain) and Sepolia's head, the power switch (off: the Box misses its settle, so the match goes to Refund, which unlocks once the pot's refund delay has run), Reset to Home (a pot left open is refunded once it unlocks), the badges' records, the whole state (the lobby and every transaction with its hash). |
 | Builder | Who builds here (the provider, SIMULATED for `sim`), whether it can, who reads answers and the voice; the Forge's jobs with their status, Cancel for one still going, Remove game for a built one, and Events for a job's whole log; the builder's event stream as it comes. Its requests carry the launcher token, through the screen's `views/builder-link.ts`. |
 
 | Module | What it is |

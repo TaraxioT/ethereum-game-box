@@ -1,5 +1,5 @@
-// SimLink: the whole Box in the browser, for the demo. A thin host round the core: the browser's clock, a ledger
-// kept in memory, the team games, stations that aren't there (the screen stands in for them, so their port does
+// SimLink: the whole Box in the browser, for the demo. A thin host round the core: the browser's clock, the demo
+// chain (USDC, pots and results in memory, no hashes), the team games, stations that aren't there (the screen stands in for them, so their port does
 // nothing), and the bot on Player 2's seat. The screen taps with a whole tap at once (touch, then done with a fresh
 // roll).
 import type { Seat } from "@egb/sdk";
@@ -11,7 +11,7 @@ import { createCore } from "../../core/core.ts";
 import { createBot } from "../../core/bot.ts";
 import { BOT_BADGE, DEMO_BADGES, sameBadge } from "../../core/badges.ts";
 import { teamLibrary } from "../../core/catalogue.ts";
-import { memoryLedgerStore } from "../../core/ledger.ts";
+import { createDemoChain } from "../../core/demo-chain.ts";
 import { instantTap } from "../../core/instant-tap.ts";
 import { systemClock } from "../../core/system-clock.ts";
 
@@ -20,10 +20,11 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   const rnd = mulberry32(seed);
   const random = (): number => Math.floor(rnd() * 2 ** 32) >>> 0;
   const clock = systemClock();
+  const chain = createDemoChain(clock);
   const ports: CorePorts = {
     clock,
     stations: { show() {}, buzz() {} },
-    ledger: memoryLedgerStore(),
+    chain,
     library: teamLibrary(),
     // The demo keeps no records.
     log: { record() {}, countedSince: () => 0 },
@@ -79,6 +80,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     stop() {
       core.stop();
       bot.stop();
+      chain.stop();
     },
   };
 }

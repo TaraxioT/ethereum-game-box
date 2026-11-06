@@ -1,7 +1,8 @@
-// <egb-txbar>: the transaction strip. A panel-style frame whose top line names the transaction ("FAUCET +100 EGB",
-// "STAKE 2×10 EGB", "PAYOUT 20 EGB", "REFUND 10 EGB") beside a hash cell (the shortened hash, or SIMULATED when there
-// is none); under it the four steps, SIGNED › SENT › IN BLOCK n › PAID, each lit in the system's light once reached
-// (the one just reached flickers once), the rest dim.
+// <egb-txbar>: the transaction strip. A panel-style frame whose top line names the transaction ("TOP UP +100 USDC",
+// "NAME", "STAKE 2×10 USDC", "PAYOUT 20 USDC", "RESULT", "REFUND 20 USDC") beside a hash cell (the shortened hash,
+// linked to its Etherscan page; empty until the relayer has sent it, and always in the demo, which has none); under it
+// the four steps, SIGNED › SENT › IN BLOCK n › PAID, each lit in the system's light once reached (the one just reached
+// flickers once), the rest dim. A failed transaction lights the strip in the alert colour and says FAILED for PAID.
 //
 // Size: it fills its box (designed at 380 × 52). `show(tx)` draws a transaction's current step, rezzing the strip in
 // if it was hidden; `hide()` derezzes it.
@@ -10,21 +11,23 @@ import { chamferClip, fitFrame } from "./frame.ts";
 import { pick, shadow, sheet } from "./part.ts";
 import { derez, flicker, rez } from "../shell/rez.ts";
 
-const STEPS: readonly TxStep[] = ["signed", "sent", "in-block", "paid"];
-const WORDS: Record<TxStep, string> = { signed: "SIGNED", sent: "SENT", "in-block": "IN BLOCK", paid: "PAID" };
+const STEPS: readonly Exclude<TxStep, "failed">[] = ["signed", "sent", "in-block", "paid"];
+const WORDS: Record<Exclude<TxStep, "failed">, string> = { signed: "SIGNED", sent: "SENT", "in-block": "IN BLOCK", paid: "PAID" };
 const CHAMFER = 12;
 
 /** The transaction's kind and amount, as the strip names it. An open with no seat carries both stakes. */
 function kindOf(tx: Tx): string {
   switch (tx.kind) {
-    case "faucet":
-      return `FAUCET +${tx.amount} EGB`;
+    case "topup":
+      return `TOP UP +${tx.amount} USDC`;
+    case "claim":
+      return "NAME";
     case "open":
-      return tx.seat === null ? `STAKE 2×${tx.amount / 2} EGB` : `STAKE ${tx.amount} EGB`;
+      return tx.seat === null ? `STAKE 2×${tx.amount / 2} USDC` : `STAKE ${tx.amount} USDC`;
     case "settle":
-      return `PAYOUT ${tx.amount} EGB`;
+      return tx.amount > 0 ? `PAYOUT ${tx.amount} USDC` : "RESULT";
     case "refund":
-      return `REFUND ${tx.amount} EGB`;
+      return `REFUND ${tx.amount} USDC`;
   }
 }
 
@@ -44,6 +47,10 @@ const styles = sheet(`
 .top { justify-content: space-between; }
 .kind { font: 600 16px / 1 var(--hud-body); letter-spacing: 0.08em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
 .hash { font: 500 14px / 1 var(--mono); color: var(--fg-3); }
+.hash a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.bar.failed { --frame-tone: var(--alert); }
+.bar.failed .frame-line { opacity: 0.8; }
+.bar.failed .kind, .bar.failed .reached { color: var(--alert); }
 .step, .arrow { font: 600 14px / 1 var(--hud-body); letter-spacing: 0.02em; font-style: normal; color: var(--sys); opacity: 0.22; }
 /* A step flickers as it is reached; it keeps its layer so the strip isn't rastered again round it each time. */
 .step { will-change: opacity; }
@@ -85,11 +92,25 @@ export class EgbTxbar extends HTMLElement {
   }
 
   show(tx: Tx): void {
-    const at = STEPS.indexOf(tx.step);
+    const failed = tx.step === "failed";
+    // A failure lights what it reached; its last step reads FAILED.
+    const at = failed ? STEPS.length - 1 : STEPS.indexOf(tx.step);
     const hidden = this.#out;
     this.#out = false;
     this.#kind.textContent = kindOf(tx);
-    this.#hash.textContent = tx.hash ? shortHash(tx.hash) : "SIMULATED";
+    this.#bar.classList.toggle("failed", failed);
+    const paidStep = this.#steps[STEPS.length - 1];
+    if (paidStep) paidStep.textContent = failed ? "FAILED" : WORDS.paid;
+    if (tx.hash && tx.etherscan) {
+      const link = document.createElement("a");
+      link.href = tx.etherscan;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = shortHash(tx.hash);
+      this.#hash.replaceChildren(link);
+    } else {
+      this.#hash.textContent = tx.hash ? shortHash(tx.hash) : "";
+    }
     this.#block.textContent = tx.block === null ? "" : ` ${tx.block.toLocaleString("en-US")}`;
     this.#steps.forEach((s, i) => s.classList.toggle("reached", i <= at));
     // The arrow before a step lights with it.
