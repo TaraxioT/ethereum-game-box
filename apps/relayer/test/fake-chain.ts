@@ -62,6 +62,8 @@ export class FakeChain {
   chainNonce = 0;
   /** Makes the next sends fail with these messages, one per send. */
   sendErrors: string[] = [];
+  /** Makes the next sends end in `error` instead of an answer, one per send, the node having taken them if `taken`. */
+  lostSends: { error: Error; taken: boolean }[] = [];
   /** How often each RPC method was called. */
   readonly calls = new Map<string, number>();
 
@@ -145,6 +147,8 @@ export class FakeChain {
   private send(raw: Hex): Hex {
     const failure = this.sendErrors.shift();
     if (failure) throw Object.assign(new Error(failure), { code: -32000 });
+    const lost = this.lostSends.shift();
+    if (lost && !lost.taken) throw lost.error;
     const tx = parseTransaction(raw);
     if (tx.nonce !== this.chainNonce) {
       throw Object.assign(new Error(`nonce too ${tx.nonce! < this.chainNonce ? 'low' : 'high'}`), { code: -32000 });
@@ -152,6 +156,7 @@ export class FakeChain {
     this.chainNonce++;
     const hash = keccak256(raw);
     this.sent.push({ raw, hash, nonce: tx.nonce!, to: tx.to ?? undefined, data: tx.data, gas: tx.gas });
+    if (lost) throw lost.error;
     return hash;
   }
 

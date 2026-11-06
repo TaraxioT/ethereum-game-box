@@ -6,6 +6,7 @@ import { storePotAddress, storeUsdcAddress } from '@egb/shared/store';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
+import type { Opens } from './pot-opened.ts';
 import { Refusal } from './refusal.ts';
 import { isRevert, revertName } from './revert.ts';
 import { deployedTargets } from './targets.ts';
@@ -79,6 +80,8 @@ export interface Call {
   gas: bigint;
   /** Refused for good once sent (a signed digest, or a badge's one drip), until `until` (unix seconds, 0: never). */
   replay?: { key: string; until: number };
+  /** The stake this call opens a pot with: anyone may send it, so this call failing doesn't mean there is no pot. */
+  opens?: Opens;
 }
 
 export interface Prepared extends Call {

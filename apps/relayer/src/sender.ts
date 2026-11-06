@@ -5,12 +5,23 @@
 
 import type { RelayerHealth, TxStep, TxView } from '@egb/shared/names';
 import { DurableObject } from 'cloudflare:workers';
-import { type Hex, type LocalAccount, formatEther, parseGwei } from 'viem';
+import {
+  BaseError,
+  type Hex,
+  HttpRequestError,
+  InternalRpcError,
+  type LocalAccount,
+  TimeoutError,
+  formatEther,
+  keccak256,
+  parseGwei,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { type Client, describe, etherscanTx, rpc, sepoliaClient } from './chain.ts';
 import type { Env } from './env.ts';
 import { Limits, limitsFor } from './limits.ts';
+import { stakeIsOpen } from './pot-opened.ts';
 import { Replay } from './replay.ts';
 import type { RefusalStatus } from './refusal.ts';
 import type { Call, Prepared } from './request.ts';
@@ -46,6 +57,17 @@ const CONFIRMATIONS = 1;
 /** The fee cap is this many base fees plus the tip: room for the base fee to rise for several full blocks, so a sent
  *  transaction is never priced out of the next one. Only the base fee actually charged is paid. */
 const FEE_CAP_BASES = 3n;
+
+/** How long past its deadline a transaction's receipt may take to reach us (seconds). */
+const RECEIPT_LAG = 60;
+
+/** Whether a send ended without the node's own answer, so the transaction may be on its way all the same. A refusal is
+ *  an answer, and final. */
+function answerLost(error: unknown): boolean {
+  const lost = (e: unknown) =>
+    e instanceof TimeoutError || e instanceof InternalRpcError || (e instanceof HttpRequestError && (e.status ?? 500) >= 500);
+  return error instanceof BaseError && error.walk(lost) !== null;
+}
 
 const view = ({ createdAt: _c, locks: _l, call: _call, primaryCall: _p, ...tx }: TxRecord): TxView => tx;
 
@@ -133,10 +155,15 @@ export class Relay {
 
   /** Moves one sent transaction along from its receipt. */
   private async advanceStep(step: TxStep, call: Call, head: number): Promise<void> {
-    const { client, account } = this.options;
+    const { client, account, now } = this.options;
     if (step.status === 'sent' && step.hash) {
       const receipt = await client.getTransactionReceipt({ hash: step.hash }).catch(() => null);
-      if (!receipt) return;
+      if (!receipt) {
+        // Past its deadline it can only revert: whether the node ever took it no longer matters.
+        const until = call.replay?.until;
+        if (until && now() > until + RECEIPT_LAG) await this.fail(step, call, head, 'not mined by its deadline');
+        return;
+      }
       step.block = Number(receipt.blockNumber);
       step.gasUsed = receipt.gasUsed.toString();
       step.fee = (receipt.gasUsed * receipt.effectiveGasPrice).toString();
@@ -145,15 +172,22 @@ export class Relay {
       } else {
         // Replay the call at the receipt's block to name the revert.
         const { to, data, value } = call;
-        const revert = await client
+        step.revert = await client
           .call({ account: account.address, to, data, value, blockNumber: receipt.blockNumber })
           .then(() => `out of gas or reverted without data (gas used ${receipt.gasUsed})`, revertName);
-        Object.assign(step, { status: 'failed', revert, error: `reverted with ${revert}` });
+        await this.fail(step, call, step.block, `reverted with ${step.revert}`);
       }
     }
     if (step.status === 'in-block' && step.block !== undefined && head >= step.block + CONFIRMATIONS) {
       step.status = 'done';
     }
+  }
+
+  /** Ends a transaction that did nothing, as of `block`. A stake's pot may be open all the same, from a copy of it: the
+   *  request then did what it asked, and goes on to `done`. */
+  private async fail(step: TxStep, call: Call, block: number, error: string): Promise<void> {
+    const opened = call.opens && (await stakeIsOpen(this.options.client, call.opens, BigInt(block)));
+    Object.assign(step, opened ? { status: 'in-block', block } : { status: 'failed', error });
   }
 
   /** Sends `call` through the nonce queue as `step`. A send that fails frees its replay key. */
@@ -185,7 +219,7 @@ export class Relay {
     if (hit) return { ok: false, status: 429, error: `rate limit: ${hit.what}` };
 
     await this.limits.take(limits, at);
-    const { kind, locks, primaryName, to, data, value, gas, replay } = request;
+    const { kind, locks, primaryName, to, data, value, gas, replay, opens } = request;
     for (const call of [request, primaryName]) {
       if (call?.replay) await this.replay.record(call.replay.key, call.replay.until);
     }
@@ -195,7 +229,7 @@ export class Relay {
       status: 'signed',
       createdAt: at,
       locks,
-      call: { to, data, value, gas, ...(replay && { replay }) },
+      call: { to, data, value, gas, ...(replay && { replay }), ...(opens && { opens }) },
       ...(primaryName && { primaryCall: primaryName, primaryName: { status: 'signed' } }),
     };
     await this.save(record);
@@ -214,7 +248,9 @@ export class Relay {
     return { ok: true, tx: view(record) };
   }
 
-  /** Signs and sends with the next nonce. On a nonce error it reads the nonce from the chain and tries once more. */
+  /** Signs and sends with the next nonce. On a nonce error it reads the nonce from the chain and tries once more. A send
+   *  with a deadline that gets no answer counts as sent, under the hash it would have: a receipt or the deadline will
+   *  say what became of it. Without a deadline nothing could end the wait, so it fails. */
   private async broadcast(request: Call): Promise<Hex> {
     const { client, account, tipWei } = this.options;
     const block = await client.getBlock();
@@ -222,22 +258,23 @@ export class Relay {
     for (let attempt = 0; ; attempt++) {
       const nonce =
         this.nonce ?? (await client.getTransactionCount({ address: account.address, blockTag: 'pending' }));
+      const serializedTransaction = await account.signTransaction({
+        type: 'eip1559',
+        chainId: client.chain.id,
+        nonce,
+        to: request.to,
+        data: request.data,
+        value: request.value,
+        gas: request.gas,
+        ...fees,
+      });
       try {
-        const serializedTransaction = await account.signTransaction({
-          type: 'eip1559',
-          chainId: client.chain.id,
-          nonce,
-          to: request.to,
-          data: request.data,
-          value: request.value,
-          gas: request.gas,
-          ...fees,
-        });
         const hash = await client.sendRawTransaction({ serializedTransaction });
         this.nonce = nonce + 1;
         return hash;
       } catch (error) {
         this.nonce = undefined;
+        if (request.replay?.until && answerLost(error)) return keccak256(serializedTransaction);
         if (attempt === 0 && NONCE_ERROR.test(error instanceof Error ? error.message : String(error))) continue;
         throw error;
       }

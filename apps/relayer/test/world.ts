@@ -193,6 +193,8 @@ export class World {
   readonly relay: Relay;
   readonly deps: Deps;
   wakes = 0;
+  /** Unix seconds, for the relay and the routes. */
+  time = NOW;
 
   constructor() {
     this.boxes.set(BOX, {
@@ -290,14 +292,14 @@ export class World {
       client: this.chain.client,
       account: this.relayerAccount,
       tipWei: 2_000_000_000n,
-      now: () => NOW,
+      now: () => this.time,
       wake: async () => void this.wakes++,
     });
     const ctx: Context = {
       client: this.chain.client,
       relayer: this.relayerAccount.address,
       addresses,
-      now: () => NOW,
+      now: () => this.time,
       dripWei: parseEther('0.0003'),
     };
     this.deps = { ctx, relayer: this.relay, allowedOrigins: 'https://gamebox-names.pages.dev,http://localhost:*' };

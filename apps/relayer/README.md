@@ -41,6 +41,13 @@ The store routes answer `404` until `deployments/sepolia.json` holds `StorePot` 
 `/store/topup`). A round has one transaction in flight: its pot's lock is held by `/store/open`, `/store/settle`,
 `/store/void` and `/store/refund`, and by the `/duel` routes and `/box/result` of the same round.
 
+`StorePot.open` takes a signed stake from anyone, so a copy of the relayer's transaction can mine first. The relayer's
+own transaction then reverts, and the pot is open all the same. So before it calls a `/store/open` failed, the sender
+reads the pot (`src/pot-opened.ts`): if the round's pot is open and holds this stake, the request goes on to `done`,
+with `revert: 'PotExists'` and the reverted transaction's hash. A `failed` open means no pot held the stake at that
+moment. It can't promise one never will: the stake's calldata is public once sent, so anyone can send it again until
+its deadline. The Box should treat a failed open as a pot that may still appear.
+
 ### The account allowlist
 
 An account's calls (each call of a batch) may be:
@@ -85,6 +92,7 @@ The live smoke test prints the gas each request used, with its Etherscan link.
 | `src/targets.ts` | Every address in `deployments/sepolia.json` |
 | `src/revert.ts` | Names a revert by its contract error |
 | `src/sender.ts` | The `Sender` Durable Object, one per chain: one nonce queue, the request records, receipts polled by alarm |
+| `src/pot-opened.ts` | Whether a stake's pot is open, for a `/store/open` whose own transaction didn't open it |
 | `src/replay.ts` | Refuses a digest it has already sent |
 | `src/limits.ts` | The rate limits, as sliding windows in the Durable Object |
 | `test/` | Every refusal against a fake node that records sends, the nonce queue, the P-256 and WebAuthn vectors |
@@ -99,6 +107,10 @@ The live smoke test prints the gas each request used, with its Etherscan link.
   plus the tip, so a send lands in the next block even if the base fee climbs. Receipts are polled every 1.5 s.
 - **One nonce queue**: requests are sent one at a time from the Durable Object. On a nonce error it reads the nonce
   from the chain and retries once.
+- **A send with no answer** (a timeout, a dropped connection, a 5xx or the node's internal error) may still have reached
+  the node. A signed request with a deadline stays `sent` under the hash it would have, until its receipt comes or a
+  minute past its deadline, when it is `failed`: it can only revert by then. Any other send fails at once, and so does
+  one the node refused. The next send reads the nonce from the chain.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one
   per badge and 50 per day; account calls 30 per account per hour and 1,500 per day in all; account deploys 3 per IP
   per hour and 30 per day; top-ups one per player per 10 minutes, 60 per IP per day and 300 per day, on each token

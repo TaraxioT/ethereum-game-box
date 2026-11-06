@@ -204,7 +204,7 @@ export interface TxStep {
 
 /** A relayed request's progress: the 202 of every POST route, and `GET /tx/:id`. Its own fields are the main
  *  transaction's; `status` reaches `done` only once the primary-name step has settled too, and is `failed` only if the
- *  main transaction failed. */
+ *  main transaction failed. A store stake is `done`, with its `revert`, if a copy of the transaction opened the pot. */
 export interface TxView extends TxStep {
   id: string;
   kind: TxKind;

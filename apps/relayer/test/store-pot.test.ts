@@ -1,5 +1,5 @@
 import { fakeUsdcAbi, storePotAbi, usdc } from '@egb/shared/names';
-import { type Abi, type Address, decodeFunctionData, getAddress, keccak256, toHex } from 'viem';
+import { type Abi, type Address, TimeoutError, decodeFunctionData, getAddress, keccak256, toHex } from 'viem';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BUNDLE, highSignature, newBadge, storeStakeBody, verdictBody, voidBody } from './bodies.ts';
@@ -231,6 +231,102 @@ describe('POST /store/open', () => {
     await world.store.put(`rate:store-open:box:${BOX}`, Array.from({ length: 29 }, (_, i) => NOW - i));
     expect((await world.post('/store/open', storeStakeBody(world, players, { key: boxKey() }))).status).toBe(401);
     expect((await world.post('/store/open', storeStakeBody(world, players))).status).toBe(202);
+  });
+});
+
+describe("a stake's pot that opened without the relayer's own transaction", () => {
+  const notOpened = { status: 'failed', error: 'reverted with PotExists', revert: 'PotExists' };
+  const timeout = () => new TimeoutError({ body: {}, url: 'https://node.test' });
+
+  /** Sends the stake, then lets `mined` put the chain as a copy of it left it. The relayer's transaction reverts. */
+  async function beaten(m: Match, mined: () => void) {
+    const { body } = await m.world.post('/store/open', storeStakeBody(m.world, m.players));
+    mined();
+    m.world.reverts.set('open', [storePotAbi as Abi, 'PotExists', [BOX, 1n]]);
+    m.world.chain.receipts.set(m.world.chain.sent[0]!.hash, { status: 'reverted', block: 100 });
+    m.world.chain.head++;
+    await m.world.relay.poll();
+    return (await m.world.get(`/tx/${body.id}`)).body;
+  }
+
+  it('is done when a copy from the mempool mined first: the pot is open and holds the stakes', async () => {
+    const m = match(4);
+    const view = await beaten(m, () => withPot(m));
+    expect(view).toMatchObject({ status: 'done', block: 100, revert: 'PotExists' });
+    expect(view.error).toBeUndefined();
+  });
+
+  const others: [string, (m: Match) => Partial<StorePotEntry>][] = [
+    ['another amount', () => ({ amount: usdc(11) })],
+    ['another bundle', () => ({ bundle: keccak256(toHex('another game')) })],
+    ['another player', (m) => ({ players: [m.players[0]!, m.players[1]!, newBadge().address] })],
+    ['fewer players', (m) => ({ players: m.players.slice(0, 2) })],
+    ['the same players in another order', (m) => ({ players: [...m.players].reverse() })],
+    ['a pot that has since been voided', () => ({ state: 3 })],
+    ['a pot that has since been refunded', () => ({ state: 4 })],
+  ];
+
+  for (const [what, entry] of others) {
+    it(`fails on ${what}: that isn't this stake's open pot`, async () => {
+      const m = match(3);
+      expect(await beaten(m, () => withPot(m, entry(m)))).toMatchObject(notOpened);
+    });
+  }
+
+  it('fails on a revert that left no pot', async () => {
+    const m = match();
+    expect(await beaten(m, () => {})).toMatchObject(notOpened);
+  });
+
+  it('says nothing until it can read the pot', async () => {
+    const m = match();
+    const { body } = await m.world.post('/store/open', storeStakeBody(m.world, m.players));
+    withPot(m);
+    m.world.chain.receipts.set(m.world.chain.sent[0]!.hash, { status: 'reverted', block: 100 });
+    m.world.chain.head++;
+    const { handlers } = m.world.chain.contracts.get(STORE_POT.toLowerCase())!;
+    const { getPot } = handlers;
+    handlers.getPot = () => {
+      throw Object.assign(new Error('header not found'), { code: -32000 });
+    };
+    await expect(m.world.relay.poll()).rejects.toThrow();
+    expect((await m.world.get(`/tx/${body.id}`)).body).toMatchObject({ status: 'sent' });
+    handlers.getPot = getPot!;
+    await m.world.relay.poll();
+    expect((await m.world.get(`/tx/${body.id}`)).body).toMatchObject({ status: 'done' });
+  });
+
+  it('follows an open whose answer was lost, rather than call it failed', async () => {
+    const m = match();
+    m.world.chain.lostSends = [{ error: timeout(), taken: true }];
+    const res = await m.world.post('/store/open', storeStakeBody(m.world, m.players));
+    expect(res).toMatchObject({ status: 202, body: { status: 'sent', hash: m.world.chain.sent[0]!.hash } });
+    m.world.chain.receipts.set(m.world.chain.sent[0]!.hash, { status: 'success', block: 100 });
+    m.world.chain.head++;
+    await m.world.relay.poll();
+    expect((await m.world.get(`/tx/${res.body.id}`)).body).toMatchObject({ status: 'done', block: 100 });
+  });
+
+  it('is done if only a copy of a lost send made it by the deadline', async () => {
+    const m = match();
+    m.world.chain.lostSends = [{ error: timeout(), taken: false }];
+    const { body } = await m.world.post('/store/open', storeStakeBody(m.world, m.players));
+    withPot(m);
+    m.world.time = NOW + 661;
+    await m.world.relay.poll();
+    expect((await m.world.get(`/tx/${body.id}`)).body).toMatchObject({ status: 'in-block', block: 100 });
+    m.world.chain.head++;
+    await m.world.relay.poll();
+    expect((await m.world.get(`/tx/${body.id}`)).body).toMatchObject({ status: 'done' });
+  });
+
+  it('fails a lost send that opened nothing by the deadline', async () => {
+    const m = match();
+    m.world.chain.lostSends = [{ error: timeout(), taken: false }];
+    const { body } = await m.world.post('/store/open', storeStakeBody(m.world, m.players));
+    m.world.time = NOW + 661;
+    await m.world.relay.poll();
+    expect((await m.world.get(`/tx/${body.id}`)).body).toMatchObject({ status: 'failed', error: 'not mined by its deadline' });
   });
 });
 
