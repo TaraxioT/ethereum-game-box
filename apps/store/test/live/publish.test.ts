@@ -4,14 +4,18 @@
 // reaches no network, and never touches a real bucket.
 
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { deflateRawSync } from 'node:zlib';
 
 import { BUNDLE_LIMITS, type StoreIndex } from '@egb/sdk/bundle';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { goodEntries } from '../../../../packages/sdk/test/bundle/fixture.ts';
+import { rawZip } from '../../../../packages/sdk/test/bundle/raw-zip.ts';
 import { hashOf, zipOf } from '../zips.ts';
 
 const APP = path.join(import.meta.dirname, '../..');
@@ -162,6 +166,56 @@ describe('the size cap, on the real runtime', () => {
     const hash = await hashOf(zip);
     expect((await post(zip)).status).toBe(201);
     expect(await hashOf(await download(hash))).toBe(hash);
+  });
+});
+
+describe("an upload's cost, on the real runtime", () => {
+  // Compressing this again is what once took a read 2.2 s for each MB.
+  it('takes the text that was slowest to deflate, right at the limit, in moments', async () => {
+    const letters = randomBytes(BUNDLE_LIMITS.zipBytes - 2048).map((byte) => (byte & 1 ? 0x61 : 0x62));
+    const zip = zipOf('two-letters', 'one', [['game.js', letters]]);
+    const started = performance.now();
+    expect((await post(zip)).status).toBe(201);
+    expect(performance.now() - started).toBeLessThan(5000);
+  });
+
+  // workerd inflates a whole stream before its first read returns, so a cap on what is read back never held a bomb.
+  it('refuses a bomb at its header, before a byte is inflated', async () => {
+    const body = new Uint8Array(256 * 1024 * 1024);
+    const bomb = { name: 'game.js', body, data: deflateRawSync(body), method: 8, size: 1000, localSize: 1000, crc: 0 };
+    const response = await post(rawZip(goodEntries().map((entry) => (entry.name === 'game.js' ? bomb : entry))));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'game.js: compression method 8' });
+  });
+});
+
+describe('HEAD, on the real runtime', () => {
+  it('says a zip is there and how big, and sends none of it', async () => {
+    const zip = zipOf('head-game');
+    const at = `${url}/bundles/${await hashOf(zip)}.zip`;
+    await post(zip);
+
+    const head = await fetch(at, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-length')).toBe(String(zip.length));
+    expect(head.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+
+    const get = await fetch(at);
+    expect(get.headers.get('content-length')).toBe(String(zip.length));
+    expect(new Uint8Array(await get.arrayBuffer())).toEqual(zip);
+  });
+
+  it('says the index is there and how big', async () => {
+    const head = await fetch(`${url}/index.json`, { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    const text = await (await fetch(`${url}/index.json`)).text();
+    expect(head.headers.get('content-length')).toBe(String(Buffer.byteLength(text)));
+  });
+
+  it('is a 404 for a zip nobody published', async () => {
+    const head = await fetch(`${url}/bundles/0x${'ab'.repeat(32)}.zip`, { method: 'HEAD' });
+    expect(head.status).toBe(404);
   });
 });
 
