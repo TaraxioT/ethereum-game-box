@@ -19,6 +19,18 @@ export const DEMO_BOX_URL: string =
 
 export const ETHERSCAN = "https://sepolia.etherscan.io";
 
+/** The operator site: where an operator signs in with a passkey and edits its Box's four keys. A separate app
+ * (`apps/operator`); this site only links to it and watches the chain for its writes. */
+export const OPERATOR_SITE_URL: string = env.VITE_OPERATOR_SITE_URL ?? "https://gamebox-operator.pages.dev";
+
+/** The ENS app on Sepolia, which resolves through ENSv2 and shows the names under gamebox.eth. */
+export const ENS_APP_URL = "https://sepolia.app.ens.domains";
+
+/** A name's page in the ENS app: what the QR code after a claim opens. */
+export function ensAppLink(name: string): string {
+  return `${ENS_APP_URL}/${name}`;
+}
+
 /** The largest block range one `eth_getLogs` asks for. */
 export const LOG_CHUNK = 9_999n;
 
