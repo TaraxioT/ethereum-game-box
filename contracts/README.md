@@ -178,3 +178,31 @@ need a little ETH for their own writes.
 `pnpm contracts:test` runs the names tests on a fork of Sepolia pinned to a block (`SEPOLIA_RPC_URL`), against the live
 ENSv2 contracts. Test accounts and labels carry an `egb-test-` or `egbt-` prefix, so they can't collide with live state.
 `Vectors.t.sol` writes `packages/shared/src/names/vectors.json`, which the shared package's tests check byte for byte.
+
+## Staking
+
+`staking/BoxStaking.sol` holds GBX staked behind a Box and pays the Box's USDC game fees out to it. A Box is a label in
+`GameBoxNames`, so staking reads the Box's operator, status and expiry from there and keeps no registry of its own.
+
+| Rule | |
+|---|---|
+| Open | The Box is `Active` in `GameBoxNames` and its licence hasn't lapsed. New stake and fees need an open Box; unstaking, withdrawing and claiming always work |
+| Bonded | Open, and the operator's own stake is at least `MIN_OPERATOR_STAKE`. Only the operator may stake on a Box that isn't bonded, and only a bonded Box takes fees |
+| Shares | Stake is held as shares (with a virtual share and a virtual GBX, so the first staker can't inflate the price), so a slash lowers every staker by the same fraction |
+| Unbonding | `requestUnstake` moves stake into a second pool that earns nothing and is still slashed, until `UNSTAKE_DELAY` passes; a second request restarts the delay. While the Box is open the operator can't go below the minimum |
+| Rewards | `notifyFees(label, amount)` pulls USDC from the caller: the commission goes to the operator at once, the rest to stakers by a USDC-per-share counter. `claim` pays it out |
+| Commission | 10% to 90%, starting at 10%. A cut is immediate; a raise waits `COMMISSION_DELAY`, unless the operator is the only staker |
+| Slashing | `slash(label, bps, to)` takes `bps` of the active and the unbonding pool and sends it to `to`. `SLASHER_ROLE` only; nobody holds it until the dispute contract exists |
+
+`stakeFor` lets the lobby and the operator auction stake bought GBX for a player or an operator in one transaction.
+
+Deployed with `MIN_OPERATOR_STAKE` 10,000 GBX and both delays at 1 hour, short enough to show in a demo. The deployer
+holds `DEFAULT_ADMIN_ROLE`.
+
+```sh
+forge script script/DeployStaking.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+`test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against real USDC and a fresh
+`GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.
