@@ -18,6 +18,13 @@ export type ChainSetting =
   | { readonly kind: "sepolia"; readonly signerCmd: string; readonly relayerUrl: string; readonly rpcUrl: string; readonly box: string }
   | { readonly kind: "demo" };
 
+/** `gamebox.eth`'s admin key (`EGB_ADMIN_KEY`): the test page's Admin tab adds games and opens and closes
+ *  championships with it, read and sent over `SEPOLIA_RPC_URL`. Null without the key. */
+export interface AdminSetting {
+  readonly key: `0x${string}`;
+  readonly rpcUrl: string;
+}
+
 export interface Settings {
   readonly host: string;
   readonly port: number;
@@ -29,6 +36,7 @@ export interface Settings {
   /** The station ids at Player 1's and Player 2's seats: the last three bytes of each MAC, lower-case hex. */
   readonly stations: readonly [string, string];
   readonly chain: ChainSetting;
+  readonly admin: AdminSetting | null;
 }
 
 export const DEFAULTS = {
@@ -62,6 +70,7 @@ export class SettingsError extends Error {
 type Env = Readonly<Record<string, string | undefined>>;
 
 const STATION = /^[0-9a-f]{6}$/;
+const PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
 
 /** `~/x` from home; a relative path from the repo root, so the server finds the same folders from any directory. */
 function place(value: string, home: string, repoRoot: string): string {
@@ -107,6 +116,16 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     problems.push(`stakes go on Sepolia: set ${missing.join(", ")} (only the simulator, EGB_RECEIVER=fake or none, runs without them)`);
   }
 
+  // The admin key is never echoed either: a problem names the variable only.
+  const adminKey = get("EGB_ADMIN_KEY");
+  let admin: AdminSetting | null = null;
+  if (adminKey !== undefined) {
+    if (!PRIVATE_KEY.test(adminKey)) problems.push("EGB_ADMIN_KEY must be a 0x-prefixed 32-byte hex private key");
+    else if (rpcUrl === undefined) problems.push("EGB_ADMIN_KEY needs SEPOLIA_RPC_URL to read and send with");
+    else if (isHttpUrl(rpcUrl)) admin = { key: adminKey as `0x${string}`, rpcUrl };
+    else if (chain.kind !== "sepolia") problems.push("SEPOLIA_RPC_URL must be an http(s) URL");
+  }
+
   if (problems.length > 0) throw new SettingsError(problems);
   return {
     host,
@@ -116,5 +135,6 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     receiver,
     stations: [one, two],
     chain,
+    admin,
   };
 }

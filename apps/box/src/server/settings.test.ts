@@ -16,6 +16,7 @@ describe("settings", () => {
       receiver: { kind: "auto" },
       stations: ["df3b9c", "df3d88"],
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "mumbai-01" },
+      admin: null,
     });
   });
 
@@ -42,6 +43,7 @@ describe("settings", () => {
       receiver: { kind: "serial", path: "/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_7C:DF:A1:D5:04:CC-if00" },
       stations: ["df3d88", "e4ba70"],
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "demo-01" },
+      admin: null,
     });
     expect(readSettings({ EGB_RECEIVER: "fake" }, HOME, REPO).receiver).toEqual({ kind: "fake" });
     expect(readSettings({ EGB_RECEIVER: "none" }, HOME, REPO).receiver).toEqual({ kind: "none" });
@@ -71,6 +73,19 @@ describe("settings", () => {
       readSettings({ ...CHAIN, SEPOLIA_RPC_URL: "not a url secret-key" }, HOME, REPO);
     } catch (error) {
       expect(String(error)).not.toContain("secret-key");
+    }
+  });
+
+  it("takes the admin key only with an RPC to use it on, and never echoes it", () => {
+    const KEY = `0x${"ab".repeat(32)}`;
+    expect(readSettings({ ...CHAIN, EGB_ADMIN_KEY: KEY }, HOME, REPO).admin).toEqual({ key: KEY, rpcUrl: CHAIN.SEPOLIA_RPC_URL });
+    expect(() => readSettings({ EGB_RECEIVER: "fake", EGB_ADMIN_KEY: KEY }, HOME, REPO)).toThrow(/EGB_ADMIN_KEY needs SEPOLIA_RPC_URL/);
+    const bad = () => readSettings({ ...CHAIN, EGB_ADMIN_KEY: "0xsecret-not-a-key" }, HOME, REPO);
+    expect(bad).toThrow(/EGB_ADMIN_KEY must be/);
+    try {
+      bad();
+    } catch (error) {
+      expect(String(error)).not.toContain("secret-not-a-key");
     }
   });
 });

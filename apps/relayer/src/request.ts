@@ -1,7 +1,7 @@
 // A request that passed every check, ready for the sender, and the steps every route shares: the `eth_call` of the
 // exact call and its gas limit.
 
-import { type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
+import { CREATES_STORAGE_GAS, type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
@@ -84,11 +84,8 @@ export interface Prepared extends Call {
   primaryName?: Call;
 }
 
-/**
- * The limit for a call that creates a resolver or a registry: `eth_estimateGas` comes out too low for nested calls
- * that create storage, and a limit above 2^24 holds the excess as a reservoir for state gas.
- */
-export const CREATES_STORAGE_GAS = (1n << 24n) + 4_000_000n;
+/** The limit for a call that creates a resolver or a registry (shared with every other sender). */
+export { CREATES_STORAGE_GAS };
 
 /** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
 export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {

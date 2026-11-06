@@ -1,6 +1,7 @@
 export * from './api.ts';
 export * from './abis.ts';
 export * from './deployments.ts';
+export * from './gas.ts';
 export * from './keys.ts';
 export * from './labels.ts';
 export * from './messages.ts';

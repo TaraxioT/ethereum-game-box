@@ -61,6 +61,7 @@ export async function startTestBox(
       receiver: options.receiver ?? { kind: "none" },
       stations: ["e4ba70", "df3d88"],
       chain: { kind: "demo" },
+      admin: null,
     },
     repoRoot: dir,
     clock,

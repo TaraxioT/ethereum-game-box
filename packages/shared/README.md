@@ -13,7 +13,19 @@
 | `src/chains.ts` | Sepolia and Robinhood Chain settings, with RPC URLs taken from the environment |
 | `src/names/` | The ENS names under `gamebox.eth`, imported as `@egb/shared/names` (below) |
 | `src/web/` | What the sites (`apps/web`, `apps/operator`) need in a browser, imported as `@egb/shared/web` (below) |
+| `src/admin/` | What `gamebox.eth`'s admin does, imported as `@egb/shared/admin` (below) |
 | `src/swap/` | The tap swap on the GBX/USDC pool, imported as `@egb/shared/swap` (below) |
+
+## `src/admin/`
+
+The calls only the admin key may make, for any app that holds it (the Box's Admin tab now, a site later). No DOM, no
+Node.
+
+| Module | Holds |
+|---|---|
+| `calls.ts` | Each call built and checked before anything is sent (`AdminInputError`): `addGameCall` (a title term of a minute to a year), `openCupCall` (a run of a minute to 90 days, never named `champion`), `closeCupCall`, and `openCupCalls`, which mints the prize's shortfall and approves `Championships` first. Calls that create storage carry `CREATES_STORAGE_GAS` |
+| `reads.ts` | `adminReads(client, admin).view()`: at one block, the admin's ETH, USDC and roles, every game (from `GameAdded`, scanned once then incrementally) with its title and open championship, and the latest 10 championships |
+| `send.ts` | `adminSender(wallet, client)`: one call at a time, each `eth_call`ed first (`AdminRefused` with the contract's error name), sent, and waited for; a nonce clash (the relayer shares the key) retried once |
 
 ## `src/names/`
 
@@ -25,6 +37,7 @@
 | `usdc.ts` | The demo's test USDC: `USDC_DECIMALS` (6), `usdc(10)` to base units and `formatUsdc` back |
 | `webauthn.ts` | The two signature forms a `P256Account` takes: raw (`rawSignature`) and a passkey's assertion (`webAuthnChallenge`, `parseDerSignature`, `encodeWebAuthnSignature`), low `s` always; a passkey's public key from its SPKI (`p256PublicKeyFromSpki`); an assertion checked the way the account checks it (`checkAssertion`, `assertionSignature`); and `base64url` |
 | `p256.ts` | P-256 without WebAuthn's help: the hash an authenticator signs (`assertionHash`), the keys a signature recovers to (`recoverP256Keys`), `verifyP256`, and a public key read from or written as `0x04` + x + y (`parseP256PublicKey`, `p256PublicKeyHex`) |
+| `gas.ts` | `CREATES_STORAGE_GAS`, the limit for a call that creates a resolver or a registry, for every sender |
 | `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, `GameBoxNames`' own roles (with `SEATER_ROLE`) and `FakeUSDC`'s (`USDC_ROLES`) |
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
 | `vectors.json` | Written by `contracts/test/names/Vectors.t.sol`; `vectors.test.ts` checks `messages.ts`, `webauthn.ts`, `primaryName.ts` and `roles.ts` against it |

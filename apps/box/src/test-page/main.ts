@@ -1,6 +1,7 @@
-// The test page (/test): four tabs to check the Box on the Pi. Stations, Badges and Box poll the server twice a
-// second; Builder follows the game builder's event stream. Plain DOM, served by the Box server; every write goes to a
-// route that needs this machine's origin (and the builder's, the launcher token).
+// The test page (/test): five tabs to check the Box on the Pi. Stations, Badges and Box poll the server twice a
+// second; Builder follows the game builder's event stream; Admin reads the chain while it is open. Plain DOM, served
+// by the Box server; every write goes to a route that needs this machine's origin (and the builder's and the
+// admin's, the launcher token).
 import "../screen/fonts.css";
 import "../screen/tokens.css";
 import "./test-page.css";
@@ -10,6 +11,7 @@ import { stationsTab } from "./stations.ts";
 import { badgesTab } from "./badges.ts";
 import { boxTab } from "./box.ts";
 import { builderTab } from "./builder.ts";
+import { adminTab } from "./admin.ts";
 
 const POLL_MS = 500;
 
@@ -17,7 +19,8 @@ const stations = stationsTab();
 const badges = badgesTab();
 const box = boxTab();
 const builder = builderTab();
-const tabs = { Stations: stations.el, Badges: badges.el, Box: box.el, Builder: builder.el } as const;
+const admin = adminTab();
+const tabs = { Stations: stations.el, Badges: badges.el, Box: box.el, Builder: builder.el, Admin: admin.el } as const;
 type Name = keyof typeof tabs;
 
 const nav = h("nav", "tabs");
@@ -30,6 +33,7 @@ function open(name: Name): void {
   for (const [tab, el] of Object.entries(tabs)) el.hidden = tab !== name;
   for (const b of nav.children) b.classList.toggle("on", b.textContent === name);
   location.hash = name.toLowerCase();
+  if (name === "Admin") admin.refresh();
 }
 for (const name of Object.keys(tabs) as Name[]) {
   const b = h("button", "", name);

@@ -3,7 +3,8 @@
 The core's `ChainPort` (`core/ports.ts`) on Sepolia, for the Box server. Stakes are fake USDC (`FakeUSDC`, 6 decimals);
 every address comes from `deployments/sepolia.json` through `@egb/shared/names`. The relayer
 (`RELAYER_URL`, `apps/relayer`) sends each request and pays the gas; the Box signs what needs its say with its P-256
-key (`src/signer/`), and never holds an Ethereum key.
+key (`src/signer/`), and holds no Ethereum key for any of this. (The optional admin key, `EGB_ADMIN_KEY`, is only
+for the test page's Admin tab: `server/admin.ts`.)
 
 | Request | Route | Signed by the Box |
 |---|---|---|

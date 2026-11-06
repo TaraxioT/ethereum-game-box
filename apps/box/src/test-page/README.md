@@ -1,6 +1,6 @@
 # The test page
 
-`/test` on the Box server: four tabs to check the Box on the Pi, in the screen's palette and type but plain and dense.
+`/test` on the Box server: five tabs to check the Box on the Pi, in the screen's palette and type but plain and dense.
 Plain DOM and TypeScript, built with the box build (`pnpm build:box` writes it to `dist/screen/test/`) and served by
 the server like the screen (CSP, the launcher token on a top-level navigation). It polls `GET /api/taps` and
 `GET /api/box` twice a second; every button posts to a route that needs this machine's origin. The Builder tab
@@ -12,6 +12,7 @@ in `src/server/README.md`.
 | Stations | The receiver (open, its path, the taps touched, done, failed and running); per station its link, RSSI, ping, reader, the chip on it and the screen it shows, with Buzz ok / no; the press round trip; the bench (samples, Run, median, p95, max per measurement). |
 | Badges | Identify and Roll the badge resting on each station (the verified number); injected taps per seat with a badge picker from the roster or an address; the roster; with `EGB_RECEIVER=fake`, the simulated badges to place on P1 or P2 and lift, the stations' links, and the receiver's cable. |
 | Box | The phase (with the match's round on chain) and Sepolia's head, the power switch (off: the Box misses its settle, so the match goes to Refund, which unlocks once the pot's refund delay has run), Reset to Home (a pot left open is refunded once it unlocks), the badges' records, the whole state (the lobby and every transaction with its hash). |
+| Admin | With `EGB_ADMIN_KEY`: the admin's address, ETH, USDC and roles; add a game with its title term; the games with their champion (name, streak, when it lapses) and open championship; open a championship (game, label, minutes, prize in test USDC); the latest championships with Close once one has ended; every job's transactions as Etherscan links. Reads every 3 s while open. |
 | Builder | Who builds here (the provider, SIMULATED for `sim`), whether it can, who reads answers and the voice; the Forge's jobs with their status, Cancel for one still going, Remove game for a built one, and Events for a job's whole log; the builder's event stream as it comes. Its requests carry the launcher token, through the screen's `views/builder-link.ts`. |
 
 | Module | What it is |
@@ -19,5 +20,5 @@ in `src/server/README.md`.
 | `index.html`, `main.ts` | The page, the tabs (the open one in the URL's hash) and the poll. |
 | `wire.ts` | What the page reads from each route; the server's replies satisfy these types, so the two can't drift. No DOM, no Node. |
 | `dom.ts` | `h`, `button`, `rows`, `get`, `post`, `show`. |
-| `stations.ts`, `badges.ts`, `box.ts`, `builder.ts` | One tab each. |
+| `stations.ts`, `badges.ts`, `box.ts`, `builder.ts`, `admin.ts` | One tab each. |
 | `test-page.css` | Its styles, on `screen/tokens.css`. |
