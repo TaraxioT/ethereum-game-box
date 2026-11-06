@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { dnsName, fullName, labelProblem, popupLabel, popupLabelProblem, titleName } from './labels.ts';
+import {
+  championshipLabelProblem,
+  championshipName,
+  dnsName,
+  fullName,
+  labelProblem,
+  popupLabel,
+  popupLabelProblem,
+  titleName,
+} from './labels.ts';
 
 describe('labelProblem', () => {
   it.each(['abc', 'mumbai-01', 'bot', 'a-b', '0x0', 'a'.repeat(32), 'quickdraw'])('accepts %s', (label) => {
@@ -49,5 +58,17 @@ describe('names', () => {
 describe('dnsName', () => {
   it('DNS-encodes the full name, as NameLib.dnsName does', () => {
     expect(dnsName('mumbai-01')).toBe('0x096d756d6261692d30310767616d65626f780365746800');
+  });
+});
+
+describe('championships', () => {
+  it('names a championship in its game', () => {
+    expect(championshipName('mumbai-cup', 'stockduel')).toBe('mumbai-cup.stockduel.gamebox.eth');
+  });
+
+  it('refuses the title label and bad labels', () => {
+    expect(championshipLabelProblem('mumbai-cup')).toBeNull();
+    expect(championshipLabelProblem('champion')).toBe('taken by the title');
+    expect(championshipLabelProblem('-cup')).toBe('no hyphen at the start or end');
   });
 });

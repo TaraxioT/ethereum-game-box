@@ -79,4 +79,11 @@ export const GAME_BOX_ROLES = {
   DEFAULT_ADMIN_ROLE: `0x${'00'.repeat(32)}` as Hex,
   LICENSOR_ROLE: keccak256(toHex('LICENSOR_ROLE')),
   REFEREE_ROLE: keccak256(toHex('REFEREE_ROLE')),
+  SEATER_ROLE: keccak256(toHex('SEATER_ROLE')),
+} as const;
+
+/** `FakeUSDC`'s OpenZeppelin roles (the deployer, which is the relayer, holds both). */
+export const USDC_ROLES = {
+  DEFAULT_ADMIN_ROLE: `0x${'00'.repeat(32)}` as Hex,
+  MINTER_ROLE: keccak256(toHex('MINTER_ROLE')),
 } as const;

@@ -78,6 +78,65 @@ export const TITLE_KEYS = {
   round: 'round',
 } as const;
 
+/** Championships (`<label>.<game>.gamebox.eth`, such as `mumbai-cup.stockduel.gamebox.eth`), written by
+ *  `Championships` only, on the name's own resolver. `addr` is the leader's badge while it runs, then the winner's.
+ *  Once closed, nobody holds a role on that resolver: the records are frozen for good. */
+export const CUP_KEYS = {
+  /** Unix seconds when scoring stops and the championship can be closed. */
+  ends: 'ends',
+  /** The prize, in USDC base units (6 decimals). */
+  prize: 'prize',
+  /** The top 5, in rank order: JSON, an array of `Standing` (`parseStandings`). `[]` until the first result. */
+  standings: 'standings',
+  /** The leader's player name, `<player>.gamebox.eth`, while it runs. */
+  leader: 'leader',
+  /** The winner's player name, written at close. */
+  winner: 'winner',
+} as const;
+
+/** One row of a championship's `standings` record. Rank is the row's position: most points, then most wins, then who
+ *  reached that score first. */
+export interface Standing {
+  /** The player's name, `<player>.gamebox.eth` (empty if the badge no longer holds one). */
+  name: string;
+  /** The player's badge, checksummed. */
+  addr: `0x${string}`;
+  /** Win 3, draw 1, loss 0. */
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+/** How many players `standings` lists. */
+export const STANDINGS_SIZE = 5;
+
+/** Reads a `standings` record. Throws on anything that isn't the shape `Championships` writes. */
+export function parseStandings(text: string): Standing[] {
+  const rows: unknown = JSON.parse(text);
+  if (!Array.isArray(rows)) throw new Error('standings is not an array');
+  return rows.map((row: unknown) => {
+    const r = row as Record<string, unknown>;
+    const counts = ['points', 'wins', 'draws', 'losses'] as const;
+    if (
+      typeof r.name !== 'string' ||
+      typeof r.addr !== 'string' ||
+      !/^0x[0-9a-fA-F]{40}$/.test(r.addr) ||
+      counts.some((k) => typeof r[k] !== 'number')
+    ) {
+      throw new Error(`standings row is malformed: ${JSON.stringify(row)}`);
+    }
+    return {
+      name: r.name,
+      addr: r.addr as `0x${string}`,
+      points: r.points as number,
+      wins: r.wins as number,
+      draws: r.draws as number,
+      losses: r.losses as number,
+    };
+  });
+}
+
 /** ENSIP-26 agent text records, used by `bot.gamebox.eth` and written by the agent itself. */
 export const AGENT_KEYS = {
   /** What the agent is and how to reach it: plain text, Markdown, YAML or JSON. */

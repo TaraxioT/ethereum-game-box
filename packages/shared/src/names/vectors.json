@@ -97,16 +97,39 @@
   },
   "result": {
     "box": "mumbai-01",
-    "boxResults": "0xb3acdD6EbC5a8F1602b55C2A02A2B5E120b4E3b1",
+    "boxResults": "0xF9fCa62Ea399ae98262d4F66D853354D514B58a7",
     "deadline": "1800000000",
-    "digest": "0xbb4d320e1da12664c8507837aff2141b1ab8d36176bc71eaf8beea1da0ab9d2f",
+    "digest": "0xf4720836055f7f9ae125edbaa75c8afd6ee391555a6e5d39b1b40ee417144b47",
     "draw": false,
     "game": "quickdraw",
     "loser": "0x4444444444444444444444444444444444444444",
-    "r": "0xd0e7da6411a21177fa3f10764a5afd956a6c9032eded634588a665ef0b2cbfe0",
+    "r": "0x33c1348ed88aa14619876b2ca4b04e2ef7f0743c4f7c3005b9141074bc6963c1",
     "round": "3",
-    "s": "0x232bda1d9ca2b4b5825dc18c70fabedc08fe878f7a34dcd3182a0846d53e1aa2",
+    "s": "0x1d3d374115413191f01ebcae68086cffa1b06f1ea670706939eb383fe54d65d9",
     "winner": "0x2222222222222222222222222222222222222222"
+  },
+  "seat": {
+    "badge": "0x2222222222222222222222222222222222222222",
+    "box": "mumbai-01",
+    "boxSeats": "0xE7636C37947b61F1fB46C74f58d282d7ac27AdE1",
+    "deadline": "1800000000",
+    "digest": "0x0ba764406383b2e2651b4aa6a2f30605fc7b5aa44e386b325ddf4b3070b2adac",
+    "label": "nova",
+    "r": "0x293fe290053ac9ee8b6a05bded3afa9636e60318e03060ae8d6e90fdf7755fef",
+    "s": "0x29193580e6a54ac8191cdee94fc36a4fd4fde68a36d835566c31612a36d4867f"
+  },
+  "stake": {
+    "a": "0x2222222222222222222222222222222222222222",
+    "amount": "10000000",
+    "b": "0x4444444444444444444444444444444444444444",
+    "box": "mumbai-01",
+    "deadline": "1800000000",
+    "digest": "0x9eb7ef7d2306a60ab726079057a9b83ee62a3532f6a3176499e13b647909f116",
+    "duelPot": "0xDbEc2CAE560743c5E69e94A759b1D4eA0e9382B8",
+    "game": "stockduel",
+    "r": "0xf41bdcdbd1df328100b5ab559abc86799ffc195322e8e95dacf579448ffa7006",
+    "round": "3",
+    "s": "0x18d8511a975f6ba4fb4a3852a321140b3c09295cdf570c64a0365123efbdfe78"
   },
   "webAuthn": {
     "authenticatorData": "0xc21ef50d88e165b7783cb7a4fd1bd50793ec975a0290e76687d564e688852d491d00000000",

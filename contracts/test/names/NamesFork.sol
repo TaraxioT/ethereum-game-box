@@ -5,7 +5,10 @@ import {Test} from "forge-std/Test.sol";
 
 import {P256Account} from "../../src/box/P256Account.sol";
 import {P256AccountFactory} from "../../src/box/P256AccountFactory.sol";
+import {DuelPot} from "../../src/game/DuelPot.sol";
 import {BoxResults} from "../../src/names/BoxResults.sol";
+import {BoxSeats} from "../../src/names/BoxSeats.sol";
+import {Championships} from "../../src/names/Championships.sol";
 import {DefaultRecord} from "../../src/names/DefaultRecord.sol";
 import {DemoLicences} from "../../src/names/DemoLicences.sol";
 import {GameBoxNames} from "../../src/names/GameBoxNames.sol";
@@ -18,11 +21,13 @@ import {
     IVerifiableFactory
 } from "../../src/names/IENSv2.sol";
 import {PlayerStats} from "../../src/names/PlayerStats.sol";
+import {FakeUSDC} from "../../src/token/FakeUSDC.sol";
 import {P256Keys} from "../box/P256Keys.sol";
 
 /// @notice A fork of Sepolia at a pinned block with the live ENSv2 contracts, and the Game Box names deployed on it
-///         the way `script/` deploys them: the account factory and the demo Box's account, `gamebox.eth` pointed at
-///         our registry and at its own resolver with the default record, both games added, the roles granted.
+///         the way `script/` deploys them: the account factory and the demo Box's account, the test USDC, the pots,
+///         the championships and the Box seats, `gamebox.eth` pointed at our registry and at its own resolver with the
+///         default record, both games added, the roles granted.
 abstract contract NamesFork is Test, P256Keys {
     /// @dev After `gamebox.eth` moved to the deployer.
     uint256 internal constant FORK_BLOCK = 12_075_200;
@@ -39,6 +44,10 @@ abstract contract NamesFork is Test, P256Keys {
     PlayerStats internal stats;
     BoxResults internal results;
     DemoLicences internal licences;
+    FakeUSDC internal fakeUsdc;
+    DuelPot internal pot;
+    Championships internal cups;
+    BoxSeats internal seats;
     P256AccountFactory internal accounts;
     P256Account internal demoBox;
     IPermissionedRegistry internal registry;
@@ -64,12 +73,19 @@ abstract contract NamesFork is Test, P256Keys {
             ensFactory, vm.parseJsonAddress(json, ".ens.UserRegistryImpl.address"), resolverImpl, ethRegistry, admin
         );
         stats = new PlayerStats(names);
-        results = new BoxResults(names, stats);
+        fakeUsdc = new FakeUSDC(admin, admin);
+        pot = new DuelPot(names, fakeUsdc);
+        cups = new Championships(names, fakeUsdc, ensFactory, resolverImpl, admin);
+        results = new BoxResults(names, stats, pot, cups);
         licences = new DemoLicences(names);
+        seats = new BoxSeats(names);
         names.grantRole(names.LICENSOR_ROLE(), admin);
         names.grantRole(names.LICENSOR_ROLE(), address(licences));
         names.grantRole(names.REFEREE_ROLE(), address(results));
+        names.grantRole(names.SEATER_ROLE(), address(seats));
         names.setStatsWriter(address(stats));
+        names.setChampionships(address(cups));
+        fakeUsdc.setGameSpender(address(pot));
         (bytes32 qx, bytes32 qy) = p256Public(boxKey);
         demoBox = P256Account(payable(accounts.deploy(qx, qy)));
         vm.stopPrank();

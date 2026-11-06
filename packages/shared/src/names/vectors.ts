@@ -6,7 +6,7 @@ import type { Address, Hex } from 'viem';
 
 import vectors from './vectors.json' with { type: 'json' };
 
-import type { ClaimName, Execute, ExecuteBatch, Result } from './messages.ts';
+import type { ClaimName, Execute, ExecuteBatch, Result, Seat, Stake } from './messages.ts';
 import type { PrimaryName } from './primaryName.ts';
 
 /** `ClaimName` for `alice`, signed by the badge as viem `signTypedData` (and `eth_signTypedData_v4`) produces it. */
@@ -105,6 +105,41 @@ export const RESULT_VECTOR = {
   digest: vectors.result.digest as Hex,
   r: vectors.result.r as Hex,
   s: vectors.result.s as Hex,
+} as const;
+
+/** `Stake` for `DuelPot`, signed by `P256_VECTOR_KEY` over the raw digest with a low `s`. */
+export const STAKE_VECTOR = {
+  duelPot: vectors.stake.duelPot as Address,
+  chainId: Number(vectors.chainId),
+  stake: {
+    box: vectors.stake.box,
+    game: vectors.stake.game,
+    round: BigInt(vectors.stake.round),
+    a: vectors.stake.a as Address,
+    b: vectors.stake.b as Address,
+    amount: BigInt(vectors.stake.amount),
+    deadline: BigInt(vectors.stake.deadline),
+  } satisfies Stake,
+  /** `DuelPot.stakeDigest`. */
+  digest: vectors.stake.digest as Hex,
+  r: vectors.stake.r as Hex,
+  s: vectors.stake.s as Hex,
+} as const;
+
+/** `Seat` for `BoxSeats`, signed by `P256_VECTOR_KEY` over the raw digest with a low `s`. */
+export const SEAT_VECTOR = {
+  boxSeats: vectors.seat.boxSeats as Address,
+  chainId: Number(vectors.chainId),
+  seat: {
+    label: vectors.seat.label,
+    badge: vectors.seat.badge as Address,
+    box: vectors.seat.box,
+    deadline: BigInt(vectors.seat.deadline),
+  } satisfies Seat,
+  /** `BoxSeats.seatDigest`. */
+  digest: vectors.seat.digest as Hex,
+  r: vectors.seat.r as Hex,
+  s: vectors.seat.s as Hex,
 } as const;
 
 /** A badge's primary-name message for ENS's `DefaultReverseRegistrar`, signed with `personal_sign` as viem

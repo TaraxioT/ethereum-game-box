@@ -31,6 +31,8 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     /// @inheritdoc IGameBoxNames
     bytes32 public constant REFEREE_ROLE = keccak256("REFEREE_ROLE");
     /// @inheritdoc IGameBoxNames
+    bytes32 public constant SEATER_ROLE = keccak256("SEATER_ROLE");
+    /// @inheritdoc IGameBoxNames
     bytes32 public constant CLAIM_TYPEHASH = keccak256("ClaimName(string label,address badge,uint256 deadline)");
 
     /// @notice The ENSIP-9 coin type of `addr` (Ethereum).
@@ -49,6 +51,10 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     ///         emancipated.
     uint256 internal constant TITLE_REGISTRY_ROLES =
         PARENT_REGISTRY_ROLES | RegistryRoles.UNREGISTER | RegistryRoles.UNREGISTER_ADMIN;
+    /// @notice What the championships contract gets on each title registry's root: register, renew and unregister a
+    ///         championship name. No admin role, so it can grant nothing on.
+    uint256 internal constant CUP_REGISTRY_ROLES =
+        RegistryRoles.REGISTRAR | RegistryRoles.RENEW | RegistryRoles.UNREGISTER;
     /// @notice Held only while a new registry's canonical parent is set, then revoked: nobody can move it after.
     uint256 internal constant PARENT_LOCK_ROLES = RegistryRoles.SET_PARENT | RegistryRoles.SET_PARENT_ADMIN;
     /// @notice A player's roles on its name's token: everything a token role can be, transfer included.
@@ -98,6 +104,8 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
 
     /// @inheritdoc IGameBoxNames
     address public statsWriter;
+    /// @inheritdoc IGameBoxNames
+    address public championships;
     uint256 private _proxyCount;
     mapping(uint256 labelId => BoxData) private _boxes;
     mapping(uint256 labelId => Game) private _games;
@@ -234,18 +242,37 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         external
         returns (address resolver)
     {
-        if (!NameLib.isValidLabel(label)) revert InvalidLabel(label);
         if (block.timestamp > deadline) revert DeadlineExpired(deadline);
-        address stats = statsWriter;
+        address stats = _checkClaim(label, badge);
+        if (!SignatureChecker.isValidSignatureNow(badge, claimDigest(label, badge, deadline), signature)) {
+            revert InvalidClaimSignature();
+        }
+        return _claim(label, badge, stats);
+    }
+
+    /// @inheritdoc IGameBoxNames
+    function claimPlayerFor(string calldata label, address badge)
+        external
+        onlyRole(SEATER_ROLE)
+        returns (address resolver)
+    {
+        return _claim(label, badge, _checkClaim(label, badge));
+    }
+
+    /// @dev The rules every player claim keeps: a valid label that is not (and never was) a Box's or a pop-up's, a
+    ///      stats writer to trust, and a badge with no name yet. Returns the stats writer.
+    function _checkClaim(string calldata label, address badge) private view returns (address stats) {
+        if (!NameLib.isValidLabel(label)) revert InvalidLabel(label);
+        stats = statsWriter;
         if (stats == address(0)) revert StatsWriterNotSet();
         string memory held = labelOf(badge);
         if (bytes(held).length != 0) revert BadgeHasName(badge, held);
         uint256 id = NameLib.id(label);
         if (_boxes[id].status != BoxStatus.None || bytes(_popups[id]).length != 0) revert LabelHeldByBox(label);
-        if (!SignatureChecker.isValidSignatureNow(badge, claimDigest(label, badge, deadline), signature)) {
-            revert InvalidClaimSignature();
-        }
+    }
 
+    /// @dev Registers `<label>.gamebox.eth` to `badge` with its own resolver, once `_checkClaim` passed.
+    function _claim(string calldata label, address badge, address stats) private returns (address resolver) {
         bytes memory name = NameLib.dnsName(label);
         Grant[] memory grants = new Grant[](2);
         grants[0] = Grant(badge, PLAYER_RESOLVER_ROLES);
@@ -299,6 +326,7 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         if (_games[id].titleRegistry != address(0)) revert GameExists(label);
 
         IPermissionedRegistry registry = _newRegistry(TITLE_REGISTRY_ROLES, REGISTRY, label);
+        if (championships != address(0)) registry.grantRootRoles(CUP_REGISTRY_ROLES, championships);
         titleRegistry = address(registry);
         _titleRegistries.push(titleRegistry);
         _games[id] = Game(titleRegistry, titleTerm);
@@ -367,6 +395,17 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         if (stats == address(0)) revert ZeroValue();
         statsWriter = stats;
         emit StatsWriterSet(stats);
+    }
+
+    /// @inheritdoc IGameBoxNames
+    function setChampionships(address cups) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (cups == address(0)) revert ZeroValue();
+        if (championships != address(0)) revert ChampionshipsAlreadySet(championships);
+        championships = cups;
+        for (uint256 i; i < _titleRegistries.length; ++i) {
+            IPermissionedRegistry(_titleRegistries[i]).grantRootRoles(CUP_REGISTRY_ROLES, cups);
+        }
+        emit ChampionshipsSet(cups);
     }
 
     /// @notice ERC-165: access control and the ERC-1155 receiver (this contract owns the game names).

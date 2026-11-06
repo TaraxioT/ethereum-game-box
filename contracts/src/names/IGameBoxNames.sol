@@ -21,11 +21,12 @@ import {IPermissionedRegistry} from "./IENSv2.sol";
 ///           holds every role and `PlayerStats` holds `SET_TEXT` on `stats` alone. `GameBoxNames` holds nothing on it.
 ///         - Game names (`<game>.gamebox.eth`), each with its own title registry holding the soulbound title
 ///           `champion.<game>.gamebox.eth`.
-/// @dev Roles (OpenZeppelin `AccessControl`): `DEFAULT_ADMIN_ROLE` adds games, sets the stats writer and hands the
-///      registry roles over,
-///      `LICENSOR_ROLE` issues and manages Box licences, `REFEREE_ROLE` crowns champions (and is the role
-///      `PlayerStats` takes results from). The badge's consent to a name is EIP-712
-///      `ClaimName(string label,address badge,uint256 deadline)`, domain `Game Box Names`, version `1`.
+/// @dev Roles (OpenZeppelin `AccessControl`): `DEFAULT_ADMIN_ROLE` adds games, sets the stats writer and the
+///      championships contract, and hands the registry roles over, `LICENSOR_ROLE` issues and manages Box licences,
+///      `REFEREE_ROLE` crowns champions (and is the role `PlayerStats`, `DuelPot` and `Championships` take results
+///      from), and `SEATER_ROLE` (`BoxSeats`) claims a player name for a badge a Box vouched for. The badge's own
+///      consent to a name is EIP-712 `ClaimName(string label,address badge,uint256 deadline)`, domain
+///      `Game Box Names`, version `1`.
 interface IGameBoxNames is IAccessControl, IERC5267 {
     /// @notice A Box's standing. `None` means the label was never a Box.
     enum BoxStatus {
@@ -113,6 +114,8 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     );
     /// @notice The `stats` writer that new player resolvers trust changed.
     event StatsWriterSet(address stats);
+    /// @notice The championships contract was set, and given `REGISTRAR | RENEW | UNREGISTER` on every title registry.
+    event ChampionshipsSet(address championships);
 
     /// @notice The label breaks the rule: 3 to 32 of `a-z`, `0-9` and `-`, no hyphen at either end.
     error InvalidLabel(string label);
@@ -140,11 +143,15 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     error ZeroValue();
     /// @notice No `stats` writer has been set, so no player resolver can be made.
     error StatsWriterNotSet();
+    /// @notice The championships contract is set already; it can be set only once.
+    error ChampionshipsAlreadySet(address championships);
 
     /// @notice The licensor role: issues and manages Box licences.
     function LICENSOR_ROLE() external view returns (bytes32);
     /// @notice The referee role: crowns champions and records results.
     function REFEREE_ROLE() external view returns (bytes32);
+    /// @notice The seater role: claims a player name for a badge a Box vouched for (`claimPlayerFor`).
+    function SEATER_ROLE() external view returns (bytes32);
     /// @notice The EIP-712 type hash of `ClaimName`.
     function CLAIM_TYPEHASH() external view returns (bytes32);
     /// @notice The prefix of every pop-up label: `popup-`.
@@ -242,6 +249,14 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
         external
         returns (address resolver);
 
+    /// @notice `claimPlayer` without the badge's signature, for a badge whose consent was checked by the caller: a
+    ///         Box's signed `Seat`, checked by `BoxSeats`. The same label rule, the same one name per badge, and the
+    ///         same name, resolver, records and roles as `claimPlayer`. Needs `SEATER_ROLE`.
+    /// @param label The player's label.
+    /// @param badge The badge.
+    /// @return resolver The name's resolver.
+    function claimPlayerFor(string calldata label, address badge) external returns (address resolver);
+
     /// @notice The EIP-712 digest a badge signs to claim `label`.
     /// @param label The player's label.
     /// @param badge The badge.
@@ -260,7 +275,9 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     /// @return The name.
     function nameOf(address badge) external view returns (string memory);
 
-    /// @notice Adds `<label>.gamebox.eth`, its title registry, and its title term. Needs `DEFAULT_ADMIN_ROLE`.
+    /// @notice Adds `<label>.gamebox.eth`, its title registry, and its title term. Once `setChampionships` has run, it
+    ///         also grants the championships contract `REGISTRAR | RENEW | UNREGISTER` on the new title registry. Needs
+    ///         `DEFAULT_ADMIN_ROLE`.
     /// @param label The game's label.
     /// @param titleTerm How long the title lasts after the holder's last win, in seconds.
     /// @return titleRegistry The game's title registry.
@@ -298,4 +315,14 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
 
     /// @notice The `stats` writer new player resolvers trust.
     function statsWriter() external view returns (address);
+
+    /// @notice Sets the championships contract, once, and grants it `REGISTRAR | RENEW | UNREGISTER` on the root of
+    ///         every title registry (games added later get the same grant in `addGame`), so it can register and close
+    ///         `<label>.<game>.gamebox.eth`. The grant needs the admin bits this contract holds; it adds no admin role,
+    ///         and nobody gains `SET_PARENT`. Needs `DEFAULT_ADMIN_ROLE`.
+    /// @param championships The `Championships` contract.
+    function setChampionships(address championships) external;
+
+    /// @notice The championships contract, or zero before `setChampionships`.
+    function championships() external view returns (address);
 }
