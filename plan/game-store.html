@@ -416,13 +416,15 @@ chain with the verdict.</p>
 <section id="s10">
 <h2><span class="n">10</span>Four players</h2>
 <p><code>Seat</code> is <code>0 | 1 | 2 | 3</code>, <code>EGB_STATIONS</code> takes 2 to 4, a seat each, and Join, Stake, Result, Refund and the ports draw
-two, three or four. A station past the game&#39;s seats, or a seat left empty, says so and takes no tap.</p>
+two, three or four. A station past the game&#39;s seats, or a seat left empty, says so and takes no tap. It stands by: if a
+seat in use loses its station, it takes over, so a third station is a two-player game&#39;s spare.</p>
 <ul>
 <li>Team games stay two-player. Their rules use <code>DuelSeat</code> and <code>other(seat)</code>, and a game&#39;s manifest sets its own limits.</li>
 <li>A store game seats its manifest&#39;s max, or the Box&#39;s stations if fewer. With every seat full Join moves on. With its
 min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
 split count players, not seats.</li>
-<li>The firmware already takes four stations (<code>MAX_STATIONS</code>).</li>
+<li>The firmware already takes four stations (<code>MAX_STATIONS</code>). It forgets none until it restarts, so a fifth can&#39;t link
+before then.</li>
 <li>Refunds and results pay a list of players, not a pair.</li>
 </ul>
 </section>

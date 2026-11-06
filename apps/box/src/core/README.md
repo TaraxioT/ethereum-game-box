@@ -12,7 +12,7 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 | Port | What the core does with it |
 |---|---|
 | `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, Home's idle). |
-| `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap. |
+| `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap; `inUse(seats)` whenever the seats that need a station change (and once at start). |
 | `chain` | The chain behind the money (`ChainPort`): `balance`, `player` (balance and player name) and `board` (the title and the open championship) are reads; `open` (both stakes into the pot), `settle` (the result), `refund`, `topup` and `claim` are sends that never wait, each step coming back through its watch; `outcome` reads what a paid result did; `watchHead` drives the block clock; `nextRound` (kept on disk on the Box, never repeated) and `refundAfterMs`; `onChain(game)`: a built game isn't, and plays for nothing. `store` (`StoreChainPort`) is a store game's money and judge, apart from all of that: `balance` (Store USDC), `open`, `refund`, `topup` and `judge`. The Box runs Sepolia through the relayer (`src/chain/`); the demo and the tests run `demo-chain.ts`, which has no `store`. |
 | `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). A `GameInfo` carries its checked game.json (`manifest`) and, for a game that should play but can't, why (`sealed`). |
 | `rules` | Built games' rules, run outside the core (the server's sandboxed children): `prepare` at Join, `start` when the match opens, `step` for each tick and tap; any rejection voids the match. Absent in the demo, where built games can't be played. |
@@ -57,6 +57,9 @@ The Box has a seat for each tap station: two to four (`createCore`'s `stations`,
   players, and a player's place in that list isn't always their seat: seats 0, 2 and 3 are places 0, 1 and 2.
   `game-tap`, `FrameWord`'s `seat`, `StorePlay.lines`, `Judged.payouts`, `Match.refunded` and a transcript's taps all go
   by place, and the core turns them back into seats for the stations.
+- **The seats in use** (`seatsInUse`, `seats.ts`): every seat on show, and from Stake on just the players'. The stations
+  hear them on each change. A station on any other seat stands by, and takes over a seat in use whose station is lost,
+  so a team game on a three-station Box has its spare.
 
 ## Stakes, results and the lobby
 
@@ -178,7 +181,7 @@ opens; a result already decided is still sent once its pot lands.
 | `store-log.ts` | A store match's log within its limits: the Box's taps and the game's events, labelled, closed by one `end`. Pure. | `createStoreLog(): StoreLog` |
 | `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder?, stations? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
 | `built.ts` | A built game's match through the rules runner: a start, then ticks (skipped while a step is out) and taps (never), each snapshot handed on, the first failure once. | `startBuilt(rules, game, seed, now, { snapshot, failed }): BuiltDriver` |
-| `seats.ts` | Who is playing, from the seats. Pure. | `playerSeats(seats)`, `allSigned(seats)` |
+| `seats.ts` | Who is playing, from the seats. Pure. | `playerSeats(seats)`, `seatsInUse(state)`, `allSigned(seats)` |
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `rematchOpen(match, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides, and what a seat out of play says. Pure. | `stationView(input, seat, now)`, `stationViews(input, now, stations)` |

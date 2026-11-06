@@ -193,13 +193,15 @@ A verdict names players only by position, so it has no way to pay anyone else. I
 ## 10. Four players
 
 `Seat` is `0 | 1 | 2 | 3`, `EGB_STATIONS` takes 2 to 4, a seat each, and Join, Stake, Result, Refund and the ports draw
-two, three or four. A station past the game's seats, or a seat left empty, says so and takes no tap.
+two, three or four. A station past the game's seats, or a seat left empty, says so and takes no tap. It stands by: if a
+seat in use loses its station, it takes over, so a third station is a two-player game's spare.
 
 - Team games stay two-player. Their rules use `DuelSeat` and `other(seat)`, and a game's manifest sets its own limits.
 - A store game seats its manifest's max, or the Box's stations if fewer. With every seat full Join moves on. With its
   min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
   split count players, not seats.
-- The firmware already takes four stations (`MAX_STATIONS`).
+- The firmware already takes four stations (`MAX_STATIONS`). It forgets none until it restarts, so a fifth can't link
+  before then.
 - Refunds and results pay a list of players, not a pair.
 
 ## 11. Steps
