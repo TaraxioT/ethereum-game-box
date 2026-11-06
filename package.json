@@ -17,6 +17,7 @@
     "names:check": "node --env-file-if-exists=.env packages/shared/scripts/names/check.ts",
     "store:deploy-pot": "cd contracts && forge script script/game/DeployStorePot.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast --skip-simulation --slow -g 150 --with-gas-price 2gwei --priority-gas-price 1gwei && forge script script/game/DeployStorePot.s.sol --rpc-url sepolia --account sepolia-deployer --password ''",
     "plan:publish": "plans publish plan/index.html --name ethereum-game-box --date 2026-11-05",
+    "store:publish": "node --env-file-if-exists=.env apps/store/scripts/publish.ts",
     "firmware:test": "sh firmware/tap-station/scripts/test.sh",
     "firmware:build": "sh firmware/tap-station/scripts/build.sh",
     "firmware:flash": "sh firmware/tap-station/scripts/flash.sh",

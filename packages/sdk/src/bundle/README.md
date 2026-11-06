@@ -12,6 +12,7 @@ sha256 of the zip, as `0x` hex. Its code is untrusted: it runs only in the kiosk
 | `format.ts` | `BundleManifest`, `bundleManifestProblems()`, `nameProblem()`, `BUNDLE_LIMITS`, `BundleRefused`, and `judgeFiles()`, the checks the reader and the packer share |
 | `read.ts` | `readBundle(zip)`: the manifest, the files and the hash, or a `BundleRefused` saying why not |
 | `pack.ts` | `packBundle(files)`: a map of names to bytes as the one zip shape, and the shape's fixed fields |
+| `listing.ts` | `StoreListing` and `StoreIndex`, what the store's `/index.json` serves, and `listingOf()` to make one from a read bundle |
 | `index.ts` | The entry: everything above except the internals |
 
 ## What a bundle may hold
@@ -54,5 +55,6 @@ The tests live in `packages/sdk/test/bundle/`, with Node's types: `tsconfig.json
 | `hostile.test.ts` | Every hostile zip, each the good bundle with one thing wrong and refused for that reason. Any one byte changed, cut or added |
 | `pack.test.ts` | Packing twice to one hash, the pinned hash, the limits to the byte, what the packer refuses |
 | `format.test.ts` | Every manifest and name refusal |
+| `listing.test.ts` | A listing's exact fields, taken from the reader's result |
 | `tap-rush.test.ts` | The sample: its folder, its instructions worked by hand, and its page |
 | `raw-zip.ts` | A zip writer that does as it is told, for the hostile zips |
