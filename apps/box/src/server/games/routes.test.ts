@@ -214,6 +214,28 @@ describe("a store bundle's routes", () => {
     expect(withBundleHost("")).toBe(host);
   });
 
+  it("leaves a doctype behind its comments, or the page falls into quirks mode", () => {
+    const host = '<script src="/bundle-host.js"></script>';
+    expect(withBundleHost("<!-- Tap Rush --><!doctype html>x")).toBe(`<!-- Tap Rush --><!doctype html>${host}x`);
+    expect(withBundleHost("\n<!-- a -->\n<!-- <b> ---><!DOCTYPE html>x")).toBe(`\n<!-- a -->\n<!-- <b> ---><!DOCTYPE html>${host}x`);
+  });
+
+  it("takes no comment for one that the parser ends sooner, so none can hide a script ahead of the host", () => {
+    const host = '<script src="/bundle-host.js"></script>';
+    for (const opening of ["<!-->", "<!--->", "<!-- --!>"]) {
+      const page = `${opening}<script>early()</script><!-- --><!doctype html>`;
+      expect(withBundleHost(page)).toBe(`${host}${page}`);
+    }
+    expect(withBundleHost("<!-- no end <!doctype html>")).toBe(`${host}<!-- no end <!doctype html>`);
+  });
+
+  it("looks for a doctype only so far, so a page the size of a whole bundle costs the server little", () => {
+    const host = '<script src="/bundle-host.js"></script>';
+    const leads = (size: number) => ["\n".repeat(size), `<!--${"x".repeat(size)}-->`, "<!---- -->".repeat(size / 10)];
+    for (const lead of leads(30_000)) expect(withBundleHost(`${lead}<!doctype html>x`).endsWith(`<!doctype html>${host}x`)).toBe(true);
+    for (const lead of leads(16 * 1024 * 1024)) expect(withBundleHost(`${lead}<!doctype html>x`).startsWith(host)).toBe(true);
+  });
+
   it("serves each listed file unchanged, under the same CSP, readable from the frame's opaque origin", async () => {
     for (const [name, type] of [
       ["game.js", "text/javascript"],

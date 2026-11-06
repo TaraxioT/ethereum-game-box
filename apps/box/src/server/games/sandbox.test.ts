@@ -278,6 +278,8 @@ window.addEventListener("load", () => {
 });
 `;
 
+const SAYS_ITS_MODE = `window.addEventListener("load", () => { egb.event("page", { mode: document.compatMode, first: document.scripts[0].getAttribute("src") }); egb.end(); });`;
+
 /** Gives what a page set going the time to get there. */
 const ENDS_SOON = `window.addEventListener("load", () => setTimeout(() => egb.end(), 500));`;
 
@@ -437,6 +439,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     bundle("forgeries", { "index.html": page(inline(FORGERIES)) });
     bundle("crushers", { "index.html": page(inline(CRUSHERS)) });
     bundle("buffers", { "index.html": page(inline(BUFFERS)) });
+    bundle("comment first", { "index.html": `<!-- Tap Rush -->\n${page(inline(SAYS_ITS_MODE))}` });
     // A page gets one prerender, so each knock is its own bundle.
     bundle("knocks on the API", { "index.html": page(`<link rel="prerender" href="/api/probe">${inline(ENDS_SOON)}`) });
     bundle("knocks on a local port", { "index.html": page(`<link rel="prerender" href="${LOCAL}/knock?secret=NOVA">${inline(`${turnTo(TURN)}${ENDS_SOON}`)}`) });
@@ -546,6 +549,10 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     expect(events(report, "page")).toEqual([{ mode: "CSS1Compat", lang: "en", title: "probe", head: "/bundle-host.js" }]);
     expect(events(report, "own")).toEqual([{ classic: true, module: true, color: "rgb(1, 2, 3)", image: "loaded", nested: "loaded", data: "loaded", font: "loaded", sound: "loaded" }]);
     expect(events(report, "violations")).toEqual([[]]);
+  });
+
+  it("keeps a page out of quirks mode when a comment comes before its doctype, with the host still its first script", () => {
+    expect(events(reportOf("comment first"), "page")).toEqual([{ mode: "CSS1Compat", first: "/bundle-host.js" }]);
   });
 
   it("carries a tap in, and a game's event, station line, buzz and end out", () => {

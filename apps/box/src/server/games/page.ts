@@ -52,11 +52,21 @@ export function bundleCsp(origin: string, hash: string): string {
 }
 
 /**
+ * A doctype with whatever may stand ahead of it and leave the page in standards mode: white space and comments. A comment
+ * that the parser would end sooner than its `-->` (`<!-->`, `<!--->`, a `--!>`) doesn't match, so what follows it, which
+ * the parser would read as markup, can't pass for part of the comment.
+ */
+const DOCTYPE = /^﻿?(?:\s|<!--(?!-?>)(?:(?!--!?>)[\s\S])*?-->)*<!doctype[^>]*>/i;
+/** How far into a page a doctype is looked for: past any honest comment, and the search can't cost the server's one thread much. */
+const DOCTYPE_WITHIN = 64 * 1024;
+
+/**
  * A bundle's page with the host as its first script. It goes straight after any doctype, ahead of everything the game
- * wrote: the parser opens the <head> for it and skips the page's own, and no comment or odd markup can get in first.
+ * wrote but the comments before that doctype: the parser opens the <head> for it and skips the page's own, and no odd
+ * markup can get in first. Without a doctype it goes at the very start.
  */
 export function withBundleHost(html: string): string {
-  const doctype = /^﻿?\s*<!doctype[^>]*>/i.exec(html)?.[0] ?? "";
+  const doctype = DOCTYPE.exec(html.slice(0, DOCTYPE_WITHIN))?.[0] ?? "";
   return `${doctype}<script src="${BUNDLE_HOST}"></script>${html.slice(doctype.length)}`;
 }
 

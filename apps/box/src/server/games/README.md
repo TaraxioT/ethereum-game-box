@@ -28,8 +28,10 @@ opened.
   reaches the disk. A bundle's names are lower-case ASCII, so nothing needs decoding.
 - **`index.html` is the only page.** A navigation to any other file is a 404, so a game can't land its frame on a second
   page and keep the channel (`screen/frame/`).
-- **The host goes first.** `/bundle-host.js` is added straight after any doctype, ahead of everything the game wrote.
-  The parser opens the `<head>` for it and skips the page's own, so no comment or odd markup can get in first.
+- **The host goes first.** `/bundle-host.js` is added straight after any doctype, ahead of everything the game wrote but
+  the white space and comments before that doctype, which must stay first or the page falls into quirks mode. The parser
+  opens the `<head>` for it and skips the page's own. A comment the parser ends sooner than its `-->`, or a doctype past
+  the first 64 KB, doesn't count: the host then goes at the very start, so no odd markup can get in first.
 
 **CORS.** Everything the frame loads is a cross-origin request from `null`: module scripts, fonts and the screen's
 `import()` are fetched in CORS mode, so they go out with `Access-Control-Allow-Origin: *`. None of it is secret; the
