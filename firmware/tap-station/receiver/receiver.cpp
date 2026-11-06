@@ -9,6 +9,8 @@
 #include <WiFi.h>
 #include <esp_mac.h>
 
+#include <atomic>
+
 #include "events.h"
 #include "loop.h"
 #include "rx.h"
@@ -29,7 +31,13 @@ static QueueHandle_t inbox;
 static egb::LineReader<INPUT_MAX> input;
 
 void inboxBegin() { inbox = xQueueCreate(24, sizeof(Msg)); }
-bool post(const Msg &m) { return xQueueSend(inbox, &m, 0) == pdTRUE; }
+static std::atomic<uint32_t> drops{0};
+bool post(const Msg &m) {
+  if (xQueueSend(inbox, &m, 0) == pdTRUE) return true;
+  drops++;
+  return false;
+}
+uint32_t inboxDrops() { return drops; }
 bool next(Msg &m, uint32_t ms) { return xQueueReceive(inbox, &m, pdMS_TO_TICKS(ms)) == pdTRUE; }
 
 void emit(size_t n) {

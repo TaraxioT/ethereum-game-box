@@ -69,6 +69,14 @@ inline size_t evOk(Json &j, const char *ev, const char *st, uint32_t id, uint8_t
   return j.begin(ev).str("st", st).u32("id", id).u32("tries", tries).u32("rtt_us", rttUs).end();
 }
 
+// `buzz` / `screen` with no linked station to send to: a fail naming the station, or for `buzz all` the one
+// protocol.md gives; `screen all` has no fail line of its own there, so it gets `bad`.
+inline size_t evNoStation(Json &j, const char *failEv, const char *st, uint32_t id, const char *line) {
+  if (!strcmp(failEv, "screen_fail") && !strcmp(st, "all")) return j.begin("bad").str("why", "no such station linked")
+      .str("line", line).end();
+  return j.begin(failEv).str("st", st).u32("id", id).str("why", "no such station linked").end();
+}
+
 // buzz_fail / screen_fail / nfc_fail
 inline size_t evFail(Json &j, const char *ev, const char *st, uint32_t id, const char *why) {
   return j.begin(ev).str("st", st).u32("id", id).str("why", why).end();

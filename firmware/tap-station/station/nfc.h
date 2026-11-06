@@ -17,6 +17,7 @@ extern Pn532 pn532;
 struct Held {
   egb::Chip chip;
   uint32_t tapId;
+  uint32_t boot;        // this boot's number, in every tap and gone
   uint32_t detectedUs;  // when the detection that found it started
   uint32_t servedMs;    // the last request the chip answered
   uint8_t misses;       // presence checks in a row without it

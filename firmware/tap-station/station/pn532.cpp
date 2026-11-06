@@ -101,7 +101,7 @@ int Pn532::exchange(const uint8_t *apdu, size_t len, uint8_t *resp, size_t max, 
   cmd[0] = 0x40;  // InDataExchange
   cmd[1] = 0x01;  // the first chip
   memcpy(cmd + 2, apdu, len);
-  static uint8_t r[1 + frame::MAX_DATA];  // only the NFC task calls this
+  static uint8_t r[1 + egb::NFC_DATA_MAX];  // only the NFC task calls this
   int got = command(cmd, 2 + len, r, sizeof r, timeoutMs);
   if (got < 1) return -1;
   status = r[0];
@@ -145,7 +145,7 @@ bool Pn532::resetField(uint32_t offMs, uint32_t onMs) {
 }
 
 int Pn532::command(const uint8_t *cmd, size_t n, uint8_t *resp, size_t max, uint32_t timeoutMs) {
-  static uint8_t buf[8 + 255 + 2];  // only the NFC task talks to the PN532
+  static uint8_t buf[frame::MAX_FRAME];  // only the NFC task talks to the PN532
   size_t len = frame::build(cmd, n, buf);
   if (!len) return -1;
   writeRaw(buf, len);
@@ -166,7 +166,7 @@ int Pn532::command(const uint8_t *cmd, size_t n, uint8_t *resp, size_t max, uint
   lastWaitUs_ += micros() - w0;
   // Reading the longest frame every time costs ~6 ms of I2C, and most answers are short: read 16 bytes, and only a
   // longer answer is asked for again (a NACK makes the PN532 send it again) and read to its length.
-  size_t want = max + 10 < sizeof buf ? max + 10 : sizeof buf;
+  size_t want = max + 13 < sizeof buf ? max + 13 : sizeof buf;  // the longest header, D5, code, data, DCS, 00
   int got = readRaw(buf, want < SHORT_READ ? want : SHORT_READ);
   size_t full = frame::fullLength(buf, (size_t)got);
   if (full > want) full = want;

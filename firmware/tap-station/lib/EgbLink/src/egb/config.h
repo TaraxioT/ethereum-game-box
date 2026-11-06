@@ -15,10 +15,14 @@ constexpr uint32_t PING_MS = 250;
 constexpr uint32_t LINK_TIMEOUT_MS = 2500;
 
 // ---- resends ----
-// Packets that must arrive (presses, taps, gones, signatures, buzzes) go again every PACKET_EVERY_MS until acked,
+// Presses and buzzes go again every PACKET_EVERY_MS until acked,
 // PACKET_TRIES sends at most; each id counts once on the far side.
 constexpr uint16_t PACKET_EVERY_MS = 20;
 constexpr uint8_t PACKET_TRIES = 25;
+// Taps, gones and signatures go again every 20 ms for as long as the Pi may still wait for them: a link counts as down
+// only after LINK_TIMEOUT_MS of silence, and the Pi gives a dropped link PI_GRACE_MS more before it gives up on a tap.
+constexpr uint16_t PI_GRACE_MS = 2000;
+constexpr uint16_t CHIP_EVENT_DEADLINE_MS = LINK_TIMEOUT_MS + PI_GRACE_MS;
 // NFC requests: again every 40 ms until the station's reply, 3 s at most (a signature takes up to ~1.5 s).
 constexpr uint16_t NFC_EVERY_MS = 40;
 constexpr uint16_t NFC_DEADLINE_MS = 3000;

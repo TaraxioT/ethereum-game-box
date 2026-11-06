@@ -102,8 +102,13 @@ is plain C++, and so are the pure station and receiver headers, so the host test
 - **A press is an interrupt** waking a high-priority task that sends at once (a fall after 30 ms up counts; 15 ms up
   after it is a release). The other board switches its LED in its receive callback, then acks. Every 20 ms again,
   25 sends at most, each id counted once on the far side.
-- **Taps, gones, signatures and buzzes** go again every 20 ms (25 sends) until a `Got`; NFC requests every 40 ms until
-  the reply (3 s at most); screens and stats requests every 40 ms (1 s). One resend slot does all of it.
+- **Taps, gones and signatures** go again every 20 ms until a `Got`, for 4.5 s: the link's 2.5 s timeout plus the Pi's
+  2 s grace for a dropped link (16 slots; a new one takes the oldest's when all are busy). The receiver acks only what
+  its loop has room for, and passes on each id once, never one older than the last. Buzzes go every 20 ms (25 sends);
+  NFC requests every 40 ms until the reply (3 s at most); screens and stats requests every 40 ms (1 s). One resend
+  slot does all of it.
+- **An `apdu` or `sign` is bound to a chip:** the receiver stamps it with the last tap it passed on for that station,
+  and the station refuses it (`err` 3) when another chip has landed since.
 - **The link** is down after 2.5 s without any packet (not only pings), compared signed. Stations ping every 250 ms,
   broadcast until a receiver answers; a station ignores packets without the receiver's flag (another station's
   broadcasts).

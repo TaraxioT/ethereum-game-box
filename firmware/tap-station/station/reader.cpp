@@ -16,6 +16,7 @@
 #include "motor.h"
 #include "nfc.h"
 #include "oled.h"
+#include "timing.h"
 
 namespace st {
 namespace nfc {
@@ -24,9 +25,7 @@ std::atomic<uint32_t> busyId{0};
 Pn532 pn532(Wire1, PIN_NFC_SDA, PIN_NFC_SCL, PIN_NFC_IRQ);
 Held held;
 
-constexpr uint32_t READ_TIMEOUT_MS = 60;
 constexpr uint8_t GONE_MISSES = 2;        // checks in a row without the chip before it counts as lifted
-constexpr uint32_t PRESENCE_MS = 20;
 constexpr uint32_t QUIET_MS = 150;
 constexpr uint16_t TAP_BUZZ_MS = 80;
 constexpr uint8_t SILENT_LISTS = 3;       // reads in a row the PN532 didn't answer before it's checked as lost
@@ -59,6 +58,7 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
     egb::Gone g;
     egb::head(g, egb::K_GONE, 0);
     g.id = held.tapId;
+    g.boot = held.boot;
     g.chip = held.chip;
     link::sendReliable(&g, sizeof g);
   }
@@ -68,6 +68,7 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   egb::Tap t;
   egb::head(t, egb::K_TAP, 0);
   t.id = ++held.tapId;
+  t.boot = held.boot;
   t.gapUs = gapUs;
   t.chip = c;
   t.readUs = micros() - startUs;
@@ -108,6 +109,7 @@ void lost() {
   egb::Gone g;
   egb::head(g, egb::K_GONE, 0);
   g.id = held.tapId;
+  g.boot = held.boot;
   g.chip = held.chip;
   link::sendReliable(&g, sizeof g);
   forgetSelect();
@@ -151,6 +153,7 @@ static void lookForReader(uint32_t now, uint32_t &nextFind, uint32_t lostMs, boo
   if (pn532.begin()) {
     told = false;
     worked = true;
+    lastStartUs = micros();  // the detections start now
     feedback.nfcOk = true;
     egb::radio::setFlag(egb::F_NFC, true);
     char line[64];
@@ -174,7 +177,8 @@ static void run(void *) {
   uint32_t nextFind = 0, lostMs = 0;
   uint8_t silent = 0;
   bool worked = false;
-  held.tapId = esp_random();  // a rebooted station's first tap never looks like a resend
+  held.tapId = esp_random();  // tap ids count up from here, named by this boot's number
+  held.boot = esp_random();
   static Request r;
   for (;;) {
     uint32_t now = millis();
@@ -188,6 +192,7 @@ static void run(void *) {
     if (xQueueReceive(requests, &r, pdMS_TO_TICKS(on ? PRESENCE_MS : 1)) == pdTRUE) {
       if (r.q.op == OP_BENCH) runBench((const char *)r.q.data, r.q.len);
       else serve(r.q, r.from);
+      if (!feedback.chipOn) lastStartUs = micros();  // the next look starts the window afresh
       continue;
     }
     now = millis();
@@ -208,7 +213,7 @@ static void run(void *) {
       bool answered = pn532.list(&c, 1, n, nullptr, 0, READ_TIMEOUT_MS);
       silent = answered ? 0 : silent + 1;
       there = answered && n;
-      uint32_t gap = start - lastStartUs;
+      uint32_t gap = gapUs(start, lastStartUs);
       lastStartUs = start;
       if (there) found(c, start, gap, true);
     }

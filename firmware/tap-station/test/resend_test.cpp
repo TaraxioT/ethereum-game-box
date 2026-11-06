@@ -82,3 +82,23 @@ TEST(a_pool_finds_and_takes) {
   CHECK(pool.take(1, K_BUZZ, 77) == nullptr);  // only once
   CHECK_EQ(pool.dueInMs(0), -1);
 }
+
+TEST(chip_events_go_until_the_pi_stops_waiting) {
+  Slot s = packetSlot(0, POLICY_CHIP_EVENT);
+  int sends = 1;
+  uint32_t expiredAt = 0;
+  for (uint32_t t = 0; t < 10000 && !expiredAt; t++) {
+    Slot::Due d = s.poll(t);
+    if (d == Slot::SEND) sends++;
+    if (d == Slot::EXPIRED) expiredAt = t;
+  }
+  CHECK_EQ(expiredAt, (uint32_t)(LINK_TIMEOUT_MS + PI_GRACE_MS));
+  CHECK_EQ(sends, 225);
+}
+
+TEST(a_full_pool_gives_the_oldest_slot_to_the_new_packet) {
+  Pool<3> pool = {};
+  for (uint32_t t : {100u, 50u, 200u}) *pool.free() = packetSlot(t, POLICY_CHIP_EVENT);
+  CHECK(pool.free() == nullptr);
+  CHECK_EQ(pool.freeOrOldest()->startMs, 50u);
+}

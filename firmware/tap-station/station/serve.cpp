@@ -33,7 +33,7 @@ static void apdu(const NfcReq &q, NfcRes &r, bool &signing, bool &signedOk, uint
     r.err = ERR_BAD;
     return;
   }
-  if (!feedback.chipOn || !held.chip.isoDep()) {
+  if (!feedback.chipOn || !held.chip.isoDep() || forOtherChip(q, held.tapId)) {  // that chip has gone
     r.err = ERR_NO_CHIP;
     return;
   }
