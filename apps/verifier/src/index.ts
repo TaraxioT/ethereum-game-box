@@ -1,0 +1,46 @@
+// The verifier Worker: it takes a match's log, has an agent judge it in a container, and signs what comes of it. Every
+// key is here. The container gets none of them.
+
+import { rpc, sepoliaClient } from '@egb/relayer/chain';
+import { contractAddress } from '@egb/shared/names';
+import type { Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+
+import type { Env } from './env.ts';
+import { judgementName } from './judge.ts';
+import { deployedPot } from './pot.ts';
+import { handle } from './routes.ts';
+import { envScrubber } from './safe.ts';
+import { upstream } from './upstream.ts';
+
+export { ContainerProxy } from '@cloudflare/containers';
+export { AgentContainer } from './container.ts';
+export { BoxGate } from './gate.ts';
+export { Judgement } from './judgement.ts';
+
+export default {
+  fetch(request, env) {
+    const judgement = (box: string, round: string) => env.JUDGEMENT.getByName(judgementName(box, round));
+    return handle(request, {
+      ctx: {
+        client: sepoliaClient(rpc(env.SEPOLIA_RPC_URL)),
+        // Read when a route needs it, so `/health` answers even before the contracts are deployed.
+        addresses: {
+          get names() {
+            return contractAddress('GameBoxNames');
+          },
+        },
+        pot: deployedPot,
+        store: upstream(env.STORE, env.STORE_URL),
+        now: () => Math.floor(Date.now() / 1000),
+      },
+      doors: {
+        judgement,
+        reads: judgement,
+        takeJudgement: (box, now) => env.BOX_GATE.getByName(box).take(box, now),
+      },
+      verifier: () => privateKeyToAccount(env.VERIFIER_PRIVATE_KEY as Hex).address,
+      scrub: envScrubber(env),
+    });
+  },
+} satisfies ExportedHandler<Env>;
