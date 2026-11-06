@@ -204,6 +204,15 @@ describe("the Sepolia port on a mocked relayer", () => {
     expect([...r.rounds.open().keys()]).toEqual([10]);
   });
 
+  it("says whether the signer's key is the Box's registered one", async () => {
+    const r = rig();
+    expect(await r.chain.checkKey()).toBe(false);
+    expect(r.logs.at(-1)).toMatch(/is not mumbai-01's/);
+    r.reads.boxKey = async () => KEY;
+    expect(await r.chain.checkKey()).toBe(true);
+    expect(r.logs.at(-1)).toMatch(/is mumbai-01's/);
+  });
+
   it("reads the board and the head through its reads, and stops polling on stop", async () => {
     const r = rig();
     expect(await r.chain.board("stock-duel")).toEqual({ title: null, cup: null });

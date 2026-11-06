@@ -169,6 +169,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   let sweeping: ReturnType<Clock["every"]> | null = null;
   if (sepolia) {
     // Rounds the chain has seen are skipped (a lost rounds file); pots left open are refunded once their delay runs.
+    void sepolia.checkKey().catch((error: unknown) => log(`chain: the key wasn't checked: ${error instanceof Error ? error.message : String(error)}`));
     void sepolia.syncRounds().catch((error: unknown) => log(`chain: rounds not checked: ${error instanceof Error ? error.message : String(error)}`));
     const sweep = () => void sepolia.sweep().catch((error: unknown) => log(`chain: sweep: ${error instanceof Error ? error.message : String(error)}`));
     sweep();

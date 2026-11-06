@@ -87,6 +87,7 @@ export function memoryReads(): MemoryReads {
     roundTaken: async (_box, round) => taken.has(round),
     potOpen: async (_box, round) => openPots.has(round),
     board: async () => board,
+    boxKey: async () => ({ qx: `0x${"00".repeat(32)}`, qy: `0x${"00".repeat(32)}` }),
     async settled() {
       if (!reads.settledAs) throw new Error("no receipt");
       return reads.settledAs;

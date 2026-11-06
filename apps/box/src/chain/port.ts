@@ -57,6 +57,8 @@ export interface SepoliaChain extends ChainPort {
   syncRounds(): Promise<void>;
   /** Refunds every pot the Box opened whose delay has run and that is still open. */
   sweep(): Promise<void>;
+  /** Whether the signer's key is the one `GameBoxNames` holds for this Box, said in the log. */
+  checkKey(): Promise<boolean>;
   stop(): void;
 }
 
@@ -263,6 +265,12 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
         if (!(await reads.roundTaken(box, round))) return;
         rounds.skipPast(round);
       }
+    },
+    async checkKey() {
+      const [mine, registered] = await Promise.all([signer.publicKey(), reads.boxKey(box)]);
+      const same = mine.qx.toLowerCase() === registered.qx.toLowerCase() && mine.qy.toLowerCase() === registered.qy.toLowerCase();
+      log(same ? `chain: the signer's key is ${box}'s (${mine.qx.slice(0, 10)}…)` : `chain: the signer's key ${mine.qx.slice(0, 10)}… is not ${box}'s (${registered.qx.slice(0, 10)}…): the relayer will refuse every request`);
+      return same;
     },
     async sweep() {
       for (const [round, openedAt] of rounds.open()) {

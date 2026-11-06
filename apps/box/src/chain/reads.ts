@@ -43,6 +43,8 @@ export interface Reads {
   /** The pot is still open (neither settled nor refunded). */
   potOpen(box: string, round: number): Promise<boolean>;
   board(game: string): Promise<Board>;
+  /** The P-256 key `GameBoxNames` holds for a Box (zeros for none). */
+  boxKey(box: string): Promise<{ readonly qx: Hex; readonly qy: Hex }>;
   settled(game: string, badges: readonly [Address, Address], hash: Hex): Promise<Settled>;
 }
 
@@ -132,6 +134,11 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
       }),
     potOpen: (box, round) =>
       safely("a pot", async () => (await client.readContract({ ...pot, functionName: "getPot", args: [box, BigInt(round)] })).state === POT_OPEN),
+    boxKey: (box) =>
+      safely("the Box's key", async () => {
+        const [qx, qy] = await client.readContract({ ...names, functionName: "boxKey", args: [box] });
+        return { qx, qy };
+      }),
     board: (game) =>
       safely("the board", async () => {
         const [held, open] = await Promise.all([title(game), cup(game)]);
