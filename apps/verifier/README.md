@@ -17,8 +17,9 @@ The agent's code is [`container/`](container/README.md). The rest of this folder
 
 The types are `@egb/shared/store`. A refusal is `{ error }`, with the relayer's codes: `400` a bad field or log, `401` a
 bad signature, `403` a Box that isn't known, live and active, `404` no such bundle, `409` a pot that isn't open or
-doesn't match the log, or a second log for a pot, `422` a zip that isn't the bundle staked on, `429` the rate limit. `502`
-means something upstream failed and the Box can repeat it. `503` means `StorePot` isn't deployed yet.
+doesn't match the log, or a second log for a pot, `413` a body over 3 MiB, `422` a zip that isn't the bundle staked on,
+`429` a rate limit. `502` means something upstream failed and the Box can repeat it. `503` means `StorePot` isn't deployed
+yet.
 
 ## One judgement
 

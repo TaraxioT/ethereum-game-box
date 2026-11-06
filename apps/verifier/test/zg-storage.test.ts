@@ -46,6 +46,8 @@ const store = (overrides: { indexerUrl?: string; timeoutMs?: number } = {}) =>
   new ZgAuditStore({ indexerUrl: `${running.url}/indexer`, rpcUrl: `${running.url}/rpc`, key: generatePrivateKey(), timeoutMs: 10_000, ...overrides });
 
 const unpaid: Paying = { paid: null, onPaid: async () => undefined };
+/** Long enough to pay, even on a busy machine, before giving up on a node that won't sync. */
+const STUCK_MS = 2500;
 
 describe('a retry', () => {
   let fake: RunningFakeZg;
@@ -63,7 +65,7 @@ describe('a retry', () => {
   async function paidAndStuck(): Promise<Hex> {
     const onPaid = vi.fn(async () => undefined);
     fake.fake.settings.nodeSyncs = false;
-    await expect(upload(1500).put(RECORD, { paid: null, onPaid })).rejects.toThrow();
+    await expect(upload(STUCK_MS).put(RECORD, { paid: null, onPaid })).rejects.toThrow();
     expect(onPaid).toHaveBeenCalledOnce();
     return (onPaid.mock.calls as unknown as [Hex][])[0]?.[0] as Hex;
   }
@@ -102,7 +104,7 @@ describe('a retry', () => {
     const paid = await paidAndStuck();
     fake.fake.settings.payment = payment;
     const onPaid = vi.fn(async () => undefined);
-    await expect(upload(1500).put(RECORD, { paid, onPaid })).rejects.toThrow();
+    await expect(upload(STUCK_MS).put(RECORD, { paid, onPaid })).rejects.toThrow();
     expect(fake.fake.paidUploads).toBe(2);
     expect(onPaid).toHaveBeenCalledOnce();
   });
