@@ -2,6 +2,10 @@
   "name": "@egb/box",
   "private": true,
   "type": "module",
+  "exports": {
+    "./tokens.css": "./src/screen/tokens.css",
+    "./fonts.css": "./src/screen/fonts.css"
+  },
   "scripts": {
     "dev": "vite",
     "dev:box": "VITE_EGB_MODE=box vite",
