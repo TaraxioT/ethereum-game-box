@@ -20,5 +20,9 @@ Its page uses the frame's one object, `window.egb`, which the Box adds to the fr
 | `end()` | Closes the match. |
 
 The page decides nothing. It shows the race, posts one `score` event and calls `end()`. The manifest's instructions
-judge the Box's taps alone, by their touch times, so a rigged page can't win the pot. They are exact enough to work out
-by hand, and `packages/sdk/test/bundle/tap-rush.test.ts` does so.
+judge the Box's taps alone, by their touch times, and read how the match closed. A match whose frame was lost, or a race
+closed before its ten seconds were up, ends in `cannot_judge` and each stake goes back. So a rigged page can't win the
+pot: the most `end()` can do is call the match off.
+
+The instructions are exact enough to work out by hand, and `packages/sdk/test/bundle/tap-rush.test.ts` does so. That
+test holds them word for word, so a change to the text that decides the money has to be made there too.

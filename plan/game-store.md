@@ -130,7 +130,8 @@ A small script the Box adds to the frame gives the game one object:
 - **Out:** `event(name, data)` for the log, `station(seat, text)` and `buzz(seat)`, cut to what a station shows and
   rate limited, and `end()`.
 
-A game has no say over money. Its `end()` only closes the match.
+A game has no say over money. Its `end()` only closes the match. It can close it at any moment, so a bundle's
+instructions must say what a match closed early pays, and the team checks that before listing.
 
 ## 7. The store
 

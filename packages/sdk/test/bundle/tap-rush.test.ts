@@ -9,6 +9,24 @@ import { logProblems, type LogEntry, type MatchLog } from "../../src/match-log.t
 const folder = path.join(import.meta.dirname, "../../../../apps/store/sample/tap-rush/");
 const files = () => new Map(readdirSync(folder).map((name): [string, Uint8Array] => [name, readFileSync(folder + name)]));
 
+/**
+ * The manifest's instructions to the letter, sentence by sentence. They decide the money, and `judgeByHand` below
+ * follows them in this order, so changing a word here means working every row by hand again.
+ */
+const INSTRUCTIONS = [
+  'Use only the log\'s entries with src "box": its taps, with t "tap", and its one end, with t "end".',
+  'Ignore every entry with src "game": a game can claim anything.',
+  'If the end\'s why is "lost", the verdict is cannot_judge.',
+  "The clock starts at the earliest tap's at.",
+  "If there are taps and the end's at is less than 10000 ms after the clock, the race was cut short and the verdict is cannot_judge.",
+  "A tap counts only if its at is less than 10000 ms after the clock.",
+  "Count each seat's taps.",
+  "The pot is the header's amount times the number of players, in base units.",
+  "The seat with the most taps gets the whole pot and the others get 0.",
+  "If seats tie for the most, split the pot evenly between them in whole base units, give any remainder one unit at a time to the tied seats from the lowest seat up, and give the others 0.",
+  "A match with no taps is a tie between every seat.",
+].join(" ");
+
 describe("Tap Rush's folder", () => {
   it("packs to one hash, every time", async () => {
     const first = await readBundle(packBundle(files()));
@@ -17,29 +35,45 @@ describe("Tap Rush's folder", () => {
     expect([...first.files.keys()]).toEqual(["index.html", "manifest.json"]);
   });
 
-  it("says what the plan says", async () => {
+  it("says what the plan says, and the instructions word for word", async () => {
     const { manifest } = await readBundle(packBundle(files()));
-    expect(manifest).toMatchObject({ format: 1, id: "tap-rush", title: "Tap Rush", players: { min: 2, max: 4 }, minutes: 1, stakes: [5, 10, 25], taps: "identify" });
+    expect(manifest).toEqual({
+      format: 1,
+      id: "tap-rush",
+      title: "Tap Rush",
+      blurb: "Most taps in ten seconds takes the pot.",
+      players: { min: 2, max: 4 },
+      minutes: 1,
+      stakes: [5, 10, 25],
+      taps: "identify",
+      verifier: { instructions: INSTRUCTIONS },
+    });
   });
 });
 
 const PLAYERS = [`0x${"aa".repeat(20)}`, `0x${"bb".repeat(20)}`, `0x${"cc".repeat(20)}`, `0x${"dd".repeat(20)}`] as const;
 const START = 1_800_000_000_000;
 
+type End = Extract<LogEntry, { t: "end" }>;
+
 const tap = (seat: number, ms: number): LogEntry => ({ src: "box", t: "tap", seat, at: START + ms, roll: null });
 const claim = (data: unknown): LogEntry => ({ src: "game", t: "event", at: START + 10_500, name: "score", data });
+const closed = (ms: number, why: End["why"]): End => ({ src: "box", t: "end", at: START + ms, why });
 
-function matchLog(players: number, amount: string, entries: readonly LogEntry[]): MatchLog {
+function matchLog(players: number, amount: string, entries: readonly LogEntry[], end: End = closed(11_000, "game")): MatchLog {
   return {
     header: { v: 1, box: "mumbai-01", round: "7", bundle: `0x${"ab".repeat(32)}`, game: "tap-rush", players: PLAYERS.slice(0, players), amount, startedAt: START },
-    entries: [...entries, { src: "box", t: "end", at: START + 11_000, why: "game" }],
+    entries: [...entries, end],
   };
 }
 
-/** The manifest's instructions, step by step, as a person would follow them. */
-function judgeByHand({ header, entries }: MatchLog): string[] {
+/** `INSTRUCTIONS`, step by step, as a person would follow them. */
+function judgeByHand({ header, entries }: MatchLog): readonly string[] | "cannot_judge" {
+  const end = entries.at(-1) as End;
+  if (end.why === "lost") return "cannot_judge";
   const taps = entries.filter((e) => e.src === "box" && e.t === "tap");
   const clock = Math.min(...taps.map((t) => t.at));
+  if (taps.length > 0 && end.at - clock < 10_000) return "cannot_judge";
   const counted = taps.filter((t) => t.at - clock < 10_000);
   const counts = header.players.map((_, seat) => counted.filter((t) => t.seat === seat).length);
   const pot = BigInt(header.amount) * BigInt(header.players.length);
@@ -68,10 +102,25 @@ describe("Tap Rush's instructions, worked by hand", () => {
     ["a touch time can be fractional", matchLog(2, "5000000", [tap(0, 0.25), tap(1, 1.5), tap(1, 10_000.24)]), ["0", "10000000"]],
     ["a game's claim counts for nothing", matchLog(2, "5000000", [tap(0, 0), tap(0, 1), tap(1, 2), claim({ counts: [0, 999] })]), ["10000000", "0"]],
     ["the claim of a game that names itself the Box counts for nothing", matchLog(2, "5000000", [tap(0, 0), tap(0, 1), claim({ src: "box", t: "tap", seat: 1 })]), ["10000000", "0"]],
+    ["a close at exactly ten seconds is a whole race", matchLog(2, "5000000", [tap(0, 0), tap(0, 1), tap(1, 2)], closed(10_000, "game")), ["10000000", "0"]],
+    ["the time limit closing a whole race changes nothing", matchLog(2, "5000000", [tap(0, 49_500), tap(0, 49_600), tap(1, 49_700)], closed(60_000, "time")), ["10000000", "0"]],
+    ["no taps by the time limit gives every stake back", matchLog(2, "5000000", [], closed(60_000, "time")), ["5000000", "5000000"]],
   ])("%s", (_, log, payouts) => {
     expect(logProblems(log)).toEqual([]);
     expect(judgeByHand(log)).toEqual(payouts);
     expect(payouts.reduce((sum, p) => sum + BigInt(p), 0n)).toBe(BigInt(log.header.amount) * BigInt(log.header.players.length));
+  });
+
+  it.each<[string, MatchLog]>([
+    ["the frame lost mid-race with one seat ahead", matchLog(2, "5000000", [tap(0, 0), tap(0, 100), tap(1, 150)], closed(400, "lost"))],
+    ["the frame lost before any tap", matchLog(2, "5000000", [], closed(3_000, "lost"))],
+    ["the frame lost in the moment after the race", matchLog(2, "5000000", [tap(0, 0), tap(0, 100), tap(1, 150)], closed(10_500, "lost"))],
+    ["a page that closes the race 50 ms in", matchLog(2, "5000000", [tap(0, 0)], closed(50, "game"))],
+    ["a page that closes the race 1 ms short", matchLog(2, "5000000", [tap(0, 0), tap(1, 1)], closed(9_999, "game"))],
+    ["a first tap 100 ms before the time limit", matchLog(2, "5000000", [tap(0, 59_900)], closed(60_000, "time"))],
+  ])("can't judge %s, so each stake goes back", (_, log) => {
+    expect(logProblems(log)).toEqual([]);
+    expect(judgeByHand(log)).toBe("cannot_judge");
   });
 });
 
