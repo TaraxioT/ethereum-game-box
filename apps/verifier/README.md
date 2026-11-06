@@ -64,6 +64,9 @@ its own Durable Object, so the code inside can't claim to be another run.
 `outboundByHost` is assigned after the class, as Cloudflare's docs do. A `static` field, as the package's README shows,
 would shadow the setter that registers the handler, and every call would be refused.
 
+The handler counts a call's bytes as they arrive and stops at 1 MiB, so a shell streaming at it can't fill the Worker's
+memory. `POST /judge` reads its body the same way, with a limit of 3 MiB.
+
 `src/proxy.ts` is the model's only caller. It keeps the fields a chat needs, sets `model`, `max_tokens`, `verify_tee: true`
 and the header `X-0G-Provider-Trust-Mode: private` itself, and records each turn as an `AgentTurn`. It counts turns too,
 since an agent's shell can reach `zg.internal` as well as the agent's loop can.
@@ -99,6 +102,7 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 |---|---|
 | `src/index.ts` | The Worker: builds the routes from the environment |
 | `src/routes.ts`, `src/admit.ts` | The HTTP routes, and `POST /judge`'s checks |
+| `src/body.ts` | Reads a body with a byte count, so a chunked one can't dodge a limit |
 | `src/bundle.ts` | Fetches a zip by hash and checks it |
 | `src/gate.ts` | `BoxGate`: the rate limit, one Durable Object per Box |
 | `src/judgement.ts`, `src/judge.ts` | `Judgement`, the Durable Object per pot, and `Judge`, its logic over a plain store |

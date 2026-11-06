@@ -5,6 +5,7 @@
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import type { AgentRunRequest } from '@egb/shared/store';
 
+import { boundedText } from './body.ts';
 import type { Env } from './env.ts';
 import { failed } from './failure.ts';
 import type { AgentRunner, RunResult, Ticket } from './judge.ts';
@@ -32,7 +33,10 @@ export async function zgOutbound(request: Request, env: Env, ctx: OutboundHandle
   if (request.method !== 'POST' || pathname !== MODEL_PATH) return Response.json({ error: 'not found' }, { status: 404 });
   const ticket = await env.AGENT.get(env.AGENT.idFromString(ctx.containerId)).ticket();
   if (!ticket) return Response.json({ error: 'this container has no run' }, { status: 403 });
-  const { status, body } = await env.JUDGEMENT.getByName(ticket.judgement).modelTurn(ticket.attempt, await request.text());
+  // Counted here, before it can fill this isolate: the agent's shell can stream anything at this handler.
+  const text = await boundedText(request, LIMITS.turnBytes);
+  if (text === null) return Response.json({ error: 'a model call is too large' }, { status: 413 });
+  const { status, body } = await env.JUDGEMENT.getByName(ticket.judgement).modelTurn(ticket.attempt, text);
   return new Response(body, { status, headers: { 'content-type': 'application/json' } });
 }
 

@@ -6,6 +6,7 @@ import type { Env } from '../src/env.ts';
 import type { Ticket } from '../src/judge.ts';
 import { LIMITS } from '../src/limits.ts';
 import { scrubber } from '../src/safe.ts';
+import { endlessBody } from './world.ts';
 
 const CONTAINER_ID = 'a'.repeat(64);
 const TICKET: Ticket = { judgement: 'mumbai-01:42', attempt: 2 };
@@ -96,6 +97,16 @@ describe('the way out', () => {
     );
     expect(response.status).toBe(403);
     expect(modelTurn).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body over the limit from a count of what arrived, and reads no further', async () => {
+    const { env: bindings, modelTurn } = env(TICKET);
+    const body = endlessBody(64 * 1024 * 1024);
+    const request = new Request('http://zg.internal/v1/chat/completions', { method: 'POST', body: body.stream, duplex: 'half' } as RequestInit);
+    const response = await zgOutbound(request, bindings, { containerId: CONTAINER_ID, className: 'AgentContainer' });
+    expect(response.status).toBe(413);
+    expect(modelTurn).not.toHaveBeenCalled();
+    expect(body.pulled()).toBeLessThanOrEqual(LIMITS.turnBytes + 64 * 1024);
   });
 
   it.each([

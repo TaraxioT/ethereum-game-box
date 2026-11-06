@@ -8,7 +8,9 @@ import type { JudgeStatus } from '@egb/shared/store';
 import type { Address } from 'viem';
 
 import { type AdmitContext, type Doors, admit } from './admit.ts';
+import { boundedText } from './body.ts';
 import type { AuditView } from './judge.ts';
+import { parsed } from './json.ts';
 import type { Scrub } from './safe.ts';
 
 /** A pot's judgement, for the read routes. */
@@ -46,8 +48,9 @@ async function route(request: Request, deps: Deps): Promise<Response> {
   const { pathname } = new URL(request.url);
   if (request.method === 'GET') return read(pathname, deps);
   if (request.method !== 'POST' || pathname !== '/judge') return json(404, { error: 'not found' });
-  if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES) return json(413, { error: 'body: too large' });
-  const body: unknown = await request.json().catch(() => undefined);
+  const text = await boundedText(request, MAX_BODY_BYTES);
+  if (text === null) return json(413, { error: 'body: too large' });
+  const body = parsed(text);
   if (body === undefined) return json(400, { error: 'body: expected JSON' });
   const { fresh, status } = await admit(deps.ctx, deps.doors, body);
   return json(fresh ? 202 : 200, status);

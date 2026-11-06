@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { takeJudgement } from '../src/gate.ts';
 import { handle } from '../src/routes.ts';
 import { POT_STATE } from '../src/pot.ts';
-import { BOX, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, matchLog, stakedWorld } from './world.ts';
+import { BOX, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, endlessBody, matchLog, stakedWorld } from './world.ts';
 
 async function setup() {
   const world = await stakedWorld();
@@ -55,6 +55,16 @@ describe('a malformed request', () => {
     const { deps } = await setup();
     const request = new Request('http://verifier/judge', { method: 'POST', body: '{}', headers: { 'content-length': String(4 * 1024 * 1024) } });
     expect((await handle(request, deps)).status).toBe(413);
+  });
+
+  it('is refused at the limit when the body is chunked and declares no length', async () => {
+    const { deps } = await setup();
+    const body = endlessBody(8 * 1024 * 1024);
+    const request = new Request('http://verifier/judge', { method: 'POST', body: body.stream, duplex: 'half' } as RequestInit);
+    expect(request.headers.get('content-length')).toBeNull();
+    const response = await handle(request, deps);
+    expect(response.status).toBe(413);
+    expect(body.pulled()).toBeLessThanOrEqual(3 * 1024 * 1024 + 64 * 1024);
   });
 
   it('is refused with a log that is not JSON', async () => {

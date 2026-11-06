@@ -88,6 +88,23 @@ export function matchLog(bundle: Hex, overrides: Partial<MatchLog['header']> = {
   };
 }
 
+/** `bytes` of body, in 64 KiB chunks made as they are asked for, and how many were. */
+export function endlessBody(bytes: number): { stream: ReadableStream<Uint8Array>; pulled: () => number } {
+  const chunk = new Uint8Array(64 * 1024).fill(0x20);
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (pulled >= bytes) return controller.close();
+        pulled += chunk.length;
+        controller.enqueue(chunk);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return { stream, pulled: () => pulled };
+}
+
 /** The relayer, closing the pot the way the chain would: only an open pot can be closed. */
 export class FakeRelayer implements PayRelayer {
   readonly sends: { path: string; body: { verdict?: unknown; void?: unknown; signature: Hex } }[] = [];
