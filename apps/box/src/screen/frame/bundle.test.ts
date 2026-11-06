@@ -83,9 +83,8 @@ describe("what a bundle's page may say", () => {
     expect(parse({ t: "event", name, data: fits })).toEqual({ t: "event", name, data: fits });
   });
 
-  it("hands on plain JSON only, and a station's text as a station can draw it", () => {
-    const when = new Date(0);
-    expect(parse({ t: "event", name: "x", data: { when, nothing: undefined, map: new Map([[1, 2]]) } })).toEqual({ t: "event", name: "x", data: { when: when.toISOString(), map: {} } });
+  it("hands on JSON's own shape, and a station's text as a station can draw it", () => {
+    expect(parse({ t: "event", name: "x", data: { nothing: undefined, nan: NaN } })).toEqual({ t: "event", name: "x", data: { nan: null } });
     expect(parse({ t: "station", seat: 0, text: "é".repeat(50) })).toEqual({ t: "station", seat: 0, text: "?".repeat(SMALL_CHARS) });
   });
 
@@ -99,9 +98,10 @@ describe("what a bundle's page may say", () => {
 describe("the kiosk's gate", () => {
   function gate(seats = 2) {
     let ms = 0;
-    const admit = createBundleGate(seats, () => ms);
+    const flooded = vi.fn();
+    const admit = createBundleGate(seats, () => ms, flooded);
     const count = (message: unknown, times: number) => Array.from({ length: times }, () => admit(message)).filter(Boolean).length;
-    return { admit, count, pass: (more: number) => void (ms += more) };
+    return { admit, count, flooded, pass: (more: number) => void (ms += more) };
   }
 
   it("holds each page to its rates, and refills them with time", () => {
@@ -161,6 +161,81 @@ describe("the kiosk's gate", () => {
     for (const message of [{ t: "end" }, { t: "event", name: "x", data: null }, { t: "buzz", seat: 0 }, { t: "error", message: "x" }, { t: "ready" }]) {
       expect(g.admit(message)).toBeNull();
     }
+  });
+
+  describe("on a message past its weight", () => {
+    const HUGE = 2 ** 24;
+    const text = "é".repeat(HUGE);
+    const cycle: Record<string, unknown> = {};
+    cycle.self = cycle;
+    const wide = Object.fromEntries(Array.from({ length: FRAME_LIMITS.messageWeight }, (_, i) => [`k${i}`, 1]));
+    let deep: unknown = null;
+    for (let i = 0; i < FRAME_LIMITS.messageWeight; i++) deep = [deep];
+    const shared = Array.from({ length: 16 }).reduce<unknown>((part) => [part, part], null);
+    const HEAVY: readonly unknown[] = [
+      text,
+      new Uint8Array(HUGE),
+      new ArrayBuffer(HUGE),
+      new Array(HUGE),
+      { t: "station", seat: 0, text },
+      { t: "error", message: text },
+      { t: "event", name: "x", data: text },
+      { t: "event", name: "x", data: new Uint8Array(HUGE) },
+      { t: "event", name: "x", data: new Array(HUGE) },
+      { t: "event", name: "x", data: wide },
+      { t: "event", name: "x", data: deep },
+      { t: "event", name: "x", data: shared },
+      { t: "event", name: "x", data: cycle },
+      { t: "event", name: "x", data: { nested: [{ more: new Uint16Array(HUGE) }] } },
+      { t: "unknown", word: text },
+    ];
+
+    it("drops it, having read no more of it than the weight", () => {
+      const g = gate();
+      g.count({ t: "station", seat: 0, text: "x" }, FRAME_LIMITS.stationBurst); // a line over the rate costs no more
+      const stringify = vi.spyOn(JSON, "stringify");
+      const keys = vi.spyOn(Object, "keys");
+      const replace = vi.spyOn(String.prototype, "replace");
+      const said = HEAVY.map((message) => g.admit(message));
+      const listed = keys.mock.calls.filter(([value]) => ArrayBuffer.isView(value) || (Array.isArray(value) && value.length > FRAME_LIMITS.messageWeight));
+      const stringified = stringify.mock.calls.length;
+      const replaced = replace.mock.calls.length;
+      vi.restoreAllMocks();
+      expect(said.filter(Boolean)).toEqual([]);
+      expect(listed).toEqual([]);
+      expect(stringified).toBe(0);
+      expect(replaced).toBe(0);
+    });
+
+    it("tells the view once, at the limit, and any heavy message counts", () => {
+      for (const heavy of HEAVY) {
+        const g = gate();
+        for (let i = 1; i < FRAME_LIMITS.oversized; i++) g.admit(heavy);
+        expect(g.flooded).not.toHaveBeenCalled();
+        g.admit(heavy);
+        g.admit(heavy);
+        expect(g.flooded).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it("counts anything JSON can't say, which it would have to turn into something else", () => {
+      for (const data of [new Date(0), new Map([[1, 2]]), new Set([1]), /x/, new Error("x"), { when: new Date(0) }, [new Map()]]) {
+        const g = gate();
+        expect(g.admit({ t: "event", name: "x", data })).toBeNull();
+        expect(g.count({ t: "event", name: "x", data }, FRAME_LIMITS.oversized)).toBe(0);
+        expect(g.flooded).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it("lets everything that fits go by uncounted: a long line, an event over the log's cap, a flood over the rates", () => {
+      const g = gate();
+      expect(g.admit({ t: "station", seat: 0, text: "x".repeat(FRAME_LIMITS.messageWeight / 2) })).toEqual({ t: "station", seat: 0, text: "x".repeat(SMALL_CHARS) });
+      expect(g.count({ t: "event", name: "x", data: "d".repeat(LOG_LIMITS.eventDataBytes) }, 100)).toBe(0);
+      expect(g.count({ t: "buzz", seat: 0 }, 100)).toBe(FRAME_LIMITS.buzzBurst);
+      expect(g.flooded).not.toHaveBeenCalled();
+      g.pass(60_000);
+      expect(g.admit({ t: "event", name: "n".repeat(LOG_LIMITS.eventName), data: "d".repeat(LOG_LIMITS.eventDataBytes - 2) })).not.toBeNull();
+    });
   });
 });
 
@@ -360,6 +435,19 @@ describe("the kiosk's view of a store match", () => {
     m.view.update(state, TAP);
     expect(m.powers.event).not.toHaveBeenCalled();
     expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("loses a page that keeps sending what it may not, and reads nothing more of it", () => {
+    const m = play();
+    m.load();
+    m.say({ t: "ready" });
+    for (let i = 1; i < FRAME_LIMITS.oversized; i++) m.say(new Uint8Array(1));
+    expect(m.powers.end).not.toHaveBeenCalled();
+    m.say(new Uint8Array(1));
+    expect(m.powers.end).toHaveBeenCalledWith("lost");
+    expect(m.frame.remove).toHaveBeenCalled();
+    m.say({ t: "event", name: "score", data: 1 });
+    expect(m.powers.event).not.toHaveBeenCalled();
   });
 
   it("doesn't lose a match when the view leaves", () => {

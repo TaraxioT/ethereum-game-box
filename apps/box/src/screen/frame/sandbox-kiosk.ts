@@ -19,11 +19,28 @@ const TAP: BoxEvent = { type: "tap", seat: 1, accepted: true, meaning: "play" };
 const SETTLE_MS = 400;
 /** Past the view's own ready timeout, so a scenario always ends. */
 const GIVE_UP_MS = 12_000;
+const BEAT_MS = 20;
 
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
+/** Starts counting the kiosk's own timers. Says the longest its thread went without running one, in ms. */
+function heartbeat(): () => number {
+  let longest = 0;
+  let last = performance.now();
+  const beat = setInterval(() => {
+    const now = performance.now();
+    longest = Math.max(longest, now - last);
+    last = now;
+  }, BEAT_MS);
+  return () => {
+    clearInterval(beat);
+    return Math.round(longest);
+  };
+}
+
 async function play(scenario: Scenario): Promise<unknown> {
   const said: unknown[] = [];
+  const stall = heartbeat();
   let finish: (why: string) => void = () => {};
   const ended = new Promise<string>((done) => (finish = done));
   const ctx = {
@@ -50,7 +67,7 @@ async function play(scenario: Scenario): Promise<unknown> {
   await pause(SETTLE_MS);
   view.dispose?.();
   view.el.remove();
-  return { id: scenario.id, end: why, said };
+  return { id: scenario.id, end: why, said, stall: stall() };
 }
 
 const scenarios = (await (await fetch("/api/scenarios")).json()) as readonly Scenario[];

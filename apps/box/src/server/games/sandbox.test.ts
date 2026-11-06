@@ -26,6 +26,8 @@ interface Report {
   readonly id: string;
   readonly end: string;
   readonly said: readonly Record<string, unknown>[];
+  /** The longest the kiosk's thread went without running a timer, in ms. */
+  readonly stall: number;
 }
 
 function findChromium(): string | null {
@@ -49,6 +51,8 @@ const HERE = Object.values(networkInterfaces())
 const file = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 /** The most seconds a flood may take, in the rates it is held to: a loaded machine mustn't fail this. */
 const FLOOD_SECONDS = 10;
+/** The longest a heavy message may hold the kiosk's thread. Reading one costs tens of ms; parsing it cost seconds, or the tab. */
+const MOST_STALL_MS = 1500;
 
 /**
  * What no CSP can do. Under `default-src 'none'` and the sandbox, `<link rel="prerender">` still sends a full GET to any
@@ -253,6 +257,27 @@ window.addEventListener("load", () => {
 });
 `;
 
+/** Each message here once crashed the kiosk's tab: its size was only looked at after the work on it. */
+const CRUSHERS = `
+window.addEventListener("load", () => {
+  const text = "é".repeat(2 ** 28);
+  parent.postMessage({ t: "station", seat: 0, text }, "*");
+  parent.postMessage({ t: "event", name: "x", data: text }, "*");
+  egb.event("still here");
+  egb.end();
+});
+`;
+
+/** Buffers: each is free to send, and each cost the kiosk seconds to list or stringify, so no rate ever dropped one. */
+const BUFFERS = `
+window.addEventListener("load", () => {
+  for (let i = 0; i < 12; i++) {
+    const data = new Uint8Array(2 ** 25);
+    parent.postMessage(i % 2 ? { t: "event", name: "x", data } : data, "*", [data.buffer]);
+  }
+});
+`;
+
 /** What a game can do: reads its players on its first line, loads its own files, hears a tap and answers. */
 const GAME = `
 const egb = window.egb;
@@ -369,6 +394,8 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
       "own.js": "1",
     });
     bundle("forgeries", { "index.html": page(inline(FORGERIES)) });
+    bundle("crushers", { "index.html": page(inline(CRUSHERS)) });
+    bundle("buffers", { "index.html": page(inline(BUFFERS)) });
     bundle("leaves for the outside", { "index.html": leaves(JSON.stringify(`${OUT}/leave`)) });
     bundle("leaves by a meta refresh", { "index.html": page(`<meta http-equiv="refresh" content="1;url=${OUT}/refresh">`) });
     bundle("leaves for a data page", { "index.html": leaves(`"data:text/html,<script>" + ${JSON.stringify(LANDED)} + "<" + "/script>"`) });
@@ -504,6 +531,20 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     expect(counts("buzz")).toBeLessThanOrEqual(FRAME_LIMITS.buzzBurst + FLOOD_SECONDS * FRAME_LIMITS.buzzRate);
     expect(counts("station")).toBeLessThanOrEqual(FRAME_LIMITS.stationBurst + FLOOD_SECONDS * FRAME_LIMITS.stationRate);
     expect(report.said.find((s) => "station" in s)?.text).toBe("x".repeat(SMALL_CHARS));
+  });
+
+  it("survives a message of any size, and hears the page go on after it", () => {
+    const report = reportOf("crushers");
+    expect(events(report, "still here")).toEqual([null]);
+    expect(report.end).toBe("game");
+    expect(report.stall).toBeLessThan(MOST_STALL_MS);
+  });
+
+  it("loses a page that keeps sending buffers, with the kiosk's thread still free", () => {
+    const report = reportOf("buffers");
+    expect(report.end).toBe("lost");
+    expect(report.said).toEqual([]);
+    expect(report.stall).toBeLessThan(MOST_STALL_MS);
   });
 
   it("hears nothing from a frame the page opened inside itself", () => {

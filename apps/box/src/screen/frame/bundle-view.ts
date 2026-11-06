@@ -3,8 +3,8 @@
 // to the Box through `powers`, and the Box writes the log.
 //
 // Unlike a built game, the page holds the game. A stray error gets the quiet plate and the taps still count, but a page
-// that never loads or leaves its page is lost: the frame goes, and the Box hears it, so a broken game closes the match
-// at once instead of running out the manifest's time.
+// that never loads, leaves its page or floods the gate is lost: the frame goes, and the Box hears it, so a broken game
+// closes the match at once instead of running out the manifest's time.
 import type { BundleTap, FrameSeat, LogEntry } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { View, ViewContext, ViewFactory } from "../views/view.ts";
@@ -61,8 +61,13 @@ export function bundleFrameView(source: BundleSource, powers: (ctx: ViewContext)
       end("lost");
     };
     const timeout = setTimeout(() => lost("the page never said ready"), READY_TIMEOUT_MS);
+    const gate = createBundleGate(
+      match.players.length,
+      () => performance.now(),
+      () => lost("the page kept sending more than it may say"),
+    );
 
-    const channel = openFrameChannel(window, frame, createBundleGate(match.players.length, () => performance.now()), {
+    const channel = openFrameChannel(window, frame, gate, {
       message(message) {
         switch (message.t) {
           case "ready": {

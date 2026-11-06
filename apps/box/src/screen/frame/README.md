@@ -52,6 +52,10 @@ the players' latest names in the same array, then sends each tap.
 **The gate** (`bundle-gate.ts`). The host is a convenience, not a wall: a game can post anything by hand. So everything
 is decided on the kiosk's side, before a message goes further:
 
+- A message is weighed before anything else: at most 4096 characters and parts of plain JSON (`FRAME_LIMITS.messageWeight`,
+  four times an event's data). The walk stops at that weight, however large the message. One past it, or holding what JSON
+  can't say (a buffer, a `Date`, a `Map`), is dropped, and the third such message loses the page: the kiosk's timers, screen
+  and link to the Box share one thread, and a browser clones anything a page posts.
 - A message must be exactly a `FromBundle`. A page has no word for a tap, a badge, the network or money, so nothing it
   posts can become one. The seat must be the match's.
 - `FRAME_LIMITS` holds the rates: 20 events a second (40 at once), 4 station lines and 2 buzzes a second a seat. Whatever
@@ -65,8 +69,8 @@ bundle in a frame: a navigation to one is a 404, and it never says `ready`, so t
 Box's other pages have nothing of the game's in them, and a landing page is under the gate like any other.
 
 **Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
-that never says ready, or leaves, is lost: the frame goes, and `powers.end("lost")` closes the match at once. A stray
-error only puts up the quiet plate: the taps still count.
+that never says ready, leaves, or keeps sending what the gate can't weigh is lost: the frame goes, and
+`powers.end("lost")` closes the match at once. A stray error only puts up the quiet plate: the taps still count.
 
 **What the CSP can't do.** Under `default-src 'none'` and the sandbox, Chromium still lets a page reach the network four
 ways: `<link rel="prerender">` sends a full GET to any URL, `preconnect` opens a connection, `dns-prefetch` looks a name
@@ -82,7 +86,7 @@ with `--host-resolver-rules` and `--webrtc-ip-handling-policy`, and `server/game
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `errorText`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
 | `bundle-view.ts` | The kiosk's view of a store match. | `bundleFrameView(source, powers): ViewFactory`, `BundleMatch`, `BundleSource`, `BundlePowers`, `BundleEnd` |
-| `bundle-gate.ts` | What a bundle's page may say, and how much. | `parseFromBundle(data, seats)`, `createBundleGate(seats, now)` |
+| `bundle-gate.ts` | What a bundle's page may say, and how much. | `parseFromBundle(data, seats)`, `createBundleGate(seats, now, flooded)` |
 | `bundle-runtime.ts` | `window.egb`, platform-free. | `createBundleRuntime({ post, name })` |
 | `bundle-host.ts` | `/bundle-host.js`: the runtime wired to a bundle's page. A classic script, so it runs first. | entry |
 | `sandbox-kiosk.ts` | The kiosk's end of `server/games/sandbox.test.ts`. Nothing in the screen imports it. | entry |

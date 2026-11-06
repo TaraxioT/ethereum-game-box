@@ -85,4 +85,8 @@ export const FRAME_LIMITS = {
   buzzBurst: 2,
   eventEntries: LOG_LIMITS.entries / 2,
   eventBytes: LOG_LIMITS.logBytes / 2,
+  /** The most one message may weigh, a character or a part being one each: four times an event's data, so no honest message nears it. */
+  messageWeight: 4 * LOG_LIMITS.eventDataBytes,
+  /** How many messages past that weight, or that aren't plain JSON, lose the page. */
+  oversized: 3,
 } as const;
