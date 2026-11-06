@@ -1,9 +1,10 @@
 // `POST /names/claim`: a badge's signed claim of `<label>.gamebox.eth`, sent as `GameBoxNames.claimPlayer`, and
 // optionally its primary name (`primary-name.ts`), sent after it.
 
-import { claimNameDigest, fullName, gameBoxNamesAbi, labelProblem, permissionedRegistryAbi } from '@egb/shared/names';
-import { encodeFunctionData, labelhash } from 'viem';
+import { claimNameDigest, fullName, gameBoxNamesAbi, permissionedRegistryAbi } from '@egb/shared/names';
+import { type Address, encodeFunctionData, labelhash } from 'viem';
 
+import { requireLabel } from '../box.ts';
 import * as field from '../parse.ts';
 import { Refusal } from '../refusal.ts';
 import { CREATES_STORAGE_GAS, type Context, type Prepared, requireDeadline, simulate } from '../request.ts';
@@ -13,19 +14,9 @@ import { preparePrimaryName } from './primary-name.ts';
 /** `IPermissionedRegistry.Status.AVAILABLE`. */
 const AVAILABLE = 0;
 
-export async function prepareClaim(ctx: Context, input: unknown): Promise<Prepared> {
-  const body = field.object(input);
-  const label = field.text(body, 'label');
-  const problem = labelProblem(label);
-  if (problem) throw new Refusal(400, `label: ${problem}`);
-  const badge = field.address(body, 'badge');
-  const deadline = field.uint(body, 'deadline');
-  const signature = field.hex(body, 'signature');
-  requireDeadline(ctx, deadline);
-
-  const digest = claimNameDigest({ label, badge, deadline }, ctx.addresses.names);
-  await requireBadgeSignature(ctx.client, badge, digest, signature);
-
+/** Throws a 409 unless the badge holds no name and `<label>.gamebox.eth` is free and was never a Box: what
+ *  `claimPlayer` and `claimPlayerFor` both require. */
+export async function requireFreeName(ctx: Context, label: string, badge: Address): Promise<void> {
   const names = { address: ctx.addresses.names, abi: gameBoxNamesAbi } as const;
   const [held, box, registry] = await Promise.all([
     ctx.client.readContract({ ...names, functionName: 'labelOf', args: [badge] }),
@@ -41,7 +32,23 @@ export async function prepareClaim(ctx: Context, input: unknown): Promise<Prepar
     args: [BigInt(labelhash(label))],
   });
   if (status !== AVAILABLE) throw new Refusal(409, `${fullName(label)} is taken`, 'LabelAlreadyRegistered');
+}
 
+export async function prepareClaim(ctx: Context, input: unknown): Promise<Prepared> {
+  const body = field.object(input);
+  const label = field.text(body, 'label');
+  requireLabel(label, 'label');
+  const badge = field.address(body, 'badge');
+  const deadline = field.uint(body, 'deadline');
+  const signature = field.hex(body, 'signature');
+  requireDeadline(ctx, deadline);
+
+  const digest = claimNameDigest({ label, badge, deadline }, ctx.addresses.names);
+  await requireBadgeSignature(ctx.client, badge, digest, signature);
+
+  await requireFreeName(ctx, label, badge);
+
+  const names = { address: ctx.addresses.names, abi: gameBoxNamesAbi } as const;
   const data = encodeFunctionData({ ...names, functionName: 'claimPlayer', args: [label, badge, deadline, signature] });
   await simulate(ctx, { to: ctx.addresses.names, data });
   const primaryName =

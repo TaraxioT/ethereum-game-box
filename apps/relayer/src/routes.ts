@@ -7,11 +7,15 @@ import { guarded } from './guard.ts';
 import { Refusal } from './refusal.ts';
 import type { Context, Prepared } from './request.ts';
 import { prepareClaim } from './requests/claim.ts';
+import { prepareCupClose } from './requests/cup.ts';
 import { prepareDeploy } from './requests/deploy.ts';
 import { prepareDrip } from './requests/drip.ts';
+import { prepareDuelOpen, prepareDuelRefund } from './requests/duel.ts';
 import { prepareExecute } from './requests/execute.ts';
 import { preparePopup } from './requests/popup.ts';
 import { prepareResult } from './requests/result.ts';
+import { prepareSeat } from './requests/seat.ts';
+import { prepareTopup } from './requests/topup.ts';
 import type { Submitted } from './sender.ts';
 
 /** The sender, as the routes see it (the Durable Object's stub, or a `Relay` in tests). */
@@ -34,6 +38,11 @@ const prepare: Record<string, (ctx: Context, body: unknown) => Promise<Prepared>
   '/account/deploy': prepareDeploy,
   '/box/result': prepareResult,
   '/box/popup': preparePopup,
+  '/usdc/topup': prepareTopup,
+  '/duel/open': prepareDuelOpen,
+  '/duel/refund': prepareDuelRefund,
+  '/players/box-claim': prepareSeat,
+  '/cup/close': prepareCupClose,
 };
 
 const json = (status: number, body: unknown, headers: Record<string, string>) =>

@@ -1,4 +1,4 @@
-// The demo Box Worker: the Box (`GET /box`, `POST /result`) and its agent (`GET /agent`, `POST /agent/setup`, and
+// The demo Box Worker: the Box (`GET /box`, `POST /stake`, `POST /result`) and its agent (`GET /agent`, `POST /agent/setup`, and
 // the agent's MCP endpoint `POST /mcp`). Every request (and an hourly cron) makes sure the heartbeat alarm is running.
 
 import { corsHeaders, originAllowed } from '@egb/relayer/cors';
@@ -16,7 +16,7 @@ const json = (status: number, body: unknown, headers: Record<string, string>) =>
 const demoBox = (env: Env) =>
   env.DEMO_BOX.get(env.DEMO_BOX.idFromName('demo-box')) as unknown as Pick<
     DemoBox,
-    'start' | 'view' | 'report' | 'agentView' | 'agentSetup'
+    'start' | 'view' | 'report' | 'stake' | 'agentView' | 'agentSetup'
   >;
 
 export default {
@@ -33,9 +33,11 @@ export default {
       switch (route) {
         case 'GET /box':
           return json(200, await box.view(), cors);
-        case 'POST /result': {
+        case 'POST /result':
+        case 'POST /stake': {
           const body: unknown = await request.json().catch(() => null);
-          const reply = await box.report(body, request.headers.get('cf-connecting-ip') ?? 'unknown');
+          const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+          const reply = route === 'POST /result' ? await box.report(body, ip) : await box.stake(body, ip);
           return json(reply.status, reply.body, cors);
         }
         case 'GET /agent':
