@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Ethereum Game Box
+Comment=Start the Box's server and its full-screen screen
+Icon=@EGB_HOME@/egb/share/egb.svg
+Exec=systemctl --user start egb-server.service egb-kiosk.service
+Terminal=false
+Categories=Game;

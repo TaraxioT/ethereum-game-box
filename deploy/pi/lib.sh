@@ -255,6 +255,19 @@ install_units() { # deploy-pi-dir
   if [ "$changed" = 1 ]; then systemctl --user daemon-reload; fi
 }
 
+# Puts the Box in the desktop's menu and on its Desktop: a click starts the server and the full-screen screen.
+install_launcher() { # deploy-pi-dir
+  local entry dir
+  mkdir -p "$HOME/egb/share"
+  install -m 644 "$1/egb.svg" "$HOME/egb/share/egb.svg"
+  entry=$(sed "s|@EGB_HOME@|$HOME|" "$1/egb.desktop")
+  for dir in "$HOME/.local/share/applications" "$HOME/Desktop"; do
+    mkdir -p "$dir"
+    printf '%s\n' "$entry" >"$dir/egb.desktop"
+    chmod 755 "$dir/egb.desktop"
+  done
+}
+
 # Copies the deploy scripts of a deploy/pi folder into ~/egb/bin. Each is written aside and renamed over: the updater
 # may be running from bin/ right now, and bash reads its script as it goes, so the old file must stay intact.
 install_scripts() { # deploy-pi-dir

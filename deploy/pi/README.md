@@ -7,7 +7,7 @@ switching to it (and back), the updater, a push from a laptop, and the systemd u
 
 | Path | Holds |
 |---|---|
-| `setup.sh` | One-time, idempotent setup on the Pi: Node, pnpm, `uhubctl`, `rtkit` (realtime audio), groups, udev, the nice and realtime limits, the env file, linger, the units |
+| `setup.sh` | One-time, idempotent setup on the Pi: Node, pnpm, `uhubctl`, `rtkit` (realtime audio), groups, udev, the nice and realtime limits, the env file, linger, the units, the launcher |
 | `lib.sh` | Shared by the Pi scripts: the layout, `log`, `setting` and `setting_int`, the health, receiver and idle waits, the deploy lock, pruning |
 | `release.sh` | `release.sh <source dir> <commit>`: copies a tree to `~/egb/releases/`, installs, builds, smoke-tests; removes it on failure |
 | `activate.sh` | `activate.sh [--force] <release>`: waits for an idle Box, switches `current`, restarts, checks health and the receiver, rolls back on failure or interruption, prunes |
@@ -18,6 +18,7 @@ switching to it (and back), the updater, a push from a laptop, and the systemd u
 | `units/egb-kiosk.service` | Full-screen Chromium on `http://127.0.0.1:8790/` |
 | `units/egb-update.service`, `units/egb-update.timer` | The updater and its 30 s timer |
 | `egb-receiver.rules` | udev: `/dev/egb-receiver` for the receiver, and USB hub access for `uhubctl` |
+| `egb.desktop`, `egb.svg` | The launcher in the desktop's menu and on the Desktop: a click starts `egb-server` and `egb-kiosk` |
 | `env.example` | Every setting, with empty secrets; copied to `~/.config/egb/env` on the Pi, never committed with values |
 | `../p256-signer/` | The Box's HYP2003 P-256 signer, which the server starts from `P256_SIGNER_CMD` (its own README) |
 
@@ -30,6 +31,7 @@ Every script passes `shellcheck -x`.
 ~/egb/incoming/<commit>/  a tree pushed from a laptop; removed once built
 ~/egb/releases/<commit>-<stamp>/   one built tree per deploy (node_modules, apps/box/dist, RELEASE.json)
 ~/egb/current             symlink to the live release; the server unit runs from here
+~/egb/share/egb.svg        the launcher's icon (~/Desktop/egb.desktop, ~/.local/share/applications/egb.desktop)
 ~/egb/bin/                stable copies of lib, update, release and activate (refreshed on every good activation)
 ~/egb/state/              deploy.log, and the updater's memory (last-seen)
 ~/.config/egb/env         the settings and secrets, mode 600

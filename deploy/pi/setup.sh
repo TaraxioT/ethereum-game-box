@@ -12,6 +12,7 @@
 # - ~/.config/egb/env from env.example, only if it does not exist yet (never overwritten)
 # - loginctl linger, so the user's units run from boot with nobody logged in
 # - a read-only ssh deploy key (~/.ssh/egb_deploy) for the updater, if there is none; the public half is printed
+# - the Ethereum Game Box launcher in the desktop's menu and on the Desktop (a click starts the server and screen)
 # - the egb-* systemd user units and the deploy scripts in ~/egb/bin. Nothing is enabled or started, except with --boot
 #   (egb-server and egb-kiosk start at boot). The updater's timer stays off until the repo accepts the deploy key.
 # It sets no sink, volume or Bluetooth setting.
@@ -154,6 +155,7 @@ fi
 # --- units and scripts -----------------------------------------------------------------------------------------------
 install_scripts "$here"
 install_units "$here"
+install_launcher "$here"
 systemctl --user daemon-reload
 if [ "$boot" = 1 ]; then
   systemctl --user enable egb-server.service egb-kiosk.service
