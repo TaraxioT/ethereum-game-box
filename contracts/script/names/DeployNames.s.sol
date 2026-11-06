@@ -49,7 +49,7 @@ contract DeployNames is NamesScript {
         if (names.statsWriter() != address(stats)) names.setStatsWriter(address(stats));
 
         address box = factory.accountOf(qx, qy);
-        if (box.code.length == 0) factory.deploy(qx, qy);
+        if (box.code.length == 0) factory.deploy{gas: CREATE_GAS}(qx, qy);
         vm.stopBroadcast();
 
         _save("P256AccountFactory", address(factory));

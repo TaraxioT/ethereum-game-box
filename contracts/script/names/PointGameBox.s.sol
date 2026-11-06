@@ -29,7 +29,9 @@ contract PointGameBox is NamesScript {
 
         address resolver = factory.predictProxyAddress(sender, RESOLVER_SALT);
         if (resolver.code.length == 0) {
-            factory.deployProxy(_ens("PermissionedResolverImpl"), RESOLVER_SALT, DefaultRecord.initData(sender));
+            factory.deployProxy{gas: CREATE_GAS}(
+                _ens("PermissionedResolverImpl"), RESOLVER_SALT, DefaultRecord.initData(sender)
+            );
         }
         if (eth.getResolver("gamebox") != resolver) eth.setResolver(GAMEBOX, resolver);
         vm.stopBroadcast();

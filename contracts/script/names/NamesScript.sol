@@ -10,6 +10,11 @@ import {Deployments} from "../Deployments.sol";
 ///         deployer signs through its cast keystore, and every other account signs with P-256 off chain.
 /// @dev Run each script from `contracts/` with the repo `.env` loaded (see `contracts/README.md`).
 abstract contract NamesScript is Deployments {
+    /// @notice The gas limit of a call that creates a registry, a resolver or an account. `eth_estimateGas` comes out
+    ///         too low for nested calls that create storage on Sepolia; a limit above `2^24` holds the excess as a
+    ///         reservoir for state gas.
+    uint256 internal constant CREATE_GAS = (1 << 24) + 4_000_000;
+
     function _ens(string memory name) internal view returns (address) {
         return vm.parseJsonAddress(vm.readFile(PATH), string.concat(".ens.", name, ".address"));
     }

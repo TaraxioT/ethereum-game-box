@@ -22,6 +22,6 @@ contract RegisterBox is NamesScript {
         IGameBoxNames.Box memory current = names.getBox(LABEL);
         if (current.status != IGameBoxNames.BoxStatus.None && current.expiry > block.timestamp) return;
         vm.broadcast();
-        names.registerBox(LABEL, operator, box, qx, qy, uint64(block.timestamp + 30 days));
+        names.registerBox{gas: CREATE_GAS}(LABEL, operator, box, qx, qy, uint64(block.timestamp + 30 days));
     }
 }
