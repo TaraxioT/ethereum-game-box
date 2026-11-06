@@ -2,8 +2,9 @@
 // the pot, moves the title and scores the championship); once its receipt is in, what it did is read back from chain
 // and listed under the banner ("+20 USDC", "now holds champion.stockduel.gamebox.eth", "mumbai-cup: 2nd, 6 pts"),
 // never made up here. A draw sends both stakes back, and so does a void (a built game's rules failed); a free-play
-// game shows no money. Rematch goes back to Stake with the same seats; Home returns to the library.
-import type { BoxState, SeatState } from "../../core/types.ts";
+// game shows no money. A store game's result is the verifier's: each seat's share of the split, or every stake back.
+// Rematch goes back to Stake with the same seats; Home returns to the library.
+import type { BoxState, Judged, SeatState } from "../../core/types.ts";
 import { badgeLabel } from "../../core/badges.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -13,6 +14,7 @@ import { rez } from "../shell/rez.ts";
 import { pageLayout } from "./page-layout.ts";
 import { honoursOf } from "../../core/honours.ts";
 import { createSeatPanel } from "./seat-panel.ts";
+import { splitWords } from "./judged.ts";
 
 /** A seat's player name on chain, else its badge's label. */
 function nameOf(seat: SeatState | undefined): string | null {
@@ -60,6 +62,7 @@ export function resultView(ctx: ViewContext): View {
   function draw(state: BoxState): void {
     const m = state.match;
     if (!m?.outcome) return;
+    if (m.play.game === "store") return drawSplit(state, m.play.judged, m.stake);
     const { winner } = m.outcome;
     const money = m.stake > 0;
     state.seats.forEach((s, i) => {
@@ -79,6 +82,18 @@ export function resultView(ctx: ViewContext): View {
     const lines = m.lines ?? (onChain && !m.voided ? ["reading the result from Sepolia…"] : []);
     chainLines.replaceChildren(...lines.map((text) => el("li", m.lines ? "" : "pending", text)));
     bannerText.className = `result-banner-text ${winner === null ? "draw" : `seat-${winner}`}`;
+    fitFont(bannerText, page.plate.w - 72, 40);
+  }
+
+  function drawSplit(state: BoxState, judged: Judged | null, stake: number): void {
+    const words = splitWords(judged, stake, state.seats.map(nameOf));
+    state.seats.forEach((s, i) => {
+      const seat = words.seats[i];
+      if (seat) panels[i]?.set(s, seat.status, seat.tone);
+    });
+    bannerText.textContent = words.banner;
+    bannerText.className = "result-banner-text draw";
+    chainLines.replaceChildren(...words.lines.map((text) => el("li", "", text)));
     fitFont(bannerText, page.plate.w - 72, 40);
   }
 

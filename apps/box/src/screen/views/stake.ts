@@ -5,7 +5,8 @@
 // Signed, one Box-signed transaction moves both stakes into the pot on Sepolia; the game's own screen shows it on
 // its way (the routes send both signatures there) until it is in a block and the match begins. One that fails comes
 // back here and says so, and both players sign again. A seat short of the stake is told to tap: its tap
-// takes it to the lobby to top up. A game that isn't on chain (a built game) plays for nothing.
+// takes it to the lobby to top up. A game that isn't on chain (a built game) plays for nothing. A store game stakes
+// Store USDC on the amount keys alone: no title and no championship, and an AI judge splits the pot, as its tier says.
 import type { BoxState, GameInfo, SeatState } from "../../core/types.ts";
 import { isTeamGame, MODE_STAKES, stakeOf } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
@@ -16,11 +17,12 @@ import { pageLayout } from "./page-layout.ts";
 import { honoursOf } from "../../core/honours.ts";
 import { createSeatPanel, type SeatTone } from "./seat-panel.ts";
 import { latestOpen } from "./open-tx.ts";
-import { liveCup, onTheLine } from "./play-for.ts";
+import { judgedLine, liveCup, onTheLine } from "./play-for.ts";
 
 const TIER: Record<GameInfo["tier"], string> = {
   refereed: "REFEREED BY THE BOX",
   verified: "VERIFIED ON CHAIN",
+  judged: "JUDGED BY AI",
 };
 
 const TICK_MS = 1_000;
@@ -56,9 +58,10 @@ export function stakeView(ctx: ViewContext): View {
   root.append(plate, keys);
 
   const game = link.state().games.find((g) => g.id === link.state().focus);
-  /** Team games stake USDC on chain; a built game plays for nothing. */
-  const money = game !== undefined && isTeamGame(game.id);
-  const stakes = money ? game.stakes : [];
+  /** Team games stake USDC on chain, and store games Store USDC; a built game plays for nothing. */
+  const team = game !== undefined && isTeamGame(game.id);
+  const money = team || game?.kind === "store";
+  const stakes = game && money ? game.stakes : [];
   const amounts = stakes.map((amount, i) => {
     const key = document.createElement("egb-key") as EgbKey;
     key.textContent = `${amount} USDC`;
@@ -71,7 +74,7 @@ export function stakeView(ctx: ViewContext): View {
     });
     return { amount, key };
   });
-  const goals = money
+  const goals = team
     ? (["title", "cup"] as const).map((target) => {
         const key = document.createElement("egb-key") as EgbKey;
         key.textContent = `${target === "title" ? "TITLE" : "CUP"} · ${MODE_STAKES[target]}`;
@@ -126,8 +129,12 @@ export function stakeView(ctx: ViewContext): View {
     if (!anySigned && state.playFor === "usdc" && open?.step === "failed") {
       return say("THE STAKES DIDN'T GO IN", open.error ? open.error.toUpperCase() : "THE OPEN FAILED", "TAP BOTH BADGES TO TRY AGAIN", true);
     }
-    const line = onTheLine(state, game.title, link.now());
     const opening = state.seats.every((s) => s.signed);
+    if (game.kind === "store") {
+      const judged = judgedLine(state.stake, state.seats.length);
+      return say(opening ? "OPENING THE MATCH" : TIER[game.tier], judged.head, judged.detail);
+    }
+    const line = onTheLine(state, game.title, link.now());
     say(opening ? "OPENING THE MATCH" : `${TIER[game.tier]} · ${state.board ? "LIVE" : "READING SEPOLIA…"}`, line.head, line.detail);
   }
 

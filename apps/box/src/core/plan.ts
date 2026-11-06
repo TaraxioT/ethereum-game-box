@@ -19,6 +19,8 @@ function gamePlan(state: PlanInput, match: Match | null, seat: Seat): TapPlan {
   const { play } = match;
   // A built game's rules decide what a tap means: every tap asks what its game.json says.
   if (play.game === "built") return state.games.find((g) => g.id === play.id)?.manifest?.taps ?? "identify";
+  // A store game's bundle says, in its manifest.
+  if (play.game === "store") return play.taps;
   // Quick Draw judges by the touch: who touched, and when.
   if (play.game === "quick-draw") return play.state.phase !== "done" && play.state.taps[seat] === null ? "identify" : "none";
   // Stock Duel's tap plays a card, and its roll picks the stat.
@@ -30,6 +32,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
   switch (state.phase) {
     case "boot":
     case "build":
+    case "judging":
       return "none";
     case "result": {
       const endedAt = state.match?.endedAt ?? null;

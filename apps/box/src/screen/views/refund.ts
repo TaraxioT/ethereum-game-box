@@ -1,6 +1,7 @@
 // Refund: the Box missed its settle, so the pot's safety net opens. The pot unlocks a while after it opened (an hour on
 // Sepolia); then either player's tap, or REFUND ALL, sends one refund that pays both stakes back to their badges.
-// Both refunded, the Box goes Home. HOME leaves sooner: the Box refunds the pot itself once it unlocks.
+// Both refunded, the Box goes Home. HOME leaves sooner: the Box refunds the pot itself once it unlocks. A store match
+// comes here when the verifier never paid its pot, and says so.
 import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -58,6 +59,10 @@ export function refundView(ctx: ViewContext): View {
   function draw(state: BoxState): void {
     const m = state.match;
     if (!m) return;
+    if (m.play.game === "store") {
+      head.textContent = "NOT JUDGED";
+      note.textContent = "THE VERIFIER NEVER PAID THIS MATCH. THE POT ON SEPOLIA HOLDS BOTH STAKES.";
+    }
     const left = Math.max(0, m.refundAt - link.now());
     if (left > 0) line.replaceChildren("UNLOCKS IN ", el("span", "refund-count", clock(left)));
     else line.textContent = "UNLOCKED · TAP YOUR BADGE";

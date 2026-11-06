@@ -18,6 +18,7 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     focus: "stock-duel",
     seats,
     chain: { block: 100, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
+    fetching: false,
     stake: 10,
     playFor: "usdc",
     board: null,

@@ -10,14 +10,29 @@
 //   - A built game's rules run outside the core (RulesRunnerPort, a sandboxed child on the Pi): its taps reach them
 //     as finished taps judged at their touch time, a known badge's at its touch when the game needs no roll, and
 //     anything the rules get wrong (over budget, a throw, a crash) voids the match and sends both stakes back.
+//   - A store game has no rules here: the Box writes each finished tap in the match's log and tells the kiosk's frame,
+//     and when the game ends the log goes to the verifier, whose split pays the pot.
 //   - A tap that touched before the phase changed never reaches the new phase.
 // Every finished match goes to the match log as a transcript. Stakes go on chain the moment both seats sign, and the
 // match begins once they are confirmed in the pot: the transaction bar follows the pot, and the result goes when the
 // match ends.
 import type { Seat } from "@egb/sdk";
 import { hash32, other, SEATS } from "@egb/sdk";
-import type { ChainHead, CorePorts, ResultOrder, RulesSnapshot, TapEvent, TapPlan, TapSource, TimerHandle, TxWatch } from "./ports.ts";
-import type { TranscriptTap } from "@egb/sdk";
+import type {
+  ChainHead,
+  CorePorts,
+  JudgeWatch,
+  ResultOrder,
+  RulesSnapshot,
+  StoreBundle,
+  StoreChainPort,
+  TapEvent,
+  TapPlan,
+  TapSource,
+  TimerHandle,
+  TxWatch,
+} from "./ports.ts";
+import type { LogEntry, TranscriptTap } from "@egb/sdk";
 import type {
   Badge,
   Board,
@@ -26,17 +41,22 @@ import type {
   BoxState,
   BuiltPlay,
   Cue,
+  FrameWord,
   GameId,
   GameInfo,
+  Judged,
   Lobby,
   Match,
   MatchPlay,
   Phase,
   PlayerRecord,
   PlayFor,
+  PlayerCard,
   ScreenCommand,
   SeatState,
   StationView,
+  StoreEnd,
+  StorePlay,
   TapCard,
   TapMeaning,
   TeamGameId,
@@ -55,6 +75,7 @@ import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
 import { sameBadge } from "./badges.ts";
 import { startBuilt, type BuiltDriver } from "./built.ts";
+import { createStoreLog, type StoreLog } from "./store-log.ts";
 
 /** Join waits this long with both seats full before moving on to Stake. */
 export const JOIN_SETTLE_MS = 700;
@@ -145,7 +166,16 @@ type GameTap =
   | { readonly kind: "release"; readonly seat: Seat };
 
 /** A team game's play: its rules run here, in the core. */
-type TeamPlay = Exclude<MatchPlay, BuiltPlay>;
+type TeamPlay = Exclude<MatchPlay, BuiltPlay | StorePlay>;
+
+/** A store game's bundle, wanted from Play to the end of its match. */
+interface WantedBundle {
+  readonly id: GameId;
+  readonly title: string;
+  readonly hash: `0x${string}`;
+  /** What its manifest says; null until it is here and checked. */
+  facts: StoreBundle | null;
+}
 
 function startPlay(game: TeamGameId, seed: number, now: number): TeamPlay {
   return game === "quick-draw"
@@ -253,6 +283,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let game: GameId | null = null;
   /** The running built game's rules, through the runner; null for a team game or none. */
   let built: BuiltDriver | null = null;
+  /** The chosen store game's bundle: set exactly while a store game is on its way to the end of its match. */
+  let wanted: WantedBundle | null = null;
+  /** The running store match's log and its time limit, and the entries of the last one closed. */
+  let storeLog: StoreLog | null = null;
+  let storeTimer: TimerHandle | null = null;
+  let storeEntries: readonly LogEntry[] = [];
   let match: Match | null = null;
   let matchCount = 0;
   /** Each badge's USDC and player name, as last read from chain (absent: not read yet). */
@@ -336,6 +372,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       focus,
       seats: [seatState(0), seatState(1)],
       chain: { block: head.block, blockAt: head.at, blockMs: BLOCK_MS, gasGwei: head.gasGwei },
+      fetching: wanted !== null && wanted.facts === null,
       stake,
       playFor,
       board: currentBoard(),
@@ -406,6 +443,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       // The built game's child goes with the game: Join starts it again.
       stopBuilt();
       if (game && gameOf(game)?.kind === "built") ports.rules?.stop();
+      // A store game's bundle goes with the game too: nothing is kept between matches.
+      stopStore();
+      dropBundle();
     }
     if (to === "stake") {
       seen[0] = null;
@@ -423,7 +463,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   }
 
   function maybeLeaveJoin(): void {
-    if (phase !== "join" || !bothSeated() || joinTimer !== null) return;
+    if (phase !== "join" || !bothSeated() || joinTimer !== null || wanted?.facts === null) return;
     joinTimer = timers.after(JOIN_SETTLE_MS, () => {
       joinTimer = null;
       if (phase === "join" && bothSeated()) setPhase("stake");
@@ -460,12 +500,24 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     else incoming.delete(address);
   }
 
+  /** The focused game is a store game: its money is Store USDC, through this port, and not the Box's USDC. */
+  function storeFocus(): StoreChainPort | undefined {
+    return gameOf(focus)?.kind === "store" ? port.store : undefined;
+  }
+
+  /** A badge's card, its balance in what the focused game stakes. */
+  function cardOf(address: `0x${string}`): Promise<PlayerCard> {
+    const store = storeFocus();
+    const card = port.player(address, focus);
+    return store ? Promise.all([card, store.balance(address)]).then(([read, balance]) => ({ ...read, balance })) : card;
+  }
+
   /**
    * Reads a badge's balance, player name and record in the focused game from chain; the seats and the lobby show them
    * when they come back.
    */
   function read(badge: Badge): void {
-    port.player(badge.address, focus).then(
+    cardOf(badge.address).then(
       (card) => {
         balances.set(card.address, card.balance);
         names.set(card.address, card.name);
@@ -516,7 +568,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** The chosen game's stakes go on chain. */
   function staked(): boolean {
-    return game !== null && port.onChain(game);
+    return wanted !== null || (game !== null && port.onChain(game));
   }
 
   function sign(seat: Seat): TapMeaning {
@@ -542,22 +594,23 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
    * Both seats signed. A game on chain first moves both stakes into the pot (a Box-signed `Stake`): the Box stays on
    * Stake, showing the open's progress, until it is confirmed on chain (a block past its own: the relayer's `done`,
    * `paid` here), and only then does the match begin; in a block alone isn't enough. An open that fails sends both
-   * players back to sign again, with nothing staked. A game off chain (a built game) begins at once.
+   * players back to sign again, with nothing staked. A store game's stakes go to `StorePot`, the same way. A game off
+   * chain (a built game) begins at once.
    */
   function openMatch(): void {
     if (!game) throw new Error("no game was chosen");
     const chosen = game;
     const badges = addresses();
     const id = ++matchCount;
-    if (!port.onChain(chosen)) return beginMatch(id, chosen, badges, 0, 0);
+    if (!staked()) return beginMatch(id, chosen, badges, 0, 0);
     const round = port.nextRound();
     const amount = stakeOf(playFor, stake);
     const waiting = epoch;
     let begun = false;
     send(
       { kind: "open", seat: null, direction: "in", amount: amount * 2 },
-      (watch) =>
-        port.open({ round, game: chosen, badges, amount }, (update) => {
+      (watch) => {
+        const hear: TxWatch = (update) => {
           watch(update);
           // Only the wait that sent it acts on it: a reset or a new phase since has moved on.
           if (begun || epoch !== waiting || phase !== "stake") return;
@@ -568,7 +621,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
             cue("error");
             setPhase("stake");
           }
-        }),
+        };
+        if (wanted) port.store?.open({ round, bundle: wanted.hash, badges, amount }, hear);
+        else port.open({ round, game: chosen, badges, amount }, hear);
+      },
       () => {
         for (const badge of badges) refreshBalance(badge);
       },
@@ -599,6 +655,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       lines: null,
     });
     if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
+    if (wanted?.facts) return openStore(wanted, wanted.facts, now, opened);
     const play = startPlay(chosen as TeamGameId, seed, now);
     match = opened(play);
     lastFronts = fronts(play, now);
@@ -611,7 +668,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** Reads a badge's balance again, after money moved. */
   function refreshBalance(address: `0x${string}`): void {
-    port.balance(address).then(
+    (storeFocus() ?? port).balance(address).then(
       (balance) => {
         balances.set(address, balance);
         for (const seat of SEATS) if (seats[seat].badge?.address === address) emit({ type: "seat", seat });
@@ -687,11 +744,145 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     tickTimer = null;
   }
 
+  // ── Store games ───────────────────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches a store game's bundle, afresh for every match. Join waits for it, so nothing can be staked before it is
+   * here and checked. One that fails has sealed its game: the Box goes Home.
+   */
+  function fetchBundle(info: GameInfo): void {
+    const { bundles } = ports;
+    if (!bundles || !info.bundle) return;
+    const mine: WantedBundle = { id: info.id, title: info.title, hash: info.bundle, facts: null };
+    wanted = mine;
+    bundles.fetch(mine.id, mine.hash).then(
+      (facts) => {
+        if (wanted !== mine) return;
+        mine.facts = facts;
+        emit({ type: "game" });
+        maybeLeaveJoin();
+      },
+      () => {
+        if (wanted !== mine) return;
+        cue("error");
+        setPhase("home");
+      },
+    );
+  }
+
+  function dropBundle(): void {
+    if (!wanted) return;
+    wanted = null;
+    ports.bundles?.drop();
+  }
+
+  /** A store game that left the rack (its index can't be reached) with nothing staked on it yet: back Home. */
+  function leaveLostGame(): void {
+    if (!wanted || gameOf(wanted.id)) return;
+    const opening = seats[0].signed && seats[1].signed;
+    if (phase === "join" || phase === "lobby" || (phase === "stake" && !opening)) setPhase("home");
+  }
+
+  /** The store game begins: its page takes the frame, the Box's log opens, and the manifest's time runs. */
+  function openStore({ id, title, hash }: WantedBundle, facts: StoreBundle, now: number, opened: (play: MatchPlay) => Match): void {
+    const limit = facts.minutes * 60_000;
+    match = opened({ game: "store", id, title, bundle: hash, taps: facts.taps, endsAt: now + limit, lines: ["PLAY", "PLAY"], judged: null });
+    storeLog = createStoreLog();
+    setPhase("playing");
+    cue("round");
+    storeTimer = timers.after(limit, () => closeStore("time"));
+  }
+
+  function stopStore(): void {
+    storeLog = null;
+    timers.cancel(storeTimer);
+    storeTimer = null;
+  }
+
+  /** A word from the game's frame. Nothing it can say moves money: `end` only closes the match. */
+  function frameWord(word: FrameWord): void {
+    if (!match || match.outcome || match.play.game !== "store") return;
+    if (word.t === "end") return closeStore(word.why);
+    if (word.t === "event") return storeLog?.event(word.name, word.data, clock.now());
+    const seat = SEATS.find((s) => s === word.seat);
+    if (seat === undefined) return;
+    if (word.t === "buzz") {
+      ports.stations.buzz(seat, "ok");
+      return emit({ type: "buzz", seat });
+    }
+    const lines: [string, string] = [match.play.lines[0], match.play.lines[1]];
+    lines[seat] = word.text;
+    match = { ...match, play: { ...match.play, lines } };
+    emit({ type: "stations" });
+  }
+
+  /** The match is over: the log closes, and after the end hold it goes to the verifier. */
+  function closeStore(why: StoreEnd): void {
+    if (!storeLog || !match) return;
+    const now = clock.now();
+    storeEntries = storeLog.close(why, now);
+    stopStore();
+    match = { ...match, outcome: { winner: null }, endedAt: now };
+    emit({ type: "game" });
+    timers.after(END_HOLD_MS, conclude);
+  }
+
+  /** Sends the log to the verifier, and waits on JUDGING for what it says. */
+  function sendToJudge(current: Match, play: StorePlay): void {
+    const badges = addresses();
+    const { id, round, stake: amount } = current;
+    setPhase("judging");
+    const money = settlement(badges, amount);
+    port.store?.judge({ round, bundle: play.bundle, game: play.id, badges, amount, startedAt: matchStartedAt, entries: storeEntries }, (update) => {
+      money(update);
+      heardJudge(id, update);
+    });
+  }
+
+  /** The verifier's transaction on screen, from its first word of money, and each balance read again when it lands. */
+  function settlement(badges: readonly `0x${string}`[], amount: number): JudgeWatch {
+    let watch: TxWatch | null = null;
+    return (update) => {
+      if (update.step === "judging" || (update.step === "failed" && !watch)) return;
+      if (!watch) {
+        const shares = update.payouts ?? badges.map(() => amount);
+        badges.forEach((address, i) => owe(address, shares[i] ?? 0));
+        const order = { kind: update.payouts ? "settle" : "refund", seat: null, direction: "out", amount: amount * badges.length } as const;
+        ({ watch } = book.submit(order, () => {
+          badges.forEach((address, i) => {
+            land(address, shares[i] ?? 0);
+            refreshBalance(address);
+          });
+        }));
+      }
+      const step = update.step === "paying" ? "sent" : update.step === "failed" ? "failed" : "paid";
+      watch({ step, hash: update.hash, etherscan: update.etherscan, block: null, error: step === "failed" ? update.reason : null });
+    };
+  }
+
+  /**
+   * What the verifier says of the match on JUDGING. Paid or refunded, the Result shows it. Failed, or never answered,
+   * nobody has paid the pot: Refund opens once its delay has run, as for a Box that missed its settle.
+   */
+  function heardJudge(id: number, update: Judged): void {
+    if (phase !== "judging" || match?.id !== id || match.play.game !== "store") return;
+    match = { ...match, play: { ...match.play, judged: update } };
+    if (update.step === "failed") {
+      setPhase("refund");
+      cue("error");
+    } else if (update.step === "paid" || update.step === "refunded") {
+      setPhase("result");
+      cue("over");
+    } else {
+      emit({ type: "game" });
+    }
+  }
+
   // ── Playing ───────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Steps the game with a tick (tap null) or a tap. Returns whether the game changed. */
   function stepGame(tap: GameTap | null): boolean {
-    if (!match || match.outcome || match.play.game === "built") return false;
+    if (!match || match.outcome || match.play.game === "built" || match.play.game === "store") return false;
     const now = clock.now();
     const before = match.play;
     const after = nextPlay(before, tap, now);
@@ -728,7 +919,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           endedAt,
           taps: matchTaps,
           winner,
-          voided: match.voided,
+          // A store match pays a split, not a winner: its transcript never counts toward records.
+          voided: match.voided || match.play.game === "store",
           seen: [seen[0], seen[1]],
         },
         ports.log,
@@ -744,12 +936,15 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (!match?.outcome) return;
     const { winner } = match.outcome;
     record(winner, match.endedAt ?? clock.now());
+    // The frame's page has gone with the match, so its bundle does too.
+    dropBundle();
     if (!power) {
       setPhase("refund");
       cue("error");
       return;
     }
     const current = match;
+    if (current.play.game === "store") return sendToJudge(current, current.play);
     if (port.onChain(current.game) && !current.voided) {
       // The match began only once its pot was confirmed, so the result settles a pot that is there.
       settle(current, { round: current.round, game: current.game, badges: addresses(), winner });
@@ -789,7 +984,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function claimRefund(): TapMeaning {
     if (!match || match.refunded[0] || refunding || clock.now() < match.refundAt) return "ignored";
     const { id, round, stake: amount } = match;
-    if (!port.onChain(match.game) || amount === 0) {
+    const pot = match.play.game === "store" ? port.store : port;
+    if (!pot || (pot === port && !port.onChain(match.game)) || amount === 0) {
       match = { ...match, refunded: [true, true] };
       timers.after(REFUND_DONE_MS, () => phase === "refund" && match?.id === id && setPhase("home"));
       return "refund";
@@ -799,7 +995,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     for (const address of badges) owe(address, amount);
     send(
       { kind: "refund", seat: null, direction: "out", amount: amount * 2 },
-      (watch) => port.refund(round, watch),
+      (watch) => pot.refund(round, watch),
       (tx) => {
         refunding = false;
         for (const address of badges) {
@@ -895,7 +1091,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     owe(badge.address, TOPUP_USDC);
     send(
       { kind: "topup", seat: null, direction: "out", amount: TOPUP_USDC },
-      (watch) => port.topup(badge.address, watch),
+      (watch) => (storeFocus() ?? port).topup(badge.address, watch),
       () => {
         land(badge.address, TOPUP_USDC);
         refreshBalance(badge.address);
@@ -940,6 +1136,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     switch (phase) {
       case "boot":
       case "build":
+      case "judging":
         return "ignored";
       case "result":
         return rematchTap(seat, badge);
@@ -963,6 +1160,16 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** A tap's end in the game: the transcript keeps it, with its touch time and roll. */
   function gameTap(tap: Extract<GameTap, { kind: "tap" }>): TapMeaning {
+    if (match?.play.game === "store") {
+      // The log keeps it for the judge, and the game's page hears it.
+      const log = storeLog;
+      matchTaps.push({ seat: tap.seat, at: tap.at, roll: tap.roll, accepted: log !== null });
+      if (!log) return "ignored";
+      log.tap(tap.seat, tap.at, tap.roll);
+      emit({ type: "game-tap", seat: tap.seat, at: tap.at, roll: tap.roll });
+      if (log.full()) closeStore("time");
+      return "play";
+    }
     if (match?.play.game === "built") {
       // The rules judge it; the Box has handed it on at its touch time.
       const accepted = built !== null && match.outcome === null;
@@ -1010,9 +1217,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function touch(event: Extract<TapEvent, { phase: "touch" }>, source: TapSource): void {
     const entry: OpenTap = { seat: event.seat, at: event.at, source, epoch, acted: false, held: false };
     open.set(`${source}:${event.tap}`, entry);
-    if (inGame(event.seat, event.badge) && match?.play.game === "built") {
-      // A built game hears finished taps: a known badge's now, at its touch, when the game needs no roll; anything
-      // else when the chip has answered (its `done`), still judged at the touch.
+    if (inGame(event.seat, event.badge) && (match?.play.game === "built" || match?.play.game === "store")) {
+      // A built or store game hears finished taps: a known badge's now, at its touch, when the game needs no roll;
+      // anything else when the chip has answered (its `done`), still judged at the touch.
       if (event.badge && tapPlan(state, event.seat, clock.now()) !== "random") {
         entry.acted = true;
         judge(entry, event.badge, null);
@@ -1077,17 +1284,18 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "play": {
         const info = gameOf(focus);
         if (phase !== "home" || !info?.ready) return;
-        if (info.kind === "built" ? !ports.rules : !isTeamGame(info.id)) return;
+        if (info.kind === "built" ? !ports.rules : info.kind === "store" ? !ports.bundles || !port.store : !isTeamGame(info.id)) return;
         game = info.id;
         // A built game's child starts now, at Join, so its first step pays no start-up cost.
         if (info.kind === "built") ports.rules?.prepare(info.id);
+        if (info.kind === "store") fetchBundle(info);
         // Every game starts at its default stake, played for USDC.
         if (stake !== defaultStake(info) || playFor !== "usdc") {
           stake = defaultStake(info);
           playFor = "usdc";
           emit({ type: "stake", amount: stake });
         }
-        setPhase(bothSeated() ? "stake" : "join");
+        setPhase(bothSeated() && !wanted ? "stake" : "join");
         return;
       }
       case "stake":
@@ -1107,15 +1315,21 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase === "lobby") setPhase(lobby.from === "stake" && bothSeated() && game ? "stake" : "home");
         else if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
         return;
-      case "rematch":
+      case "rematch": {
         if (phase !== "result") return;
         fitSeatsToOpponent();
-        if (game && gameOf(game)?.kind === "built") ports.rules?.prepare(game);
-        setPhase(bothSeated() ? "stake" : "join");
-        return;
+        const info = game === null ? undefined : gameOf(game);
+        if (info?.kind === "built") ports.rules?.prepare(info.id);
+        if (match?.play.game !== "store") return setPhase(bothSeated() ? "stake" : "join");
+        // A store game is fetched again for every match, if it is still in the rack and can play.
+        if (!info?.ready) return setPhase("home");
+        fetchBundle(info);
+        return setPhase("join");
+      }
       case "home":
-        // From Refund too: a pot left unrefunded is refunded by the server once its delay has run.
-        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby") setPhase("home");
+        // From Refund too: a pot left unrefunded is refunded by the server once its delay has run. From Judging too: a
+        // verdict pays the pot with nobody watching.
+        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby" || phase === "judging") setPhase("home");
         return;
       case "build":
         // From Home, the builder opens; inside it, resetIdle() above was the point (a player is still there).
@@ -1136,6 +1350,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "claim":
         if (phase === "lobby") claimName();
         return;
+      case "frame":
+        if (phase === "playing") frameWord(cmd.word);
+        return;
     }
   }
 
@@ -1153,6 +1370,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     games = ports.library.games();
     if (!gameOf(focus) && games[0]) focus = games[0].id;
     emit({ type: "games" });
+    leaveLostGame();
   });
 
   showStations();
@@ -1191,6 +1409,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     stop() {
       stopBuilt();
       ports.rules?.stop();
+      dropBundle();
       timers.clear();
       book.stop();
       unwatchLibrary();
