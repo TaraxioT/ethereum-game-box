@@ -1,7 +1,8 @@
 // The view contract: every screen (Home, Join, Stake, a game, Result, Refund, the lobby) is a View the router mounts on the
 // stage when the Box's phase calls for it. Views draw from `BoxState`, animate on `BoxEvent`s, and act only through
 // `ctx.link.send`. The Box's own objects (Grid, core, ports, clock) belong to the machine, not to a view.
-import type { BoxEvent, BoxLink, BoxState, Cue } from "../../core/types.ts";
+import type { BoxEvent, BoxLink, BoxState } from "../../core/types.ts";
+import type { SoundName, SoundOptions } from "../sound/catalogue.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { RunOptions } from "../shell/packets.ts";
 import type { TraceName } from "../shell/traces.ts";
@@ -34,8 +35,18 @@ export interface Machine {
   swell(): void;
 }
 
+export interface PlayOptions extends SoundOptions {
+  /** 0..1, scales the sound. */
+  readonly volume?: number;
+}
+
+/** The Box's sounds (`sound/`): the cues by name, the music loop, the mute. */
 export interface Sound {
-  play(cue: Cue): void;
+  play(name: SoundName, options?: PlayOptions): void;
+  /** The music loop on (fades in) or off (fades out, then pauses). Safe to call on every change. */
+  music(on: boolean): void;
+  /** Sinks the music under a spoken clip, and brings it back. */
+  duck(on: boolean): void;
   readonly muted: boolean;
   setMuted(muted: boolean): void;
 }

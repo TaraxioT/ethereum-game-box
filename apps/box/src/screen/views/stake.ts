@@ -47,7 +47,7 @@ export function stakeView(ctx: ViewContext): View {
   back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
   back.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     link.send({ type: "back" });
   });
   root.append(plate, keys);
@@ -99,11 +99,15 @@ export function stakeView(ctx: ViewContext): View {
   const game = link.state().games.find((g) => g.id === link.state().focus);
   /** Team games stake USDC on chain; a built game plays for nothing. */
   const money = game !== undefined && isTeamGame(game.id);
-  const amounts = (money ? game.stakes : []).map((amount) => {
+  const stakes = money ? game.stakes : [];
+  const amounts = stakes.map((amount, i) => {
     const key = document.createElement("egb-key") as EgbKey;
     key.textContent = `${amount} USDC`;
     key.addEventListener("click", () => {
-      sound.play("tap");
+      // Up or down from the stake chosen, pitched by where this one stands among them.
+      const now = link.state().stake;
+      const pitch = stakes.length > 1 ? i / (stakes.length - 1) : 0.5;
+      sound.play(amount < now ? "ui-down" : amount > now ? "ui-up" : "ui-select", { pitch });
       link.send({ type: "stake", amount });
     });
     return { amount, key };

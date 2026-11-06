@@ -44,13 +44,13 @@ export function resultView(ctx: ViewContext): View {
   home.setAttribute("variant", "ghost");
   home.textContent = "HOME";
   home.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     link.send({ type: "home" });
   });
   const rematch = document.createElement("egb-key") as EgbKey;
   rematch.textContent = "REMATCH";
   rematch.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-select");
     link.send({ type: "rematch" });
   });
   keys.append(home, rematch);

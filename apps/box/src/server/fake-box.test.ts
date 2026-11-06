@@ -209,7 +209,7 @@ describe("the Box on the fake receiver", () => {
     const counts = taps.stats().taps;
     expect(counts.touch).toBe(counts.done + Object.values(counts.fail).reduce((a, b) => a + b, 0));
     expect(held()).toEqual([null, null]);
-    expect(rig.events.filter((e) => e.type === "tap").at(-1)).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(rig.events.filter((e) => e.type === "tap").at(-1)).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "let-go" });
     taps.fake.plug();
   });
 });

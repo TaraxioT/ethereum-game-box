@@ -116,7 +116,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   let spoken = "";
   let thinkTimer: ReturnType<typeof setInterval> | undefined;
 
-  const voice = createDesignerVoice(status.voice, () => sound.muted, {
+  const voice = createDesignerVoice(status.voice, sound, {
     onCaption: (text) => lcd.push(text),
     onListening: (on) => talk.toggleAttribute("selected", on),
   });
@@ -149,14 +149,14 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   }
 
   function choose(choice: string): void {
-    sound.play("tap");
+    sound.play("ui-select");
     void act(() => postJson<DesignerState>(BUILDER.choose, { choice, session: state?.session }));
   }
 
   function answer(): void {
     const text = input.value.trim();
     if (!text) return;
-    sound.play("tap");
+    sound.play("ui-select");
     void act(async () => {
       lcd.push(`YOU: ${text}`);
       const next = await postJson<DesignerState>(BUILDER.answer, { text, session: state?.session });
@@ -166,11 +166,11 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   }
 
   home.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     link.send({ type: "home" });
   });
   back.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     void act(() => postJson<DesignerState>(BUILDER.back, { session: state?.session }));
   });
   send.addEventListener("click", answer);
@@ -184,7 +184,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   talk.addEventListener("pointerdown", (e) => {
     if (!state || state.locked || busy) return;
     talk.setPointerCapture(e.pointerId);
-    sound.play("tick");
+    sound.play("ui-focus");
     hooks.stay();
     void voice.press();
   });
@@ -268,7 +268,7 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
         void machine.run(`slot${i % 4}` as SlotTrace).then(() => machine.swell());
       }, n * 160);
     });
-    if (filled.length) sound.play("tick");
+    if (filled.length) sound.play("count", { pitch: filled.length / 4 });
     if (prev?.thinking !== next.thinking) drawThinking(next);
     if (next.locked && !prev?.locked) lcd.push("A GAME IS BEING BUILT: THE DESIGN IS LOCKED.");
     if (next.step === "confirm" && !current.ready.ok) lcd.push(current.ready.reason ?? "This Box can't build games right now.", "bad");

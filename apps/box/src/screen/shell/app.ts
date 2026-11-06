@@ -10,6 +10,7 @@ import { createMachine, type MachineView } from "./machine.ts";
 import { createRouter, type Router, type Routes } from "./router.ts";
 import { boot } from "./boot.ts";
 import { calm, el, play } from "./dom.ts";
+import { musicFor, soundsFor } from "../sound/event-sounds.ts";
 
 export interface AppOptions {
   readonly link: BoxLink;
@@ -104,7 +105,8 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
 
   link.subscribe((state, event) => {
     machine?.update(state, event);
-    if (event.type === "cue") sound.play(event.cue);
+    for (const heard of soundsFor(state, event)) sound.play(heard.name, { seat: heard.seat });
+    sound.music(musicFor(state.phase));
     if (state.phase !== "boot") router?.update(state, event);
     // A Box server that restarted under a screen that has already booted starts in boot again: carry it on.
     else if (booted && event.type === "init") link.send({ type: "booted" });

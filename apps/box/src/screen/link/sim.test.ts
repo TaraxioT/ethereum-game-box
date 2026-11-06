@@ -63,7 +63,7 @@ describe("SimLink on the demo chain", () => {
     open();
     expect(link.state().phase).toBe("boot");
     link.tap(0);
-    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "ignored" });
     link.send({ type: "booted" });
     expect(link.state().phase).toBe("attract");
     link.send({ type: "start" });
@@ -91,7 +91,7 @@ describe("SimLink on the demo chain", () => {
     expect(link.state().seats.map((seat) => seat.signed)).toEqual([true, true]);
     expect(link.state().match?.stake).toBe(25);
     expect(link.state().txs.find((tx) => tx.kind === "open")).toMatchObject({ seat: null, amount: 50, hash: null });
-    expect(cues()).toContain("boot");
+    expect(cues()).toContain("round");
 
     await until((state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase !== "wait", 7_000);
     link.tap(0);
@@ -100,7 +100,7 @@ describe("SimLink on the demo chain", () => {
 
     await vi.advanceTimersByTimeAsync(END_HOLD_MS);
     expect(link.state().phase).toBe("result");
-    expect(cues()).toContain(winner === 0 ? "win" : "lose");
+    expect(cues()).toContain("over");
 
     await until((state) => state.txs.some((tx) => tx.kind === "settle") && paidAll(state), 30_000);
     await settled();
@@ -135,7 +135,7 @@ describe("SimLink on the demo chain", () => {
       await vi.advanceTimersByTimeAsync(50);
     }
     expect(link.state().phase).toBe("result");
-    expect(cues()).toEqual(expect.arrayContaining(["flip", "seal", "tick"]));
+    expect(cues()).toEqual(expect.arrayContaining(["round", "play", "step"]));
     const winner = link.state().match?.outcome?.winner;
     await until((state) => state.txs.some((tx) => tx.kind === "settle") && paidAll(state), 30_000);
     await settled();
@@ -195,16 +195,16 @@ describe("SimLink on the demo chain", () => {
     expect(state.stations[0].big).toBe("OFFLINE");
 
     link.tap(0);
-    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "ignored" });
     // The stations redraw with the next head after the pot unlocks.
     await until((s) => s.stations[0].big === "TAP", DEMO_REFUND_MS + BLOCK_MS);
     expect(Date.now()).toBeGreaterThanOrEqual(match.refundAt);
     expect(link.state().stations[0]).toMatchObject({ big: "TAP", small: "to refund" });
     link.tap(0);
-    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: true });
+    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: true, meaning: "refund" });
     expect(link.state().txs.filter((tx) => tx.kind === "refund").map((tx) => tx.seat)).toEqual([null]);
     link.tap(0);
-    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "ignored" });
 
     await until((s) => s.match?.refunded.every(Boolean) === true, 15_000);
     await settled();
@@ -234,7 +234,7 @@ describe("SimLink on the demo chain", () => {
     }
     await until((state) => state.seats[0].balance === 0);
     link.tap(0);
-    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "refused" });
     expect(link.state().phase).toBe("lobby");
     expect(link.state().lobby).toMatchObject({ from: "stake", badge: { name: "nova.gamebox.eth" } });
 

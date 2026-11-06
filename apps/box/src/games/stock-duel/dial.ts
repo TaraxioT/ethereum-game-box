@@ -1,8 +1,10 @@
 // The stat wheel at the top of the tray: a dark disc of four graphite quarters (PRICE, AVG PRICE, 24H MOVE,
 // LIQUIDITY in roll order, clockwise from the top left), each named beside the wheel, and a white pointer round a hub.
 // Until both cards are down the wheel rests with a "?" on its hub and a line saying how the stat is picked. Then the
-// pointer spins a few turns and settles on the chosen stat; its quarter lights white and its name is underlined.
+// pointer spins a few turns and settles on the chosen stat; its quarter lights white and its name is underlined. The
+// spin clicks like a slot reel at every 30° the pointer passes, and lands with a boom and a bell.
 import type { Point } from "../../screen/shell/layout.ts";
+import type { Sound } from "../../screen/views/view.ts";
 import type { StatKey } from "./types.ts";
 import { calm, el } from "../../screen/shell/dom.ts";
 import { DIAL_MS } from "./rules.ts";
@@ -42,7 +44,10 @@ const CORNERS = [
   { x: 0, y: 1, round: "8% 8% 8% 100%" },
 ] as const;
 
-export function createDial(centre: Point, radius: number): Dial {
+/** A reel click each time the pointer turns this far. */
+const CLICK_DEG = 30;
+
+export function createDial(centre: Point, radius: number, sound: Sound): Dial {
   const size = radius * 2;
   const root = el("div", "sd-wheel");
   root.style.left = `${centre.x - radius}px`;
@@ -97,9 +102,38 @@ export function createDial(centre: Point, radius: number): Dial {
   function wake(on: boolean): void {
     root.classList.toggle("awake", on);
   }
+  let clicking = 0;
   function stop(): void {
     spinning?.cancel();
     spinning = null;
+    cancelAnimationFrame(clicking);
+  }
+
+  /** The pointer's angle as drawn now, from its computed transform. */
+  function drawnAngle(): number | null {
+    const m = /matrix\(([^,]+),\s*([^,]+)/.exec(getComputedStyle(pointer).transform);
+    return m ? (Math.atan2(Number(m[2]), Number(m[1])) * 180) / Math.PI : null;
+  }
+
+  /** Clicks for every CLICK_DEG the pointer turns while `run` plays. */
+  function clicks(run: Animation): void {
+    let prev = drawnAngle();
+    let travelled = 0;
+    const frame = (): void => {
+      if (spinning !== run) return;
+      const now = drawnAngle();
+      if (now !== null && prev !== null) {
+        // The shortest way round from the last frame's angle: a frame turns the pointer far less than half a turn.
+        travelled += Math.abs(((now - prev + 540) % 360) - 180);
+        if (travelled >= CLICK_DEG) {
+          travelled %= CLICK_DEG;
+          sound.play("reel");
+        }
+      }
+      prev = now;
+      clicking = requestAnimationFrame(frame);
+    };
+    clicking = requestAnimationFrame(frame);
   }
   setAngle(angle);
 
@@ -113,6 +147,7 @@ export function createDial(centre: Point, radius: number): Dial {
       if (calm() || elapsedMs >= SPIN_MS) {
         setAngle(target);
         light(stat);
+        if (elapsedMs < SPIN_MS) sound.play("land");
         return Promise.resolve();
       }
       let to = target;
@@ -128,10 +163,12 @@ export function createDial(centre: Point, radius: number): Dial {
       run.currentTime = Math.max(0, elapsedMs);
       spinning = run;
       setAngle(target);
+      clicks(run);
       return run.finished.then(
         () => {
           spinning = null;
           light(stat);
+          sound.play("land");
         },
         () => undefined,
       );

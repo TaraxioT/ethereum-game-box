@@ -39,21 +39,21 @@ export function homeView(ctx: ViewContext): View {
   // router derezzes Home for the game (or the builder).
   playKey.addEventListener("click", () => {
     if (newGame) {
-      sound.play("tap");
+      sound.play("ui-select");
       rack.press(NEW_GAME.id);
       machine.coin();
       link.send({ type: "build" });
       return;
     }
     if (!current?.ready) return;
-    sound.play("tap");
+    sound.play("ui-select");
     rack.press(current.id);
     machine.coin();
     link.send({ type: "play" });
   });
 
   const pick = (id: string): void => {
-    sound.play("tick");
+    sound.play("ui-focus");
     if (id === NEW_GAME.id) focusNewGame(true);
     else focusGame(id);
   };
@@ -80,7 +80,7 @@ export function homeView(ctx: ViewContext): View {
   lobbyKey.textContent = "LOBBY";
   place(lobbyKey, { x: layout.play.x + layout.play.w + 16, y: layout.play.y, w: 150, h: layout.play.h });
   lobbyKey.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-select");
     link.send({ type: "lobby" });
   });
 
@@ -163,7 +163,7 @@ export function homeView(ctx: ViewContext): View {
     if (step) {
       const next = entries[(i + step + entries.length) % entries.length];
       if (next) {
-        sound.play("tick");
+        sound.play("ui-focus");
         if (next.id === NEW_GAME.id) focusNewGame(true);
         else focusGame(next.id);
       }

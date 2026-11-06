@@ -42,14 +42,14 @@ export function refundView(ctx: ViewContext): View {
   both.setAttribute("variant", "alert");
   both.textContent = "REFUND ALL";
   both.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-select");
     link.send({ type: "refund" });
   });
   const home = document.createElement("egb-key") as EgbKey;
   home.setAttribute("variant", "ghost");
   home.textContent = "HOME";
   home.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     link.send({ type: "home" });
   });
   keys.append(note, home, both);

@@ -102,10 +102,10 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   place(root, { x: 0, y: 0, w: ctx.layout.width, h: ctx.layout.height });
 
   const scene = createScene(geo.scene);
-  const dial = createDial(geo.dial.centre, geo.dial.radius);
+  const dial = createDial(geo.dial.centre, geo.dial.radius, ctx.sound);
   const drums = [createRolodex(0, geo.rolodex[0], ctx.sound), createRolodex(1, geo.rolodex[1], ctx.sound)] as const;
   let players: readonly [Player, Player] = playersOf(ctx.link.state());
-  const reveal = createReveal(geo.reveal, (seat: Seat) => players[seat].label);
+  const reveal = createReveal(geo.reveal, (seat: Seat) => players[seat].label, ctx.sound);
   const standing = createStanding(geo.standing);
   root.append(scene.el, dial.el, reveal.el, drums[0].el, drums[1].el, ...standing.els);
 

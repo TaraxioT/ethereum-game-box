@@ -208,7 +208,36 @@ export interface BoxState {
   readonly stations: readonly [StationView, StationView];
 }
 
-export type Cue = "boot" | "tap" | "block" | "seal" | "flip" | "tick" | "win" | "lose" | "error";
+/**
+ * A moment in a match or in the Box's work that the screen marks (with a sound, a flash). The core says what happened;
+ * how it sounds is the screen's. `seat` on the event says whose moment it is, where it is someone's. Moments a game's
+ * screen times to its own animation (Stock Duel's dial, reveal and scored round) are the screen's, not cues.
+ */
+export type Cue =
+  | "round" // a match opens, a new Stock Duel round begins
+  | "draw" // Quick Draw: the sign turns to DRAW
+  | "shot" // Quick Draw: a good draw (the winner's seat)
+  | "false-start" // Quick Draw: a tap before the draw (the seat that jumped)
+  | "tie" // Quick Draw: a dead heat, or nobody drew and the standoff is stood again
+  | "step" // Stock Duel: a seat's spotlight steps to its next card
+  | "play" // Stock Duel: a seat's card goes down (its tap, or played for it when time ran out)
+  | "over" // the match is over (the winner's seat, or none for a draw)
+  | "error"; // trouble: the stakes couldn't lock, a built game's rules failed, the Box missed its settle
+
+/** What a badge's tap did, so the screen can tell it apart by ear. */
+export type TapMeaning =
+  | "wake" // woke the Box: attract to Home
+  | "join" // took a seat
+  | "again" // tapped the seat it already holds
+  | "sign" // signed the stake
+  | "open" // the second signature: the stakes lock and the match opens
+  | "play" // a game took it (the game's own moment follows as a cue)
+  | "let-go" // a game tap that played nothing: the card its touch held goes
+  | "rematch" // asked for a rematch on the result
+  | "refund" // claimed the refund
+  | "card" // in the lobby: shows the badge's card
+  | "refused" // the badge can't cover the stake (it is sent to the lobby)
+  | "ignored"; // read, but it meant nothing here
 
 /** The moment that changed the state, so the screen animates the moment rather than diffing states. */
 export type BoxEvent =
@@ -217,8 +246,10 @@ export type BoxEvent =
   | { readonly type: "focus"; readonly game: GameId }
   | { readonly type: "block"; readonly block: number }
   | { readonly type: "gas"; readonly gwei: number }
+  /** A chip landed on a station's reader and is still being read: its tap (or nothing, if the read fails) follows. */
+  | { readonly type: "touch"; readonly seat: Seat }
   /** A badge tapped a station. `accepted` false: the tap meant nothing here (the station buzzes no). */
-  | { readonly type: "tap"; readonly seat: Seat; readonly accepted: boolean }
+  | { readonly type: "tap"; readonly seat: Seat; readonly accepted: boolean; readonly meaning: TapMeaning }
   | { readonly type: "seat"; readonly seat: Seat }
   | { readonly type: "stake"; readonly amount: number }
   | { readonly type: "tx"; readonly tx: Tx }
@@ -230,7 +261,7 @@ export type BoxEvent =
   /** The lobby's badge, card, proposal or board changed. */
   | { readonly type: "lobby" }
   | { readonly type: "buzz"; readonly seat: Seat }
-  | { readonly type: "cue"; readonly cue: Cue };
+  | { readonly type: "cue"; readonly cue: Cue; readonly seat: Seat | null };
 
 /** What a touch on the screen asks the Box for. */
 export type ScreenCommand =

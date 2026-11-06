@@ -172,7 +172,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
       k.setAttribute("variant", variant);
       k.textContent = label;
       k.addEventListener("click", () => {
-        sound.play("tap");
+        sound.play(variant === "ghost" ? "ui-back" : "ui-select");
         act();
       });
       return k;
@@ -226,7 +226,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
         if (!event.ok) lcd.push(`${COMPILE[i]?.label ?? event.step}: ${event.text}`, "bad");
         if (live && i >= 0) {
           packet(`slot${i}` as TraceName, event.ok ? LIGHT.sys : LIGHT.alert);
-          sound.play(event.ok ? "tick" : "error");
+          sound.play(event.ok ? "count" : "error", { pitch: (i + 1) / 4 });
           flicker(plates[i]!.plate);
         }
         break;
@@ -245,7 +245,7 @@ export function createBuildScreen(ctx: ViewContext, job: ForgeJob, hooks: BuildH
         }
         drawKeys();
         if (live) {
-          sound.play(event.ok ? "win" : "lose");
+          sound.play(event.ok ? "round-won" : "error");
           if (event.ok) machine.coin();
           void rez(keys);
         }

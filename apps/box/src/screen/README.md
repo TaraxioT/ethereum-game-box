@@ -111,7 +111,6 @@ Modules go with them, each pure one tested:
   has already booted is sent `booted` at once. With `onSeatTap` (Demo mode) a touch on a `data-seat` element (a port,
   a seat panel) taps that seat, and in a game a touch below the overlay taps the half it lands in, with a ring of that
   seat's light. `isBot` tags the bot's port.
-- `sound.ts`: synthesized WebAudio cues, muted by localStorage `gamebox-muted=1`.
 - `dom.ts`: `el`, `place`, `play` (a Web Animation; under reduced motion a 160 ms fade to its end state), `fitFont`,
   `fitWidth`, `facesReady`, `wait`, `calm`.
 
@@ -140,7 +139,7 @@ on `BoxEvent`s and acts only through `link.send`.
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes.
 - `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, and the rack (`rack.ts`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
-  derezzes and rezzes, the facts rez in turn and the `tick` plays. Enter or Play launches: the key and program flash,
+  derezzes and rezzes, the facts rez in turn and the `ui-focus` tick plays. Enter or Play launches: the key and program flash,
   the core turns and every trace flares. On the Box (`build:box`) the rack ends in the blank NEW GAME program: it
   focuses like a game, on the screen alone (the Box's focus is always a game), and its key, DESIGN, sends `build`.
   Built games' programs stand before it with their art from the Box; one that can't load is sealed, and focusing it
@@ -208,9 +207,87 @@ talks to anything but the Box: every ElevenLabs call is the server's, behind its
 
 | Module | What it is | API |
 |---|---|---|
-| `designer-voice.ts` | The key's behaviour. Mock voice (the default): no microphone; the press shows the scripted player's next line (`GET turns`) and the release sends an empty take, which the Box "hears" as that line and reads. ElevenLabs: the key records while held and the take goes up to be transcribed; each new question is spoken from the clip the Box made (its words are on screen either way). | `createDesignerVoice(status, muted, hooks): { mode, press(), release(session), speak(session), stop() }` |
+| `designer-voice.ts` | The key's behaviour. Mock voice (the default): no microphone; the press shows the scripted player's next line (`GET turns`) and the release sends an empty take, which the Box "hears" as that line and reads. ElevenLabs: the key records while held and the take goes up to be transcribed; each new question is spoken from the clip the Box made (its words are on screen either way). | `createDesignerVoice(status, sound, hooks): { mode, press(), release(session), speak(session), stop() }` |
 | `recorder.ts` | Push-to-talk recording: MediaRecorder on a mic opened at the press and closed at the release (its tracks stopped), one webm/opus blob per take; a take is cut at 15 s, and one under 0.3 s is a tap, not an answer. | `createRecorder()`, `canRecord()`, `MAX_TAKE_MS`, `MIN_TAKE_MS` |
-| `clips.ts` | Plays a spoken clip: fetched with the token (an `<audio src>` can't send it), decoded and played through WebAudio, one at a time; muted (localStorage `gamebox-muted=1`), nothing plays. Never throws: the question stays on screen. | `createClipPlayer(muted): { play(clip), stop() }` |
+| `clips.ts` | Plays a spoken clip: fetched with the token (an `<audio src>` can't send it), decoded and played through WebAudio, one at a time, with the music sunk under it (`sound.duck`); muted (localStorage `gamebox-muted=1`), nothing plays. Never throws: the question stays on screen. | `createClipPlayer(sound): { play(clip), stop() }` |
+
+## Sound
+
+`sound/` is everything the Box says by ear. Every tap has its own sound, so a player knows what their tap did without
+looking at the screen. Every sound is synthesized with WebAudio; the music loop is the only audio file.
+
+| Module | What it is | API |
+|---|---|---|
+| `catalogue.ts` | Every sound: its name, its meaning, what it sounds like and its recipe. Each is layered: a body (a pitched thump), a texture (filtered noise) and a voice (bells with inharmonic partials, or soft brass of detuned saws through a low-pass). Each differs from the rest in timbre and in contour (rising, falling, struck, held), so it reads in mono through a small Bluetooth speaker. | `SOUNDS`, `SOUND_NAMES`, `SoundName`, `soundEntry(name)` |
+| `synth.ts` | The instruments: one bus into a compressor (stacked sounds never clip), a second of noise, and `tone`, `noise`, `bell`, `brass`, `thump`. | `Synth` |
+| `sound.ts` | The `Sound` the views get: `play(name, { seat, pitch, volume })`, `music(on)`, `duck(on)`, the mute. A seat's sound leans to its side (a stereo pan), and is also pitched or voiced apart from the other seat's, since the speaker is mono. The same sound for the same seat within 25 ms is dropped. The kiosk's Chromium starts audio without a touch; a normal browser starts it on the first gesture. Muted (localStorage `gamebox-muted=1`), cues are silent and the music is paused. Nothing in it throws into a caller: with no audio, the Box runs silent. | `createSound(): Sound` |
+| `music.ts` | The one loop (`digital-dividend.mp3`) at 0.18 volume, fading in and out over 0.8 s, paused once faded out or while muted, and sunk to 30 % while a spoken clip plays. | `createMusic(url, muted)` |
+| `event-sounds.ts` | What each Box event sounds like, pure: a `touch` (a chip landed, still being read), a `tap` by its `meaning` and seat, a `cue` (a match's moment, with its seat), a block outside a match. And `musicFor(phase)`: the music plays in attract, Home, Join, the lobby and Result, and fades out for Stake, a match, the builder and Refund. `shell/app.ts` plays both on every event. | `soundsFor(state, event)`, `musicFor(phase)` |
+
+Tap feedback plays as the event reaches the screen: it never waits for a transaction or a chip's signature. The core
+stays free of audio: it says what a tap meant (`TapMeaning`: `wake`, `join`, `again`, `card`, `sign`, `open`, `play`,
+`let-go`, `rematch`, `refund`, `refused`, `ignored`), when a chip lands (`touch`), and a match's moments (`Cue`:
+`round`, `draw`, `shot`, `false-start`, `tie`, `step`, `play`, `over`, `error`); the screen turns them into sound.
+Sounds a game times to its own animation are its screen's: Stock Duel's deal flicks, the wheel's reel clicks and
+landing, the cards' flip, the count-up and the round's fanfare or tie. Screen touches have their own quieter family
+(`ui-…`), so a finger on the glass never sounds like a badge. Badge taps are short (under ~400 ms) and louder than
+screen touches; the fanfares and the match's end run longer.
+
+The sounds, for the Box's views, its games and a Forge-built game's designer, by name:
+
+**Badge taps**
+
+| Name | What it means | What it sounds like |
+|---|---|---|
+| `touch` (seat) | A chip lands on a reader, before its read finishes; in Stock Duel, the touch that freezes the lit card | A quick rising zip with a contact click. Player 1 low, Player 2 high |
+| `wake` | A tap on the attract screen wakes the Box to Home | A bright power-up shimmer: a sweep up into three rising bells |
+| `join` (seat) | A badge takes a seat on Home or Join | A two-note bell chime: Player 1 a fifth (C, G), Player 2 a sixth (E, C) that completes the chord |
+| `again` (seat) | A badge taps the seat it already holds (and a built game takes a tap) | A soft single tick of wood and triangle. Player 1 lower, Player 2 higher |
+| `card` (seat) | A badge taps in the lobby: its card (name, balance) comes up | A card drawn from a deck: a quick double flick, then one soft bell. Player 1 lower, Player 2 higher |
+| `sign` (seat) | A seated badge signs the stake | A stamp coming down: a heavy thunk, a slap of noise and a short bright chime (G for Player 1, B for Player 2) |
+| `open` (seat) | The second signature: the stakes lock and the match opens | The stamp, then a rising cascade of coins into a hit |
+| `refused` (seat) | The badge can't cover the stake (it is sent to the lobby) | A low double buzz, square and soft, with a dull body under each |
+| `ignored` (seat) | The chip was read and the tap meant nothing here | A dull short knock on wood |
+| `rematch` | A seated badge asks for a rematch on the result | A short noise riser into a hit, the new round's family |
+| `refund` (seat) | A seated badge claims its refund | A falling cascade of bright coins that lands in the hand |
+
+**In the games**
+
+| Name | What it means | What it sounds like |
+|---|---|---|
+| `draw` | Quick Draw: the sign turns to DRAW | A card-flip whoosh up into a sharp crack of an accent |
+| `shot` (seat) | Quick Draw: the winner's good draw | A gunshot: a crack of noise over a fast thump, and its echo. Player 1 deeper, Player 2 higher |
+| `false-start` (seat) | Quick Draw: a tap before the draw | A sour, detuned falling tone: clearly a mistake |
+| `tie` | Quick Draw: a dead heat, or nobody drew; a Stock Duel round tied; a drawn match | A neutral falling fourth on soft triangles |
+| `step` (seat) | Stock Duel: a seat's spotlight steps to its next card | A tiny soft blip, quiet enough to run for minutes. Player 1 lower, Player 2 higher |
+| `play` (seat) | Stock Duel: a seat's card goes down | A card slammed on the desk: a thunk, a slap of noise and a chime (E for Player 1, A for Player 2) |
+| `let-go` (seat) | Stock Duel: a tap that played nothing lets the held card go | A soft falling deflate |
+| `deal` | Stock Duel: a card lands on a drum's rail | A crisp flick |
+| `reel` | Stock Duel: the dial's pointer passes a mark as it turns | One slot-reel click |
+| `land` | Stock Duel: the dial settles on the round's stat | A boom and a bell |
+| `flip` | Stock Duel: both cards turn over | A paper whoosh |
+| `count` (pitch) | Stock Duel: the round's number counts up on the cards | A blip that rises with the value (A4 to A6) |
+| `round-won` (seat) | A round won (and a game built) | A short major brass fanfare from the winner's side: Player 1 in C, Player 2 a step up in D |
+| `over` (seat) | The match is over: the winner's sound | An arpeggio up into a held chord, with a boom and sparkles. Player 1 in C, Player 2 in D |
+| `round` | A match opens, or a new Stock Duel round begins | A noise riser into a hit |
+
+**Screen touches**
+
+| Name | What it means | What it sounds like |
+|---|---|---|
+| `ui-focus` | A touch or arrow key moves the focus (a program on Home) | A faint glassy tick |
+| `ui-select` | A key pressed on the screen: Play, Start, Rematch, Send | A soft rising pop |
+| `ui-back` | Back, Home or cancel on the screen | A lower falling pop |
+| `ui-up` (pitch) | A bigger stake picked on the screen | A small blip that glides up, higher for a bigger stake |
+| `ui-down` (pitch) | A smaller stake picked on the screen | A small blip that glides down, lower for a smaller stake |
+
+**The Box**
+
+| Name | What it means | What it sounds like |
+|---|---|---|
+| `boot` | The Box powers on | Dark detuned saws under a low-pass that opens over 1.6 s, a rising hiss, and a bell shimmer as it peaks |
+| `block` | A new block on Sepolia (outside a match) | A low soft thud with a click and a faint high ping |
+| `error` | The Box hit trouble: the stakes couldn't lock, a build failed, a settle was missed | A low dissonant saw buzz, twice, with a muffled thud |
 
 ## Demo
 
@@ -228,12 +305,7 @@ only, so in box mode the real stations are the only taps. The simulated Box's ha
 (`link/control.ts`). The demo draws no stations: what a station shows (`StationView`, `@egb/sdk`) is the core's,
 for the real stations' OLEDs.
 
-`shell/sound.ts` (`createSound(): Sound`) goes with it: every `Cue` synthesized with WebAudio. The launcher's lean
-toward a dark analogue synth: boot three detuned saws under a low-pass that opens over 1.6 s with a high shimmer, tap
-a short gliding square, block a low sine with a click, error a doubled saw buzz, win a saw arpeggio up to E5, lose a
-falling saw pair. The games' seal (a warm chime), flip (a card flick) and tick (a wood tick) are their own. The
-AudioContext is made on the first user gesture; until then, and while muted, cues are silent. Muting is remembered
-(localStorage `gamebox-muted=1`). It never throws.
+The DEMO tag's `SOUND` switch is the Box's mute (`sound/`, above).
 
 ## Quick Draw
 
@@ -258,7 +330,7 @@ How it moves:
   beat quickens once the shortest wait has passed. The figures hold. All of this is the same for every match, timed
   from `startedAt` and the Box's clock (`link.now()`), so it never gives away when the draw comes. A remounted view
   picks the dimming up where it has got to.
-- **Draw** (the phase turns to `draw`, or a `cue: flip` event): the plate turns over on its pins (rotateX) with a
+- **Draw** (the phase turns to `draw`, or a `cue: draw` event): the plate turns over on its pins (rotateX) with a
   swing that settles. The horizon flashes and the light comes back up.
 - **Done**: the winner's arm comes up out of the holster and fires (a muzzle-flash spark, a recoil); the loser sags
   back on its heels. A brass plate drops in under each figure with its reaction time (`reactionMs`, JetBrains Mono)
@@ -269,6 +341,8 @@ How it moves:
 - **Stood again**: when nobody draws within 4 s of the flip, the rules stand the standoff again (the phase goes back
   to `wait` with a new start), and the view runs the standoff from the top.
 - **Taps**: each accepted `tap` event jolts that seat's figure a few pixels back, so the player feels it land.
+- Sounds: the Box cues `draw` as the sign turns, `shot` from the winner's seat, `false-start` from the seat that
+  jumped, and `tie` for a dead heat or a standoff nobody drew.
 - Only transform and opacity animate; every shadow and glow is static. Under reduced motion it shows end states: a
   fixed dim during the wait, no heartbeat, the plate already turned, the poses, plates and plank in place.
 
@@ -297,7 +371,7 @@ side by side under the band and the tray along the bottom. The comp it was built
 How it moves:
 
 - **Deal**: the cards drop onto each drum one at a time, the two drums half a beat apart, the front card last; each
-  lands with a `tick`. Nothing is ever laid out on the tray.
+  lands with a `deal` flick. Nothing is ever laid out on the tray.
 - **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` at the Box's clock
   (`link.now()`). When the front card changes the drum indexes one card: the old front card rises and tips back over
   the top of the drum (rotateX about its foot, edge-on at the midpoint), then stands up again at the back while the
@@ -309,14 +383,17 @@ How it moves:
 - **Dial**: the wheel wakes (the hub's `?` and the hint go), the pointer spins three turns, swings a few degrees past
   the stat and settles on it; then its quarter lights white and its name is underlined. A screen joining mid-spin
   carries on from where the spin has got to.
-- **Reveal**: both cards turn over together (rotateY); then the winner's card lifts on a spring with its rim and
+- **Reveal**: both cards turn over together (rotateY), and the round's number counts up on both faces from nothing
+  to its value in eight steps; then the winner's card lifts on a spring with its rim and
   badge, the loser's sinks and tilts, the result line pops in, the winner's pip lights with a pop and its glow
   flares; a tie moves neither card and says `TIE · REPLAY`. The next pick clears the tray, the line recalls the round
   just played, and the drums close up round the cards that are left.
 - **Over**: the final reveal stays, the end slab (`NOVA WINS` in the winner's colour, or `A DRAW`) drops in over the
   wheel, the round reads `FINAL`, and the winner's glow stays bright.
-- Sounds: the Box cues `tick` on each drum step, `flip` at the reveal and `seal` when a round scores; the screen adds
-  only the deal's `tick`s.
+- Sounds: the Box cues `step` for each seat's drum step and `play` for a card going down, and the touch that freezes
+  a card zips (`touch`); the screen adds a `deal` flick per card, the wheel's `reel` clicks as the pointer turns and
+  its `land`, the cards' `flip`, a rising `count` as the round's number counts up on both cards, and `round-won` from
+  the winner's side as the outcome shows (`tie` for a tied round). A new round rises in (`round`).
 - Only transform and opacity animate; every shadow and glow is static and reaches at most 24 px. Each card's shade
   keeps a layer of its own, and the front card's rim is one layer that stays put while the cards turn under it, so a
   drum step never rasters a card's shadow again. Under reduced motion it shows end states: the drum jumps to the next

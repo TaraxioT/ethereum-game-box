@@ -248,7 +248,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
       const s = quickDraw(state);
       if (!s) return;
       if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
-      if (event.type === "cue" && event.cue === "flip" && shown === "wait") {
+      if (event.type === "cue" && event.cue === "draw" && shown === "wait") {
         shown = "draw";
         void draw(false);
       }

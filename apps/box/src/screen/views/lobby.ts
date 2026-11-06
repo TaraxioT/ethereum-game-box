@@ -51,7 +51,7 @@ export function lobbyView(ctx: ViewContext): View {
     if (variant) k.setAttribute("variant", variant);
     k.textContent = text;
     k.addEventListener("click", () => {
-      sound.play("tap");
+      sound.play(command === "back" ? "ui-back" : "ui-select");
       link.send({ type: command });
     });
     return k;

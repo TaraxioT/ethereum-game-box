@@ -4,8 +4,10 @@
 // stock's colour across the top with the ticker and company, the round's stat set large and the other three below.
 // Then the winner's card lifts with a rim of its seat's colour and a "+1 ROUND" badge, the loser's sinks and dims,
 // and the line under the cards names who took it. A tie says TIE · REPLAY and moves neither card. During the next
-// pick that line recalls the last round.
+// pick that line recalls the last round. It sounds as it moves: a paper whoosh as the cards turn, a blip for each step
+// of the round's number counting up, then the winner's fanfare from its side (or the neutral fall of a tie).
 import type { Rect } from "../../screen/shell/layout.ts";
+import type { Sound } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
 import type { RoundRecord, StatKey, Stock } from "./types.ts";
 import { calm, el, fitFont, place, play, wait } from "../../screen/shell/dom.ts";
@@ -14,8 +16,10 @@ import { inkOn } from "./rolodex.ts";
 
 const FLY_MS = 560;
 const FLIP_MS = 720;
-/** The pause between the cards landing face up and the round's outcome. */
+/** The pause between the cards landing face up and the round's outcome: the round's number counts up in it. */
 const OUTCOME_AFTER_MS = 420;
+/** How many steps the number counts up in. */
+const COUNT_STEPS = 8;
 const OUTCOME_MS = 520;
 
 /** How the result line names each stat. */
@@ -69,7 +73,7 @@ interface Slot {
 }
 
 /** `label(seat)` is the player's short name (`KAI`), for the result line and the last-turn note. */
-export function createReveal(places: RevealPlaces, label: (seat: Seat) => string): Reveal {
+export function createReveal(places: RevealPlaces, label: (seat: Seat) => string, sound: Sound): Reveal {
   const root = el("div", "sd-reveal");
   const wells = places.rests.map((r, seat) => {
     const well = el("div", `sd-rest s${seat}`);
@@ -123,6 +127,20 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
     slot.face.replaceChildren(head, feature, rows, el("i", "sd-rc-dim"));
     // A long number ($1,002.35) shrinks to fit across the card.
     fitToSize(value, places.rests[0].w - VALUE_INSET);
+  }
+
+  /** The round's number on both cards counts up from nothing to its value, a rising blip a step. */
+  async function countUp(record: RoundRecord, pair: readonly Slot[]): Promise<void> {
+    const values = pair.map((slot) => slot.face.querySelector<HTMLElement>(".sd-rc-value"));
+    for (let k = 1; k <= COUNT_STEPS; k++) {
+      if (!alive || shown !== record) return;
+      const share = k / COUNT_STEPS;
+      values.forEach((value, seat) => {
+        if (value) value.textContent = formatStat(record.stat, record.cards[seat as Seat][record.stat] * share);
+      });
+      sound.play("count", { pitch: share });
+      await wait(OUTCOME_AFTER_MS / COUNT_STEPS);
+    }
   }
 
   /** The winner's card lifts and lights; the loser's sinks and dims. */
@@ -190,6 +208,12 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
       const motion = animate && !calm();
       for (const slot of pair) slot.card.classList.remove("down");
       if (motion) {
+        // The number starts from nothing and counts up once the faces are round.
+        for (const slot of pair) {
+          const value = slot.face.querySelector<HTMLElement>(".sd-rc-value");
+          if (value) value.textContent = formatStat(record.stat, 0);
+        }
+        sound.play("flip");
         await Promise.all(
           pair.map((slot) =>
             play(slot.card, [{ transform: "rotateY(180deg)" }, { transform: "rotateY(0deg)" }], {
@@ -198,9 +222,10 @@ export function createReveal(places: RevealPlaces, label: (seat: Seat) => string
             }),
           ),
         );
-        await wait(OUTCOME_AFTER_MS);
+        await countUp(record, pair);
         if (!alive || shown !== record) return;
       }
+      if (motion) sound.play(record.winner === null ? "tie" : "round-won", { seat: record.winner });
       if (record.winner !== null) {
         await Promise.all([outcome(record.winner, true, motion), outcome(record.winner === 0 ? 1 : 0, false, motion)]);
         if (!alive || shown !== record) return;

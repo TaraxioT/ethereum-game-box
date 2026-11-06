@@ -219,7 +219,7 @@ describe("the core on its ports", () => {
     // Player 2's chip touched 180 ms after the draw; the core hears of it a little later. The touch time counts.
     clock.advance(drawAt + 300 - clock.now());
     const tap = touch(core, 1, KITE, drawAt + 180);
-    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true });
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true, meaning: "play" });
     // It waits SETTLE_MS from the touch for the other station, then judges.
     expect(core.state().match?.outcome).toBeNull();
     clock.advance(400);
@@ -227,7 +227,7 @@ describe("the core on its ports", () => {
     if (after?.play.game !== "quick-draw") throw new Error("no Quick Draw");
     expect(after.outcome).toEqual({ winner: 1 });
     expect(reactionMs(after.play.state, 1)).toBe(180);
-    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true });
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: true, meaning: "play" });
     expect(r.buzzes.at(-1)).toEqual([1, "ok"]);
     expect(core.plan(1)).toBe("none");
     // The chip's answer arrives afterwards and changes nothing.
@@ -290,7 +290,7 @@ describe("the core on its ports", () => {
     await until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
     const tap = touch(core, 0, NOVA);
     core.tap({ phase: "fail", tap, seat: 0, at: core.now(), badge: NOVA, error: { code: "lifted", text: "lifted" } });
-    expect(lastTap(r)).toEqual({ type: "tap", seat: 0, accepted: false });
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 0, accepted: false, meaning: "let-go" });
     expect(r.buzzes.at(-1)).toEqual([0, "no"]);
     expect(core.plan(0)).toBe("random");
   });
@@ -315,7 +315,7 @@ describe("the core on its ports", () => {
     expect(core.state().phase).toBe("join");
     core.tap({ phase: "done", tap, seat: 1, at: core.now(), badge: KITE, roll: null });
     expect(core.state().seats[1].badge).toBeNull();
-    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: false });
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: false, meaning: "ignored" });
   });
 
   it("sends each station its view only when it changes", () => {
@@ -358,7 +358,7 @@ describe("the core on its ports", () => {
     expect(r.core.state().chain.block).toBe(0);
     r.chain.head({ block: 12_080_000, at: START + 5, gasGwei: 1.5 });
     expect(r.core.state().chain).toMatchObject({ block: 12_080_000, blockAt: START + 5, gasGwei: 1.5 });
-    expect(r.events.slice(-3)).toEqual([{ type: "block", block: 12_080_000 }, { type: "cue", cue: "block" }, { type: "gas", gwei: 1.5 }]);
+    expect(r.events.slice(-3)).toEqual([{ type: "block", block: 12_080_000 }, { type: "gas", gwei: 1.5 }]);
     // An older head (a lagging RPC) changes nothing.
     const count = r.events.length;
     r.chain.head({ block: 12_079_999, at: START + 6, gasGwei: 2 });
@@ -483,6 +483,70 @@ describe("the core on its ports", () => {
     await until(r, (state) => state.txs.length > 0 && state.txs.every((tx) => tx.step === "paid"));
     expect(r.chain.sent).toEqual(["open 1"]);
     expect(await r.chain.balance(NOVA.address)).toBe(90);
+  });
+});
+
+describe("what the screen hears", () => {
+  const meanings = (r: Rig) => r.events.flatMap((event) => (event.type === "tap" ? [event.meaning] : []));
+  const moments = (r: Rig) => r.events.flatMap((event) => (event.type === "cue" ? [[event.cue, event.seat]] : []));
+  const touches = (r: Rig) => r.events.flatMap((event) => (event.type === "touch" ? [event.seat] : []));
+
+  it("says what each tap did, from waking the Box to the stakes going in", async () => {
+    const r = rig();
+    const { core } = r;
+    await seated(r);
+    core.send({ type: "play" });
+    await flush();
+    instantTap(core, 0, NOVA, 1);
+    instantTap(core, 0, NOVA, 1);
+    instantTap(core, 1, KITE, 1);
+    expect(meanings(r)).toEqual(["wake", "join", "join", "sign", "ignored", "open"]);
+    await potInBlock(r);
+    expect(moments(r)).toContainEqual(["round", null]);
+  });
+
+  it("tells a badge tapping its own seat again from one taking it", async () => {
+    const r = rig();
+    await seated(r);
+    instantTap(r.core, 1, KITE, 1);
+    expect(meanings(r)).toEqual(["wake", "join", "join", "again"]);
+  });
+
+  it("hears a chip land while it is still being read, but not one judged at its touch", async () => {
+    const r = rig();
+    const { core } = r;
+    core.send({ type: "booted" });
+    instantTap(core, 0, NOVA, 1);
+    expect(touches(r)).toEqual([]);
+    const tap = touch(core, 1, null);
+    expect(touches(r)).toEqual([1]);
+    core.tap({ phase: "done", tap, seat: 1, at: core.now(), badge: KITE, roll: null });
+    expect(meanings(r).at(-1)).toBe("join");
+  });
+
+  it("marks Quick Draw's draw, the winner's shot with its seat, and the match's end", async () => {
+    const r = rig();
+    await toPlaying(r, "quick-draw");
+    await quickWin(r, 1);
+    expect(moments(r)).toEqual(expect.arrayContaining([["draw", null], ["shot", 1], ["over", 1]]));
+  });
+
+  it("marks a false start with the seat that jumped", async () => {
+    const r = rig();
+    await toPlaying(r, "quick-draw");
+    instantTap(r.core, 0, NOVA, 1);
+    await until(r, (state) => state.match?.outcome != null);
+    expect(moments(r)).toContainEqual(["false-start", 0]);
+    expect(moments(r).map(([cue]) => cue)).not.toContain("draw");
+  });
+
+  it("marks each Stock Duel card going down with its seat", async () => {
+    const r = rig();
+    await toPlaying(r, "stock-duel");
+    await until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
+    instantTap(r.core, 1, KITE, 5);
+    expect(meanings(r).at(-1)).toBe("play");
+    expect(moments(r)).toContainEqual(["play", 1]);
   });
 });
 
@@ -823,7 +887,7 @@ describe("the build phase", () => {
     r.core.send({ type: "build" });
     expect([r.core.plan(0), r.core.plan(1)]).toEqual(["none", "none"]);
     instantTap(r.core, 1, KITE, 1);
-    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: false });
+    expect(lastTap(r)).toEqual({ type: "tap", seat: 1, accepted: false, meaning: "ignored" });
     expect(r.buzzes.at(-1)).toEqual([1, "no"]);
     expect(r.core.state().seats[1].badge).toBeNull();
     expect(r.core.state().seats[0].badge).toEqual(NOVA);

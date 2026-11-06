@@ -225,7 +225,7 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
           { duration: DROP_MS, delay: Math.max(0, delay), fill: "backwards", easing: "cubic-bezier(0.4, 0, 0.6, 1)" },
         );
         if (delay < 0) drop.currentTime = -delay;
-        later(Math.max(0, delay + DROP_MS), () => sound.play("tick"));
+        later(Math.max(0, delay + DROP_MS), () => sound.play("deal", { seat }));
       }
     },
     lift(card) {

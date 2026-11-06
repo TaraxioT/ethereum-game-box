@@ -28,7 +28,7 @@ export function joinView(ctx: ViewContext): View {
   back.textContent = "BACK";
   place(back, { ...page.keys, x: page.keys.x + page.keys.w / 2 - 110, w: 220 });
   back.addEventListener("click", () => {
-    sound.play("tap");
+    sound.play("ui-back");
     link.send({ type: "back" });
   });
   root.append(plate, back);

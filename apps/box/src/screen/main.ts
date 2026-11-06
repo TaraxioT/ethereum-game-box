@@ -8,7 +8,7 @@ import "./shell/shell.css";
 import "./views/views.css";
 import type { Badge, Seat } from "../core/types.ts";
 import { registerParts } from "./parts/register.ts";
-import { createSound } from "./shell/sound.ts";
+import { createSound } from "./sound/sound.ts";
 import { startApp } from "./shell/app.ts";
 import { routes } from "./views/routes.ts";
 import { LINK_PATH } from "../core/wire.ts";

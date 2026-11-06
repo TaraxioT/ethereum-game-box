@@ -42,7 +42,7 @@ describe("the screen's link", () => {
     await screen.next(() => events(screen.messages).length >= heard.length);
     expect(events(screen.messages)).toEqual(heard);
     expect(screen.messages.at(-1)?.state).toEqual(tb.box.core.state());
-    expect(events(screen.messages).map((e) => e.type)).toEqual(expect.arrayContaining(["phase", "tap", "buzz", "cue", "block"]));
+    expect(events(screen.messages).map((e) => e.type)).toEqual(expect.arrayContaining(["phase", "tap", "buzz", "block"]));
   });
 
   it("takes the screen's commands to the core, and ignores anything that isn't one", async () => {
@@ -126,7 +126,7 @@ describe("the screen's link", () => {
     const from = screen.messages.length;
     change({ type: "stations" });
     change({ type: "gas", gwei: 2 });
-    for (let i = 0; i < 5; i++) change({ type: "cue", cue: "tick" });
+    for (let i = 0; i < 5; i++) change({ type: "cue", cue: "step", seat: 0 });
     await screen.next((m) => n(m) === 57, from);
     await new Promise((resolve) => setTimeout(resolve, LINK_COALESCE_MS * 2));
     expect(screen.messages.slice(from).map((m) => [m.t, n(m)])).toEqual([

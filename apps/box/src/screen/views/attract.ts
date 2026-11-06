@@ -38,7 +38,7 @@ export function attractView(ctx: ViewContext): View {
   const go = (): void => {
     if (started) return;
     started = true;
-    sound.play("tap");
+    sound.play("ui-select");
     link.send({ type: "start" });
   };
   root.addEventListener("pointerdown", go, { once: true });

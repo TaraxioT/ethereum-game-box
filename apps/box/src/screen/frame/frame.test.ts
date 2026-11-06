@@ -155,8 +155,8 @@ describe("what the kiosk tells the frame", () => {
     const a = match({ n: 0 });
     const b = match({ n: 1 });
     expect(frameEvent(a, match({ n: 1 }, true), tick)).toEqual({ type: "over" });
-    expect(frameEvent(a, b, { type: "tap", seat: 1, accepted: true })).toEqual({ type: "tap", seat: 1 });
-    expect(frameEvent(a, b, { type: "tap", seat: 1, accepted: false })).toEqual({ type: "step" });
+    expect(frameEvent(a, b, { type: "tap", seat: 1, accepted: true, meaning: "play" })).toEqual({ type: "tap", seat: 1 });
+    expect(frameEvent(a, b, { type: "tap", seat: 1, accepted: false, meaning: "ignored" })).toEqual({ type: "step" });
     expect(frameEvent(a, b, { type: "game" })).toEqual({ type: "step" });
     expect(frameEvent(a, a, tick)).toBeNull();
     expect(frameUpdate(a, a, { type: "gas", gwei: 2 }, 9)).toBeNull();

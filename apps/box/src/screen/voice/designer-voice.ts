@@ -10,7 +10,7 @@
 import type { VoiceStatus } from "../../builder/voice/port.ts";
 import { BUILDER, type MockTurn, type SpokenLine, type TranscribeReply } from "../../server/builder-wire.ts";
 import { getJson, postBytes, postJson } from "../views/builder-link.ts";
-import { createClipPlayer } from "./clips.ts";
+import { createClipPlayer, type ClipSound } from "./clips.ts";
 import { canRecord, createRecorder } from "./recorder.ts";
 
 export interface DesignerVoiceHooks {
@@ -32,8 +32,9 @@ export interface DesignerVoice {
   stop(): void;
 }
 
-export function createDesignerVoice(status: VoiceStatus, muted: () => boolean, hooks: DesignerVoiceHooks): DesignerVoice {
-  const clips = createClipPlayer(muted);
+export function createDesignerVoice(status: VoiceStatus, sound: ClipSound, hooks: DesignerVoiceHooks): DesignerVoice {
+  const clips = createClipPlayer(sound);
+  const muted = (): boolean => sound.muted;
   const recorder = createRecorder();
   const mock = status.mode === "mock";
   let pressed = false;
