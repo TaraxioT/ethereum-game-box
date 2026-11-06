@@ -3,9 +3,11 @@
 // - Every address in `deployments/sepolia.json` has code.
 // - Every contract is verified on Etherscan; each proxy shows its source and points at a verified implementation.
 // - The roles are exactly as designed: `gamebox.eth`'s registry is emancipated and `GameBoxNames` holds only
-//   `REGISTRAR | RENEW | SET_PARENT` there; each title registry and shared resolver; each Box resolver's role table; each
-//   player resolver, where the badge holds every role and `GameBoxNames` none.
-// - Every name resolves through the Universal Resolver with stock viem (`getEnsAddress`, `getEnsText`).
+//   `REGISTRAR | RENEW` and their admins there (nobody holds `SET_PARENT`); each title registry and shared resolver;
+//   `gamebox.eth`'s own resolver, written only by `gamebox.eth`'s owner; each Box resolver's role table; each player
+//   resolver, where the badge holds every role and `GameBoxNames` none.
+// - Every name resolves through the Universal Resolver with stock viem (`getEnsAddress`, `getEnsText`): players, Boxes,
+//   live pop-ups (as their Box), games and titles, and a free label (`gamebox.eth`'s default record, with no address).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +21,10 @@ import {
   verifiableFactoryAbi,
 } from '../../src/names/abis.ts';
 import { contractAddress, ensAddress, namesProxies } from '../../src/names/deployments.ts';
-import { BOX_DEVICE_KEYS, BOX_OPERATOR_KEYS, BOX_REGISTRAR_KEYS, GAME_KEYS } from '../../src/names/keys.ts';
+import { BOX_DEVICE_KEYS, BOX_OPERATOR_KEYS, BOX_REGISTRAR_KEYS, DEFAULT_KEYS, GAME_KEYS } from '../../src/names/keys.ts';
 import { fullName, titleName } from '../../src/names/labels.ts';
 import { REGISTRY_ROLES as R, RESOLVER_ROLES as S, ROOT_RESOURCE, textResource } from '../../src/names/roles.ts';
-import { currentBoxes, discover } from './discover.ts';
+import { currentBoxes, currentPopups, discover } from './discover.ts';
 import { run, sepoliaClient } from './env.ts';
 import { sourceInfo } from './etherscan.ts';
 
@@ -107,20 +109,26 @@ async function checkRoles(client: PublicClient, found: Awaited<ReturnType<typeof
 
   const emancipated = await client.readContract({ address: proxies.registry, abi: permissionedRegistryAbi, functionName: 'isEmancipated' });
   expect(emancipated, "gamebox.eth's registry is emancipated");
-  await soleHolder(client, proxies.registry, ROOT_RESOURCE, names, R.REGISTRAR | R.RENEW | R.SET_PARENT, 'GameBoxNames is the only root on gamebox.eth\'s registry, with REGISTRAR | RENEW | SET_PARENT');
+  const registrar = R.REGISTRAR | R.REGISTRAR_ADMIN | R.RENEW | R.RENEW_ADMIN;
+  await soleHolder(client, proxies.registry, ROOT_RESOURCE, names, registrar, "GameBoxNames is the only root on gamebox.eth's registry, with REGISTRAR | RENEW and their admins");
   const subregistry = await client.readContract({ address: ensAddress('ETHRegistry'), abi: permissionedRegistryAbi, functionName: 'getSubregistry', args: ['gamebox'] });
   expect(isAddressEqual(subregistry, proxies.registry), "gamebox.eth's subregistry is GameBoxNames' registry", subregistry);
 
   for (const [game, registry] of Object.entries(proxies.titles)) {
-    await soleHolder(client, registry, ROOT_RESOURCE, names, R.REGISTRAR | R.UNREGISTER | R.RENEW | R.SET_PARENT, `${game} title registry roots`);
+    await soleHolder(client, registry, ROOT_RESOURCE, names, registrar | R.UNREGISTER | R.UNREGISTER_ADMIN, `${game} title registry roots`);
   }
   await soleHolder(client, proxies.titleResolver, ROOT_RESOURCE, names, S.SET_TEXT | S.SET_ADDRESS, 'title resolver: GameBoxNames is the only writer');
   await soleHolder(client, proxies.gameResolver, ROOT_RESOURCE, names, S.SET_TEXT | S.SET_ADDRESS, 'game resolver: GameBoxNames is the only writer');
+  const ethRegistry = ensAddress('ETHRegistry');
+  const owner = await client.readContract({ address: ethRegistry, abi: permissionedRegistryAbi, functionName: 'getOwner', args: [BigInt(labelhash('gamebox'))] });
+  await soleHolder(client, proxies.gameboxResolver, ROOT_RESOURCE, owner, S.SET_TEXT | S.SET_TEXT_ADMIN, "gamebox.eth's resolver: its owner is the only writer");
+  const resolver = await client.readContract({ address: ethRegistry, abi: permissionedRegistryAbi, functionName: 'getResolver', args: ['gamebox'] });
+  expect(isAddressEqual(resolver, proxies.gameboxResolver), "gamebox.eth's resolver is its own default-record resolver", resolver);
 
   for (const box of currentBoxes(found.boxes)) {
     const info = await client.readContract({ address: names, abi: gameBoxNamesAbi, functionName: 'getBox', args: [box.label] });
     const r = info.resolver;
-    await soleHolder(client, r, ROOT_RESOURCE, names, S.SET_TEXT_ADMIN | S.SET_ADDRESS, `${box.label}: GameBoxNames' root roles`);
+    await soleHolder(client, r, ROOT_RESOURCE, names, S.SET_TEXT_ADMIN | S.SET_ADDRESS | S.LINK, `${box.label}: GameBoxNames' root roles`);
     for (const key of BOX_REGISTRAR_KEYS) await soleHolder(client, r, textResource(key), names, S.SET_TEXT, `${box.label}: ${key} is GameBoxNames'`);
     for (const key of BOX_OPERATOR_KEYS) await soleHolder(client, r, textResource(key), info.operator, S.SET_TEXT, `${box.label}: ${key} is the operator's`);
     for (const key of BOX_DEVICE_KEYS) await soleHolder(client, r, textResource(key), info.account, S.SET_TEXT, `${box.label}: ${key} is the Box's`);
@@ -141,6 +149,20 @@ async function checkRoles(client: PublicClient, found: Awaited<ReturnType<typeof
 async function checkResolution(client: PublicClient, found: Awaited<ReturnType<typeof discover>>) {
   const now = BigInt(Math.floor(Date.now() / 1000));
   const names = contractAddress('GameBoxNames');
+  const free = fullName(`free-${now.toString(36)}`);
+  const freeAddress = await client.getEnsAddress({ name: free });
+  const description = await client.getEnsText({ name: free, key: DEFAULT_KEYS.description });
+  const url = await client.getEnsText({ name: free, key: DEFAULT_KEYS.url });
+  expect(freeAddress === null && description === 'This Game Box name is free.' && Boolean(url), `${free} (free) resolves to the default record`, `${description} ${url}`);
+  for (const popup of currentPopups(found.popups)) {
+    const address = await client.getEnsAddress({ name: fullName(popup.label) });
+    if (popup.expiry > now) {
+      const box = await client.readContract({ address: names, abi: gameBoxNamesAbi, functionName: 'getBox', args: [popup.ofBox] });
+      expect(address !== null && isAddressEqual(address, box.account), `${fullName(popup.label)} resolves as ${popup.ofBox}`, address ?? 'null');
+    } else {
+      expect(address === null, `${fullName(popup.label)} has lapsed and resolves to the default`, address ?? 'null');
+    }
+  }
   for (const player of found.players) {
     const address = await client.getEnsAddress({ name: fullName(player.label) });
     expect(address !== null && isAddressEqual(address, player.badge), `${fullName(player.label)} resolves to its badge`, address ?? 'null');
@@ -153,7 +175,7 @@ async function checkResolution(client: PublicClient, found: Awaited<ReturnType<t
       const status = await client.getEnsText({ name: fullName(box.label), key: 'status' });
       expect(status !== null && status !== '', `${fullName(box.label)} has a status`, status ?? 'null');
     } else {
-      expect(address === null, `${fullName(box.label)} has lapsed and no longer resolves`, address ?? 'null');
+      expect(address === null, `${fullName(box.label)} has lapsed and resolves to the default`, address ?? 'null');
     }
   }
   for (const game of Object.keys(namesProxies().titles)) {
