@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { INDEX_SECONDS } from '../src/catalog.ts';
+import { INDEX_SECONDS, REBUILD_SECONDS } from '../src/catalog.ts';
 import { store } from './harness.ts';
 import { hashOf, zipOf } from './zips.ts';
 
@@ -52,6 +52,74 @@ describe('/index.json', () => {
     await index();
     await upload(zipOf());
     expect((await index()).listings).toHaveLength(1);
+  });
+
+  it('shows an upload at once even if a build was part way through it', async () => {
+    const { r2, upload, call, index } = store({ now: () => 0 });
+    const release = r2.holdNextList();
+    const building = call('/index.json');
+    expect((await upload(zipOf())).status).toBe(201);
+    release();
+    await building;
+    expect((await index()).listings).toHaveLength(1);
+  });
+
+  it('rebuilds once for everyone when the window ends, and they get the old text meanwhile', async () => {
+    let now = 1_000_000;
+    const { r2, upload, index } = store({ now: () => now });
+    for (const id of ['one', 'two', 'three']) await upload(zipOf(id));
+    await index();
+    const calls = r2.calls;
+
+    now += INDEX_SECONDS * 1000;
+    r2.plant(`listings/0x${'ab'.repeat(32)}.json`, JSON.stringify({ id: 'seen-later' }));
+    const release = r2.holdNextList();
+    const rebuild = index();
+    const others = await Promise.all(Array.from({ length: 100 }, () => index()));
+    expect(others.every(({ listings }) => listings.length === 3)).toBe(true);
+
+    release();
+    expect((await rebuild).listings).toHaveLength(4);
+    expect(r2.calls - calls).toBe(5); // One list, and one read for each of the four listings.
+    expect((await index()).listings).toHaveLength(4);
+    expect(r2.calls - calls).toBe(5);
+  });
+
+  it('lets another rebuild when one never comes back', async () => {
+    let now = 1_000_000;
+    const { r2, index } = store({ now: () => now });
+    await index();
+    now += INDEX_SECONDS * 1000;
+    r2.plant(`listings/0x${'ab'.repeat(32)}.json`, JSON.stringify({ id: 'seen-later' }));
+    r2.holdNextList();
+    void index();
+    expect((await index()).listings).toEqual([]);
+
+    now += REBUILD_SECONDS * 1000 - 1;
+    expect((await index()).listings).toEqual([]);
+    now += 1;
+    expect((await index()).listings).toHaveLength(1);
+  });
+
+  it('keeps the old text for the others when a rebuild fails, and tries again', async () => {
+    let now = 1_000_000;
+    const { r2, upload, call, index } = store({ now: () => now });
+    await upload(zipOf());
+    await index();
+    now += INDEX_SECONDS * 1000;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const list = r2.list.bind(r2);
+    r2.list = () => Promise.reject(new Error('R2 failed'));
+    expect((await call('/index.json')).status).toBe(500);
+    logged.mockRestore();
+    r2.list = list;
+
+    const calls = r2.calls;
+    expect((await index()).listings).toHaveLength(1);
+    expect(r2.calls).toBe(calls);
+    now += REBUILD_SECONDS * 1000;
+    await index();
+    expect(r2.calls).toBeGreaterThan(calls);
   });
 
   it('skips a listing removed by hand between the list and the read', async () => {

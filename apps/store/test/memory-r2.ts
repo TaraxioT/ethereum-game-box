@@ -18,6 +18,7 @@ export class MemoryR2 {
   pageSize = 1000;
   private barrier: Barrier | null = null;
   private failing: string | null = null;
+  private listHold: Promise<void> | null = null;
 
   get bucket(): Bucket {
     return this as unknown as Bucket;
@@ -40,6 +41,13 @@ export class MemoryR2 {
   /** Makes the next put under `prefix` fail, as R2 or a dying request would. */
   failNextPut(prefix: string): void {
     this.failing = prefix;
+  }
+
+  /** Holds the next `list`, once it has read its page, until the function returned is called: a build part way. */
+  holdNextList(): () => void {
+    let release = () => {};
+    this.listHold = new Promise<void>((resolve) => (release = resolve));
+    return release;
   }
 
   /** Stores an object directly, as if an earlier upload had. */
@@ -83,6 +91,9 @@ export class MemoryR2 {
     const start = Number(cursor ?? 0);
     const end = start + this.pageSize;
     const objects = keys.slice(start, end).map((key) => ({ key }));
+    const held = this.listHold;
+    this.listHold = null;
+    await held;
     return end < keys.length ? { objects, truncated: true, cursor: String(end) } : { objects, truncated: false };
   }
 }
