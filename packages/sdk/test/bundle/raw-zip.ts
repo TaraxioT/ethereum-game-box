@@ -1,12 +1,11 @@
 // A zip writer that does what it is told, field by field, for bundles no honest packer makes. With no overrides its
 // output is byte for byte the packer's, which the control test proves, so each hostile zip is wrong in exactly one way.
 import { crc32 } from "node:zlib";
-import { deflateSync } from "fflate";
 
 export interface Raw {
   name: string;
   body: Uint8Array;
-  /** Compressed bytes to write instead of deflating `body`. */
+  /** Bytes to write instead of `body`, such as a compressed spelling of it. */
   data?: Uint8Array;
   method?: number;
   flags?: number;
@@ -52,8 +51,6 @@ export interface Whole {
   zip64?: boolean;
 }
 
-const isText = (name: string) => /\.(?:html|css|js|svg|json)$/.test(name);
-
 export function rawZip(entries: readonly Raw[], w: Whole = {}): Buffer {
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
@@ -61,8 +58,8 @@ export function rawZip(entries: readonly Raw[], w: Whole = {}): Buffer {
   let offset = w.prefix?.length ?? 0;
   if (w.prefix) parts.push(w.prefix);
   for (const e of entries) {
-    const method = e.method ?? (isText(e.name) ? 8 : 0);
-    const data = e.data ?? (method === 8 ? deflateSync(e.body, { level: 9 }) : e.body);
+    const method = e.method ?? 0;
+    const data = e.data ?? e.body;
     const crc = e.crc ?? crc32(e.body);
     const size = e.size ?? e.body.length;
     const packed = e.packed ?? data.length;

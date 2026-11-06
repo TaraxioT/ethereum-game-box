@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOG_LIMITS, logProblems, type LogEntry, type LogHeader, type MatchLog } from "./match-log.ts";
+import { LOG_LIMITS, logProblems, logTextProblems, type LogEntry, type LogHeader, type MatchLog } from "./match-log.ts";
 
 const A = "0x00000000000000000000000000000000000000aa";
 const B = "0x00000000000000000000000000000000000000bb";
@@ -147,5 +147,64 @@ describe("logProblems", () => {
 
   it("stops at the first bad entry", () => {
     expect(logProblems({ header, entries: [{}, {}, {}, end] })).toHaveLength(1);
+  });
+});
+
+describe("logTextProblems", () => {
+  const text = JSON.stringify(log);
+  const spelt = (from: string, to: string) => {
+    expect(text).toContain(from);
+    return text.replace(from, to);
+  };
+  const withData = (data: unknown) => JSON.stringify({ header, entries: [{ ...event, data }, end] });
+
+  it("takes what JSON.stringify writes, in any layout", () => {
+    expect(logTextProblems(text)).toEqual([]);
+    expect(logTextProblems(JSON.stringify(log, null, 2))).toEqual([]);
+    expect(logTextProblems(`\n ${text}\r\n`)).toEqual([]);
+  });
+
+  it("takes everything a game's event may honestly carry", () => {
+    expect(logTextProblems(withData({ text: 'two  spaces, "quotes" and \\ a backslash\n', emoji: "é🎮", lone: "\ud83d" }))).toEqual([]);
+    expect(logTextProblems(withData({ b: 1, 2: 3, a: [1.5, 1e21, null, true], __proto__: { x: 1 } }))).toEqual([]);
+  });
+
+  it("takes a log of exactly the limit, counted in the text's own bytes", () => {
+    const padding = " ".repeat(LOG_LIMITS.logBytes - text.length);
+    expect(logTextProblems(`${text}${padding}`)).toEqual([]);
+    expect(logTextProblems(`${text}${padding} `)).toEqual([`the log is over ${LOG_LIMITS.logBytes} bytes`]);
+  });
+
+  it.each<[string, string, RegExp]>([
+    ["a game's event spelt as the Box's tap", spelt('{"src":"box","t":"tap"', '{"src":"game","src":"box","t":"tap"'), /repeats a key/],
+    ["a tap with two seats", spelt('"seat":0', '"seat":0,"seat":1'), /repeats a key/],
+    ["a header with two lists of players", spelt(`"players":["${A}","${B}"]`, `"players":["${B}","${A}"],"players":["${A}","${B}"]`), /repeats a key/],
+    ["two ends' reasons", spelt('"why":"game"', '"why":"lost","why":"game"'), /repeats a key/],
+    ["a key repeated deep in a game's data", spelt('"counts":[1,0]', '"counts":[0,1],"counts":[1,0]'), /repeats a key/],
+    ["a whole second header", spelt('{"header":', `{"header":${JSON.stringify({ ...header, amount: "1" })},"header":`), /repeats a key/],
+    ["a number spelt two ways", spelt('"seat":0', '"seat":0.0'), /spells a value oddly/],
+    ["an escape spelt two ways", spelt('"src":"box"', '"src":"\\u0062ox"'), /spells a value oddly/],
+    ["a key spelt with an escape", spelt('"seat":0', '"se\\u0061t":0'), /spells a value oddly/],
+    ["not JSON", "{", /not JSON/],
+    ["nothing", "", /not JSON/],
+    ["two logs, one after the other", `${text}${text}`, /not JSON/],
+    ["a good text of a bad log", JSON.stringify({ ...log, extra: 1 }), /stray field/],
+  ])("refuses %s", (_, bad, why) => {
+    expect(logTextProblems(bad).join("\n")).toMatch(why);
+  });
+
+  it("counts bytes, not letters", () => {
+    expect(logTextProblems(`"${"é".repeat(LOG_LIMITS.logBytes / 2)}"`)).toEqual([`the log is over ${LOG_LIMITS.logBytes} bytes`]);
+  });
+
+  it("answers, and doesn't throw, on one string or deep nesting at the limit", () => {
+    expect(logTextProblems(JSON.stringify("x".repeat(LOG_LIMITS.logBytes - 2)))).toEqual(["the log is not an object"]);
+    expect(logTextProblems(`${"[".repeat(LOG_LIMITS.logBytes / 2)}${"]".repeat(LOG_LIMITS.logBytes / 2)}`).length).toBe(1);
+  });
+
+  it("repeats nothing from the text in a problem", () => {
+    const secret = "sk-secret-value";
+    expect(logTextProblems(`{"${secret}":1,"${secret}":2}`).join("\n")).not.toContain(secret);
+    expect(logTextProblems(`{${secret}`).join("\n")).not.toContain(secret);
   });
 });

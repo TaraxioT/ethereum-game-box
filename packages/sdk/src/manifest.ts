@@ -50,7 +50,6 @@ export function sharedManifestProblems(m: Record<string, unknown>, unit: string)
   if (typeof m.id === "string" && !ID.test(m.id)) problems.push("id must be lower-case words joined by -");
   text("title", MANIFEST_LIMITS.title);
   text("blurb", MANIFEST_LIMITS.blurb);
-  if (typeof m.minutes !== "number" || !(m.minutes > 0 && m.minutes <= 30)) problems.push("minutes must be 1–30");
   const stakes = m.stakes;
   if (!Array.isArray(stakes) || stakes.length === 0 || stakes.length > 4) problems.push("stakes must list 1–4 amounts");
   else if (!stakes.every((s, i) => Number.isSafeInteger(s) && s > 0 && (i === 0 || s > (stakes[i - 1] as number))))
@@ -64,6 +63,8 @@ export function manifestProblems(value: unknown): string[] {
   if (typeof value !== "object" || value === null) return ["game.json is not an object"];
   const m = value as Record<string, unknown>;
   const problems = sharedManifestProblems(m, "EGB");
+  // A typical match, not a limit: a built game's agent may well write half a minute.
+  if (typeof m.minutes !== "number" || !(m.minutes > 0 && m.minutes <= 30)) problems.push("minutes must be above 0, at most 30");
   if (m.players !== 2) problems.push("players must be 2");
   if (m.tier !== "refereed") problems.push("tier must be refereed");
   if (m.kind !== "team" && m.kind !== "built") problems.push("kind must be team or built");
