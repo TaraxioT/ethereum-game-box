@@ -31,4 +31,5 @@ export type ToFrame =
     }
   | { readonly t: "update"; readonly state: unknown; readonly event: FrameEvent; readonly now: number };
 
+/** An error's message is at most MAX_MESSAGE characters (runner.ts). */
 export type FromFrame = { readonly t: "ready" } | { readonly t: "error"; readonly message: string };

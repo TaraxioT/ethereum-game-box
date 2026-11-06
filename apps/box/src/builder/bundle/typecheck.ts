@@ -1,12 +1,20 @@
-// Type-checks a built game's folder with the repo's tsc, against the real @egb/sdk sources. The tsconfig is written
-// by the Box into a temp folder, never read from the game's folder, and a contract file checks the two entries'
-// default exports: rules.ts a BuiltRules, screen.ts a GameScreen. Errors come back as `file:line:col message
+// Type-checks a built game's folder with the repo's TypeScript, against the real @egb/sdk sources. The tsconfig is
+// written by the Box into a temp folder, never read from the game's folder, and a contract file checks the two
+// entries' default exports: rules.ts a BuiltRules, screen.ts a GameScreen. Errors come back as `file:line:col message
 // (TSnnnn)`, relative to the game's folder; errors inside the SDK aren't the game's to fix and are left out.
-import { execFile } from "node:child_process";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+//
+// The compiler is confined to what a game may read. TypeScript 7's compiler is a native binary, so Node's permission
+// model can't hold it; instead it runs behind its API with every file-system call (read, exists, list, realpath)
+// answered by this module: the game's folder, the SDK's sources, TypeScript's lib files and the temp folder, by real
+// path, and nothing else. Elsewhere nothing exists, so an import of `/home/pi/.config/egb/env.json` (or a type query,
+// or a reference directive) is "cannot find module", and no key in it ever shows in an error.
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { tscPath, type SdkPaths } from "./paths.ts";
+import { API, DiagnosticCategory, type Diagnostic } from "typescript/unstable/async";
+import type { FileSystem } from "typescript/unstable/fs";
+import { tsLibDir, type SdkPaths } from "./paths.ts";
 
 export interface TypecheckResult {
   readonly ok: boolean;
@@ -33,7 +41,7 @@ function contract(gameDir: string): string {
 }
 
 /** Strict, browser and ES2023 libs (screen.ts draws; rules.ts must stay pure, which the rules check proves at run time). */
-export function gameTsconfig(gameDir: string, sdk: SdkPaths): Record<string, unknown> {
+function gameTsconfig(gameDir: string, sdk: SdkPaths): Record<string, unknown> {
   return {
     compilerOptions: {
       target: "ES2023",
@@ -55,56 +63,119 @@ export function gameTsconfig(gameDir: string, sdk: SdkPaths): Record<string, unk
   };
 }
 
-/** tsc's `file(line,col): error TSnnnn: message` lines (with indented continuations) for the game's own files. */
-export function parseTscOutput(output: string, gameDir: string, cwd: string, sdkSrc: string): string[] {
-  const errors: string[] = [];
-  let keep = false;
-  const clean = (text: string) => text.split(`${gameDir}${path.sep}`).join("");
-  for (const line of output.split(/\r?\n/)) {
-    const m = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/.exec(line);
-    if (m) {
-      const [, fileText = "", row, col, code, text = ""] = m;
-      const file = path.resolve(cwd, fileText);
-      keep = !file.startsWith(sdkSrc + path.sep);
-      if (!keep) continue;
-      const where = file === path.join(cwd, CONTRACT) ? "the game's exports" : `${path.relative(gameDir, file).split(path.sep).join("/")}:${row}:${col}`;
-      errors.push(`${where} ${clean(text)} (${code})`);
-      continue;
-    }
-    const general = /^error (TS\d+): (.*)$/.exec(line);
-    if (general) {
-      keep = true;
-      errors.push(`${clean(general[2] ?? "")} (${general[1]})`);
-    } else if (keep && /^\s+\S/.test(line) && errors.length > 0) {
-      errors[errors.length - 1] = `${errors[errors.length - 1]} ${clean(line.trim())}`;
-    }
+const realOrNull = (p: string): string | null => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
   }
-  return errors;
+};
+
+/**
+ * The compiler's whole view of the disk: the files under `roots` (real paths), and the folders on the way down to
+ * them. A path that leaves the roots, by its name or through a symlink, doesn't exist. No callback ever returns
+ * undefined, which would let the compiler fall back to the real disk.
+ */
+function confinedFileSystem(roots: readonly string[], texts: Map<string, string>): FileSystem {
+  const inside = (p: string): string | null => {
+    const real = realOrNull(p);
+    return real !== null && roots.some((root) => real === root || real.startsWith(root + path.sep)) ? real : null;
+  };
+  const onTheWay = (dir: string) => roots.some((root) => root.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep));
+  const kind = (p: string) => {
+    const real = inside(p);
+    if (!real) return null;
+    const info = statSync(real, { throwIfNoEntry: false });
+    return info?.isFile() ? "file" : info?.isDirectory() ? "dir" : null;
+  };
+  return {
+    readFile(file) {
+      const real = kind(file) === "file" ? inside(file) : null;
+      if (!real) return null;
+      const text = readFileSync(real, "utf8");
+      texts.set(path.resolve(file), text);
+      texts.set(real, text);
+      return text;
+    },
+    fileExists: (file) => kind(file) === "file",
+    directoryExists: (dir) => kind(dir) === "dir" || onTheWay(path.resolve(dir)),
+    getAccessibleEntries(dir) {
+      if (kind(dir) !== "dir") return { files: [], directories: [] };
+      const entries = readdirSync(dir, { withFileTypes: true });
+      return { files: entries.filter((e) => e.isFile()).map((e) => e.name), directories: entries.filter((e) => e.isDirectory()).map((e) => e.name) };
+    },
+    realpath: (p) => inside(p) ?? p,
+  };
 }
 
-function run(args: string[], cwd: string): Promise<{ code: number; output: string }> {
-  return new Promise((done) => {
-    execFile(process.execPath, args, { cwd, timeout: TSC_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
-      done({ code, output: `${stdout}${stderr}` });
-    });
+/** 1-based line and column of offset `pos` in `text`. */
+function lineCol(text: string, pos: number): { line: number; col: number } {
+  const before = text.slice(0, pos);
+  const line = before.split("\n").length;
+  return { line, col: pos - before.lastIndexOf("\n") };
+}
+
+/** A diagnostic's message with its chain, in one line. */
+const message = (d: Diagnostic): string => [d.text, ...(d.messageChain ?? []).map(message)].join(" ");
+
+/** The game's own errors, as the agent reads them. */
+function describeDiagnostics(diagnostics: readonly Diagnostic[], o: { gameDirs: readonly string[]; contract: string; sdkSrc: string; texts: ReadonlyMap<string, string> }): string[] {
+  const clean = (text: string) => o.gameDirs.reduce((t, dir) => t.split(`${dir}${path.sep}`).join(""), text);
+  const errors: string[] = [];
+  for (const d of diagnostics) {
+    if (d.category !== DiagnosticCategory.Error) continue;
+    const text = `${clean(message(d))} (TS${d.code})`;
+    if (!d.fileName) {
+      errors.push(text);
+      continue;
+    }
+    const file = path.resolve(d.fileName);
+    if (file.startsWith(o.sdkSrc + path.sep)) continue;
+    if (file === o.contract) {
+      errors.push(`the game's exports ${text}`);
+      continue;
+    }
+    const { line, col } = lineCol(o.texts.get(file) ?? "", d.pos);
+    errors.push(`${clean(file).split(path.sep).join("/")}:${line}:${col} ${text}`);
+  }
+  return [...new Set(errors)];
+}
+
+async function check(dir: string, gameDir: string, sdk: SdkPaths): Promise<string[]> {
+  const realGame = realpathSync(gameDir);
+  const texts = new Map<string, string>();
+  const fs = confinedFileSystem([realGame, realpathSync(sdk.src), tsLibDir(), dir], texts);
+  const api = new API({ cwd: dir, fs });
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`the type checker didn't finish within ${TSC_TIMEOUT_MS / 1000} s`)), TSC_TIMEOUT_MS);
   });
+  try {
+    const run = (async () => {
+      const snapshot = await api.updateSnapshot({ openProjects: [path.join(dir, "tsconfig.json")] });
+      const project = snapshot.getProjects()[0];
+      if (!project) throw new Error("the type checker couldn't open the game's project");
+      const p = project.program;
+      const lists = await Promise.all([p.getConfigFileParsingDiagnostics(), p.getProgramDiagnostics(), p.getGlobalDiagnostics(), p.getSyntacticDiagnostics(), p.getSemanticDiagnostics()]);
+      return lists.flat();
+    })();
+    const diagnostics = await Promise.race([run, timeout]);
+    return describeDiagnostics(diagnostics, { gameDirs: [gameDir, realGame], contract: path.join(dir, CONTRACT), sdkSrc: realpathSync(sdk.src), texts });
+  } finally {
+    clearTimeout(timer);
+    await api.close();
+  }
 }
 
 export async function typecheckGame(gameDir: string, sdk: SdkPaths): Promise<TypecheckResult> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  // Real path: tsc prints paths relative to its (resolved) working folder, and the parser resolves them back.
-  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "egb-tsc-")));
+  // Real path: the confined file system answers by real paths, and the errors name files by them.
+  const dir = realpathSync(await mkdtemp(path.join(tmpdir(), "egb-tsc-")));
   try {
     await writeFile(path.join(dir, "tsconfig.json"), JSON.stringify(gameTsconfig(gameDir, sdk), null, 2));
     await writeFile(path.join(dir, CONTRACT), contract(gameDir));
-    const { code, output } = await run([tscPath(), "-p", path.join(dir, "tsconfig.json"), "--pretty", "false"], dir);
-    const errors = parseTscOutput(output, gameDir, dir, sdk.src);
-    // A compiler that failed without one error line (a crash, a timeout) still fails the check.
-    if (code !== 0 && errors.length === 0 && !/error TS\d+/.test(output)) {
-      errors.push(output.trim().split("\n").slice(0, 3).join(" ") || `tsc exited with ${code}`);
-    }
+    const errors = await check(dir, gameDir, sdk).catch((error: unknown) => [error instanceof Error ? error.message : String(error)]);
     return { ok: errors.length === 0, errors, ms: ms() };
   } finally {
     await rm(dir, { recursive: true, force: true });

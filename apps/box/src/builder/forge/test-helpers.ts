@@ -1,9 +1,12 @@
-// Shared by the Forge's tests: temp folders, the fixture template's root, briefs, a scripted provider, and a launcher
-// that runs a job in this process (so a test can script the agent; the real launcher forks child.ts).
+// Shared by the Forge's tests: temp folders, the fixture template's root, briefs, a scripted provider, a launcher
+// that runs a job in this process (so a test can script the agent; the real launcher forks child.ts), and a built
+// rules.js played in the rules host's own sandboxed child.
 import { mkdtempSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { RunnerReply, RunnerRequest } from "@egb/sdk";
+import { startRulesChild } from "../../server/rules/child.ts";
 import { sdkPaths } from "../bundle/paths.ts";
 import type { ForgeProvider, GameBrief } from "../types.ts";
 import { runJob } from "./job.ts";
@@ -57,4 +60,35 @@ export async function until(cond: () => boolean, ms = 20_000): Promise<void> {
     if (Date.now() - t0 > ms) throw new Error("timed out waiting");
     await new Promise((r) => setTimeout(r, 10));
   }
+}
+
+/**
+ * Plays `requests` against a rules.js in the rules host's own child (sandbox flags, memory caps, reply check), sent
+ * once it says ready. Resolves with the first `count` replies, `ready` included, and what it wrote to stderr so far.
+ */
+export function playRules(rulesJs: string, requests: readonly RunnerRequest[], count: number): Promise<{ replies: RunnerReply[]; stderr: () => string }> {
+  return new Promise((resolve, reject) => {
+    const replies: RunnerReply[] = [];
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`rules.js didn't answer: ${stderr}`));
+    }, 10_000);
+    const child = startRulesChild(rulesJs, {
+      reply(reply) {
+        replies.push(reply);
+        if (reply.t === "ready") for (const request of requests) child.send(request);
+        if (replies.length < count) return;
+        clearTimeout(timer);
+        child.kill();
+        resolve({ replies, stderr: () => stderr });
+      },
+      fail(kind, reason) {
+        if (replies.length >= count) return;
+        clearTimeout(timer);
+        reject(new Error(`rules.js ${kind}: ${reason} ${stderr}`));
+      },
+      stderr: (text) => (stderr += text),
+    });
+  });
 }

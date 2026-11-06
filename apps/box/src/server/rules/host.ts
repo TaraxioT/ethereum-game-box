@@ -12,10 +12,15 @@
 //   restarts by itself; the next prepare or start does.
 // - A child that dies, or errors, before it says `ready` couldn't load its bundle: `onUnloadable` tells the library,
 //   which seals the game.
+// - On a Node whose permission model can't sandbox a child (child.ts, sandboxRefusal), no built game runs: each one
+//   asked for is refused and sealed with the reason, before any of its code starts.
+// - What a child writes to stderr is kept, capped, and its tail goes into the log line when the child fails: never
+//   to the screen, never line by line to the journal.
 import type { BuiltEvent, RunnerReply, RunnerRequest } from "@egb/sdk";
 import type { RulesRunnerPort, RulesSnapshot } from "../../core/ports.ts";
-import { createCappedLog } from "./capped-log.ts";
-import { startRulesChild, type RulesChild } from "./child.ts";
+import { createCappedLog, type CappedLog } from "./capped-log.ts";
+import { sandboxRefusal, startRulesChild, type RulesChild } from "./child.ts";
+import { fitStations } from "./reply.ts";
 
 /** Where a built game's rules are and how long a step may take, or null for a game that can't run. */
 export interface RulesGame {
@@ -30,16 +35,13 @@ export interface RulesHostOptions {
   onUnloadable?(game: string, reason: string): void;
   /** How long a child may take to say ready. Node's start on a busy Pi is well under it. */
   readyTimeoutMs?: number;
-  /** How much of the children's stderr is kept. */
+  /** How much of a child's stderr is kept for the log line when it fails. */
   stderrChars?: number;
+  /** The Node version the children run on: this process's (tests: an older one). */
+  nodeVersion?: string;
 }
 
-export interface RulesHost extends RulesRunnerPort {
-  /** The game whose child is up, or null. */
-  running(): string | null;
-  /** The children's stderr, newest last, capped. For the test page; never the screen. */
-  stderr(): string;
-}
+export type RulesHost = RulesRunnerPort;
 
 export type RulesFailure = "budget" | "threw" | "crash" | "protocol" | "stopped" | "unavailable";
 
@@ -65,6 +67,8 @@ interface Session {
   readonly game: string;
   readonly budgetMs: number;
   readonly child: RulesChild | null;
+  /** The tail of the child's stderr. */
+  readonly stderr: CappedLog;
   ready: boolean;
   /** Set once the session has failed or stopped: the error every later call gets. */
   failed: RulesError | null;
@@ -75,12 +79,16 @@ interface Session {
 }
 
 export const READY_TIMEOUT_MS = 10_000;
+/** Enough of a failing child's stderr to see its last error. */
+const STDERR_CHARS = 2_000;
 
 const describe = (request: Request): string => (request.t === "start" ? "start" : `a ${request.event.type} step`);
 
 export function createRulesHost(options: RulesHostOptions): RulesHost {
   const readyTimeoutMs = options.readyTimeoutMs ?? READY_TIMEOUT_MS;
-  const stderr = createCappedLog(options.stderrChars ?? 16_384);
+  const stderrChars = options.stderrChars ?? STDERR_CHARS;
+  const refusal = sandboxRefusal(options.nodeVersion);
+  if (refusal) options.log(`rules: ${refusal}`);
   let session: Session | null = null;
 
   /** Ends a session: kills its child and rejects everything it still owes. */
@@ -92,7 +100,10 @@ export function createRulesHost(options: RulesHostOptions): RulesHost {
     if (s.inflight) clearTimeout(s.inflight.timer);
     s.inflight = null;
     s.child?.kill();
-    if (error.code !== "stopped") options.log(`rules: ${s.game} ${error.message}`);
+    if (error.code !== "stopped") {
+      const tail = s.stderr.text().trimEnd();
+      options.log(`rules: ${s.game} ${error.message}${tail ? `; its stderr ended:\n${tail}` : ""}`);
+    }
     for (const call of owed) call.reject(error);
   }
 
@@ -131,17 +142,22 @@ export function createRulesHost(options: RulesHostOptions): RulesHost {
     if (reply.t === "error") return end(s, new RulesError("threw", `threw: ${reply.message}`));
     clearTimeout(sent.timer);
     s.inflight = null;
-    sent.call.resolve({ state: reply.state, outcome: reply.outcome, stations: reply.stations });
+    sent.call.resolve({ state: reply.state, outcome: reply.outcome, stations: fitStations(reply.stations) });
     pump(s);
   }
 
   function open(game: string): Session {
-    const located = options.locate(game);
-    const base = { game, ready: false, failed: null, seq: 0, queue: [], inflight: null, readyTimer: null };
-    if (!located) {
+    const base = { game, ready: false, failed: null, seq: 0, queue: [], inflight: null, readyTimer: null, stderr: createCappedLog(stderrChars) };
+    const refuse = (why: string): Session => {
       const s: Session = { ...base, budgetMs: 0, child: null };
-      end(s, new RulesError("unavailable", "isn't a built game that can run"));
+      end(s, new RulesError("unavailable", why));
       return s;
+    };
+    const located = options.locate(game);
+    if (!located) return refuse("isn't a built game that can run");
+    if (refusal) {
+      options.onUnloadable?.(game, refusal);
+      return refuse(`can't run: ${refusal}`);
     }
     let s: Session | null = null;
     const child = startRulesChild(located.rulesJs, {
@@ -151,9 +167,8 @@ export function createRulesHost(options: RulesHostOptions): RulesHost {
         if (!s.ready) options.onUnloadable?.(game, `its rules ${reason} before loading`);
         end(s, new RulesError(kind, reason));
       },
-      stderr: (text) => stderr.append(text),
+      stderr: (text) => s?.stderr.append(text),
     });
-    stderr.append(`--- ${game} (pid ${child.pid ?? "?"}) ---\n`);
     s = { ...base, budgetMs: located.budgetMs, child };
     const started = s;
     s.readyTimer = setTimeout(() => end(started, new RulesError("crash", `didn't start within ${readyTimeoutMs / 1000} s`)), readyTimeoutMs);
@@ -191,7 +206,5 @@ export function createRulesHost(options: RulesHostOptions): RulesHost {
       if (session) end(session, new RulesError("stopped", "was stopped"));
       session = null;
     },
-    running: () => (session && !session.failed ? session.game : null),
-    stderr: () => stderr.text(),
   };
 }

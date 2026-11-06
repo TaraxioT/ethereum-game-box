@@ -4,17 +4,18 @@
 // agent SDK, the bundler or the type checker itself: those live in the child.
 import { fork } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { rename, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ForgeEvent, ForgeJob, ForgeProvider, GameBrief } from "../types.ts";
+import { isFinished, type ForgeEvent, type ForgeJob, type ForgeProvider, type GameBrief } from "../types.ts";
 import { briefProblem } from "./brief.ts";
 import type { FromChild, ToChild } from "./child.ts";
+import { writeFileAtomic } from "../../server/files.ts";
 import { claudeChildEnv, claudeReady, type Env } from "../llm/claude-env.ts";
 import { forgeDirs, removeGame } from "./install.ts";
 import type { JobSpec } from "./job.ts";
-import { FORGE_MODEL, KILL_GRACE_MS, MAX_EVENTS, MAX_JOBS_KEPT, MAX_TURNS, TIMEOUT_MS } from "./limits.ts";
+import { FORGE_MODEL, KILL_GRACE_MS, MAX_EVENT_TEXT, MAX_EVENTS, MAX_JOBS_KEPT, MAX_TURNS, TIMEOUT_MS } from "./limits.ts";
 import { readShelf, type ShelfTemplate } from "./shelf.ts";
 import { newGameId } from "./slug.ts";
 
@@ -91,8 +92,16 @@ interface JobRecord {
   readonly events: ForgeEvent[];
 }
 
-const FINISHED = new Set(["done", "failed"]);
 const COMMITTED = new Set(["installing", "done", "failed"]);
+
+/** An event with every text field cut to MAX_EVENT_TEXT: what the build's child sends is kept, saved and streamed. */
+function capped(event: ForgeEvent): ForgeEvent {
+  const out: Record<string, unknown> = { ...event };
+  for (const [key, value] of Object.entries(out)) {
+    if (typeof value === "string" && value.length > MAX_EVENT_TEXT) out[key] = `${value.slice(0, MAX_EVENT_TEXT - 1)}…`;
+  }
+  return out as ForgeEvent;
+}
 
 /**
  * The default launcher: a forked child in its own process group. It gets the same allowlisted environment as the
@@ -179,15 +188,11 @@ export function createForge(config: ForgeConfig): ForgeService {
 
   const fileOf = (id: string) => path.join(dirs.jobs, `${id}.json`);
 
-  /** Writes a record (temp file, then rename), one write per job at a time. */
+  /** Writes a record whole or not at all (a power cut never leaves half of one), one write per job at a time. */
   function save(rec: JobRecord): void {
     const id = rec.job.id;
     const text = JSON.stringify(rec);
-    const next = (saving.get(id) ?? Promise.resolve()).then(async () => {
-      const tmp = `${fileOf(id)}.tmp`;
-      await writeFile(tmp, text);
-      await rename(tmp, fileOf(id));
-    });
+    const next = (saving.get(id) ?? Promise.resolve()).then(() => writeFileAtomic(fileOf(id), text));
     saving.set(
       id,
       next.catch((err) => log(`[forge] couldn't save ${id}: ${(err as Error).message}`)),
@@ -195,7 +200,7 @@ export function createForge(config: ForgeConfig): ForgeService {
   }
 
   function prune(): void {
-    const finished = [...records.values()].filter((r) => FINISHED.has(r.job.status)).sort((a, b) => a.job.createdAt - b.job.createdAt);
+    const finished = [...records.values()].filter((r) => isFinished(r.job.status)).sort((a, b) => a.job.createdAt - b.job.createdAt);
     while (finished.length > MAX_JOBS_KEPT) {
       const old = finished.shift()!;
       records.delete(old.job.id);
@@ -221,7 +226,7 @@ export function createForge(config: ForgeConfig): ForgeService {
         queue.push(rec.job.id);
         hold(rec.job.id);
       }
-      else if (!FINISHED.has(rec.job.status)) {
+      else if (!isFinished(rec.job.status)) {
         // A build the restart cut off. If its install had already landed, the game is there.
         const installed = existsSync(path.join(dirs.games, rec.gameId, "game.json"));
         finish(rec, installed ? null : "The Box restarted during this build.");
@@ -242,11 +247,12 @@ export function createForge(config: ForgeConfig): ForgeService {
     }
   }
 
-  function record(rec: JobRecord, event: ForgeEvent): void {
+  function record(rec: JobRecord, sent: ForgeEvent): void {
+    const event = capped(sent);
     rec.events.push(event);
     if (rec.events.length > MAX_EVENTS) rec.events.splice(1, rec.events.length - MAX_EVENTS);
     // A job ends with its result: status, game and error change together, never `done` with no game yet.
-    if (event.type === "status" && !FINISHED.has(event.status)) rec.job.status = event.status;
+    if (event.type === "status" && !isFinished(event.status)) rec.job.status = event.status;
     if (event.type === "result") {
       rec.job.status = event.ok ? "done" : "failed";
       rec.job.game = event.game;
@@ -290,7 +296,7 @@ export function createForge(config: ForgeConfig): ForgeService {
     const run = launch(spec, (event) => record(rec, event));
     active = { id, run };
     void run.done.then(() => {
-      if (!FINISHED.has(rec.job.status)) finish(rec, "The build stopped unexpectedly.");
+      if (!isFinished(rec.job.status)) finish(rec, "The build stopped unexpectedly.");
       active = null;
       prune();
       pump();
@@ -369,7 +375,7 @@ export function createForge(config: ForgeConfig): ForgeService {
     },
 
     remove(game) {
-      if ([...records.values()].some((r) => r.gameId === game && !FINISHED.has(r.job.status))) {
+      if ([...records.values()].some((r) => r.gameId === game && !isFinished(r.job.status))) {
         throw new ForgeRequestError(`${game} is being built right now.`);
       }
       try {
