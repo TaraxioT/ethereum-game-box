@@ -8,3 +8,4 @@ export * from "./manifest.ts";
 export * from "./runner.ts";
 export * from "./frame.ts";
 export * from "./transcript.ts";
+export * from "./match-log.ts";
