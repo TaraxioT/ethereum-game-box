@@ -11,6 +11,7 @@ import type { DesignerState } from "../../builder/types.ts";
 import { BUILDER, type BuilderStatus } from "../../server/builder-wire.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbLcd } from "../parts/lcd.ts";
+import { chamferClip, fitFrame } from "../parts/frame.ts";
 import { el, fitFont, place } from "../shell/dom.ts";
 import { rez } from "../shell/rez.ts";
 import { LIGHT, type SlotTrace } from "../shell/traces.ts";
@@ -30,6 +31,9 @@ const STEP_NAME: Record<DesignerState["step"], string> = {
   title: "THE TITLE",
   confirm: "READY TO BUILD",
 };
+
+/** The typed answer's frame is cut like a key's. */
+const FIELD_CHAMFER = 14;
 
 /** While the model reads an answer, a packet runs into the core this often. */
 const THINK_PULSE_MS = 1_100;
@@ -93,7 +97,11 @@ export function createDesignerScreen(ctx: ViewContext, status: BuilderStatus, ho
   const send = document.createElement("egb-key") as EgbKey;
   send.classList.add("designer-send");
   send.textContent = "SEND";
-  field.append(input);
+  // The field is glass in a frame of light, like a key's.
+  const fill = el("i", "frame-fill");
+  fill.style.clipPath = chamferClip(FIELD_CHAMFER);
+  field.append(fill, input);
+  fitFrame(field, { chamfer: FIELD_CHAMFER });
   const talk = ghost("HOLD TO TALK", "designer-talk");
   bar.append(home, back, field, send, talk);
 

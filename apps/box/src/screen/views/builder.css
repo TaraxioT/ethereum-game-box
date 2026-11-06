@@ -23,19 +23,19 @@
 .designer-home, .designer-back { width: 140px; }
 .designer-send { width: 150px; }
 .designer-talk { width: 250px; }
-/* The typed answer: a well of glass edged in a quiet line of light, lit full with its bloom while it has focus. */
-.designer-field { flex: 1 1 0; min-width: 0; align-self: stretch; margin: 0; display: flex; }
+/* The typed answer: glass in a chamfered frame at 35 %, lit full with its bloom while it has focus. */
+.designer-field { position: relative; flex: 1 1 0; min-width: 0; align-self: stretch; margin: 0; display: flex; }
+.designer-field > .frame-fill { position: absolute; inset: 0; background: var(--glass); }
+.designer-field .frame-line { opacity: 0.35; }
+.designer-field .frame-bloom { opacity: 0; }
+.designer-field:focus-within :is(.frame-line, .frame-bloom) { opacity: 1; }
 .designer-input {
-  flex: 1; width: 100%; min-width: 0; margin: 0; padding: 0 22px; border: 0; border-radius: 0; outline: none;
+  position: relative; flex: 1; width: 100%; min-width: 0; margin: 0; padding: 0 22px; border: 0; outline: none;
   font: 600 24px/1 var(--hud-body); letter-spacing: 0.02em; color: var(--fg); caret-color: var(--sys-hot);
-  background: var(--glass);
-  box-shadow: inset 0 0 0 1px rgb(207 232 246 / 0.35);
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-  user-select: text; -webkit-user-select: text;
+  background: none; user-select: text; -webkit-user-select: text;
 }
 .designer-input::placeholder { color: var(--fg-4); }
-.designer-input:focus { box-shadow: inset 0 0 0 1.5px var(--sys), inset 0 0 12px var(--sys-bloom); }
-.designer-input:disabled { opacity: 0.45; }
+.designer-field:has(.designer-input:disabled) { opacity: 0.45; }
 [data-orientation="portrait"] .designer-bar { gap: 10px; }
 [data-orientation="portrait"] .designer-bar egb-key { height: 48px; }
 [data-orientation="portrait"] .designer-home, [data-orientation="portrait"] .designer-back { width: 88px; }
@@ -45,7 +45,7 @@
 
 /* ---- The brief: a panel of light per field ----------------------------------------------------------------- */
 .brief { display: flex; flex-direction: column; gap: 7px; }
-.brief-head { font: 700 14px/1 var(--hud-display); letter-spacing: 0.22em; color: var(--fg-2); margin-bottom: 4px; }
+.brief-head { font: 700 14px/1 var(--hud-display); letter-spacing: 0.22em; color: var(--fg-2); margin-bottom: 8px; }
 .brief-plate { display: block; font-size: 14px; padding: 0.45em 1.5em; }
 .brief-label { display: block; font-size: 14px; letter-spacing: 0.14em; color: var(--fg-3); }
 .brief-plate[lit] .brief-label { color: var(--sys); }
