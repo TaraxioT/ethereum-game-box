@@ -80,15 +80,15 @@
       "verified": true
     },
     "BoxStaking": {
-      "address": "0xEABdE4D7b969bdAF524C9E7A55082A51c5Eee513",
-      "deployBlock": 12075736,
-      "txHash": "0xfe943ba4267ea2abc7d092b10635bf26baa3104ebd1107f526933f707f03ece9",
+      "address": "0x1BC15489258C2eA080F99c4182Dd661489a003FC",
+      "deployBlock": 12076176,
+      "txHash": "0xb0de3ebb7496a70169d92472aeaf2d1506271d221b24c46bd78cec043122615b",
       "verified": false
     },
     "GameBoxHook": {
-      "address": "0x431eb36860D411cCF2c78969a55bc1D33B9f9080",
-      "deployBlock": 12075998,
-      "txHash": "0x98d7a5356eae976451b1465af291813106df5198e210fa0d5ed559d4b197e72a",
+      "address": "0x9c466D8ca99051c1F1B59157C01771B84a979080",
+      "deployBlock": 12076180,
+      "txHash": "0x92259ca46dea4504d502e37720cd34b07d1160abdef18c5aaa6857a012001091",
       "verified": false
     }
   },
@@ -153,8 +153,8 @@
       "currency0": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       "currency1": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
       "fee": 8388608,
-      "hooks": "0x431eb36860D411cCF2c78969a55bc1D33B9f9080",
-      "id": "0x4cfdd38f71a8dd367a0202151ea2f510bc3a6dc0aa6f75e64b9daf735edd8d85",
+      "hooks": "0x9c466D8ca99051c1F1B59157C01771B84a979080",
+      "id": "0xb33197dbc6b283f2c9f52a43da4bd1e05b6299eca8f1254eaf7045c36141f471",
       "tickSpacing": 60
     }
   }
