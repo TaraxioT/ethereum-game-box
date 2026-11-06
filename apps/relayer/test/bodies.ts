@@ -184,7 +184,7 @@ export function seatBody(world: World, label: string, badge: Address, options: P
 /** A store game's bundle hash. */
 export const BUNDLE = sha256(toHex('tap-rush'));
 /** An audit record's hash. */
-export const RECORD = keccak256(toHex('{"v":1}'));
+const RECORD = keccak256(toHex('{"v":1}'));
 
 /** A `Stake` of 10 Store USDC each for round 1 of `BUNDLE`, signed by the Box (or by `key`). */
 export function storeStakeBody(world: World, players: Address[], options: Partial<StoreStake> & { key?: Key; highS?: boolean } = {}) {

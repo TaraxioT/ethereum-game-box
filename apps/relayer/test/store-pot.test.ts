@@ -286,7 +286,7 @@ describe('POST /store/settle', () => {
         /not a valid signature/,
         'ECDSAInvalidSignature',
       ],
-      ['a signer without VERIFIER_ROLE', (m) => verdictBody(newBadge(), ZERO_SPLIT), 403, /does not hold VERIFIER_ROLE/, 'NotVerifier'],
+      ['a signer without VERIFIER_ROLE', () => verdictBody(newBadge(), ZERO_SPLIT), 403, /does not hold VERIFIER_ROLE/, 'NotVerifier'],
       [
         'a verifier whose role was revoked',
         (m) => {
@@ -566,10 +566,10 @@ describe('one transaction in flight per round', () => {
 
   it('shares the lock with a DuelPot request of the same round', async () => {
     const m = match();
-    const opened = BigInt(NOW - 3600);
-    withPot(m, { opened });
+    withPot(m, { opened: overdue });
     const { world, players } = m;
-    world.pots.set(`${BOX}:1`, { a: players[0]!, b: players[1]!, amount: usdc(10), opened, state: 1, game: keccak256(toHex('stockduel')) });
+    const [a, b] = players as [Address, Address];
+    world.pots.set(`${BOX}:1`, { a, b, amount: usdc(10), opened: overdue, state: 1, game: keccak256(toHex('stockduel')) });
     expect((await world.post('/duel/refund', { box: BOX, round: 1 })).status).toBe(202);
     expect(await world.post('/store/refund', { box: BOX, round: 1 })).toMatchObject(pending);
     expect(world.chain.sent).toHaveLength(1);
