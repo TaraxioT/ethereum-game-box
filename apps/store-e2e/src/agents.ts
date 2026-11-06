@@ -29,12 +29,14 @@ export interface AgentConfig {
   readonly text: string;
   /** Its environment, as `env` would list it. */
   readonly env: string;
+  /** Its image's labels. */
+  readonly labels: Readonly<Record<string, string>>;
 }
 
 export function agentConfig(name: string): AgentConfig {
   const text = docker('inspect', name);
-  const [{ Config }] = JSON.parse(text) as [{ Config: { Env: string[] } }];
-  return { text, env: Config.Env.join('\n') };
+  const [{ Config }] = JSON.parse(text) as [{ Config: { Env: string[]; Labels: Record<string, string> | null } }];
+  return { text, env: Config.Env.join('\n'), labels: Config.Labels ?? {} };
 }
 
 /** Kills an agent's container, as a crash would. */

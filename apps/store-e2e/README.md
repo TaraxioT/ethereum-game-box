@@ -29,6 +29,9 @@ bindings dropped, so the verifier uses `RELAYER_URL` and `STORE_URL`. Everything
 `deployments/sepolia.json`: the Workers through Wrangler's `alias`, the Box and the script through `src/deployments-hook.ts`.
 The real file is never touched.
 
+The agent's image is the real Dockerfile with a label added. `wrangler dev` deletes every other `cloudflare-dev` tag on an
+image ID it builds, so without the label a `pnpm --filter @egb/verifier dev` beside a run would delete the run's image.
+
 The ports are 28545 to 28554 (`src/ports.ts`). A run refuses to start if anything holds one.
 
 ## The scenarios

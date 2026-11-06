@@ -22,6 +22,7 @@ import { BADGES, join, judgedOf, opened, play, sign, stakeAndPlay, toHome } from
 import { outsider } from '../src/outsider.ts';
 import { TAP_RUSH, publish, variantOfTapRush } from '../src/publish.ts';
 import { BOX_LABEL, type World, ZG_API_KEY, startWorld } from '../src/world.ts';
+import { RUN_IMAGE_LABEL } from '../src/wrangler.ts';
 
 /** Every match stakes this much each, in whole USDC. */
 const STAKE = 10;
@@ -357,9 +358,10 @@ describe('the game store, end to end', () => {
     const { relayer, verifier, storage } = world.keys;
     const secrets = [relayer.slice(2), verifier.slice(2), storage.slice(2), ZG_API_KEY];
     for (const secret of secrets) expect(output).not.toContain(secret);
-    for (const { env, text } of agents.values()) {
+    for (const { env, text, labels } of agents.values()) {
       expect(noSecrets(env)).toBeNull();
       for (const secret of secrets) expect(text).not.toContain(secret);
+      expect(labels[RUN_IMAGE_LABEL]).toBe('true');
     }
     say('Docker says the same of both containers: neither was started with a secret');
   });
