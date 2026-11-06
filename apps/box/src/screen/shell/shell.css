@@ -1,4 +1,4 @@
-/* The shell: the window, the scaled stage, the machine's layers and its three poses. */
+/* The shell: the window, the scaled stage, the machine's layers and its four poses. */
 .app { position: fixed; inset: 0; overflow: hidden; background: var(--void); }
 /* The whole window; the room round the stage, where the window's shape differs from it, is the void. */
 .screen-area { position: absolute; inset: 0; overflow: hidden; }
@@ -24,7 +24,12 @@
 .machine[data-pose="game"] egb-clock { transform: translateY(-14px) scale(0.78); }
 .machine[data-pose="game"] .view-layer { z-index: 0; }
 /* The game screens keep the text colour and face they inherited before the launcher took the Grid's. */
-.machine[data-pose="game"] .view-layer { color: #f5f1ff; font: 18px/1.4 var(--body); }
+.machine:is([data-pose="game"], [data-pose="full"]) .view-layer { color: #f5f1ff; font: 18px/1.4 var(--body); }
+
+/* Full: a game that draws its own top band; nothing of the machine shows. */
+.machine[data-pose="full"] :is(.grid, .core-host) { opacity: 0; }
+.machine[data-pose="full"] .overlay > * { opacity: 0; pointer-events: none; }
+.machine[data-pose="full"] .view-layer { z-index: 0; }
 
 .stake-chip {
   position: absolute; left: 50%; top: 104px; transform: translateX(-50%); padding: 7px 16px; white-space: nowrap;
