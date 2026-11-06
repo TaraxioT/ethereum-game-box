@@ -114,7 +114,8 @@ cast wallet private-key --account sepolia-deployer --password '' | wrangler secr
 printf %s "$SEPOLIA_RPC_URL" | wrangler secret put SEPOLIA_RPC_URL
 ```
 
-The live smoke test spends about 0.03 ETH, and needs the deployer at 0.5 ETH or more. Against the deployed Workers, or with `LIVE_DEV=1` through `wrangler dev`:
+The live smoke test spends about 0.03 ETH, needs the deployer at 0.5 ETH or more, and claims two names, so it counts
+against the 5 claims per IP per hour (other sessions on the same machine share that window). Against the deployed Workers, or with `LIVE_DEV=1` through `wrangler dev`:
 
 ```sh
 set -a; . ./.env; set +a
