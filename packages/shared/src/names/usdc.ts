@@ -1,5 +1,5 @@
-// The demo's test USDC (`FakeUSDC` in `deployments/sepolia.json`): 6 decimals, like USDC. It is not Circle's USDC
-// (`external.USDC`) and has no value. Stakes, top-ups and prizes are in its base units.
+// The demo's test USDC (`FakeUSDC` in `deployments/sepolia.json`): 6 decimals, like USDC. It is the only USDC the
+// project uses, and has no value. Stakes, top-ups and prizes are in its base units.
 
 import { formatUnits, parseUnits } from 'viem';
 

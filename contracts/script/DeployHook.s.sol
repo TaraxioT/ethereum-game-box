@@ -21,10 +21,12 @@ contract DeployHook is Deployments {
     function run() external {
         address gbx = _deployed("GBX");
         address names = _deployed("GameBoxNames");
-        string memory json = vm.readFile(PATH);
-        address usdc = vm.parseJsonAddress(json, ".external.USDC");
-        address poolManager = vm.parseJsonAddress(json, ".external.PoolManager");
-        require(gbx != address(0) && names != address(0), "DeployHook: GBX and GameBoxNames first");
+        address usdc = _deployed("FakeUSDC");
+        address poolManager = vm.parseJsonAddress(vm.readFile(PATH), ".external.PoolManager");
+        require(
+            gbx != address(0) && names != address(0) && usdc != address(0),
+            "DeployHook: GBX, GameBoxNames and FakeUSDC first"
+        );
 
         vm.startBroadcast();
         (, address deployer,) = vm.readCallers();

@@ -19,7 +19,7 @@ import {IGameBoxHook} from "../../src/hook/IGameBoxHook.sol";
 import {GBX} from "../../src/token/GBX.sol";
 import {NamesFork} from "../names/NamesFork.sol";
 
-/// @notice The GBX/USDC pool on a Sepolia fork: the real v4 pool manager and its test routers, Sepolia's real USDC, a
+/// @notice The GBX/USDC pool on a Sepolia fork: the real v4 pool manager and its test routers, the fork's `FakeUSDC`, a
 ///         fresh GBX, and `GameBoxHook` mined to an address with its flags. The pool starts at 0.10 USDC per GBX with
 ///         full-range liquidity.
 abstract contract HookFork is NamesFork {
@@ -49,7 +49,7 @@ abstract contract HookFork is NamesFork {
     function setUp() public virtual override {
         super.setUp();
         string memory json = vm.readFile("../deployments/sepolia.json");
-        usdc = IERC20(vm.parseJsonAddress(json, ".external.USDC"));
+        usdc = fakeUsdc;
         manager = IPoolManager(vm.parseJsonAddress(json, ".external.PoolManager"));
         router = PoolSwapTest(vm.parseJsonAddress(json, ".external.PoolSwapTest"));
         lpRouter = PoolModifyLiquidityTest(vm.parseJsonAddress(json, ".external.PoolModifyLiquidityTest"));

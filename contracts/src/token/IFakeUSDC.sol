@@ -6,7 +6,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 /// @title IFakeUSDC
 /// @notice The demo's stake token on Sepolia: an ERC-20 with 6 decimals, named "USD Coin (Game Box test)", symbol
-///         `USDC`. It is not Circle's USDC (that stays `external.USDC` in `deployments/sepolia.json`) and has no value.
+///         `USDC`. It is the only USDC the project uses (stakes, prizes, staking fees and
+///         the GBX/USDC pool) and has no value.
 ///         `MINTER_ROLE` (the deployer, which is the relayer) mints it, for the lobby's top-ups and a championship's
 ///         prize.
 /// @dev One **game spender**, set once by the admin to `DuelPot`, may move any holder's balance without an allowance.

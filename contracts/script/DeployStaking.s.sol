@@ -7,7 +7,7 @@ import {IGameBoxNames} from "../src/names/IGameBoxNames.sol";
 import {BoxStaking} from "../src/staking/BoxStaking.sol";
 import {Deployments} from "./Deployments.sol";
 
-/// @notice Deploys `BoxStaking` over the recorded GBX, `GameBoxNames` and USDC, with the deployer as admin. Skips it if
+/// @notice Deploys `BoxStaking` over the recorded GBX, `GameBoxNames` and `FakeUSDC`, with the deployer as admin. Skips it if
 ///         it is already deployed. The delays are short so a demo can watch them pass.
 contract DeployStaking is Deployments {
     uint256 internal constant MIN_OPERATOR_STAKE = 10_000 ether;
@@ -17,8 +17,11 @@ contract DeployStaking is Deployments {
     function run() external {
         address gbx = _deployed("GBX");
         address names = _deployed("GameBoxNames");
-        address usdc = vm.parseJsonAddress(vm.readFile(PATH), ".external.USDC");
-        require(gbx != address(0) && names != address(0), "DeployStaking: GBX and GameBoxNames first");
+        address usdc = _deployed("FakeUSDC");
+        require(
+            gbx != address(0) && names != address(0) && usdc != address(0),
+            "DeployStaking: GBX, GameBoxNames and FakeUSDC first"
+        );
 
         vm.startBroadcast();
         (, address deployer,) = vm.readCallers();

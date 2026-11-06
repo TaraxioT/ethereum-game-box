@@ -10,7 +10,7 @@ import {IBoxStaking} from "../../src/staking/IBoxStaking.sol";
 import {GBX} from "../../src/token/GBX.sol";
 import {NamesFork} from "../names/NamesFork.sol";
 
-/// @notice `BoxStaking` on a Sepolia fork, against the real Game Box names, a fresh GBX and Sepolia's real USDC.
+/// @notice `BoxStaking` on a Sepolia fork, against the real Game Box names, a fresh GBX and the fork's `FakeUSDC`.
 contract BoxStakingTest is NamesFork {
     string internal constant BOX = "egbt-stake";
 
@@ -30,7 +30,7 @@ contract BoxStakingTest is NamesFork {
 
     function setUp() public override {
         super.setUp();
-        usdc = IERC20(vm.parseJsonAddress(vm.readFile("../deployments/sepolia.json"), ".external.USDC"));
+        usdc = fakeUsdc;
 
         vm.startPrank(admin);
         gbx = new GBX();
