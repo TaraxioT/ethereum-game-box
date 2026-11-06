@@ -5,7 +5,7 @@ import { type Address, type Transport, createPublicClient, http, parseAbi } from
 
 import type { ZgServices } from './tee.ts';
 
-const servingAbi = parseAbi([
+export const servingAbi = parseAbi([
   'struct Service { address provider; string serviceType; string url; uint256 inputPrice; uint256 outputPrice; uint256 updatedAt; string model; string verifiability; string additionalInfo; address teeSignerAddress; bool teeSignerAcknowledged; }',
   'function getService(address provider) view returns (Service service)',
 ]);
