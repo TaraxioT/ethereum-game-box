@@ -51,6 +51,16 @@ function writeDeployments(file: string, deployed: Record<string, Address>): void
   writeFileSync(file, JSON.stringify({ ...real, contracts: { ...real.contracts, ...Object.fromEntries(entries) } }, null, 2));
 }
 
+/** Gives each badge a player name: `StubNames` takes it from anyone. */
+export async function giveNames(chain: Chain, keys: RunKeys, { names }: Contracts, badges: readonly Address[]): Promise<void> {
+  const wallet = createWalletClient({ account: privateKeyToAccount(keys.stranger), chain: sepolia, transport: http(chain.url) });
+  const { abi } = artifact('StubNames');
+  for (const [index, badge] of badges.entries()) {
+    const hash = await wallet.writeContract({ address: names, abi, functionName: 'setName', args: [badge, `player-${index}.gamebox.eth`] });
+    await chain.client.waitForTransactionReceipt({ hash });
+  }
+}
+
 export async function deployContracts(chain: Chain, keys: RunKeys, box: { label: string; qx: Hex; qy: Hex }, file: string): Promise<Contracts> {
   const deployer = privateKeyToAccount(keys.relayer);
   const admin = privateKeyToAccount(keys.admin);

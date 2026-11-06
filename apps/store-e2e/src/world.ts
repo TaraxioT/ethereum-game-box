@@ -8,13 +8,13 @@ import path from 'node:path';
 
 import { SERVING_CONTRACT } from '@egb/verifier/test/fake-zg';
 import { p256 } from '@noble/curves/nist.js';
-import { bytesToHex, hexToBytes } from 'viem';
+import { type Address, bytesToHex, hexToBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { removeAgents } from './agents.ts';
 import { type Chain, startChain } from './anvil.ts';
 import { type RunningBox, startBox } from './box.ts';
-import { type Contracts, buildContracts, deployContracts } from './contracts.ts';
+import { type Contracts, buildContracts, deployContracts, giveNames } from './contracts.ts';
 import { type RunKeys, makeKeys } from './keys.ts';
 import { local, PORTS, requirePortsFree } from './ports.ts';
 import type { Child } from './processes.ts';
@@ -33,6 +33,8 @@ export interface World {
   readonly relayerUrl: string;
   readonly storeUrl: string;
   readonly verifierUrl: string;
+  /** Gives each badge a player name. */
+  name(badges: readonly Address[]): Promise<void>;
   /** Starts the Box, or starts it again, on the same data. */
   startBox(): Promise<RunningBox>;
   /** Stops the verifier's Worker. Its state stays. */
@@ -122,6 +124,7 @@ export async function startWorld(): Promise<World> {
     relayerUrl,
     storeUrl,
     verifierUrl,
+    name: (badges) => giveNames(chain, keys, contracts, badges),
     async startBox() {
       await box?.stop();
       box = await startBox({
