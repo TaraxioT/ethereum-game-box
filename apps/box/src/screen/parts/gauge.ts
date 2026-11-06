@@ -3,10 +3,19 @@
 // 1.2 s, and a small mono readout under the bezel ("1.8 GWEI").
 //
 // Size: the dial fills its (square) box; the readout hangs just under it. Property `gwei`.
+//
+// The needle sits on a layer of its own and the gauge turns it frame by frame. A compositor animation of it (a CSS
+// transition or a Web Animation) makes the browser lift the parts painted after it onto layers of their own while it
+// runs and merge them back when it ends, and on the Pi each of those changes rasters the screen's wide top tiles
+// again: an 80–110 ms frame as the needle sets off and another as it settles, on every gas change.
+import { calm } from "../shell/dom.ts";
+import { cubicBezier } from "./bezier.ts";
 import { pick, shadow, sheet } from "./part.ts";
 
 const MAX_GWEI = 5;
 const SWEEP = 240;
+const SWING_MS = 1200;
+const swing = cubicBezier(0.25, 0.9, 0.3, 1);
 
 /** The dial's face on a 100 × 100 grid round 50,50: a tick every half gwei, the whole ones longer. */
 const DIAL = (() => {
@@ -43,7 +52,7 @@ const styles = sheet(`
   border-radius: calc(2 * var(--p)) calc(2 * var(--p)) 0 0; transform-origin: 50% 100%;
   background: linear-gradient(90deg, #ffe0a0, var(--lcd-amber) 50%, #c97a1c);
   box-shadow: 0 0 4px rgb(255 181 71 / 0.55);
-  transform: rotate(-120deg); transition: transform 1.2s cubic-bezier(0.25, 0.9, 0.3, 1);
+  transform: rotate(-120deg); will-change: transform;
 }
 .hub {
   position: absolute; left: 50%; top: 50%; width: calc(12 * var(--p)); height: calc(12 * var(--p)); margin: calc(-6 * var(--p)) 0 0 calc(-6 * var(--p));
@@ -62,6 +71,9 @@ const styles = sheet(`
 export class EgbGauge extends HTMLElement {
   readonly #needle: HTMLElement;
   readonly #readout: HTMLElement;
+  /** Where the needle points now, in degrees; null until the first value, which it points at straight away. */
+  #angle: number | null = null;
+  #frame = 0;
 
   constructor() {
     super();
@@ -76,8 +88,30 @@ export class EgbGauge extends HTMLElement {
 
   set gwei(value: number) {
     const g = Math.min(MAX_GWEI, Math.max(0, value));
-    this.#needle.style.transform = `rotate(${-SWEEP / 2 + (g / MAX_GWEI) * SWEEP}deg)`;
+    this.#swing(-SWEEP / 2 + (g / MAX_GWEI) * SWEEP);
     this.#readout.textContent = `${value.toFixed(1)} GWEI`;
     this.setAttribute("aria-label", `gas ${value.toFixed(1)} gwei`);
+  }
+
+  /** Eases the needle from where it points to `to` over 1.2 s; under reduced motion, or for the first value, it is
+   * there at once. */
+  #swing(to: number): void {
+    cancelAnimationFrame(this.#frame);
+    const from = this.#angle;
+    const point = (deg: number): void => {
+      this.#angle = deg;
+      this.#needle.style.transform = `rotate(${deg}deg)`;
+    };
+    if (from === null || from === to || calm()) {
+      point(to);
+      return;
+    }
+    const start = performance.now();
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - start) / SWING_MS);
+      point(from + (to - from) * swing(t));
+      if (t < 1) this.#frame = requestAnimationFrame(step);
+    };
+    this.#frame = requestAnimationFrame(step);
   }
 }

@@ -2,13 +2,14 @@
 // bevelled metal face round a big dark glass screen, the title in arcade caps across the top of the glass and the
 // game's art standing on it. A game with no art yet (Bet on X, B17) is sealed: no screen, a riveted metal cover with
 // the title engraved and a SOON plate. `new-game` is the blank cartridge that opens the game builder. A built game
-// brings its own art: `icon`, its icon.svg from the Box, fills the glass under the title; one whose bundle failed is
-// `sealed`: the cover again, with a SEALED plate.
+// brings its own art: `icon`, its icon.svg from the Box, fills the glass under the title, held still; one whose bundle
+// failed is `sealed`: the cover again, with a SEALED plate.
 //
 // Size: it fills its box (designed at 176 × 186). Attributes: `game` (or `new-game`), `title` (the printed title), `focused` (the
 // keycap rises out of its housing on a spring, and only then a thin lavender strip lights at its foot and round the
 // housing's rim; an idle cartridge has no light at all), `pressed` (the keycap seats 8 px down: the launch).
 import { pick, shadow, sheet } from "./part.ts";
+import { stillIcon } from "./still-icon.ts";
 
 /** The art on each built game's glass, on a 120 × 64 grid, its foot on the glass's floor. */
 const ART: Record<string, string> = {
@@ -212,7 +213,16 @@ export class EgbCart extends HTMLElement {
       ? `<div class="glass"><span class="title"></span><div class="art${ART[game] ? "" : " icon"}">${art}</div><i class="veil"></i></div>`
       : `<div class="cover">${RIVETS}<span class="etched"></span><egb-plate variant="brass">${sealed ? "SEALED" : "SOON"}</egb-plate></div>`;
     pick(this.#face, art ? ".title" : ".etched").textContent = title;
-    // Set as a property, never written into the markup: the URL is the server's, but it is still data.
-    if (art && icon && !ART[game]) pick<HTMLImageElement>(this.#face, "img").src = icon;
+    if (art && icon && !ART[game]) this.#showIcon(pick<HTMLImageElement>(this.#face, "img"), icon);
+  }
+
+  /** Shows the icon as a still (`still-icon.ts`); if that fails, the icon as it is. Set as a property, never written
+   * into the markup: the URL is the server's, but it is still data. */
+  #showIcon(img: HTMLImageElement, icon: string): void {
+    const show = (src: string): void => {
+      // A newer render has replaced this image.
+      if (this.#face.contains(img)) img.src = src;
+    };
+    stillIcon(icon).then(show, () => show(icon));
   }
 }

@@ -144,9 +144,12 @@ export function createMachine(layout: Layout, scale: number): MachineView {
         // Balances move when the money does: the port reads the ledger as the tx lands.
         state.seats.forEach((s, i) => ports[i]?.set(s));
       }
+      // Written only when it changes: rewriting the same text on every event repainted the chip and the wide tiles
+      // under it on each block, gas reading and transaction step.
       const m = state.match;
-      stakeChip.textContent = m ? `${m.stake * 2} EGB AT STAKE` : "";
-      stakeChip.hidden = !m;
+      const stake = m ? `${m.stake * 2} EGB AT STAKE` : "";
+      if (stakeChip.textContent !== stake) stakeChip.textContent = stake;
+      if (stakeChip.hidden !== !m) stakeChip.hidden = !m;
     },
 
     rescale(next) {
