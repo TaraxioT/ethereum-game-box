@@ -120,6 +120,50 @@ contract LocksTest is NamesFork {
         names.handOverRegistrar(address(0));
     }
 
+    /// @dev `Championships` gets `REGISTRAR | RENEW | UNREGISTER` on every title registry, games added before and after
+    ///      `setChampionships`, with no admin bit (so it can grant nothing on) and nothing on `gamebox.eth`'s registry,
+    ///      which stays emancipated. The parent lock still holds.
+    function test_championshipsHoldOnlyTheirRegistryRoles() public {
+        uint256 cupRoles = RegistryRoles.REGISTRAR | RegistryRoles.RENEW | RegistryRoles.UNREGISTER;
+        vm.prank(admin);
+        IPermissionedRegistry later = IPermissionedRegistry(names.addGame("egbt-game", 1 days));
+        IPermissionedRegistry[3] memory rs = _registries();
+        assertEq(registry.roles(0, address(cups)), 0);
+        assertTrue(registry.isEmancipated());
+        IPermissionedRegistry[3] memory titles = [rs[1], rs[2], later];
+        for (uint256 i; i < titles.length; ++i) {
+            assertEq(titles[i].roles(0, address(cups)), cupRoles);
+            assertEq(titles[i].roles(0, address(names)), TITLE_ROLES);
+            assertEq(_holders(titles[i], RegistryRoles.SET_PARENT), 0);
+            assertEq(_holders(titles[i], RegistryRoles.SET_PARENT_ADMIN), 0);
+            assertEq(_holders(titles[i], RegistryRoles.REGISTRAR_ADMIN), 1);
+        }
+
+        address stranger = account("stranger");
+        vm.prank(address(cups));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IEnhancedAccessControl.EACCannotGrantRoles.selector, 0, RegistryRoles.REGISTRAR, address(cups)
+            )
+        );
+        later.grantRootRoles(RegistryRoles.REGISTRAR, stranger);
+    }
+
+    function test_setChampionshipsOnceByTheAdmin() public {
+        address stranger = account("stranger");
+        bytes32 role = names.DEFAULT_ADMIN_ROLE();
+        vm.prank(stranger);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role)
+        );
+        names.setChampionships(stranger);
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IGameBoxNames.ChampionshipsAlreadySet.selector, address(cups)));
+        names.setChampionships(stranger);
+        assertEq(names.championships(), address(cups));
+    }
+
     /// @dev Nobody holds UPGRADE on a Box resolver or on the shared resolvers.
     function test_nobodyCanUpgradeOurResolvers() public {
         address[4] memory rs =
