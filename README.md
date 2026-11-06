@@ -21,6 +21,7 @@ https://plans.georgekm.com/ethereum-game-box-2026-11-05/.
 | [`apps/demo-box`](apps/demo-box/README.md) | A Box with no hardware, as a Cloudflare Worker: a software P-256 key that signs heartbeats and results |
 | [`apps/verifier`](apps/verifier/README.md) | The Cloudflare Worker that judges a store game: an agent in a container, 0G's private inference and the verifier key |
 | [`apps/store`](apps/store/README.md) | The game store, as a Cloudflare Worker: the index and the zips in R2, and the team's uploads |
+| [`apps/store-e2e`](apps/store-e2e/README.md) | `pnpm store:e2e`: a store match end to end on anvil, the real Workers, a real container and the real Box, with 0G, `GameBoxNames`, the Box's hardware key and the badges faked |
 | [`apps/web`](apps/web/README.md) | The public site, read straight from ENS and the contracts |
 | [`packages/sdk`](packages/sdk/README.md) | `@egb/sdk`: the contract between the Box and its games (rules, station views, manifests, the rules-runner and frame protocols) |
 | [`packages/shared`](packages/shared/README.md) | Message digests, the badge entry, ABIs and addresses, shared by every app; `@egb/shared/web` for the sites' browser code |

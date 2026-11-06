@@ -8,7 +8,8 @@
 //   `<base>/v1`.
 // - `POST /rpc`: 0G's chain. `ZG_RPC` and `ZG_STORAGE_RPC` are `<base>/rpc`.
 // - `POST /indexer`, `POST /node`: 0G Storage. `ZG_STORAGE_INDEXER` is `<base>/indexer`.
-// - `POST /__fake`: sets `FakeZgSettings` fields from a JSON body. `GET /__fake`: what it has seen.
+// - `POST /__fake`: sets `FakeZgSettings` fields from a JSON body. `GET /__fake`: what it has seen. `GET /__fake/chats` and
+//   `GET /__fake/segments`: every chat call, and what reached 0G Storage, whole.
 
 import { type Address, type Hex, decodeFunctionData, encodeFunctionResult, keccak256, pad } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
@@ -121,6 +122,8 @@ export class FakeZg {
     if (request.method === 'POST' && (pathname === '/rpc' || pathname === '/indexer' || pathname === '/node')) {
       return this.rpc(pathname, (await request.json()) as RpcCall | RpcCall[]);
     }
+    if (pathname === '/__fake/chats') return json(this.chats);
+    if (pathname === '/__fake/segments') return json(this.segments);
     if (pathname === '/__fake') {
       if (request.method === 'POST') Object.assign(this.settings, await request.json());
       return json({ settings: this.settings, chats: this.chats.length, segments: this.segments.length, shellOutput: this.shellOutput() });

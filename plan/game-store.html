@@ -83,7 +83,9 @@
 AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G&#39;s
 private inference reads the match&#39;s log and says who gets paid how much. If it can&#39;t, everyone gets their stake back.
 Built and tested on the branch <code>game-store</code>, on fakes and up to four seats: nothing is deployed, 0G hasn&#39;t judged a real
-match, and it hasn&#39;t run on the Pi or on real badges.</p></div>
+match, and it hasn&#39;t run on the Pi or on real badges. <code>pnpm store:e2e</code> plays it end to end on one laptop: anvil, the real
+Workers on <code>wrangler dev</code>, a real container and the real Box in a real browser, with 0G, <code>GameBoxNames</code>, the Box&#39;s hardware
+key and the badges faked.</p></div>
   <nav>
     <a href="#s1">Goal</a>
     <a href="#s2">Decisions</a>

@@ -143,7 +143,7 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 | `src/texts.ts` | Long text in Durable Object storage, in chunks under its 2 MB limit |
 | `src/limits.ts`, `src/failure.ts`, `src/safe.ts`, `src/json.ts`, `src/abortable.ts` | The limits, why a run failed, redaction, JSON helpers and a deadline for work with no signal |
 | `test/` | Every refusal, failure and crash on fakes, through `test/world.ts`. `relayer.test.ts` puts what a `Judge` really sends through the relayer's real routes |
-| `test/fake-zg/` | A fake 0G for tests and for the end-to-end harness |
+| `test/fake-zg/` | A fake 0G for tests and for the end-to-end run (`apps/store-e2e`) |
 | `container/` | The agent's container: its own package and tests |
 
 ## Rules
@@ -157,7 +157,8 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 
 `pnpm --filter @egb/verifier fake-zg [port]` serves the Router, a provider's signature endpoint, 0G's chain and 0G
 Storage on one port, and prints the Worker vars that point at it. `@egb/verifier/test/fake-zg` is the same thing as a
-`fetch`. `POST /__fake` sets how it behaves, and `GET /__fake` says what it has seen:
+`fetch`. `POST /__fake` sets how it behaves, `GET /__fake` says what it has seen, and `GET /__fake/chats` and
+`GET /__fake/segments` hand back every chat call and what reached 0G Storage:
 
 ```sh
 curl -d '{"payouts":["10000000","0"]}' http://127.0.0.1:8790/__fake     # the split the agent submits
