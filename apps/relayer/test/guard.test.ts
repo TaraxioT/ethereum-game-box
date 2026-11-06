@@ -27,7 +27,7 @@ describe('guarded', () => {
   it('answers a route with 503 before the contracts are deployed', async () => {
     const world = new World();
     Object.defineProperty(world.deps.ctx, 'addresses', { get: notDeployed });
-    const res = await world.post('/box/execute', executeBody(world));
+    const res = await world.post('/account/execute', executeBody(world));
     expect(res).toEqual({ status: 503, body: { error: 'not deployed: GameBoxNames is not in deployments/sepolia.json' } });
     expect(await world.get('/health')).toMatchObject({ status: 200 });
   });

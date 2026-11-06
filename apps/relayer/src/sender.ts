@@ -176,7 +176,7 @@ export class Relay {
     for (const record of await this.pendingRecords()) record.locks.forEach((lock) => held.add(lock));
     const clash = request.locks.find((lock) => held.has(lock));
     if (clash) return { ok: false, status: 409, error: `a request for ${clash} is already pending` };
-    const limits = limitsFor(request.kind, ip);
+    const limits = limitsFor(request, ip);
     const hit = await this.limits.exceeded(limits, at);
     if (hit) return { ok: false, status: 429, error: `rate limit: ${hit.what}` };
 
