@@ -41,7 +41,8 @@ The ports are 28545 to 28554 (`src/ports.ts`). A run refuses to start if anythin
 3. A changed zip is refused: at the store, at the Box, which seals the game, and at the verifier.
 4. An unlisted hash can't be staked, through the Box or straight on `StorePot`.
 5. The agent's container is killed mid-run, and again on the retry, and each stake goes back to its address.
-6. The agent's shell finds no secret and no way out, and `cannot_judge` refunds.
+6. The agent's shell finds no secret and no way out, Docker holds no secret for its container, and `cannot_judge`
+   refunds.
 7. A forged verdict, one that doesn't add up and one from a wrong key are refused, by the relayer and by `StorePot`.
 8. The agent's own split doesn't add up, and it refunds.
 9. A turn fails the TEE check, and it refunds.

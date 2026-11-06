@@ -23,6 +23,20 @@ function listed(...flags: string[]): string[] {
 /** The agent containers running now. */
 export const runningAgents = () => listed().filter((name) => !SIDECAR.test(name));
 
+/** What Docker holds of a container: what it was started with, whatever its shell is shown. */
+export interface AgentConfig {
+  /** All of it. */
+  readonly text: string;
+  /** Its environment, as `env` would list it. */
+  readonly env: string;
+}
+
+export function agentConfig(name: string): AgentConfig {
+  const text = docker('inspect', name);
+  const [{ Config }] = JSON.parse(text) as [{ Config: { Env: string[] } }];
+  return { text, env: Config.Env.join('\n') };
+}
+
 /** Kills an agent's container, as a crash would. */
 export function killAgent(name: string): void {
   docker('kill', name);

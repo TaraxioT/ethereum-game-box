@@ -15,7 +15,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { allBlocked, noSecrets } from '../../verifier/container/test/docker/probes.ts';
 import { servingAbi } from '../../verifier/src/zg-chain.ts';
-import { killAgent, runningAgents } from '../src/agents.ts';
+import { type AgentConfig, agentConfig, killAgent, runningAgents } from '../src/agents.ts';
 import { type RunningBox, ageRounds } from '../src/box.ts';
 import { type Ledger, STATE, ledger, showUsdc, usdc } from '../src/ledger.ts';
 import { BADGES, join, judgedOf, opened, play, sign, stakeAndPlay, toHome } from '../src/match.ts';
@@ -47,6 +47,9 @@ const WAYS_OUT = [
   `timeout 5 getent hosts example.com; echo "dns example.com exit=$?"`,
   `timeout 8 node -e 'fetch("https://example.com").then(() => process.exit(0), () => process.exit(1))'; echo "https example.com exit=$?"`,
 ];
+
+/** How long the shell stays up after its probes, so a run can read each container from Docker before it goes. */
+const LOOK_SECONDS = 3;
 
 /** Why the verifier refused a run, in its own words: every other failure refunds the same way. */
 const NOT_THE_POT = 'a split does not add up to exactly the pot';
@@ -329,9 +332,17 @@ describe('the game store, end to end', () => {
 
   it("gives the agent's shell no secrets and no way out, and refunds when it can't judge", async () => {
     const probes = WAYS_OUT.map((probe) => `(${probe}) &`).join('\n');
-    await world.zg.script({ shellCommand: `env\n${probes}\nwait` });
+    await world.zg.script({ shellCommand: `env\n${probes}\nwait\nsleep ${LOOK_SECONDS}` });
     const before = await chain.balances(BADGES);
     const round = await stakeAndPlayFrom();
+
+    // The shell's `env` is built for it, so it can't show what the container itself was given. Docker can.
+    const agents = new Map<string, AgentConfig>();
+    await vi.waitFor(() => {
+      for (const name of runningAgents()) if (!agents.has(name)) agents.set(name, agentConfig(name));
+      expect(agents.size).toBe(2);
+    }, { timeout: 90_000, interval: 200 });
+
     const shown = await boxResult();
     expect(shown.step).toBe('refunded');
     say(`Box: ${shown.step}: ${shown.reason}`);
@@ -344,7 +355,13 @@ describe('the game store, end to end', () => {
     expect(allBlocked(output)).toBeNull();
     expect(noSecrets(output)).toBeNull();
     const { relayer, verifier, storage } = world.keys;
-    for (const secret of [relayer, verifier, storage]) expect(output).not.toContain(secret.slice(2));
+    const secrets = [relayer.slice(2), verifier.slice(2), storage.slice(2), ZG_API_KEY];
+    for (const secret of secrets) expect(output).not.toContain(secret);
+    for (const { env, text } of agents.values()) {
+      expect(noSecrets(env)).toBeNull();
+      for (const secret of secrets) expect(text).not.toContain(secret);
+    }
+    say('Docker says the same of both containers: neither was started with a secret');
   });
 
   it("refuses a forged verdict, one that doesn't add up, and one from a wrong key", async () => {
