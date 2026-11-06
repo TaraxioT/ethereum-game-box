@@ -14,6 +14,7 @@ const sources: Record<string, [string, string]> = {
   boxResultsAbi: ['BoxResults.sol', 'BoxResults'],
   demoLicencesAbi: ['DemoLicences.sol', 'DemoLicences'],
   boxSeatsAbi: ['BoxSeats.sol', 'BoxSeats'],
+  boxLeaseAbi: ['BoxLease.sol', 'BoxLease'],
   championshipsAbi: ['Championships.sol', 'Championships'],
   duelPotAbi: ['DuelPot.sol', 'DuelPot'],
   fakeUsdcAbi: ['FakeUSDC.sol', 'FakeUSDC'],
