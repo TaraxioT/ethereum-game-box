@@ -170,7 +170,7 @@ on `BoxEvent`s and acts only through `link.send`.
   line (`play-for.ts`, tested): `WINNER TAKES 20 USDC` and that the win also takes the title and scores the
   championship; `FOR THE STOCK DUEL TITLE` and who holds it; `FOR CUP-1921` with its leader, prize and countdown. It
   follows the board live and counts down every second.
-- `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
+- `join.ts`, `stake.ts`, `judging.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
   loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby; under the badge's name its stats,
   `4W 1L 0D · 90 USDC`, its record in the focused game and its balance, read from chain, popping in on its tap), a
@@ -182,7 +182,9 @@ on `BoxEvent`s and acts only through `link.send`.
   championship), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
   pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,
   and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
-  rules failed.
+  rules failed. A store game stakes on the amount keys alone, under its tier's plate, `JUDGED BY AI`; Join says
+  `DOWNLOADING THE GAME…` while its bundle is on its way. Judging waits on the verifier, and Result shows each seat's
+  share of the split, or `REFUNDED` with why (`judged.ts`, tested). A verifier that never paid goes to Refund, saying so.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
   shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
   `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's

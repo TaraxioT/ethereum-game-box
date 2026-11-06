@@ -15,7 +15,7 @@ const TAP: Readonly<Record<TapMeaning, SoundName | null>> = {
   again: "again",
   sign: "sign",
   open: "open",
-  // The game's own moment (a shot, a card going down) arrives as a cue; a built game's tap is confirmed here.
+  // The game's own moment (a shot, a card going down) arrives as a cue; a built or store game's tap is confirmed here.
   play: null,
   "let-go": "let-go",
   rematch: "rematch",
@@ -43,8 +43,8 @@ export function soundsFor(state: BoxState, event: BoxEvent): Heard[] {
     case "touch":
       return [{ name: "touch", seat: event.seat }];
     case "tap": {
-      const built = event.meaning === "play" && state.match?.play.game === "built";
-      const name = built ? "again" : TAP[event.meaning];
+      const game = state.match?.play.game;
+      const name = event.meaning === "play" && (game === "built" || game === "store") ? "again" : TAP[event.meaning];
       return name ? [{ name, seat: event.seat }] : [];
     }
     case "cue":

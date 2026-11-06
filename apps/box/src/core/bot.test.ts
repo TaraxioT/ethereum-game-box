@@ -31,6 +31,7 @@ function box(patch: Partial<BoxState>): BoxState {
     focus: "quick-draw",
     seats: [EMPTY, EMPTY],
     chain: { block: 50, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
+    fetching: false,
     stake: 10,
     playFor: "usdc",
     board: null,

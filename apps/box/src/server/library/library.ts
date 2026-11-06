@@ -1,6 +1,7 @@
 // The game library: the core's LibraryPort on the Pi. The team games come from apps/box/src/games/<id>/game.json, in
 // the catalogue's rack order (the catalogue's sealed games, Bet on X and B17, have no folder and stay as it lists
-// them); the built games from $EGB_DATA/games/<id>/, oldest first, so a new cartridge slides in at the end of the rack.
+// them); the built games from $EGB_DATA/games/<id>/, oldest first, so a new cartridge slides in at the end of the rack;
+// and last the store's games, from its index (store-index.ts), for as long as it can be read.
 //
 // - It answers at once with the catalogue's team games: the server listens first and scans after, so the kiosk never
 //   waits on a slow disk. `rescan()` runs the scan; the server calls it after listening and on the Forge's
@@ -8,17 +9,21 @@
 // - A built game that can't be offered (installedProblems: a bad manifest, a missing bundle) is listed sealed, and its
 //   reason is logged once. So is one whose bundle didn't load in its rules child (`seal`, from the rules host), until
 //   the folder goes.
+// - A store game's bundle is fetched at Join (bundles.ts), and one that fails is sealed the same way, until the game
+//   leaves the rack. It can't take a team or a built game's id: it is left out.
 // - Listeners hear only real changes to the list.
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { manifestProblems, type GameManifest } from "@egb/sdk";
+import { manifestProblems, SEATS, type GameManifest } from "@egb/sdk";
 import { TEAM_GAMES } from "../../core/catalogue.ts";
 import type { LibraryPort } from "../../core/ports.ts";
 import type { GameInfo } from "../../core/types.ts";
 import { DIST, installedProblems, PROVENANCE } from "../../builder/forge/install.ts";
 import { readManifestFile } from "../../builder/forge/shelf.ts";
 import { BUNDLE_FILES } from "../../builder/bundle/paths.ts";
+import { FALLBACK_ICON } from "../games/routes.ts";
 import type { RulesGame } from "../rules/host.ts";
+import type { StoreIndex, RackListing } from "./store-index.ts";
 
 export interface LibraryEntry {
   readonly info: GameInfo;
@@ -38,8 +43,11 @@ export interface Library extends LibraryPort {
   entry(id: string): LibraryEntry | null;
   /** The rules host's `locate`: a playable built game's rules.js and budget. */
   rules(id: string): RulesGame | null;
-  /** Seals a built game whose bundle didn't load (the rules host's `onUnloadable`). */
-  seal(id: string, reason: string): void;
+  /**
+   * Seals a built game whose bundle didn't load (the rules host's `onUnloadable`) or a store game whose bundle failed.
+   * `passing`: the next scan lifts it.
+   */
+  seal(id: string, reason: string, passing?: boolean): void;
 }
 
 export interface LibraryOptions {
@@ -48,6 +56,8 @@ export interface LibraryOptions {
   /** Installed built games: $EGB_DATA/games. */
   readonly gamesDir: string;
   readonly log: (text: string) => void;
+  /** What the store offers. Absent: this Box has no store games. */
+  readonly store?: StoreIndex | null;
 }
 
 /** The URL a built game's cartridge art is served at; `v` changes when the file does, so the kiosk never shows a stale one. */
@@ -98,6 +108,14 @@ async function builtEntry(dir: string, sealed: ReadonlyMap<string, string>): Pro
   return { info, dir, manifest: null, problem, at };
 }
 
+/** A store game as the rack shows it: no folder and no manifest until its bundle is fetched for a match. */
+function storeEntry(listing: RackListing, sealed: ReadonlyMap<string, string>): LibraryEntry {
+  const { id, title, stakes, hash, players } = listing;
+  const problem = sealed.get(id) ?? (players.min > SEATS.length ? `it needs ${players.min} players, and this Box seats ${SEATS.length}` : null);
+  const info: GameInfo = { id, kind: "store", title, players: SEATS.length, minutes: 0, stakes, tier: "judged", ready: problem === null, sealed: problem, icon: FALLBACK_ICON, manifest: null, bundle: hash };
+  return { info, dir: null, manifest: null, problem };
+}
+
 async function builtEntries(gamesDir: string, sealed: ReadonlyMap<string, string>): Promise<LibraryEntry[]> {
   const names = await readdir(gamesDir, { withFileTypes: true }).catch(() => []);
   const dirs = names.filter((d) => d.isDirectory() && !d.name.startsWith(".") && !d.name.startsWith("_")).map((d) => path.join(gamesDir, d.name));
@@ -111,6 +129,8 @@ export function createLibrary(options: LibraryOptions): Library {
   let snapshot = listKey(games);
   const listeners = new Set<() => void>();
   const sealed = new Map<string, string>();
+  /** Seals the next scan lifts. */
+  const passing = new Set<string>();
   const reported = new Map<string, string>();
   let running: Promise<void> | null = null;
   let again = false;
@@ -125,9 +145,9 @@ export function createLibrary(options: LibraryOptions): Library {
   }
 
   const problems = (list: readonly LibraryEntry[]): [string, string][] =>
-    list.flatMap((e) => (e.problem && e.dir ? [[e.dir, `${e.info.id} is sealed: ${e.problem}`] as [string, string]] : []));
+    list.flatMap((e) => (e.problem ? [[e.dir ?? e.info.id, `${e.info.id} is sealed: ${e.problem}`] as [string, string]] : []));
 
-  /** Built games left out of the list, with why: logged alongside the sealed ones. */
+  /** Built and store games left out of the list, with why: logged alongside the sealed ones. */
   let leftOut: readonly [string, string][] = [];
 
   function publish(next: readonly LibraryEntry[]): void {
@@ -147,9 +167,16 @@ export function createLibrary(options: LibraryOptions): Library {
     // A built game can't take a team game's id: its cartridge, its routes and its matches would be the team game's.
     const built = found.filter((e) => !teamIds.has(e.info.id));
     leftOut = found.flatMap((e) => (teamIds.has(e.info.id) && e.dir ? [[e.dir, `${e.dir} is left out: a team game already uses its id`] as [string, string]] : []));
-    // A seal lasts as long as the folder: a game removed (or never there) forgets it.
-    for (const id of sealed.keys()) if (!built.some((e) => e.info.id === id)) sealed.delete(id);
-    publish([...team, ...built]);
+    const taken = new Set([...teamIds, ...built.map((e) => e.info.id)]);
+    const listed = options.store?.listings() ?? [];
+    for (const id of passing) sealed.delete(id);
+    passing.clear();
+    const store = listed.filter((l) => !taken.has(l.id)).map((l) => storeEntry(l, sealed));
+    leftOut = [...leftOut, ...listed.flatMap((l) => (taken.has(l.id) ? [[`store:${l.id}`, `the store's ${l.id} is left out: another game already uses its id`] as [string, string]] : []))];
+    // A seal lasts as long as the game: one removed (or never there) forgets it.
+    const here = [...built, ...store];
+    for (const id of sealed.keys()) if (!here.some((e) => e.info.id === id)) sealed.delete(id);
+    publish([...team, ...here]);
   }
 
   function rescan(): Promise<void> {
@@ -189,10 +216,11 @@ export function createLibrary(options: LibraryOptions): Library {
       if (!e || e.info.kind !== "built" || !e.info.ready || !e.dir || !e.manifest) return null;
       return { rulesJs: path.join(e.dir, DIST, BUNDLE_FILES.rules), budgetMs: e.manifest.budgetMs };
     },
-    seal(id, reason) {
+    seal(id, reason, lifts = false) {
       const e = entry(id);
-      if (!e || e.info.kind !== "built" || sealed.has(id)) return;
+      if (!e || e.info.kind === "team" || sealed.has(id)) return;
       sealed.set(id, reason);
+      if (lifts) passing.add(id);
       publish(entries.map((x) => (x.info.id === id ? { ...x, info: { ...x.info, ready: false, sealed: x.problem ?? reason }, problem: x.problem ?? reason } : x)));
     },
   };

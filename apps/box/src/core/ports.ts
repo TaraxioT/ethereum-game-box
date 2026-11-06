@@ -1,7 +1,7 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
-import type { Seat, StationView, Transcript, BuiltEvent, Outcome, TapNeed } from "@egb/sdk";
-import type { Badge, Board, GameId, GameInfo, PlayerCard, TxStep } from "./types.ts";
+import type { Seat, StationView, Transcript, BuiltEvent, LogEntry, Outcome, TapNeed } from "@egb/sdk";
+import type { Badge, Board, GameId, GameInfo, Judged, PlayerCard, TxStep } from "./types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };
@@ -87,6 +87,43 @@ export interface ResultOrder {
   readonly winner: 0 | 1 | null;
 }
 
+/** A store match's stakes, for `StorePot`: the bundle's hash names the game. */
+export interface StoreStakeOrder {
+  readonly round: number;
+  readonly bundle: `0x${string}`;
+  readonly badges: readonly `0x${string}`[];
+  /** Whole USDC per seat. */
+  readonly amount: number;
+}
+
+/** A closed store match, for the verifier: what the port needs to write the log's header, and its entries. */
+export interface JudgeOrder extends StoreStakeOrder {
+  readonly game: GameId;
+  /** ms since the epoch, the Box's clock. */
+  readonly startedAt: number;
+  readonly entries: readonly LogEntry[];
+}
+
+/** Hears the verifier's every new word, up to `paid`, `refunded` or `failed`. */
+export type JudgeWatch = (update: Judged) => void;
+
+/**
+ * The money and the judge behind a store game. `StorePot` and Store USDC are apart from `DuelPot` and its USDC. Sends
+ * never wait, as on `ChainPort`.
+ */
+export interface StoreChainPort {
+  /** A badge's Store USDC. */
+  balance(address: `0x${string}`): Promise<number>;
+  /** Sends every stake into the pot (a Box-signed `Stake` naming the bundle). */
+  open(order: StoreStakeOrder, watch: TxWatch): void;
+  /** Sends the pot back past its refund delay, when the verifier never paid it. */
+  refund(round: number, watch: TxWatch): void;
+  /** 100 Store USDC to a badge. */
+  topup(address: `0x${string}`, watch: TxWatch): void;
+  /** Sends the match's log, signed by the Box's key, to the verifier, and follows it to a payout or a refund. */
+  judge(order: JudgeOrder, watch: JudgeWatch): void;
+}
+
 /** Sepolia's head: its number, when it was sealed (ms since the epoch) and its base fee (gwei). */
 export interface ChainHead {
   readonly block: number;
@@ -130,9 +167,29 @@ export interface ChainPort {
   outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<readonly string[]>;
   /** Calls back with each new head; returns the unsubscribe. */
   watchHead(listener: (head: ChainHead) => void): () => void;
+  /** Absent: no store game can run (the demo, or Sepolia before `StorePot` is deployed). */
+  readonly store?: StoreChainPort;
 }
 
-/** The games the Box can run: the team games plus the installed built games. */
+/** What the core needs from a store game's manifest, once its bundle is here and checked. */
+export interface StoreBundle {
+  /** The match's time limit, in minutes. */
+  readonly minutes: number;
+  readonly taps: TapNeed;
+}
+
+/**
+ * Store games' bundles, one at a time: fetched for each match, and never kept. A bundle's code never runs here: it runs
+ * only in the kiosk's sandboxed frame.
+ */
+export interface BundlePort {
+  /** Fetches the bundle and checks it. A rejection means the game is sealed, and nothing may be staked on it. */
+  fetch(game: GameId, hash: `0x${string}`): Promise<StoreBundle>;
+  /** Forgets the bundle: stops a fetch still running, and deletes what is on disk. */
+  drop(): void;
+}
+
+/** The games the Box can run: the team games, the installed built games and the store's games. */
 export interface LibraryPort {
   games(): readonly GameInfo[];
   /** Calls back when a game is installed or removed. */
@@ -179,6 +236,8 @@ export interface CorePorts {
   readonly library: LibraryPort;
   /** Absent: built games can't run (the demo). */
   readonly rules?: RulesRunnerPort;
+  /** Absent: store games can't run (the demo, a Box with no store settings). */
+  readonly bundles?: BundlePort;
   readonly log: MatchLog;
   /** uint32 randomness for seeds and the lobby's proposed labels (never a game's outcome on a real Box: badges roll those). */
   readonly random: () => number;

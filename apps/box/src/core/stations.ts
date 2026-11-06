@@ -3,7 +3,7 @@
 // what a tap means now, from the seat's tap plan. `@egb/sdk`'s `stationView` cuts each line to what the station holds.
 import type { Seat, StationMode, StationView } from "@egb/sdk";
 import { stationView as fitView } from "@egb/sdk";
-import type { Match, SeatState } from "./types.ts";
+import type { Match, SeatState, StorePlay } from "./types.ts";
 import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelState } from "../games/stock-duel/types.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
@@ -83,6 +83,14 @@ function stockDuel(game: StockDuelState, seat: Seat, now: number): Lines {
   }
 }
 
+/** A store match: the line the game set under its title, then the judge's word, then what the seat was paid. */
+function store(match: Match, play: StorePlay, seat: Seat): Lines {
+  if (match.outcome === null) return lines(play.lines[seat], play.title);
+  if (play.judged?.step === "refunded") return lines("REFUNDED", `+${match.stake} USDC`);
+  const paid = play.judged?.step === "paid" ? play.judged.payouts?.[seat] : undefined;
+  return paid === undefined ? lines("JUDGING", "by AI") : lines(`+${paid} USDC`, "paid");
+}
+
 function refunding(match: Match, seat: Seat, now: number): Lines {
   if (match.refunded[seat]) return lines("REFUNDED", `+${match.stake} USDC`);
   const left = match.refundAt - now;
@@ -105,9 +113,11 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
     case "stake":
       return staking(input, seat);
     case "playing":
+    case "judging":
     case "result":
       if (!match) return seated(mine);
       if (match.voided) return lines("VOID", "stakes back");
+      if (match.play.game === "store") return store(match, match.play, seat);
       if (match.play.game === "built") return lines(match.play.stations[seat].big, match.play.stations[seat].small);
       return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat) : stockDuel(match.play.state, seat, now);
     case "refund":

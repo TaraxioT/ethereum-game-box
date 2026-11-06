@@ -7,6 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
+import { storePotAddress } from "@egb/shared/store";
 import type { ChainPort, Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
 import { monotonicClock } from "../core/system-clock.ts";
@@ -24,6 +25,7 @@ import { sepoliaReads } from "../chain/reads.ts";
 import { relayerAt } from "../chain/relayer.ts";
 import { roundsFile } from "../chain/rounds.ts";
 import { createSepoliaChain, SWEEP_MS, type SepoliaChain } from "../chain/port.ts";
+import { verifierAt } from "../chain/verifier.ts";
 import { processSigner } from "../signer/hyp2003.ts";
 import { stopKiosk } from "./kiosk.ts";
 import { createLogFile } from "./log-file.ts";
@@ -34,7 +36,9 @@ import { createLauncherToken } from "./security.ts";
 import { createSessionLog } from "./sessions.ts";
 import { createFrameAssets } from "./games/assets.ts";
 import { createGameRoutes } from "./games/routes.ts";
+import { createBundles, type Bundles } from "./library/bundles.ts";
 import { createLibrary, type Library } from "./library/library.ts";
+import { createStoreIndex, STORE_INDEX_MS } from "./library/store-index.ts";
 import { createRulesHost, type RulesHost } from "./rules/host.ts";
 import { tapsRoutes } from "./taps-api.ts";
 
@@ -49,6 +53,8 @@ export interface BoxOptions {
   /** Makes the chain port on the Box's clock, instead of the one the settings name (tests: the Sepolia port on a mocked
    * relayer). */
   readonly chain?: (clock: Clock) => ChainPort & { stop?(): void };
+  /** What the Box fetches the store with (tests: a stand-in store). */
+  readonly storeFetch?: typeof fetch;
   /** The game builder's settings: its environment (default: process.env), its shelf's folders, the sim's pace. */
   readonly builder?: Partial<Pick<BuilderOptions, "env" | "gameRoots" | "simSpeed">>;
   /** Closes the kiosk's browser (default: stops its systemd unit; tests: a stand-in). */
@@ -67,6 +73,8 @@ export interface Box {
   readonly library: Library;
   /** Built games' rules, each in its sandboxed child. */
   readonly rules: RulesHost;
+  /** Store games' bundles; null on a Box with no store games. */
+  readonly bundles: Bundles | null;
   /** The taps library, once it has started (after the server listens); null with EGB_RECEIVER=none. */
   taps(): Taps | null;
   /** The game builder, once it has started (after the server listens). */
@@ -88,6 +96,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   // The Pi keeps no user journal: the Box's lines also go to $EGB_DATA/logs/ (tests pass their own log).
   const logFile = options.log ? null : createLogFile(settings.dataDir, (text) => console.log(text));
   const log = options.log ?? ((text: string) => logFile?.log(text));
+  const storePot = storePotAddress();
   // Monotonic: a clock step (NTP after boot) must not move touch times against the game's own timers.
   const clock = options.clock ?? monotonicClock();
   const started = performance.now();
@@ -105,11 +114,18 @@ export async function startBox(options: BoxOptions): Promise<Box> {
           rounds: roundsFile(join(settings.dataDir, "rounds.json")),
           clock,
           log,
+          store: settings.store && storePot ? { storePot, verifier: verifierAt(settings.store.verifierUrl) } : undefined,
         });
   const chain: ChainPort & { stop?(): void } = options.chain?.(clock) ?? sepolia ?? createDemoChain(clock);
   const sessions = createSessionLog(settings.dataDir, log);
+  // Store games need the store's URL and a chain with `StorePot`: without either, the rack simply has none.
+  const storeUrl = chain.store ? settings.store?.storeUrl : undefined;
+  const fetcher = options.storeFetch ?? fetch;
+  const storeIndex = storeUrl ? createStoreIndex({ url: storeUrl, log, fetcher }) : null;
+  if (settings.store && !storeUrl) log("store: no store games: this chain has no StorePot");
   // The library answers with the catalogue until its first scan, which runs after the listen.
-  const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log });
+  const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log, store: storeIndex });
+  const bundles = storeUrl ? createBundles({ url: storeUrl, dir: join(settings.dataDir, "store-bundles"), log, seal: library.seal, fetcher }) : null;
   const rules = createRulesHost({
     locate: (id) => library.rules(id),
     log,
@@ -127,6 +143,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     chain,
     library,
     rules,
+    ...(bundles ? { bundles } : {}),
     log: sessions,
     random: () => randomInt(2 ** 32),
   }, { builder: true });
@@ -187,6 +204,13 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   // The match log is read back now, not before the listen: it only grows.
   void sessions.load();
   void library.rescan();
+  void bundles?.clear();
+  let storeReads: ReturnType<Clock["every"]> | null = null;
+  if (storeIndex) {
+    const readIndex = () => void storeIndex.refresh().then(library.rescan);
+    readIndex();
+    storeReads = clock.every(STORE_INDEX_MS, readIndex);
+  }
 
   if (settings.receiver.kind !== "none") {
     taps = createTaps({
@@ -227,6 +251,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     core,
     library,
     rules,
+    bundles,
     taps: () => taps,
     builder: () => builder,
     token,
@@ -237,6 +262,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
         server.closeAllConnections();
         await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close(), builder?.stop()]);
         clock.cancel(sweeping);
+        clock.cancel(storeReads);
         chain.stop?.();
         await Promise.all([sessions.flush(), logFile?.flush()]);
       })();

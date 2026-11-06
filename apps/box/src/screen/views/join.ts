@@ -1,5 +1,6 @@
 // Join: both players take a seat by tapping a badge; each seat's USDC balance is read from chain as it fills (a badge
-// short of the stake tops up in the lobby). When both seats are full the Box moves on to Stake by itself.
+// short of the stake tops up in the lobby). When both seats are full the Box moves on to Stake by itself, once a store
+// game's bundle is here and checked.
 import type { BoxState, Seat } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -39,7 +40,7 @@ export function joinView(ctx: ViewContext): View {
     state.seats.forEach((s, i) => panels[i]?.set(s, s.badge ? "READY" : "TAP YOUR BADGE", s.badge ? "done" : "ask"));
     state.seats.forEach((s, i) => panels[i]?.honours(honoursOf(s.ens, state.boards, Date.now())));
     const waiting = state.seats.filter((s) => !s.badge).length;
-    plate.textContent = waiting ? `${game?.title ?? ""} · TAP ${waiting === 2 ? "BOTH BADGES" : "A BADGE"} TO JOIN` : "BOTH SEATED";
+    plate.textContent = waiting ? `${game?.title ?? ""} · TAP ${waiting === 2 ? "BOTH BADGES" : "A BADGE"} TO JOIN` : state.fetching ? "DOWNLOADING THE GAME…" : "BOTH SEATED";
   }
 
   return {

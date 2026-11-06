@@ -1,6 +1,6 @@
 // The one interface between the screen and the Box. The screen reads `BoxState`, hears `BoxEvent`s and sends
 // `ScreenCommand`s; whatever runs the Box (SimLink in the demo, LiveLink to the Box server) sits behind `BoxLink`.
-import type { GameManifest, Seat, StationView } from "@egb/sdk";
+import type { GameManifest, Seat, StationView, TapNeed } from "@egb/sdk";
 import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import type { StockDuelState } from "../games/stock-duel/types.ts";
 
@@ -13,24 +13,31 @@ export type TeamGameId = "quick-draw" | "stock-duel";
 
 export interface GameInfo {
   readonly id: GameId;
-  /** `team`: shipped with the Box. `built`: made by the game builder, its rules in a sandboxed child process. */
-  readonly kind: "team" | "built";
+  /**
+   * `team`: shipped with the Box. `built`: made by the game builder, its rules in a sandboxed child process. `store`: a
+   * bundle from the store, downloaded for each match, played in the kiosk's frame and judged by the verifier.
+   */
+  readonly kind: "team" | "built" | "store";
   readonly title: string;
   readonly players: number;
-  /** A typical match, in minutes. */
+  /** A typical match, in minutes; 0 for a store game, whose time limit is in its bundle. */
   readonly minutes: number;
   /** The stakes the Box offers, in whole USDC. A game that isn't on chain (a built game) plays them for nothing. */
   readonly stakes: readonly number[];
-  readonly tier: "refereed" | "verified";
+  /** Who says what a result means: the Box, the chain, or the verifier's AI judge. */
+  readonly tier: "refereed" | "verified" | "judged";
   /** false: sealed on Home with a SOON plate; Play stays dark. */
   readonly ready: boolean;
   /** Why a game that should play can't (a built game whose bundle failed), shown when it is focused; null otherwise. */
   readonly sealed: string | null;
-  /** A built game's cartridge art (its icon.svg, served by the Box). null: a team game's art is the cartridge's own. */
+  /** A built game's cartridge art (its icon.svg, served by the Box), or a store game's fallback. null: a team game's art
+   * is the cartridge's own. */
   readonly icon: string | null;
   /** Its game.json as the Box checked it: what a built game's taps ask of the badge, what its frame is told. null for a
-   * catalogue game with no folder, and for a game.json that failed its check. */
+   * catalogue game with no folder, for a game.json that failed its check, and for a store game. */
   readonly manifest: GameManifest | null;
+  /** A store game's identity: the sha256 of its zip, as `0x` hex. */
+  readonly bundle?: `0x${string}`;
 }
 
 export interface Badge {
@@ -105,10 +112,45 @@ export interface BuiltPlay {
   readonly stations: readonly [StationView, StationView];
 }
 
+/** Why a store match closed, as its log says: the game called `end()`, its time ran out, or its frame was lost. */
+export type StoreEnd = "game" | "time" | "lost";
+
+/** What the verifier has said of a store match, as far as it has gone. */
+export interface Judged {
+  readonly step: "judging" | "paying" | "paid" | "refunded" | "failed";
+  /** Each seat's payout in USDC, in seat order, once a verdict stands. */
+  readonly payouts: readonly number[] | null;
+  /** The settling transaction, once sent, and its Etherscan page. */
+  readonly hash: `0x${string}` | null;
+  readonly etherscan: string | null;
+  /** Why it refunded or failed. */
+  readonly reason: string | null;
+}
+
+/** A store game's match: its page in the kiosk's frame, the Box's log of it, and in time the verifier's split. */
+export interface StorePlay {
+  readonly game: "store";
+  readonly id: GameId;
+  readonly title: string;
+  /** The bundle's sha256, as `0x` hex: the frame loads the page by it, and the pot and the log name it. */
+  readonly bundle: `0x${string}`;
+  /** What a tap asks of the badge: the bundle's manifest says. */
+  readonly taps: TapNeed;
+  /** When the manifest's time runs out (ms since the epoch). */
+  readonly endsAt: number;
+  /** Each station's big line, as the game last set it. */
+  readonly lines: readonly [string, string];
+  /** null until the verifier first answers. */
+  readonly judged: Judged | null;
+  /** When Result opened, the verifier's word having ended Judging (ms since the epoch); null before. */
+  readonly resultAt: number | null;
+}
+
 export type MatchPlay =
   | { readonly game: "quick-draw"; readonly state: QuickDrawState }
   | { readonly game: "stock-duel"; readonly state: StockDuelState }
-  | BuiltPlay;
+  | BuiltPlay
+  | StorePlay;
 
 /**
  * What a match is played for. `usdc`: both stake `BoxState.stake`. `title` and `cup`: both stake the mode's own amount
@@ -129,7 +171,7 @@ export interface Match {
   readonly openedBlock: number;
   readonly refundAt: number;
   readonly play: MatchPlay;
-  /** Set when the game ends. `winner` null is a draw. */
+  /** Set when the game ends. `winner` null is a draw, and any store match: the verifier pays a split, not a winner. */
   readonly outcome: { readonly winner: Seat | null } | null;
   /** The built game's rules failed (over budget, crashed): the match is void and both stakes go back. */
   readonly voided: boolean;
@@ -205,6 +247,7 @@ export type Phase =
   | "join" // both seats tap a badge
   | "stake" // pick what to play for (USDC, the title, the championship), both tap to sign
   | "playing" // a game runs
+  | "judging" // a store match's log is with the verifier
   | "result" // the winner is paid
   | "refund" // the Box missed its settle: each seat takes its stake back
   | "lobby" // a badge's name, balance and top-up; the game's title and championship
@@ -216,6 +259,8 @@ export interface BoxState {
   readonly focus: GameId;
   readonly seats: readonly [SeatState, SeatState];
   readonly chain: ChainState;
+  /** A store game's bundle is on its way: nothing can be staked until it is here and checked. */
+  readonly fetching: boolean;
   /** The stake chosen on the Stake screen, in USDC: what a `usdc` match puts in. */
   readonly stake: number;
   /** What the next match is played for (Stake's choice): USDC, the title or the championship. */
@@ -284,6 +329,8 @@ export type BoxEvent =
   | { readonly type: "stake"; readonly amount: number }
   | { readonly type: "tx"; readonly tx: Tx }
   | { readonly type: "game" }
+  /** A store game hears a tap: `at` is when the chip touched the reader, `roll` its verified roll on `random` taps. */
+  | { readonly type: "game-tap"; readonly seat: Seat; readonly at: number; readonly roll: number | null }
   /** Only the stations' views moved, with the clock (Stock Duel's Rolodex turning): nothing on the screen animates. */
   | { readonly type: "stations" }
   /** The library changed: a game was installed or removed. */
@@ -298,6 +345,16 @@ export type BoxEvent =
   | { readonly type: "play-for"; readonly target: PlayFor }
   | { readonly type: "buzz"; readonly seat: Seat }
   | { readonly type: "cue"; readonly cue: Cue; readonly seat: Seat | null };
+
+/**
+ * What a store game's page said, once the kiosk's gate let it through, or that the page was lost. The kiosk passes it to
+ * the core, which writes the log. `seat` isn't a `Seat`: the page can name any seat, and the core drops one it hasn't.
+ */
+export type FrameWord =
+  | { readonly t: "event"; readonly name: string; readonly data: unknown }
+  | { readonly t: "station"; readonly seat: number; readonly text: string }
+  | { readonly t: "buzz"; readonly seat: number }
+  | { readonly t: "end"; readonly why: Exclude<StoreEnd, "time"> };
 
 /** What a touch on the screen asks the Box for. */
 export type ScreenCommand =
@@ -322,7 +379,9 @@ export type ScreenCommand =
   | { readonly type: "topup" }
   /** The lobby: another label to claim, or claim the one proposed. */
   | { readonly type: "propose" }
-  | { readonly type: "claim" };
+  | { readonly type: "claim" }
+  /** A store game's frame spoke. */
+  | { readonly type: "frame"; readonly word: FrameWord };
 
 export interface BoxLink {
   state(): BoxState;

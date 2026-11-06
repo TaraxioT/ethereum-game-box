@@ -9,6 +9,7 @@ import { joinView } from "./join.ts";
 import { stakeView } from "./stake.ts";
 import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
+import { judgingView } from "./judging.ts";
 import { lobbyView } from "./lobby.ts";
 import { builderView } from "./builder.ts";
 import { frameView } from "../frame/view.ts";
@@ -50,6 +51,8 @@ export const routes: Routes = (state) => {
       if (game === "quick-draw" || game === "stock-duel") return teamRoute(game);
       return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: builtScreen };
     }
+    case "judging":
+      return { key: "judging", pose: "page", view: judgingView };
     case "result":
       return { key: "result", pose: "page", view: resultView };
     case "refund":

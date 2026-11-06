@@ -1,4 +1,4 @@
-// What the Box reads from Sepolia (SEPOLIA_RPC_URL): USDC balances, player names, the pot and rounds, the head, and a
+// What the Box reads from Sepolia (SEPOLIA_RPC_URL): USDC balances, player names, the pots and rounds, the head, and a
 // game's title and championship through the Universal Resolver. Every address comes from deployments/sepolia.json
 // (the shared loader). The RPC URL carries the node's key, so every error that leaves here has its URLs redacted.
 import {
@@ -17,6 +17,7 @@ import {
   parseStandings,
   titleName,
 } from "@egb/shared/names";
+import { storePotAbi, storePotAddress, storeUsdcAddress } from "@egb/shared/store";
 import { sepoliaClient } from "@egb/shared/web";
 import { type Address, type Hex, type PublicClient, decodeEventLog, isAddressEqual } from "viem";
 import type { ChainHead } from "../core/ports.ts";
@@ -41,10 +42,14 @@ export interface Reads {
   nameOf(address: Address, block?: bigint): Promise<string | null>;
   /** A badge's wins, losses and draws in a game (its chain label), from `PlayerStats`. */
   record(address: Address, game: string): Promise<{ readonly wins: number; readonly losses: number; readonly draws: number }>;
-  /** BoxResults has seen this round, or DuelPot holds a pot for it (open, settled or refunded). */
+  /** A badge's Store USDC. */
+  storeBalance(address: Address): Promise<number>;
+  /** BoxResults has seen this round, or DuelPot or StorePot holds a pot for it (open, settled or refunded). */
   roundTaken(box: string, round: number): Promise<boolean>;
   /** The pot is still open (neither settled nor refunded). */
   potOpen(box: string, round: number): Promise<boolean>;
+  /** StorePot's pot is still open (not settled, voided or refunded). */
+  storePotOpen(box: string, round: number): Promise<boolean>;
   board(game: string): Promise<Board>;
   /** The P-256 key `GameBoxNames` holds for a Box (zeros for none). */
   boxKey(box: string): Promise<{ readonly qx: Hex; readonly qy: Hex }>;
@@ -77,6 +82,12 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
   const results = { address: contractAddress("BoxResults"), abi: boxResultsAbi } as const;
   const cups = { address: contractAddress("Championships"), abi: championshipsAbi } as const;
   const stats = { address: contractAddress("PlayerStats"), abi: playerStatsAbi } as const;
+
+  /** A pot in `StorePot`, or null before it is deployed. */
+  async function storePot(box: string, round: number) {
+    const address = storePotAddress();
+    return address ? client.readContract({ address, abi: storePotAbi, functionName: "getPot", args: [box, BigInt(round)] }) : null;
+  }
 
   /** A text record through the Universal Resolver; a name that doesn't resolve is null. */
   async function text(name: string, key: string, blockNumber?: bigint): Promise<string | null> {
@@ -128,6 +139,12 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
       }),
     balance: (badge) =>
       safely("a USDC balance", async () => Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge] })))),
+    storeBalance: (badge) =>
+      safely("a Store USDC balance", async () => {
+        const address = storeUsdcAddress();
+        if (!address) throw new Error("Store USDC isn't deployed");
+        return Number(formatUsdc(await client.readContract({ address, abi: fakeUsdcAbi, functionName: "balanceOf", args: [badge] })));
+      }),
     nameOf: (badge, block) => safely("a player name", () => nameOf(badge, block)),
     record: (badge, game) =>
       safely("a player's record", async () => {
@@ -139,10 +156,12 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
         const used = await client.readContract({ ...results, functionName: "roundUsed", args: [box, BigInt(round)] });
         if (used) return true;
         const held = await client.readContract({ ...pot, functionName: "getPot", args: [box, BigInt(round)] });
-        return held.state !== 0;
+        if (held.state !== 0) return true;
+        return ((await storePot(box, round))?.state ?? 0) !== 0;
       }),
     potOpen: (box, round) =>
       safely("a pot", async () => (await client.readContract({ ...pot, functionName: "getPot", args: [box, BigInt(round)] })).state === POT_OPEN),
+    storePotOpen: (box, round) => safely("a store pot", async () => (await storePot(box, round))?.state === POT_OPEN),
     boxKey: (box) =>
       safely("the Box's key", async () => {
         const [qx, qy] = await client.readContract({ ...names, functionName: "boxKey", args: [box] });

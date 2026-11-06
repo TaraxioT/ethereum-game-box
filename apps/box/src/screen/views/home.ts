@@ -196,7 +196,7 @@ function factsFor(game: GameInfo): HTMLElement[] {
   const high = game.stakes[game.stakes.length - 1] ?? low;
   return [
     fact("players", `${game.players} PLAYERS`),
-    fact("clock", `${game.minutes} MIN`),
+    ...(game.minutes > 0 ? [fact("clock", `${game.minutes} MIN`)] : []),
     fact("coin", `${low}–${high} USDC`),
   ];
 }

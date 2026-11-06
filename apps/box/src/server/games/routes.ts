@@ -49,6 +49,8 @@ const BASE = { "x-content-type-options": "nosniff", "cache-control": "no-cache" 
 const SHARED = { ...BASE, "access-control-allow-origin": "*" } as const;
 /** For files a browser could also open by themselves: nothing in them runs. */
 const INERT = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+/** Where a store game's cartridge finds its art, the Box's plain icon: a bundle brings none in this pass. */
+export const FALLBACK_ICON = "/games/icon.svg";
 
 export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
   async function icon(res: http.ServerResponse, dir: string): Promise<void> {
@@ -96,6 +98,10 @@ export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
     }
 
     if (!game) {
+      if (p === FALLBACK_ICON) {
+        res.writeHead(200, { ...SHARED, "content-type": "image/svg+xml", "content-security-policy": INERT }).end(fallbackIcon());
+        return true;
+      }
       const asset = p.startsWith("/games/") ? null : await options.assets.get(p);
       if (!asset) sendText(res, 404, "not found");
       else res.writeHead(200, { ...SHARED, "content-type": asset.type, "content-length": String(asset.body.byteLength) }).end(asset.body);

@@ -56,7 +56,7 @@ const isUint256 = (value: unknown): value is string => matches(DECIMAL, value) &
 const isTime = (value: unknown): boolean => typeof value === "number" && Number.isFinite(value) && value >= 0;
 
 /** Bytes of UTF-8, counted by hand: the Box's core compiles this file with no TextEncoder. */
-function utf8Bytes(text: string): number {
+export function utf8Bytes(text: string): number {
   let bytes = 0;
   for (const char of text) {
     const code = char.codePointAt(0) as number;
