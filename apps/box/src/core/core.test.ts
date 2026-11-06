@@ -58,6 +58,7 @@ function recordingPort(): Recording {
     onChain: (game) => chainLabel(game) !== null,
     nextRound: () => ++round,
     refundAfterMs: 3_600_000,
+    stakeNeedsName: false,
     balance: (address) => Promise.resolve(balances.get(address) ?? 100),
     player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100 }),
     board(game): Promise<Board> {
@@ -561,6 +562,19 @@ describe("stakes on chain", () => {
     r.core.send({ type: "back" });
     expect(r.core.state().phase).toBe("stake");
     expect(r.core.state().seats.map((seat) => [seat.badge, seat.signed])).toEqual([[NOVA, false], [KITE, false]]);
+  });
+
+  it("sends a badge with no player name to the lobby when the chain stakes only named badges", async () => {
+    const r = rigOn(() => ({ ...recordingPort(), stakeNeedsName: true }));
+    r.chain.names.set(NOVA.address, "nova.gamebox.eth");
+    await seated(r);
+    r.core.send({ type: "play" });
+    await flush();
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state().seats[0].signed).toBe(true);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.core.state()).toMatchObject({ phase: "lobby", lobby: { badge: KITE, from: "stake" } });
+    expect(r.chain.sent).toEqual([]);
   });
 
   it("sends a badge whose balance isn't read yet to the lobby too", () => {

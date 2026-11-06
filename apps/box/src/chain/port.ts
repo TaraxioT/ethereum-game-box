@@ -206,6 +206,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     onChain: (game) => chainLabel(game) !== null,
     nextRound: () => rounds.take(),
     refundAfterMs: REFUND_AFTER_MS,
+    stakeNeedsName: true,
     balance: (address) => reads.balance(address),
     async player(address) {
       const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);

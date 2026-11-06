@@ -474,9 +474,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function sign(seat: Seat): TapResult {
     const mine = seats[seat];
     if (!mine.badge || mine.signed) return "ignored";
-    // A badge that can't cover the stake (or whose balance isn't read yet) is sent to the lobby to top up.
+    // A badge that can't cover the stake (or whose balance isn't read yet), or that needs a player name to stake, is
+    // sent to the lobby to top up or claim one.
     const balance = balances.get(mine.badge.address);
-    if (staked() && (balance === undefined || balance < stake)) {
+    const nameless = port.stakeNeedsName && !names.get(mine.badge.address);
+    if (staked() && (balance === undefined || balance < stake || nameless)) {
       openLobby(mine.badge, "stake");
       return "refused";
     }

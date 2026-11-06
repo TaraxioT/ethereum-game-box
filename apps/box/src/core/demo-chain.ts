@@ -84,6 +84,7 @@ export function createDemoChain(clock: Clock): DemoChain {
     onChain: (game: GameId) => chainLabel(game) !== null,
     nextRound: () => ++round,
     refundAfterMs: DEMO_REFUND_MS,
+    stakeNeedsName: false,
     balance: (address) => Promise.resolve(balanceOf(address)),
     player: (address): Promise<PlayerCard> => Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address) }),
     board(game): Promise<Board> {

@@ -107,6 +107,8 @@ export interface ChainPort {
   nextRound(): number;
   /** How long after its open an unsettled pot may be refunded (ms). */
   readonly refundAfterMs: number;
+  /** Only a badge with a player name may stake (`DuelPot` refuses `NotAPlayer`): one without is sent to the lobby. */
+  readonly stakeNeedsName: boolean;
   balance(address: `0x${string}`): Promise<number>;
   player(address: `0x${string}`): Promise<PlayerCard>;
   board(game: GameId): Promise<Board>;

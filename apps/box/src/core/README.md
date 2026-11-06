@@ -42,8 +42,9 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 ## Stakes, results and the lobby
 
 - **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
-  Stake tap whose balance can't cover the stake (or isn't read yet) is refused and opens the lobby on that badge, with
-  Back returning to Stake.
+  Stake tap whose balance can't cover the stake (or isn't read yet), or with no player name where the port stakes only
+  named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
+  badge, with Back returning to Stake.
 - **Open.** When both seats have signed, the match opens at once and the stakes go to the pot (`open`, a Box-signed
   `Stake` with the round from `nextRound`) without waiting: the transaction bar follows it, SIGNED › SENT › IN BLOCK ›
   PAID, with its hash and Etherscan link. A pot that fails to open leaves the match played for nothing.
