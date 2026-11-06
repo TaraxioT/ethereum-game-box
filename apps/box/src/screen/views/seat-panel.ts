@@ -1,4 +1,4 @@
-// A seat's panel on a page: a chamfered frame in the seat's colour round a socket of two rings holding the badge's
+// A seat's panel on a page: a chamfered frame in the seat's colour round a socket of two rings in a dial of ticks, holding the badge's
 // LED blockie, the badge's name and one status line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Lit when the story is
 // about this seat (it is asked to act, or it won); a loss dims it. Touching it taps that seat (Demo mode).
 import type { Seat, SeatState } from "../link/types.ts";
@@ -27,7 +27,7 @@ export function createSeatPanel(seat: Seat): SeatPanel {
   const socket = el("div", "seat-panel-socket");
   const flash = el("i", "seat-panel-flash");
   const tile = el("div", "seat-panel-tile");
-  socket.append(flash, tile);
+  socket.append(el("i", "seat-panel-dial"), flash, tile);
   const name = el("div", "seat-panel-name");
   const status = el("div", "seat-panel-status");
   const words = el("span", "seat-panel-words");

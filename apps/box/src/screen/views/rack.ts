@@ -21,6 +21,7 @@ export function createRack(layout: Layout, games: readonly GameInfo[], onPick?: 
     const cart = document.createElement("egb-cart") as EgbCart;
     cart.setAttribute("game", game.id);
     cart.setAttribute("title", game.title);
+    cart.setAttribute("slot", String(i + 1));
     const slot = layout.rack[i];
     if (slot) place(cart, slot);
     if (onPick) cart.addEventListener("click", () => onPick(game.id));

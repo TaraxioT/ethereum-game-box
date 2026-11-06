@@ -30,13 +30,21 @@ const styles = sheet(`
 :host([seat="1"]) .port { direction: rtl; transform-origin: 100% 0; }
 :host([compact]) .port { transform: scale(0.7); }
 
-/* The socket: a circle of seat-colour light, 25 % while empty, full with its bloom once a badge is seated. */
+/* The socket: a circle of seat-colour light, 25 % while empty, full with its bloom once a badge is seated, inside a
+   dial of fine seat-colour ticks. */
 .socket {
   position: absolute; inset-inline-start: calc(22 * var(--p)); top: calc(18 * var(--p));
   width: calc(60 * var(--p)); height: calc(60 * var(--p)); display: grid; place-items: center;
 }
 .socket > i { position: absolute; inset: 0; border-radius: 50%; }
-.ring { border: 2px solid var(--seat); opacity: 0.25; transition: opacity 200ms linear; }
+.ring { border: 2px solid var(--seat); opacity: 0.25; transition: opacity 200ms linear; background: radial-gradient(circle, color-mix(in srgb, var(--seat) 14%, transparent), transparent 70%); }
+.dial {
+  inset: calc(-7 * var(--p)) !important; opacity: 0.35;
+  background: repeating-conic-gradient(var(--seat) 0 1.2deg, transparent 1.2deg 10deg);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 4px));
+  mask: radial-gradient(circle, transparent calc(50% - 4px), #000 calc(50% - 4px));
+}
+.port.seated .dial { opacity: 0.7; }
 .ring::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--seat) 35%, var(--sys-hot)); }
 .glow { box-shadow: 0 0 6px var(--seat-bloom), 0 0 16px var(--seat-bloom), inset 0 0 8px var(--seat-bloom); opacity: 0; transition: opacity 200ms linear; }
 .flash { box-shadow: 0 0 0 2px var(--seat), 0 0 10px var(--seat), 0 0 22px var(--seat-bloom), inset 0 0 12px var(--seat-bloom); opacity: 0; }
@@ -69,7 +77,13 @@ const styles = sheet(`
 /* The underline: out from the socket under the name and balance, ending in a tick. */
 .underline {
   position: absolute; inset-inline-start: calc(82 * var(--p)); inset-inline-end: calc(36 * var(--p)); top: calc(84 * var(--p)); height: 1px;
-  background: var(--seat); opacity: 0.3; transition: opacity 200ms linear;
+  background: linear-gradient(to var(--run, right), var(--seat), color-mix(in srgb, var(--seat) 50%, transparent));
+  opacity: 0.3; transition: opacity 200ms linear;
+}
+:host([seat="1"]) .underline { --run: left; }
+.underline::before {
+  content: ""; position: absolute; inset-inline-start: 0; top: -1px; width: calc(48 * var(--p)); height: 3px;
+  background: var(--seat); box-shadow: 0 0 6px var(--seat-bloom);
 }
 .underline::after { content: ""; position: absolute; inset-inline-end: 0; bottom: 0; width: 1px; height: 6px; background: var(--seat); }
 .port.seated .underline { opacity: 0.9; }
@@ -103,7 +117,7 @@ export class EgbPort extends HTMLElement {
       this,
       styles,
       `<div class="port">
-        <div class="socket"><i class="ring"></i><i class="glow"></i><i class="flash"></i><i class="alarm"></i><div class="face"></div></div>
+        <div class="socket"><i class="dial"></i><i class="ring"></i><i class="glow"></i><i class="flash"></i><i class="alarm"></i><div class="face"></div></div>
         <div class="info"><div class="name"></div><div class="tap">TAP BADGE</div><div class="bal"><span class="num"></span><span class="unit">EGB</span></div></div>
         <i class="underline"></i><span class="hint" aria-hidden="true"></span><span class="bot">BOT</span>
       </div>`,

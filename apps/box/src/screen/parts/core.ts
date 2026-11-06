@@ -1,6 +1,9 @@
 // <egb-core>: the core, the world computer at the centre of the Grid. An outer ring of light with four notches
 // pointing out, a ring of 24 segments inside it, a thin inner ring round a dark disc, and in the disc the Ethereum
-// mark in wireframe. All its light is lines; nothing in it moves while it idles.
+// mark in wireframe. Round it, the instrument's detail: a soft blue halo on the air behind it, a dial of fine ticks
+// outside the ring, and two broken orbit rings that turn very slowly (transform only), one outside the ring and one
+// inside the glass, with a ring of small printed words. The glass is lit from inside and catches a sheen at its top
+// left. All its light is lines.
 //
 // Size: attributes `glass` (the inner ring's radius) and `collar` (the outer ring's), in px. The drawing centres
 // itself on the element's box, which fills its parent; the shell sizes the parent to (collar + 24) × 2 round the
@@ -37,20 +40,46 @@ const styles = sheet(`
   background: var(--sys-hot); box-shadow: 0 0 4px var(--sys), 0 0 10px var(--sys-bloom);
 }
 .segs { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.seg { fill: none; stroke: var(--sys); stroke-width: 6; opacity: ${SEG_OPACITY}; }
+.seg { opacity: ${SEG_OPACITY}; }
+.seg path { fill: none; }
+.seg .s-glow { stroke: var(--sys-glow); stroke-width: 12; stroke-opacity: 0.18; }
+.seg .s-line { stroke: var(--sys); stroke-width: 6; }
+.seg .s-hot { stroke: var(--sys-hot); stroke-width: 1.5; }
 .bloom { opacity: 0; }
 .bloom path { fill: none; stroke: var(--sys); }
-/* The inner ring and the dark disc it holds. */
-.disc { --r: var(--g); background: radial-gradient(circle, var(--deep), var(--void) 72%); }
+/* The halo: the core's light on the air round it. */
+.halo { --r: calc(var(--c) * 1.7); background: radial-gradient(circle, rgb(74 168 232 / 0.2), rgb(74 168 232 / 0.07) 45%, transparent 70%); }
+/* The inner ring and the glass it holds: lit blue from deep inside, fine rings in it, a sheen at its top left. */
+.disc {
+  --r: var(--g);
+  background:
+    radial-gradient(ellipse 60% 40% at 34% 22%, rgb(200 235 255 / 0.1), transparent 70%),
+    repeating-radial-gradient(circle, transparent 0 9px, rgb(120 190 240 / 0.05) 9px 10px),
+    radial-gradient(circle, #0c3150, #061a2c 38%, var(--void) 78%);
+  box-shadow: inset 0 0 24px rgb(0 0 0 / 0.9);
+}
+.detail { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dial line { stroke: var(--sys); stroke-width: 1; }
+.dial { opacity: 0.4; }
+.orbit { position: absolute; inset: 0; will-change: transform; animation: orbit 90s linear infinite; }
+.orbit.in { animation-duration: 140s; animation-direction: reverse; }
+.orbit svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.orbit path { fill: none; stroke: var(--sys); stroke-linecap: butt; }
+.orbit .arc { stroke-width: 2; opacity: 0.55; }
+.orbit .arc-hot { stroke: var(--sys-hot); stroke-width: 1; }
+.orbit .dash { stroke-width: 1; stroke-dasharray: 2 6; opacity: 0.35; }
+.script { opacity: 0.55; }
+.script text { font: 600 9px var(--mono); letter-spacing: 0.32em; fill: var(--fg-2); }
+@keyframes orbit { to { transform: rotate(360deg); } }
 .inner { --r: var(--g); border: 1px solid var(--sys); opacity: 0.5; }
 /* The mark, front on, 0.95 × the glass radius tall. It turns about its upright axis for coin(). */
 .mark { position: absolute; left: 50%; top: 50%; height: calc(var(--g) * 0.95 * 433 / 417); aspect-ratio: 272 / 433; transform: translate(-50%, -50%); }
 .turn { width: 100%; height: 100%; }
 .turn svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
-/* Dark (before ignite): every line at 8 %, the mark out. */
+/* Dark (before ignite): every line at 8 %, the mark and the detail out. */
 :host([dark]) :is(.outer, .notches, .inner, .seg) { opacity: ${DIM}; }
-:host([dark]) .mark { opacity: 0; }
+:host([dark]) :is(.mark, .halo, .dial, .orbit, .script) { opacity: 0; }
 `);
 
 const COIN_MS = 900;
@@ -64,10 +93,50 @@ function segmentPaths(r: number): string[] {
   return Array.from({ length: SEGMENTS }, (_, i) => `M${at(i * 15 + 2.5)}A${r} ${r} 0 0 1 ${at(i * 15 + 12.5)}`);
 }
 
+/** A point on a circle of radius r, `deg` clockwise from 12 o'clock. */
+function polar(r: number, deg: number): [number, number] {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return [Math.cos(a) * r, Math.sin(a) * r];
+}
+
+function arc(r: number, from: number, to: number): string {
+  const [x0, y0] = polar(r, from);
+  const [x1, y1] = polar(r, to);
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+
+/** The dial: 144 fine ticks just outside the ring, every sixth longer. */
+function dial(collar: number): string {
+  const ticks = Array.from({ length: 144 }, (_, i) => {
+    const [x0, y0] = polar(collar + 5, i * 2.5);
+    const [x1, y1] = polar(collar + (i % 6 === 0 ? 13 : 8), i * 2.5);
+    return `<line x1="${x0.toFixed(2)}" y1="${y0.toFixed(2)}" x2="${x1.toFixed(2)}" y2="${y1.toFixed(2)}"/>`;
+  });
+  return `<g class="dial">${ticks.join("")}</g>`;
+}
+
+/** A broken orbit ring: three arcs of light with hot cores, and a dotted run between them. Its layer turns very
+ * slowly (an HTML layer, so the compositor turns it without repainting). */
+function orbit(r: number, which: "out" | "in"): string {
+  const arcs: [number, number][] = which === "out" ? [[8, 52], [130, 148], [214, 290]] : [[20, 70], [160, 178], [250, 320]];
+  const lit = arcs.map(([a, b]) => `<path class="arc" d="${arc(r, a, b)}"/><path class="arc-hot" d="${arc(r, a + 2, b - 2)}"/>`).join("");
+  const dotted = arcs.map(([, b], i) => `<path class="dash" d="${arc(r, b + 6, (arcs[i + 1]?.[0] ?? arcs[0]![0] + 360) - 6)}"/>`).join("");
+  return `<g>${lit}${dotted}</g>`;
+}
+
+/** The printed ring inside the glass, round the mark. */
+function script(r: number): string {
+  const id = `core-script-${r}`;
+  const words = "ETHEREUM · WORLD COMPUTER · SEPOLIA 11155111 · PROOF OF STAKE · ";
+  return `<g class="script"><path id="${id}" fill="none" d="${arc(r, 200, 559.9)}"/><text><textPath href="#${id}" textLength="${(2 * Math.PI * r - 4).toFixed(1)}">${words}</textPath></text></g>`;
+}
+
 export class EgbCore extends HTMLElement {
   static readonly observedAttributes = ["glass", "collar"];
   readonly #core: HTMLElement;
   readonly #segs: SVGSVGElement;
+  readonly #detail: SVGSVGElement;
+  readonly #orbits: readonly [SVGSVGElement, SVGSVGElement];
   readonly #mark: HTMLElement;
   readonly #turn: HTMLElement;
   readonly #swell: HTMLElement;
@@ -83,7 +152,10 @@ export class EgbCore extends HTMLElement {
       this,
       styles,
       `<div class="core">
+        <i class="ring halo"></i>
         <i class="ring disc"></i>
+        <svg class="detail" aria-hidden="true"></svg>
+        <div class="orbit out"><svg aria-hidden="true"></svg></div><div class="orbit in"><svg aria-hidden="true"></svg></div>
         <i class="ring swell"></i><i class="ring outer"></i><div class="notches">${notches}</div>
         <svg class="segs" aria-hidden="true"></svg>
         <i class="ring inner"></i>
@@ -92,11 +164,13 @@ export class EgbCore extends HTMLElement {
     );
     this.#core = pick(root, ".core");
     this.#segs = pick<SVGSVGElement>(root, ".segs");
+    this.#detail = pick<SVGSVGElement>(root, ".detail");
+    this.#orbits = [pick<SVGSVGElement>(root, ".orbit.out svg"), pick<SVGSVGElement>(root, ".orbit.in svg")];
     this.#mark = pick(root, ".mark");
     this.#turn = pick(root, ".turn");
     this.#swell = pick(root, ".swell");
     this.#rings = [".outer", ".notches", ".inner"].map((s) => pick(root, s));
-    this.#drawSegments(166);
+    this.#drawSegments(166, 132);
   }
 
   attributeChangedCallback(name: string, _old: string | null, value: string | null): void {
@@ -104,17 +178,27 @@ export class EgbCore extends HTMLElement {
     const prop = name === "glass" ? "--g" : "--c";
     if (value !== null && px > 0) this.#core.style.setProperty(prop, `${px}px`);
     else this.#core.style.removeProperty(prop);
-    if (name === "collar" && px > 0) this.#drawSegments(px);
+    const collar = Number(this.getAttribute("collar")) || 166;
+    const glass = Number(this.getAttribute("glass")) || 132;
+    if (px > 0) this.#drawSegments(collar, glass);
   }
 
-  /** The segment ring at collar − 14, and its bloom layer under it, in a box (collar + 24) × 2 round the centre. */
-  #drawSegments(collar: number): void {
+  /** The segment ring at collar − 14, and its bloom layer under it, in a box (collar + 24) × 2 round the centre; the
+   * dial, the orbits and the printed ring round it. */
+  #drawSegments(collar: number, glass: number): void {
     const half = collar + 24;
     const paths = segmentPaths(collar - 14);
-    this.#segs.setAttribute("viewBox", `${-half} ${-half} ${half * 2} ${half * 2}`);
+    const box = `${-half} ${-half} ${half * 2} ${half * 2}`;
+    this.#segs.setAttribute("viewBox", box);
     this.#segs.innerHTML = `<g class="bloom">${paths.map((d) => `<path d="${d}" stroke-width="16" stroke-opacity="0.12"/><path d="${d}" stroke-width="10" stroke-opacity="0.22"/>`).join("")}</g>${paths
-      .map((d) => `<path class="seg" d="${d}"/>`)
+      .map((d) => `<g class="seg"><path class="s-glow" d="${d}"/><path class="s-line" d="${d}"/><path class="s-hot" d="${d}"/></g>`)
       .join("")}`;
+    this.#detail.setAttribute("viewBox", box);
+    this.#detail.innerHTML = `${dial(collar)}${script(glass - 22)}`;
+    const [out, inner] = this.#orbits;
+    for (const svg of this.#orbits) svg.setAttribute("viewBox", box);
+    out.innerHTML = orbit(collar + 18, "out");
+    inner.innerHTML = orbit(glass - 8, "in");
   }
 
   /** A copy of the outer ring swells out and fades; the segment ring blooms once. */
@@ -143,10 +227,12 @@ export class EgbCore extends HTMLElement {
       motion(node, [{ opacity: from }, { opacity: to }], { delay, duration, easing: "linear", fill: "backwards" });
     const segs = [...this.#segs.querySelectorAll(".seg")];
     const ringsAt = segs.length * 20;
+    const details = [...this.#core.querySelectorAll(".halo, .dial, .orbit, .script")];
     this.#igniting = settled([
       ...segs.map((seg, i) => up(seg, i * 20, 90, DIM, SEG_OPACITY)),
       ...this.#rings.map((ring, i) => up(ring, ringsAt, 150, DIM, i === 2 ? 0.5 : 1)),
       up(this.#mark, ringsAt + 150, 300, 0, 1),
+      ...details.map((d) => up(d, ringsAt + 150, 500, 0, Number(getComputedStyle(d).opacity) || 1)),
     ]).then(() => {
       this.#igniting = null;
     });
