@@ -9,7 +9,7 @@ import { stationView, type StationInput } from "./stations.ts";
 
 const NOW = 5_000_000;
 const [NOVA, KITE] = DEMO_BADGES as [(typeof DEMO_BADGES)[0], (typeof DEMO_BADGES)[0]];
-const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
+const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0 };
 
 function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EMPTY], match: Match | null = null): StationInput {
   return {
@@ -21,25 +21,28 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     stake: 10,
     match,
     txs: [],
+    lobby: { badge: null, card: null, proposal: null, board: null, from: "home" },
   };
 }
 
-function seat(badge: typeof NOVA, signed = false, balance = 100): SeatState {
-  return { badge, balance, signed, pending: 0 };
+function seat(badge: typeof NOVA, signed = false, balance: number | null = 100): SeatState {
+  return { badge, ens: null, balance, signed, pending: 0 };
 }
 
 function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
   return {
     id: 1,
     game: play.game,
+    round: 1,
     stake: 10,
     openedBlock: 98,
-    refundBlock: 101,
+    refundAt: NOW + 3_600_000,
     play,
     outcome: null,
     voided: false,
     endedAt: null,
     refunded: [false, false],
+    lines: null,
     ...extra,
   };
 }
@@ -71,12 +74,23 @@ describe("station views", () => {
 
   it("shows the seated badge and its balance, and names it when a tap is done", () => {
     const view = stationView(input("join", both), 0, NOW);
-    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 EGB", done: "DONE|NOVA" });
+    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 USDC", done: "DONE|NOVA" });
     expect(stationView(input("home"), 0, NOW).done).toBeUndefined();
+    // Before its balance is read from chain, and a fraction cut to whole USDC.
+    expect(stationView(input("join", [seat(NOVA, false, null), EMPTY]), 0, NOW).small).toBe("... USDC");
+    expect(stationView(input("join", [seat(NOVA, false, 12.5), EMPTY]), 0, NOW).small).toBe("12 USDC");
+  });
+
+  it("asks for a tap in the lobby at every station", () => {
+    for (const s of [0, 1] as const) {
+      const view = stationView(input("lobby", both), s, NOW);
+      expect(lines(view)).toEqual({ tag: `P${s + 1}`, big: "LOBBY", small: "tap to see yours" });
+      fitsStation(view);
+    }
   });
 
   it("asks for the stake, then waits for the other seat", () => {
-    expect(lines(stationView(input("stake", both), 0, NOW))).toEqual({ tag: "P1", big: "SIGN", small: "10 EGB" });
+    expect(lines(stationView(input("stake", both), 0, NOW))).toEqual({ tag: "P1", big: "SIGN", small: "10 USDC" });
     const one = [seat(NOVA, true), seat(KITE)] as const;
     expect(lines(stationView(input("stake", one), 0, NOW))).toEqual({ tag: "P1", big: "SIGNED", small: "waiting" });
     const two = [seat(NOVA, true), seat(KITE, true)] as const;
@@ -117,16 +131,16 @@ describe("station views", () => {
     expect(stationView(after, 0, at).sign).toBeUndefined();
   });
 
-  it("counts the blocks to a refund, then offers it, then shows it paid", () => {
+  it("counts the time to a refund, then offers it, then shows it paid", () => {
     const play: MatchPlay = { game: "quick-draw", state: quickDraw.start(1, NOW) };
-    const waiting = input("refund", both, matchOf(play, { refundBlock: 103 }));
-    expect(lines(stationView(waiting, 0, NOW))).toEqual({ tag: "P1", big: "OFFLINE", small: "wait 3 blocks" });
-    const one = input("refund", both, matchOf(play, { refundBlock: 101 }));
-    expect(stationView(one, 0, NOW).small).toBe("wait 1 block");
-    const open = input("refund", both, matchOf(play, { refundBlock: 100 }));
+    const waiting = input("refund", both, matchOf(play, { refundAt: NOW + 59 * 60_000 }));
+    expect(lines(stationView(waiting, 0, NOW))).toEqual({ tag: "P1", big: "OFFLINE", small: "wait 59 min" });
+    const last = input("refund", both, matchOf(play, { refundAt: NOW + 42_000 }));
+    expect(stationView(last, 0, NOW).small).toBe("wait 42 s");
+    const open = input("refund", both, matchOf(play, { refundAt: NOW }));
     expect(lines(stationView(open, 0, NOW))).toEqual({ tag: "P1", big: "TAP", small: "to refund" });
-    const paid = input("refund", both, matchOf(play, { refundBlock: 100, refunded: [true, false] }));
-    expect(lines(stationView(paid, 0, NOW))).toEqual({ tag: "P1", big: "REFUNDED", small: "+10 EGB" });
+    const paid = input("refund", both, matchOf(play, { refundAt: NOW, refunded: [true, true] }));
+    expect(lines(stationView(paid, 0, NOW))).toEqual({ tag: "P1", big: "REFUNDED", small: "+10 USDC" });
   });
 
   it("keeps every line inside the station, in printable ASCII, through a whole Stock Duel", () => {

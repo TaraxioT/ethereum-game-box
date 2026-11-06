@@ -41,6 +41,11 @@ export type ContractName =
   | 'BoxResults'
   | 'DemoLicences'
   | 'DemoBoxAccount'
+  | 'MumbaiBoxAccount'
+  | 'FakeUSDC'
+  | 'DuelPot'
+  | 'Championships'
+  | 'BoxSeats'
   | (string & {});
 
 /** The proxies we created through ENS's `VerifiableFactory` and that never move. */
@@ -74,10 +79,10 @@ export function ensAddress(name: EnsName): Address {
   return getAddress(file.ens[name].address);
 }
 
-/** One of our contracts, or `undefined` before it is deployed. */
+/** One of our contracts, or `undefined` before it is deployed (missing, or the zero address as a placeholder). */
 export function ourContract(name: ContractName): OurContract | undefined {
   const entry = file.contracts[name];
-  return entry && { ...entry, address: getAddress(entry.address) };
+  return entry && BigInt(entry.address) !== 0n ? { ...entry, address: getAddress(entry.address) } : undefined;
 }
 
 /** One of our contracts' addresses. Throws if it is not deployed yet. */
@@ -94,14 +99,16 @@ export function namesProxies(): NamesProxies {
 }
 
 function addressesIn(value: unknown): Address[] {
-  if (typeof value === 'string') return isAddress(value, { strict: false }) ? [getAddress(value)] : [];
+  if (typeof value === 'string') {
+    return isAddress(value, { strict: false }) && BigInt(value) !== 0n ? [getAddress(value)] : [];
+  }
   if (typeof value === 'object' && value !== null) return Object.values(value).flatMap(addressesIn);
   return [];
 }
 
 /** Every contract address in `deployments/sepolia.json`: ours (`contracts`), ENS's (`ens`) and the proxies
  *  `GameBoxNames` created (`names`), checksummed, once each. The external tokens (`external`) are not ours and are
- *  left out. */
+ *  left out, and so are zero-address placeholders. */
 export function deployedAddresses(): Address[] {
   return [...new Set(addressesIn([file.contracts, file.ens, file.names]))];
 }

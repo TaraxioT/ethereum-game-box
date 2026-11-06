@@ -38,6 +38,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
     case "attract":
     case "home":
     case "join":
+    case "lobby":
       return "identify";
     case "stake":
       return mine.badge && !mine.signed ? "identify" : "none";
@@ -45,7 +46,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
       return mine.badge ? gamePlan(state, state.match, seat) : "none";
     case "refund": {
       const { match } = state;
-      const open = match !== null && !match.refunded[seat] && state.chain.block >= match.refundBlock;
+      const open = match !== null && !match.refunded[seat] && now >= match.refundAt;
       return mine.badge && open ? "identify" : "none";
     }
   }

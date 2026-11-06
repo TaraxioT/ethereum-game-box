@@ -2,6 +2,7 @@
 // stations, through the real server, the taps library and the core, on a fake clock. Join, the simulated stake, both
 // games, the result, Refund by the power switch, and the taps' promises: a known badge costs no chip command, and
 // every touch ends in done or fail even when the receiver is unplugged.
+import { FREE_MIN_MATCH_MS } from "../core/transcript.ts";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -68,7 +69,11 @@ async function fakeBox(timeScale = 0): Promise<Rig> {
   };
 }
 
-/** Boots, reads ada at P1 (attract → Home), seats ada and bo, focuses the game and stakes 10 EGB each. */
+/**
+ * Boots, reads ada at P1 (attract → Home), seats ada and bo, focuses the game and stakes 10 USDC each. bo signs a
+ * while after ada: the match opens at once, and a result counts only once FREE_MIN_MATCH_MS have passed since the first
+ * tap the Box saw from Stake on.
+ */
 async function staked(rig: Rig, game: "quick-draw" | "stock-duel"): Promise<void> {
   const { tb } = rig;
   tb.box.core.send({ type: "booted" });
@@ -81,6 +86,7 @@ async function staked(rig: Rig, game: "quick-draw" | "stock-duel"): Promise<void
   tb.box.core.send({ type: "play" });
   expect(rig.state().phase).toBe("stake");
   await rig.tap("ada", P1);
+  rig.tb.advance(FREE_MIN_MATCH_MS);
   await rig.tap("bo", P2);
   expect(rig.state().seats.map((s) => s.signed)).toEqual([true, true]);
   await rig.tb.settle(() => rig.state().phase === "playing", 30_000, 50);
@@ -162,7 +168,7 @@ describe("the Box on the fake receiver", () => {
     expect(new Set(rolls).size).toBe(rolls.length);
   });
 
-  it("goes to Refund with the power cut, and pays each stake back on its badge's tap", async () => {
+  it("goes to Refund with the power cut, and pays both stakes back on a tap once the refund opens", async () => {
     const rig = await fakeBox();
     await staked(rig, "quick-draw");
     expect((await post(rig.tb.box, "/api/box/power", { on: false })).status).toBe(204);
@@ -174,9 +180,9 @@ describe("the Box on the fake receiver", () => {
     await rig.tb.settle(() => rig.state().phase === "refund", 10_000, 50);
     expect(rig.state().stations[0].big).toBe("OFFLINE");
     const match = rig.state().match;
-    await rig.tb.settle(() => rig.state().chain.block >= (match?.refundBlock ?? 0), 60_000, 100);
+    await rig.tb.settle(() => rig.tb.box.core.now() >= (match?.refundAt ?? 0), 120_000, 500);
+    // One tap refunds the whole pot to both badges.
     await rig.tap("ada", P1);
-    await rig.tap("bo", P2);
     await rig.tb.settle(() => rig.state().phase === "home", 30_000, 50);
     expect(rig.state().seats.map((s) => s.balance)).toEqual([100, 100]);
   });

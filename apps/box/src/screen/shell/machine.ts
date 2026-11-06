@@ -110,10 +110,12 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
     shown.set(tx.id, tx.step);
     txbar.show(tx);
     clearTimeout(hideTx);
-    if (tx.step === "sent" && tx.direction === "in") void packet("port", tx.seat).then(() => core.swell());
+    // A lobby's top-up or name belongs to no seat: it lights the core, and runs no packet to a port.
+    const seated = tx.kind !== "topup" && tx.kind !== "claim";
+    if (tx.step === "sent" && tx.direction === "in" && seated) void packet("port", tx.seat).then(() => core.swell());
     if (tx.step === "in-block") core.swell();
-    if (tx.step === "in-block" && tx.direction === "out") void packet("core", tx.seat);
-    if (tx.step === "paid") hideTx = setTimeout(() => txbar.hide(), 3200);
+    if (tx.step === "in-block" && tx.direction === "out" && seated) void packet("core", tx.seat);
+    if (tx.step === "paid" || tx.step === "failed") hideTx = setTimeout(() => txbar.hide(), 3200);
   }
 
   const machine: MachineView = {
@@ -164,13 +166,13 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
       }
       if (event.type === "tx") {
         onTx(event.tx);
-        // Balances move when the money does: the port reads the ledger as the tx lands.
+        // Balances move when the money does: the ports show each new read from chain.
         state.seats.forEach((s, i) => ports[i]?.set(s));
       }
       // Written only when it changes: rewriting the same text on every event repainted the chip and the wide tiles
       // under it on each block, gas reading and transaction step.
       const m = state.match;
-      const stake = m ? `${m.stake * 2} EGB AT STAKE` : "";
+      const stake = m ? (m.stake > 0 ? `${m.stake * 2} USDC AT STAKE` : "FREE PLAY") : "";
       if (stakeChip.textContent !== stake) stakeChip.textContent = stake;
       if (stakeChip.hidden !== !m) stakeChip.hidden = !m;
     },

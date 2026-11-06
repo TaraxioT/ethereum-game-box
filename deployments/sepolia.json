@@ -16,34 +16,64 @@
       "txHash": "0x1f1e2a24355956e316cb5e289c8e35d0775de0b9ec95f6de0d6e6c64d6b38f8d",
       "verified": true
     },
-    "GameBoxNames": {
-      "address": "0x5C1E1948526975E1c7e0Df2AD227e06D00e71e46",
-      "deployBlock": 12075663,
-      "txHash": "0xbc9fb379262ced65db08bc31d7c87cdd2357aaa10474ddc228d4332026ff5772",
-      "verified": true
-    },
     "PlayerStats": {
-      "address": "0xfeb17783c2094c0F047Db7DD867B1792C1078d25",
-      "deployBlock": 12075664,
-      "txHash": "0xd01f88c28b18fa75f4a2c7a70e4b56013708bb0cc125ed42048af217c159771a",
+      "address": "0xd7d328645b77DF958E9B855c226F436ec1187717",
+      "deployBlock": 12075915,
+      "txHash": "0xb63495ad940c557ccc6c44f57a7023ac22944fbe08357e39f593c0e68833c0fc",
       "verified": true
     },
     "BoxResults": {
-      "address": "0x61CAC5E0bfB48F27f4424aC057D793300EeF1532",
-      "deployBlock": 12075665,
-      "txHash": "0x76d2845b26a385a50c93ea1fbc45df5271354c23cf1174900230a0cde255da5e",
+      "address": "0x8C50253D4F8eCd770Aa851d8A77Dade8839ff7C3",
+      "deployBlock": 12075919,
+      "txHash": "0xc86763b03c7ca1468ba0b7cca48e40994497c3ea42118588815ff8c028fa3175",
       "verified": true
     },
     "DemoLicences": {
-      "address": "0x40BB9311da9b73d3Efd121FF844124847b473677",
-      "deployBlock": 12075666,
-      "txHash": "0x0cec57008826a6db1927c5da015ec68baf30e7b76b45f649ef4b81efc43ce372",
+      "address": "0xC7FEEa9b237705cA45C00D5617290e453a276369",
+      "deployBlock": 12075920,
+      "txHash": "0xd685fbfff1b63c58c667000af9e96b4199f7313c68b6131bafd6e8bf021ba16a",
       "verified": true
     },
     "DemoBoxAccount": {
       "address": "0xB1eF64e46049585cF76549cbd839E9d09819EA38",
       "deployBlock": 12075671,
       "txHash": "0x4afe6c08dfa0716f6aab7a664d4cb1c20e333c762bc6bbae0a6f65679d7622cc",
+      "verified": true
+    },
+    "FakeUSDC": {
+      "address": "0xF3e90E1a0a17A4680e52573b6188D6c94442493B",
+      "deployBlock": 12075916,
+      "txHash": "0x39e792dacff679678e2a6713c66aecf6fd192ce0f2d9fcb0555432a108dbb523",
+      "verified": true
+    },
+    "DuelPot": {
+      "address": "0xcda56510E21aBa78200de62a6C23bc3170CC12a2",
+      "deployBlock": 12075917,
+      "txHash": "0x9c6e2e0d5ca6087847e926dd4044af6000a2feeb2b67487983ea50fe5cf0e886",
+      "verified": true
+    },
+    "Championships": {
+      "address": "0x8222774A2eD41E3c38A188A8143D29EF77957eA0",
+      "deployBlock": 12075918,
+      "txHash": "0x1206903512684284e02c5d3d359436692196ac8a34b8803a56f1cab8341f6ae2",
+      "verified": true
+    },
+    "BoxSeats": {
+      "address": "0x64dD6c471234220B0bf66317fd26e5032ac512cd",
+      "deployBlock": 12075921,
+      "txHash": "0xe28732cfdb29e2b846e0084509d06798a57e4904a87f19b18bb2b2f5879a2289",
+      "verified": true
+    },
+    "MumbaiBoxAccount": {
+      "address": "0xB9d488f985EE62dDFdd5024aE4c3ab526fF8d2D9",
+      "deployBlock": 12075939,
+      "txHash": "0x66c937e2e742fbfa15ee4809385efc8f2ceaf851e7864937a6738a5412eb5845",
+      "verified": true
+    },
+    "GameBoxNames": {
+      "address": "0x07D464bcE29D85A09590666febE37ab4FDC8Ff9a",
+      "deployBlock": 12075914,
+      "txHash": "0xfc47ce3c6e079be88df0ae886b3bff882dc80e43ddc944440c71ce27849aad35",
       "verified": true
     },
     "BoxStaking": {
@@ -100,12 +130,12 @@
     }
   },
   "names": {
-    "registry": "0x6ACCd2185a609F2aF612a84957B3471d0A2AfEDf",
-    "titleResolver": "0x0C7D87E2C3e02Cd115e098e5907DA1ae4fACB143",
-    "gameResolver": "0xC7c3a8267DC40fE0A662166CbFAcF55eA2434222",
+    "registry": "0x98541B2bC02d83994E59281a19c2aB6aE744Ea73",
+    "titleResolver": "0x58965FE69938F8B05eecE7E6b9f60b46F0E93fAc",
+    "gameResolver": "0x55230cDf86b62875efeFce1Cc1753C93aD9DcA9F",
     "titles": {
-      "stockduel": "0xDd67f45a1FED946a7b8134ff5381acaE07AdfD0F",
-      "quickdraw": "0x35224498aA20a9b653F24102eeAf74B948b95952"
+      "stockduel": "0x42E7284B1C129640C9A58392B8cBC38a38C2E8DA",
+      "quickdraw": "0xB951D0b89c02d4E7cC9587f98313b7F7d2a52CE1"
     },
     "gameboxResolver": "0xa4054304EA92A52D96Fc68dacEe3582f9f3Bc3C8"
   }

@@ -39,9 +39,22 @@ export function fullName(label: string): string {
   return `${label}.${PARENT_NAME}`;
 }
 
+/** The label of every game's title. */
+export const TITLE_LABEL = 'champion';
+
 /** `champion.<game>.gamebox.eth`, the game's title. */
 export function titleName(game: string): string {
-  return `champion.${fullName(game)}`;
+  return `${TITLE_LABEL}.${fullName(game)}`;
+}
+
+/** `<label>.<game>.gamebox.eth`: a championship, such as `mumbai-cup.stockduel.gamebox.eth`. */
+export function championshipName(label: string, game: string): string {
+  return `${label}.${fullName(game)}`;
+}
+
+/** Why `Championships.open` would refuse `label`, or `null`: the label rule, and not the game's title label. */
+export function championshipLabelProblem(label: string): string | null {
+  return label === TITLE_LABEL ? 'taken by the title' : labelProblem(label);
 }
 
 /** `<label>.gamebox.eth` DNS-encoded, as a resolver's `setText` and `resolve` take the name. */

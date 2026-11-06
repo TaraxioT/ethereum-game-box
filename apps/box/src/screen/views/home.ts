@@ -4,7 +4,8 @@
 // On the Box, the rack ends in a blank NEW GAME cartridge: it focuses like a game (on this screen alone: the Box's
 // focus is always a game), and its key opens the game builder. Built games' cartridges stand before it, each with its
 // art from the Box; one that can't load is sealed, and focusing it says why. A game the Forge installs rezzes into the
-// rack.
+// rack. LOBBY, beside Play, opens the lobby: a badge's player name, its USDC and a top-up, the title and the
+// championship.
 import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
@@ -73,7 +74,17 @@ export function homeView(ctx: ViewContext): View {
     current = undefined;
   }
 
-  root.append(title, facts, playKey, rack.el);
+  const lobbyKey = document.createElement("egb-key") as EgbKey;
+  lobbyKey.classList.add("home-lobby");
+  lobbyKey.setAttribute("variant", "ghost");
+  lobbyKey.textContent = "LOBBY";
+  place(lobbyKey, { x: layout.play.x + layout.play.w + 16, y: layout.play.y, w: 150, h: layout.play.h });
+  lobbyKey.addEventListener("click", () => {
+    sound.play("tap");
+    link.send({ type: "lobby" });
+  });
+
+  root.append(title, facts, playKey, lobbyKey, rack.el);
   for (const entry of arrived) rack.arrive(entry.id);
 
   let current: GameInfo | undefined;
@@ -183,7 +194,7 @@ function factsFor(game: GameInfo): HTMLElement[] {
   return [
     fact("players", `${game.players} PLAYERS`),
     fact("clock", `${game.minutes} MIN`),
-    fact("coin", `${low}–${high} EGB`),
+    fact("coin", `${low}–${high} USDC`),
   ];
 }
 

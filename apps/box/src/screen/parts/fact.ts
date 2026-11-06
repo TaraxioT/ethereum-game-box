@@ -1,5 +1,5 @@
 // <egb-fact icon="players|clock|coin|shield">: a fact about the focused game as a data tag. A small chamfered frame
-// at idle brightness round a line icon and a word ("2 PLAYERS", "1 MIN", "5–25 EGB"; the element's text).
+// at idle brightness round a line icon and a word ("2 PLAYERS", "1 MIN", "5–25 USDC"; the element's text).
 //
 // Size: its height is the box's (44 px by default); its width follows the word. `rez(delayMs)`: after the delay the
 // tag rezzes in (Home rezzes each fact in turn when the focused game changes).

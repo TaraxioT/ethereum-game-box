@@ -59,7 +59,7 @@ since, and its "yes, build it" counts only if nothing changed at all. A newer an
 |---|---|
 | `service.ts` | The service above: the session, the lock, the generations, the voice calls. |
 | `steps.ts` | The step graph, pure: the current step, questions, keys, the read-back, patches, reopening a step. |
-| `options.ts` | The fixed keys (ways to score, places, twists, stake sets in EGB, voices) and the words that name them. |
+| `options.ts` | The fixed keys (ways to score, places, twists, stake sets in USDC, voices) and the words that name them. |
 | `keywords.ts` | The keyword reader: words to brief fields with no model (numbers, stake sets, "call it …", "yes", "change the …"). |
 | `reader.ts` | Reads an answer: the model within 5 s, else keywords; the model's reading wins only when it adds something. |
 | `script.ts` | `mockTurns`: the Designer's lines and a player's spoken answers for every open step, checked against the keyword reader. |

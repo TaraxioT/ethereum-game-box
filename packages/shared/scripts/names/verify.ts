@@ -6,8 +6,8 @@
 // - The proxy logic every `VerifiableFactory` proxy clones: if it is unverified, it is verified from the source ENS
 //   deployed it with (the `VerifiableFactory` deployment's metadata). Once it is, Etherscan shows the source of every
 //   proxy (each is a 77-byte clone of it).
-// - Every proxy (`gamebox.eth`'s registry, the shared resolvers, each title registry, and one resolver per Box licence
-//   and per player): `verifyproxycontract`, linked to the ERC-1967 implementation `VerifiableFactory.verifyContract`
+// - Every proxy (`gamebox.eth`'s registry, the shared resolvers, each title registry, and one resolver per Box licence,
+//   per player and per championship): `verifyproxycontract`, linked to the ERC-1967 implementation `VerifiableFactory.verifyContract`
 //   reports.
 
 import { execFileSync } from 'node:child_process';
@@ -32,7 +32,12 @@ const OURS: Record<string, string> = {
   PlayerStats: 'src/names/PlayerStats.sol:PlayerStats',
   BoxResults: 'src/names/BoxResults.sol:BoxResults',
   DemoLicences: 'src/names/DemoLicences.sol:DemoLicences',
+  BoxSeats: 'src/names/BoxSeats.sol:BoxSeats',
+  Championships: 'src/names/Championships.sol:Championships',
+  DuelPot: 'src/game/DuelPot.sol:DuelPot',
+  FakeUSDC: 'src/token/FakeUSDC.sol:FakeUSDC',
   DemoBoxAccount: 'src/box/P256Account.sol:P256Account',
+  MumbaiBoxAccount: 'src/box/P256Account.sol:P256Account',
 };
 
 /** The account `P256AccountFactory` deployed at `account`: its constructor arguments, the key it was made for. */
@@ -49,7 +54,7 @@ async function accountArgs(client: PublicClient, account: Address, block: number
 }
 
 /** Accounts our factory created: their constructor arguments come from its event, not a creation transaction. */
-const FACTORY_MADE = new Set(['DemoBoxAccount']);
+const FACTORY_MADE = new Set(['DemoBoxAccount', 'MumbaiBoxAccount']);
 
 async function verifyOurs(): Promise<boolean> {
   const client = sepoliaClient();

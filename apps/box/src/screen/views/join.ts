@@ -1,5 +1,5 @@
-// Join: both players take a seat by tapping a badge. A new badge gets test EGB from the faucet (its transaction runs
-// on the LCD). When both seats are full the Box moves on to Stake by itself.
+// Join: both players take a seat by tapping a badge; each seat's USDC balance is read from chain as it fills (a badge
+// short of the stake tops up in the lobby). When both seats are full the Box moves on to Stake by itself.
 import type { BoxState, Seat } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";

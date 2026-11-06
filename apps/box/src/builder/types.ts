@@ -9,7 +9,7 @@ export interface GameBrief {
   readonly mechanic: string | null;
   readonly theme: string | null;
   readonly twist: string | null;
-  /** EGB per seat, ascending. */
+  /** USDC per seat, ascending. */
   readonly stakes: readonly number[] | null;
   /** The voice of the game's words (a commentator, a robot, a pirate). */
   readonly voice: string | null;

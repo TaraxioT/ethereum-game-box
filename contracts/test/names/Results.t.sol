@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
+import {IBoxSigned} from "../../src/names/IBoxSigned.sol";
 import {NamesFork} from "./NamesFork.sol";
 
 contract ResultsTest is NamesFork {
@@ -36,14 +37,14 @@ contract ResultsTest is NamesFork {
     function test_unknownBox() public {
         _expectRefused(
             result("egbt-nobox", "stockduel", 1, alice, bob, false),
-            abi.encodeWithSelector(IBoxResults.UnknownBox.selector, "egbt-nobox")
+            abi.encodeWithSelector(IBoxSigned.UnknownBox.selector, "egbt-nobox")
         );
     }
 
     function test_expiredBox() public {
         vm.warp(block.timestamp + 1 days);
         _expectRefused(
-            result(BOX, "stockduel", 1, alice, bob, false), abi.encodeWithSelector(IBoxResults.BoxExpired.selector, BOX)
+            result(BOX, "stockduel", 1, alice, bob, false), abi.encodeWithSelector(IBoxSigned.BoxExpired.selector, BOX)
         );
     }
 
@@ -58,7 +59,7 @@ contract ResultsTest is NamesFork {
     function test_expiredDeadline() public {
         IBoxResults.Result memory r = result(BOX, "stockduel", 1, alice, bob, false);
         r.deadline = block.timestamp - 1;
-        _expectRefused(r, abi.encodeWithSelector(IBoxResults.DeadlineExpired.selector, r.deadline));
+        _expectRefused(r, abi.encodeWithSelector(IBoxSigned.DeadlineExpired.selector, r.deadline));
     }
 
     function test_playersNeedNames() public {
@@ -83,17 +84,17 @@ contract ResultsTest is NamesFork {
     function test_badSignatures() public {
         IBoxResults.Result memory r = result(BOX, "stockduel", 1, alice, bob, false);
         (bytes32 sr, bytes32 ss) = p256Sign(p256Key("egb-test-not-the-box"), results.resultDigest(r));
-        vm.expectRevert(IBoxResults.InvalidSignature.selector);
+        vm.expectRevert(IBoxSigned.InvalidSignature.selector);
         results.submit(r, sr, ss);
 
         (sr, ss) = p256Sign(boxKey, results.resultDigest(r));
-        vm.expectRevert(IBoxResults.InvalidSignature.selector);
+        vm.expectRevert(IBoxSigned.InvalidSignature.selector);
         results.submit(r, sr, bytes32(P256_N - uint256(ss)));
 
         // The signature covers every field: a changed winner fails.
         r.winner = bob;
         r.loser = alice;
-        vm.expectRevert(IBoxResults.InvalidSignature.selector);
+        vm.expectRevert(IBoxSigned.InvalidSignature.selector);
         results.submit(r, sr, ss);
     }
 

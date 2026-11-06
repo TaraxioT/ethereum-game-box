@@ -12,7 +12,7 @@ import type { ReceiverCommand, ReceiverEvent } from "./lines.ts";
 import { Nfc } from "./nfc.ts";
 import { Roster } from "./roster.ts";
 import { Stations } from "./stations.ts";
-import { TapMachine } from "./tap-machine.ts";
+import { REJOIN_MS, TapMachine } from "./tap-machine.ts";
 
 const P1 = "e4ba70";
 
@@ -46,7 +46,7 @@ function machine() {
   const tap: Extract<ReceiverEvent, { ev: "tap" }> = {
     ev: "tap", st: P1, id: 1, uid: badge.uid, atqa: "0044", sak: "20", ats: "78807002", read_us: 27_400, gap_us: 20_000, tries: 1, at_us: 0,
   };
-  return { m, events, roster, answer, tap };
+  return { m, events, roster, answer, tap, clock };
 }
 
 describe("TapMachine", () => {
@@ -65,7 +65,7 @@ describe("TapMachine", () => {
   });
 
   it("fails a tap `lifted` when its chip left before the answer came back", async () => {
-    const { m, events, roster, answer, tap } = machine();
+    const { m, events, roster, answer, tap, clock } = machine();
     m.tap(tap, 0);
     await flush();
     answer();
@@ -73,6 +73,12 @@ describe("TapMachine", () => {
     m.gone({ ev: "gone", st: P1, id: 1, uid: tap.uid, at_us: 10 });
     answer();
     await flush();
+    // It may yet come back (a flapping station): it fails once that window has passed.
+    expect(events.at(-1)?.phase).toBe("touch");
+    for (let t = 0; t <= REJOIN_MS + 100; t += 25) {
+      clock.advance(25);
+      await flush();
+    }
     expect(events.at(-1)).toMatchObject({ phase: "fail", error: { code: "lifted" } });
     expect(roster.entries()).toEqual([]);
   });

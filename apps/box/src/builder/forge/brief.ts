@@ -23,7 +23,7 @@ export function briefProblem(value: unknown, shelf: readonly ShelfTemplate[]): s
   const stakes = b.stakes;
   if (stakes !== null) {
     if (!Array.isArray(stakes) || stakes.length === 0 || stakes.length > 4) return "Stakes must list 1–4 amounts.";
-    if (!stakes.every((s, i) => Number.isInteger(s) && s > 0 && (i === 0 || s > (stakes[i - 1] as number)))) return "Stakes must be whole EGB, ascending.";
+    if (!stakes.every((s, i) => Number.isInteger(s) && s > 0 && (i === 0 || s > (stakes[i - 1] as number)))) return "Stakes must be whole USDC, ascending.";
   }
   return null;
 }
@@ -43,7 +43,7 @@ export function briefToTask(brief: GameBrief, template: ShelfTemplate, gameId: s
     `- How a tap scores: ${said(brief.mechanic, "the template's rule")}.`,
     `- Theme: ${said(brief.theme, "the template's")}. Restyle the screen, the station text, the copy and the icon to it.`,
     `- Twist: ${said(brief.twist, "none: the template's rules as they are")}.`,
-    `- Stakes: ${brief.stakes ? `${brief.stakes.join(", ")} EGB a seat (the Box sets them in game.json)` : "the template's"}.`,
+    `- Stakes: ${brief.stakes ? `${brief.stakes.join(", ")} USDC a seat (the Box sets them in game.json)` : "the template's"}.`,
     `- Voice of its words (screen and stations): ${said(brief.voice, "plain and short")}.`,
   ];
   return [

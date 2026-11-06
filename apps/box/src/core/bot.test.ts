@@ -22,7 +22,7 @@ import {
 
 const NOW = 9_000_000;
 const NOVA = DEMO_BADGES[0] ?? BOT_BADGE;
-const EMPTY: SeatState = { badge: null, balance: 0, signed: false, pending: 0 };
+const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0 };
 
 function box(patch: Partial<BoxState>): BoxState {
   return {
@@ -34,13 +34,14 @@ function box(patch: Partial<BoxState>): BoxState {
     stake: 10,
     match: null,
     txs: [],
+    lobby: { badge: null, card: null, proposal: null, board: null, from: "home" },
     stations: [stationView("", "", ""), stationView("", "", "")],
     ...patch,
   };
 }
 
-const human = (signed = false): SeatState => ({ badge: NOVA, balance: 100, signed, pending: 0 });
-const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, balance: 100, signed, pending: 0 });
+const human = (signed = false): SeatState => ({ badge: NOVA, ens: null, balance: 100, signed, pending: 0 });
+const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, ens: null, balance: 100, signed, pending: 0 });
 
 function delays(intent: BotIntent, runs = 4_000): (number | null)[] {
   const out: (number | null)[] = [];
@@ -70,7 +71,7 @@ describe("bot intents", () => {
   });
 
   it("sits out while somebody else holds Player 2's seat", () => {
-    const kite: SeatState = { badge: DEMO_BADGES[1] ?? NOVA, balance: 100, signed: false, pending: 0 };
+    const kite: SeatState = { badge: DEMO_BADGES[1] ?? NOVA, ens: null, balance: 100, signed: false, pending: 0 };
     expect(botIntent(box({ phase: "stake", seats: [human(true), kite] }), NOW, BOT_BADGE)).toBeNull();
   });
 
@@ -79,20 +80,22 @@ describe("bot intents", () => {
     const match = {
       id: 4,
       game: "quick-draw" as const,
+      round: 4,
       stake: 10,
       openedBlock: 48,
-      refundBlock: 51,
+      refundAt: NOW + 60_000,
       play: { game: "quick-draw" as const, state },
       outcome: null,
       voided: false,
       endedAt: null,
       refunded: [false, false] as const,
+      lines: null,
     };
     const playing = botIntent(box({ phase: "playing", seats: [human(true), bot(true)], match }), NOW, BOT_BADGE);
     expect(playing).toEqual({ kind: "draw", key: "draw:4", untilDraw: state.drawAt - NOW });
     expect(botIntent(box({ phase: "refund", seats: [human(), bot()], match }), NOW, BOT_BADGE)).toBeNull();
-    const open = box({ phase: "refund", seats: [human(), bot()], match, chain: { ...box({}).chain, block: 51 } });
-    expect(botIntent(open, NOW, BOT_BADGE)?.kind).toBe("refund");
+    const open = box({ phase: "refund", seats: [human(), bot()], match });
+    expect(botIntent(open, NOW + 60_000, BOT_BADGE)?.kind).toBe("refund");
   });
 });
 
@@ -159,14 +162,16 @@ describe("bot scheduler", () => {
     const matchOf = () => ({
       id: 2,
       game: "stock-duel" as const,
+      round: 4,
       stake: 10,
       openedBlock: 48,
-      refundBlock: 51,
+      refundAt: NOW + 60_000,
       play: { game: "stock-duel" as const, state: duel },
       outcome: null,
       voided: false,
       endedAt: null,
       refunded: [false, false] as const,
+      lines: null,
     });
     const tap = vi.fn(() => {
       duel = stockDuel.step(duel, { type: "tap", seat: 1, now: clock.now(), roll: 1 });
