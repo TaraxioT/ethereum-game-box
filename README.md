@@ -19,6 +19,7 @@ https://plans.georgekm.com/ethereum-game-box-2026-11-05/.
 | [`apps/box`](apps/box/README.md) | The Game Box: the core, the Pi server, the taps, the game builder, the screen and the games |
 | [`apps/relayer`](apps/relayer/README.md) | The Cloudflare Worker that pays gas for Box-signed requests |
 | [`apps/web`](apps/web/README.md) | The public site, read straight from ENS and the contracts |
+| [`apps/operator`](apps/operator/README.md) | The operator site: an operator runs their Box from a passkey, and the admin issues Box licences |
 | [`packages/sdk`](packages/sdk/README.md) | `@egb/sdk`: the contract between the Box and its games (rules, station views, manifests, the rules-runner and frame protocols) |
 | [`packages/shared`](packages/shared/README.md) | Message digests, the badge entry, ABIs and addresses, shared by every app |
 | [`contracts`](contracts/README.md) | Foundry: the registry, games, token, hook, staking and names |

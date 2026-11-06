@@ -11,6 +11,7 @@ A pnpm monorepo. Each folder's README says what goes in it; read it before addin
 - `apps/box/`: the Box: core, Pi server, taps, game builder, screen and games (`@egb/box`).
 - `apps/relayer/`: the Cloudflare Worker that sends the Box's signed requests (`@egb/relayer`).
 - `apps/web/`: the public site (`@egb/web`).
+- `apps/operator/`: the operator site, passkeys and Box licences (`@egb/operator`).
 - `packages/sdk/`: the contract between the Box and its games (`@egb/sdk`).
 - `packages/shared/`: message digests, the badge entry, ABIs and the deployments loader (`@egb/shared`).
 - `contracts/`: Foundry. Every contract, its forge tests and deploy scripts.
