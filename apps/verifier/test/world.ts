@@ -218,7 +218,7 @@ export class World {
   /** What the store answers for a zip, when set. */
   storeReply: (() => Response) | null = null;
   gateHits = 0;
-  judgeOf = new Map<string, Judge>();
+  private latest: Judge | null = null;
 
   private readonly services = cachedServices(
     zgServices(
@@ -258,8 +258,8 @@ export class World {
   };
 
   /** A `Judge` on this world's store. A new one is a restarted object. */
-  judge(name = judgementName(BOX, ROUND)): Judge {
-    const made = new Judge({
+  judge(): Judge {
+    this.latest = new Judge({
       store: this.store,
       wake: async (at) => {
         this.alarm = at;
@@ -280,16 +280,20 @@ export class World {
       audits: this.audits,
       scrub: scrubber([ZG_API_KEY, this.key, RPC_SECRET]),
     });
-    this.judgeOf.set(name, made);
-    return made;
+    return this.latest;
+  }
+
+  /** The `Judge` built last: the object as it is now. */
+  current(): Judge {
+    return this.latest as Judge;
   }
 
   /** The agent, as the container runs it: chat through the proxy until the model submits a verdict. */
-  agent(judge = (): Judge => this.judgeOf.get(judgementName(BOX, ROUND)) as Judge): AgentScript {
+  agent(): AgentScript {
     return async ({ attempt }) => {
       const messages: unknown[] = [{ role: 'system', content: 'Judge.' }];
       for (;;) {
-        const reply = await judge().modelTurn(attempt, JSON.stringify({ messages, tool_choice: 'required', max_tokens: 2048 }));
+        const reply = await this.current().modelTurn(attempt, JSON.stringify({ messages, tool_choice: 'required', max_tokens: 2048 }));
         if (reply.status !== 200) return { failure: failed('container', `the container answered 500`) };
         const call = (JSON.parse(reply.body) as ChatReply).choices[0].message.tool_calls[0];
         if (call.function.name === 'submit_verdict') return { verdict: JSON.parse(call.function.arguments) as unknown };
@@ -334,7 +338,7 @@ export class World {
     const stubs = new Map<string, Judge>();
     const judgement = (box: string, round: string) => {
       const name = judgementName(box, round);
-      if (!stubs.has(name)) stubs.set(name, this.judge(name));
+      if (!stubs.has(name)) stubs.set(name, this.judge());
       return stubs.get(name) as Judge;
     };
     const doors: Doors & Deps['doors'] = {

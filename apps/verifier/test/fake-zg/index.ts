@@ -30,6 +30,8 @@ export interface FakeZgSettings {
   additionalInfo: string;
   /** Whether 0G Storage answers. */
   storageUp: boolean;
+  /** Whether the node ever sees the paid-for file. If not, the SDK waits on it for ever. */
+  nodeSyncs: boolean;
 }
 
 /** One chat call, as it reached the fake. */
@@ -46,6 +48,8 @@ const FLOW: Address = '0x00000000000000000000000000000000000000d2';
 const MARKET: Address = '0x00000000000000000000000000000000000000d3';
 const MARKET_SELECTOR = '0x80f55605';
 const CHAIN_ID = '0x4115';
+/** The size every file claims: the uploader asks for segments up to it, and stops at the file's real end. */
+const MAX_FILE_BYTES = 32 * 1024 * 1024;
 
 const json = (body: unknown, init?: ResponseInit) => Response.json(body, init);
 
@@ -66,6 +70,7 @@ export class FakeZg {
     acknowledged: true,
     additionalInfo: '{}',
     storageUp: true,
+    nodeSyncs: true,
   };
 
   private readonly enclave = privateKeyToAccount(generatePrivateKey());
@@ -187,7 +192,7 @@ export class FakeZg {
       case 'zgs_getShardConfig':
         return { numShard: 1, shardId: 0 };
       case 'zgs_getFileInfo':
-        return this.submissions === 0 ? null : this.fileInfo(params[0] as Hex);
+        return this.submissions === 0 || !this.settings.nodeSyncs ? null : this.fileInfo(params[0] as Hex);
       case 'zgs_uploadSegmentsByTxSeq':
         this.segments.push(...(params[0] as unknown[]));
         return null;
@@ -199,7 +204,7 @@ export class FakeZg {
   private fileInfo(root: Hex) {
     const finalized = this.segments.length > 0;
     return {
-      tx: { streamIds: [], data: '', dataMerkleRoot: root, merkleNodes: [], startEntryIndex: 0, size: 0, seq: 7 },
+      tx: { streamIds: [], data: '', dataMerkleRoot: root, merkleNodes: [], startEntryIndex: 0, size: MAX_FILE_BYTES, seq: 7 },
       finalized,
       isCached: false,
       uploadedSegNum: this.segments.length,
