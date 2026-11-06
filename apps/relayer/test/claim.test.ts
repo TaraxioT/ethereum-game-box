@@ -3,8 +3,10 @@ import type { Abi } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { CREATES_STORAGE_GAS } from '../src/request.ts';
-import { claimBody, newBadge } from './bodies.ts';
-import { NOW, World, addresses } from './world.ts';
+import { accountClaimBody, claimBody, newBadge } from './bodies.ts';
+import { NOW, World, addresses, boxKey } from './world.ts';
+
+const AGENT = '0x00000000000000000000000000000000000000D2';
 
 describe('POST /names/claim', () => {
   it('sends claimPlayer with the explicit gas limit once every check passes', async () => {
@@ -14,6 +16,36 @@ describe('POST /names/claim', () => {
     expect(res.body).toMatchObject({ kind: 'claim', status: 'sent' });
     expect(world.chain.sent).toHaveLength(1);
     expect(world.chain.sent[0]).toMatchObject({ to: addresses.names, gas: CREATES_STORAGE_GAS, nonce: 0 });
+  });
+
+  it("takes a contract account's ERC-1271 signature (an agent's P256Account)", async () => {
+    const world = new World();
+    const key = boxKey();
+    world.addAccount(AGENT, key);
+    const res = await world.post('/names/claim', accountClaimBody(world, 'bot', AGENT, key));
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    expect(world.chain.sent).toHaveLength(1);
+  });
+
+  it("refuses a contract account whose isValidSignature says no, even if the signature is the key's", async () => {
+    const world = new World();
+    const key = boxKey();
+    world.addAccount(AGENT, key);
+    const body = accountClaimBody(world, 'bot', AGENT, key);
+    world.erc1271.clear();
+    const res = await world.post('/names/claim', body);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/not signed by the badge/);
+    expect(world.chain.sent).toHaveLength(0);
+  });
+
+  it('refuses an ECDSA signature for a contract account', async () => {
+    const world = new World();
+    const badge = newBadge();
+    world.addAccount(badge.address, boxKey());
+    const res = await world.post('/names/claim', await claimBody('alice', badge));
+    expect(res.status).toBe(401);
+    expect(world.chain.sent).toHaveLength(0);
   });
 
   const refusals: [string, (world: World) => Promise<unknown>, number, RegExp][] = [

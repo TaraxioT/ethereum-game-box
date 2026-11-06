@@ -1,28 +1,42 @@
 // A request that passed every check, ready for the sender, and the steps every route shares: the `eth_call` of the
 // exact call and its gas limit.
 
-import { type TxKind, contractAddress, ensAddress } from '@egb/shared/names';
+import { type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
 import { Refusal } from './refusal.ts';
 import { isRevert, revertName } from './revert.ts';
+import { deployedTargets } from './targets.ts';
 
 /** Our contracts the routes call. */
 export interface Addresses {
   names: Address;
   results: Address;
   licences: Address;
+  /** `P256AccountFactory`, and the block it was deployed in. */
+  factory: Address;
+  factoryBlock: bigint;
+  /** `gamebox.eth`'s own registry: where a `<label>.gamebox.eth` name's resolver is set. */
+  registry: Address;
   /** ENS's `DefaultReverseRegistrar`, which sets a badge's primary name. */
   reverseRegistrar: Address;
+  /** Every address in `deployments/sepolia.json` an account may call, lower-cased. */
+  targets: ReadonlySet<string>;
 }
 
 export function deployedAddresses(): Addresses {
+  const factory = ourContract('P256AccountFactory');
+  if (!factory) throw new Error('P256AccountFactory is not in deployments/sepolia.json');
   return {
     names: contractAddress('GameBoxNames'),
     results: contractAddress('BoxResults'),
     licences: contractAddress('DemoLicences'),
+    factory: factory.address,
+    factoryBlock: BigInt(factory.deployBlock),
+    registry: namesProxies().registry,
     reverseRegistrar: ensAddress('DefaultReverseRegistrar'),
+    targets: deployedTargets(),
   };
 }
 
@@ -50,6 +64,8 @@ export interface Call {
 
 export interface Prepared extends Call {
   kind: TxKind;
+  /** The `P256Account` an `execute` is for: its rate limits are per account. */
+  account?: Address;
   /** Refused while a request holding any of these is pending (a label, a badge, a Box nonce or round). */
   locks: string[];
   /** A claim's primary-name call, sent once the claim is in a block. */
@@ -77,6 +93,18 @@ export async function simulate(ctx: Context, call: { to: Address; data: Hex; val
 export async function estimatedGas(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<bigint> {
   const gas = await ctx.client.estimateGas({ account: ctx.relayer, ...call });
   return gas + gas / 2n;
+}
+
+/** An estimate above this means the call creates a resolver or a registry (1.3 to 4M gas), which it underestimates. */
+export const CREATES_STORAGE_ESTIMATE = 1_000_000n;
+
+/** The limit for a call whose effect isn't known in advance (an account's `execute`): the estimate plus 50%, or at
+ *  least `CREATES_STORAGE_GAS` if the estimate says it creates storage. */
+export async function accountCallGas(ctx: Context, call: { to: Address; data: Hex }): Promise<bigint> {
+  const gas = await estimatedGas(ctx, call);
+  return gas >= CREATES_STORAGE_ESTIMATE + CREATES_STORAGE_ESTIMATE / 2n && gas < CREATES_STORAGE_GAS
+    ? CREATES_STORAGE_GAS
+    : gas;
 }
 
 /** A deadline closer than this (seconds) would pass before the transaction is in a block. */

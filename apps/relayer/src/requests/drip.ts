@@ -10,11 +10,13 @@ import { type Context, type Prepared, estimatedGas } from '../request.ts';
 
 export async function prepareDrip(ctx: Context, input: unknown): Promise<Prepared> {
   const badge = field.address(field.object(input), 'badge');
-  const [name, balance] = await Promise.all([
+  const [name, balance, code] = await Promise.all([
     ctx.client.readContract({ address: ctx.addresses.names, abi: gameBoxNamesAbi, functionName: 'nameOf', args: [badge] }),
     ctx.client.getBalance({ address: badge }),
+    ctx.client.getCode({ address: badge }),
   ]);
   if (!name) throw new Refusal(403, 'the badge holds no player name', 'NotAPlayer');
+  if (code && code !== '0x') throw new Refusal(403, 'a contract account needs no ETH: it acts through /account/execute');
   if (balance >= ctx.dripWei) throw new Refusal(409, `the badge already holds ${formatEther(balance)} ETH`);
 
   const call = { to: badge, data: '0x' as const, value: ctx.dripWei };
