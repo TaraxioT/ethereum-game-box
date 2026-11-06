@@ -60,7 +60,7 @@ function cupLine(cups: readonly AdminCup[], label: string, now: number): BoardLi
     return { what: `${open.label.toUpperCase()} · ${leader ? `${leader} WINS` : "NOBODY PLAYED"}`, when: "ENDED", tone: "done" };
   }
   const last = mine.find((c) => c.closed && now - c.ends < RECENT_S);
-  if (last) return { what: `${last.label.toUpperCase()} · CLOSED`, when: last.winner ? `WON BY ${playerWord(last.winnerName, last.winner)}` : "NOBODY PLAYED", tone: "done" };
+  if (last) return { what: last.label.toUpperCase(), when: last.winner ? `WON BY ${playerWord(last.winnerName, last.winner)}` : "NOBODY PLAYED", tone: "done" };
   return { what: "NONE OPEN", when: "", tone: "none" };
 }
 
