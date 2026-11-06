@@ -504,6 +504,10 @@ describe('the game store, end to end', () => {
   it('refunds after the delay with the verifier down', async () => {
     await world.stopVerifier();
     await world.zg.script({});
+    // The pots a stranger refunds below, should the scenarios that open them have failed or been left out.
+    for (const open of [HELD_ROUND, ATTACKED_ROUND]) {
+      if ((await chain.pot(open)).state === STATE.none) await who.openPot(open, tapRush, BADGES, usdc(STAKE));
+    }
     const before = await chain.balances(BADGES);
     const round = await stakeAndPlayFrom();
     say(`round ${round}: judging, and the verifier isn't there`);
@@ -540,11 +544,11 @@ describe('the game store, end to end', () => {
     expect((await chain.pot(HELD_ROUND)).state).toBe(STATE.refunded);
 
     await who.refund(ATTACKED_ROUND);
-    expect(await chain.potBalance()).toBe(0n);
-    say('StorePot holds nothing: every stake of every pot went somewhere it should');
 
     // The sweep read the chain for the rest, and the Box keeps no pot that is over.
     await vi.waitFor(() => expect(JSON.parse(readFileSync(box.rounds, 'utf8'))).not.toHaveProperty('storePots'), SOON);
+    expect(await chain.potBalance()).toBe(0n);
+    say('StorePot holds nothing: every stake of every pot went somewhere it should');
     await everyChatWentOutPrivate();
   });
 });
