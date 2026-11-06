@@ -24,7 +24,7 @@ const resolverOf = (label: string) => `0x${label.length.toString(16).padStart(40
 
 const decode = (data: Hex) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args as [Hex, string, string];
 
-function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Record<string, string>; reply?: (path: string, body: unknown) => Reply } = {}) {
+function setup(options: { popups?: Record<string, Partial<BoxInfo>>; reply?: (path: string, body: unknown) => Reply } = {}) {
   const boxes: Record<string, BoxInfo> = {
     'mumbai-01': { account: ACCOUNT, resolver: resolverOf('mumbai-01'), expiry: NOW + 86_400, status: 1 },
   };
@@ -34,7 +34,6 @@ function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Rec
   const usedRounds = new Set<string>();
   const chain: BoxChain = {
     box: async (label) => boxes[label] ?? { account: `0x${'00'.repeat(20)}`, resolver: `0x${'00'.repeat(20)}`, expiry: 0, status: 0 },
-    game: async (_box, label) => options.games?.[label] ?? '',
     roundUsed: async (box, round) => usedRounds.has(`${box}:${round}`),
     recentPopups: async () => Object.keys(options.popups ?? {}),
   };
@@ -77,10 +76,10 @@ describe('the signer', () => {
 
 describe('the heartbeat', () => {
   it("signs a BoxAccount.execute of lastSeen on mumbai-01's resolver, over the right digest", async () => {
-    const { box, posts, signer } = setup({ games: { 'mumbai-01': 'quickdraw' } });
+    const { box, posts, signer } = setup();
     const ids = await box.heartbeat();
-    expect(ids).toEqual(['id-1']);
-    expect(posts).toHaveLength(1);
+    expect(ids).toEqual(['id-1', 'id-2']);
+    expect(posts).toHaveLength(2);
     const body = posts[0]!.body as Record<string, string>;
     expect(posts[0]!.path).toBe('/box/execute');
     expect(body).toMatchObject({ account: ACCOUNT, target: resolverOf('mumbai-01'), value: '0', deadline: String(NOW + 600) });
@@ -96,18 +95,27 @@ describe('the heartbeat', () => {
     expect((await box.view()).lastSeen).toBe(NOW);
   });
 
-  it('writes game only where it differs', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'stockduel' } });
+  it('writes game on the first beat and when it changes, lastSeen on every beat', async () => {
+    const { box, posts } = setup();
+    await box.heartbeat();
     await box.heartbeat();
     expect(posts.map((p) => decode(p.body.data as Hex).slice(1))).toEqual([
       ['lastSeen', String(NOW)],
       ['game', 'quickdraw'],
+      ['lastSeen', String(NOW)],
     ]);
+  });
+
+  it('writes game again if the relayer refused it', async () => {
+    let n = 0;
+    const { box, posts } = setup({ reply: () => (++n === 2 ? { status: 502, body: { error: 'down' } } : { status: 202, body: { id: `id-${n}` } }) });
+    await box.heartbeat();
+    await box.heartbeat();
+    expect(posts.map((p) => decode(p.body.data as Hex)[1])).toEqual(['lastSeen', 'game', 'lastSeen', 'game']);
   });
 
   it('beats on every live pop-up it runs, and skips the lapsed and the foreign ones', async () => {
     const { box, posts } = setup({
-      games: { 'mumbai-01': 'quickdraw', 'popup-live': 'quickdraw', 'popup-gone': 'quickdraw', 'popup-other': 'quickdraw' },
       popups: {
         'popup-live': {},
         'popup-gone': { expiry: NOW - 1 },
@@ -115,7 +123,7 @@ describe('the heartbeat', () => {
       },
     });
     await box.heartbeat();
-    expect(posts.map((p) => p.body.target)).toEqual([resolverOf('mumbai-01'), resolverOf('popup-live')]);
+    expect([...new Set(posts.map((p) => p.body.target))]).toEqual([resolverOf('mumbai-01'), resolverOf('popup-live')]);
   });
 
   it('uses a fresh nonce for every write', async () => {
@@ -157,7 +165,8 @@ describe('POST /result', () => {
   });
 
   it('shows the game it reported in the next heartbeat', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'quickdraw' } });
+    const { box, posts } = setup();
+    await box.heartbeat();
     await box.report({ ...report, game: 'stockduel' }, 'ip');
     await box.heartbeat();
     expect(decode(posts.at(-1)!.body.data as Hex).slice(1)).toEqual(['game', 'stockduel']);

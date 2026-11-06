@@ -1,14 +1,7 @@
-// What the demo Box reads from Sepolia: its Boxes, their records, and the rounds it has already reported.
+// What the demo Box reads from Sepolia: its Boxes, recent pop-ups, and the rounds already settled.
 
-import {
-  BOX_KEYS,
-  boxResultsAbi,
-  demoLicencesAbi,
-  fullName,
-  gameBoxNamesAbi,
-  permissionedResolverAbi,
-} from '@egb/shared/names';
-import { type Address, type PublicClient, createPublicClient, http, namehash } from 'viem';
+import { boxResultsAbi, demoLicencesAbi, gameBoxNamesAbi } from '@egb/shared/names';
+import { type Address, type PublicClient, createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
 
 export interface BoxInfo {
@@ -22,8 +15,6 @@ export interface BoxInfo {
 
 export interface BoxChain {
   box(label: string): Promise<BoxInfo>;
-  /** The Box's `game` record, read from its own resolver. */
-  game(box: BoxInfo, label: string): Promise<string>;
   roundUsed(box: string, round: bigint): Promise<boolean>;
   /** The labels of the pop-ups opened in the last half hour (live or not). */
   recentPopups(): Promise<string[]>;
@@ -49,14 +40,6 @@ export function sepoliaChain(rpcUrl: string, contracts: Contracts): BoxChain {
         args: [label],
       });
       return { account: box.account, resolver: box.resolver, expiry: Number(box.expiry), status: box.status };
-    },
-    game(box, label) {
-      return client.readContract({
-        address: box.resolver,
-        abi: permissionedResolverAbi,
-        functionName: 'text',
-        args: [namehash(fullName(label)), BOX_KEYS.game],
-      });
     },
     roundUsed(box, round) {
       return client.readContract({

@@ -20,8 +20,8 @@ At the event, the Box signs only after a real match. `POST /result` takes 10 per
 ## Heartbeat
 
 A Durable Object alarm every 5 minutes signs a `BoxAccount.execute` of `PermissionedResolver.setText(lastSeen, <unix
-seconds>)` on `mumbai-01.gamebox.eth` and on every live pop-up it runs, and of `game` wherever it differs from the
-game the Box is running (the game of its last result, or `DEFAULT_GAME`). Each write goes through
+seconds>)` on `mumbai-01.gamebox.eth` and on every live pop-up it runs, and of `game` when the game the Box is
+running (the game of its last result there, or `DEFAULT_GAME`) is not the one it last wrote. Each write goes through
 `POST /box/execute`. Every request, and an hourly cron, restarts the alarm if it has stopped.
 
 ## Signing
@@ -41,7 +41,7 @@ has already settled is skipped.
 | `src/index.ts` | The Worker: the routes, CORS, and the cron that keeps the heartbeat running |
 | `src/box.ts` | The heartbeat and the result reports (`Box`), and the `DemoBox` Durable Object around them |
 | `src/signer.ts` | The software P-256 key |
-| `src/chain.ts` | The Sepolia reads: Boxes, their `game`, settled rounds, recent pop-ups |
+| `src/chain.ts` | The Sepolia reads: Boxes, settled rounds, recent pop-ups |
 | `test/` | The heartbeat's digest and calls, round numbers, the rate limit, the signer against the vectors |
 
 ## Secrets and config
