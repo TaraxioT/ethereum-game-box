@@ -16,6 +16,7 @@ import {
   permissionedRegistryAbi,
   permissionedResolverAbi,
   playerStatsAbi,
+  storePotAbi,
   universalResolverAbi,
   verifiableFactoryAbi,
 } from '@egb/shared/names';
@@ -25,6 +26,7 @@ const errors: Abi = [
   playerStatsAbi,
   boxResultsAbi,
   duelPotAbi,
+  storePotAbi,
   championshipsAbi,
   boxSeatsAbi,
   fakeUsdcAbi,

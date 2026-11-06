@@ -2,6 +2,7 @@
 // exact call and its gas limit.
 
 import { CREATES_STORAGE_GAS, type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
+import { storePotAddress, storeUsdcAddress } from '@egb/shared/store';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
@@ -18,6 +19,10 @@ export interface Addresses {
   usdc: Address;
   /** `DuelPot`: a match's USDC pot. */
   pot: Address;
+  /** `StorePot` and its stake token, Store USDC (a second `FakeUSDC`): `undefined` until they are deployed, and the store
+   *  routes refuse until then. */
+  storePot: Address | undefined;
+  storeUsdc: Address | undefined;
   /** `Championships`. */
   cups: Address;
   /** `BoxSeats`: player names a Box vouched for. */
@@ -42,6 +47,8 @@ export function deployedAddresses(): Addresses {
     licences: contractAddress('DemoLicences'),
     usdc: contractAddress('FakeUSDC'),
     pot: contractAddress('DuelPot'),
+    storePot: storePotAddress(),
+    storeUsdc: storeUsdcAddress(),
     cups: contractAddress('Championships'),
     seats: contractAddress('BoxSeats'),
     factory: factory.address,

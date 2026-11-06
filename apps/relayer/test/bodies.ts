@@ -20,16 +20,25 @@ import {
   usdc,
 } from '@egb/shared/names';
 import {
+  type StoreStake,
+  type StoreVerdict,
+  type StoreVoid,
+  storeStakeDigest,
+  storeVerdictTypedData,
+  storeVoidTypedData,
+} from '@egb/shared/store';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import {
   type Address,
   type Hex,
   concatHex,
   encodeAbiParameters,
   encodeFunctionData,
-  parseAbiParameters, hexToBytes, keccak256, numberToHex, sha256, toHex } from 'viem';
+  parseAbiParameters, hexToBytes, hexToNumber, keccak256, numberToHex, sha256, slice, toHex } from 'viem';
 import { type PrivateKeyAccount, generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { packetToBytes } from 'viem/ens';
 
-import { BOX, BOX_ACCOUNT, BOX_RESOLVER, type Key, NOW, type World, addresses } from './world.ts';
+import { BOX, BOX_ACCOUNT, BOX_RESOLVER, type Key, NOW, STORE_POT, type World, addresses } from './world.ts';
 
 export const newBadge = () => privateKeyToAccount(generatePrivateKey());
 
@@ -170,4 +179,34 @@ export function seatBody(world: World, label: string, badge: Address, options: P
   const { key = world.key, highS, ...fields } = options;
   const seat: Seat = { label, badge, box: BOX, deadline: BigInt(NOW + 600), ...fields };
   return { seat, ...key.sign(seatDigest(seat, addresses.seats), { highS }) };
+}
+
+/** A store game's bundle hash. */
+export const BUNDLE = sha256(toHex('tap-rush'));
+/** An audit record's hash. */
+export const RECORD = keccak256(toHex('{"v":1}'));
+
+/** A `Stake` of 10 Store USDC each for round 1 of `BUNDLE`, signed by the Box (or by `key`). */
+export function storeStakeBody(world: World, players: Address[], options: Partial<StoreStake> & { key?: Key; highS?: boolean } = {}) {
+  const { key = world.key, highS, ...fields } = options;
+  const stake: StoreStake = { box: BOX, bundle: BUNDLE, round: 1n, players, amount: usdc(10), deadline: BigInt(NOW + 600), ...fields };
+  return { stake, ...key.sign(storeStakeDigest(stake, STORE_POT), { highS }) };
+}
+
+/** A `Verdict` for round 1 paying `payouts`, signed by `signer`. */
+export async function verdictBody(signer: PrivateKeyAccount, payouts: bigint[], options: Partial<StoreVerdict> = {}) {
+  const verdict: StoreVerdict = { box: BOX, round: 1n, payouts, record: RECORD, deadline: BigInt(NOW + 600), ...options };
+  return { verdict, signature: await signer.signTypedData(storeVerdictTypedData(verdict, STORE_POT)) };
+}
+
+/** A `Void` of round 1, signed by `signer`. */
+export async function voidBody(signer: PrivateKeyAccount, options: Partial<StoreVoid> = {}) {
+  const voiding: StoreVoid = { box: BOX, round: 1n, record: RECORD, deadline: BigInt(NOW + 600), ...options };
+  return { void: voiding, signature: await signer.signTypedData(storeVoidTypedData(voiding, STORE_POT)) };
+}
+
+/** The same `r ‖ s ‖ v` signature with a high `s`: it recovers the same signer, and the contracts refuse it. */
+export function highSignature(signature: Hex): Hex {
+  const s = secp256k1.Point.CURVE().n - BigInt(slice(signature, 32, 64));
+  return concatHex([slice(signature, 0, 32), numberToHex(s, { size: 32 }), hexToNumber(slice(signature, 64)) === 27 ? '0x1c' : '0x1b']);
 }

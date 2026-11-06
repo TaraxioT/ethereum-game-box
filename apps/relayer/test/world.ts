@@ -13,6 +13,7 @@ import {
   p256AccountFactoryAbi,
   permissionedRegistryAbi,
   rawSignature,
+  storePotAbi,
   universalResolverAbi,
 } from '@egb/shared/names';
 import { p256 } from '@noble/curves/nist.js';
@@ -24,6 +25,7 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   hexToBytes,
+  keccak256,
   labelhash,
   numberToHex,
   parseAbi,
@@ -43,12 +45,16 @@ import { MemoryStore } from './memory-store.ts';
 export const NOW = 1_800_000_000;
 
 export const REGISTRY: Address = '0x00000000000000000000000000000000000000a4';
+export const STORE_POT: Address = '0x00000000000000000000000000000000000000ab';
+export const STORE_USDC: Address = '0x00000000000000000000000000000000000000ac';
 export const addresses: Addresses = {
   names: '0x00000000000000000000000000000000000000a1',
   results: '0x00000000000000000000000000000000000000a2',
   licences: '0x00000000000000000000000000000000000000a3',
   usdc: '0x00000000000000000000000000000000000000a7',
   pot: '0x00000000000000000000000000000000000000a8',
+  storePot: STORE_POT,
+  storeUsdc: STORE_USDC,
   cups: '0x00000000000000000000000000000000000000a9',
   seats: '0x00000000000000000000000000000000000000aa',
   factory: '0x00000000000000000000000000000000000000a6',
@@ -116,6 +122,16 @@ export interface PotEntry {
   game: Hex;
 }
 
+/** A `StorePot.Pot`. `state`: 0 none, 1 open, 2 settled, 3 voided, 4 refunded. */
+export interface StorePotEntry {
+  players: Address[];
+  amount: bigint;
+  opened: bigint;
+  state: number;
+  bundle: Hex;
+  record: Hex;
+}
+
 /** A `Championships.Cup`. */
 export interface CupEntry {
   game: string;
@@ -157,6 +173,14 @@ export class World {
   readonly usdc = new Map<string, bigint>();
   /** Pots by `box:round`. */
   readonly pots = new Map<string, PotEntry>();
+  /** Store USDC balances by address (lower-cased). */
+  readonly storeUsdc = new Map<string, bigint>();
+  /** `StorePot`'s pots by `box:round`. */
+  readonly storePots = new Map<string, StorePotEntry>();
+  /** The bundles `StorePot` lists. */
+  readonly listed = new Set<string>();
+  /** Who holds `VERIFIER_ROLE` (lower-cased). */
+  readonly verifiers = new Set<string>();
   /** Open championship ids by game, and championships by id. */
   readonly openCups = new Map<string, bigint>();
   readonly cups = new Map<bigint, CupEntry>();
@@ -228,6 +252,21 @@ export class World {
         getPot: ([box, round]) => this.pots.get(`${box}:${round}`) ?? noPot,
         REFUND_DELAY: () => 3600n,
         open: () => this.fail('open'),
+        refund: () => this.fail('refund'),
+      })
+      .contract(STORE_USDC, fakeUsdcAbi as Abi, {
+        balanceOf: ([account]) => this.storeUsdc.get(String(account).toLowerCase()) ?? 0n,
+        mint: () => this.fail('mint'),
+      })
+      .contract(STORE_POT, storePotAbi as Abi, {
+        VERIFIER_ROLE: () => VERIFIER_ROLE,
+        hasRole: ([role, account]) => role === VERIFIER_ROLE && this.verifiers.has(String(account).toLowerCase()),
+        listed: ([bundle]) => this.listed.has(String(bundle)),
+        getPot: ([box, round]) => this.storePots.get(`${box}:${round}`) ?? noStorePot,
+        REFUND_DELAY: () => 3600n,
+        open: () => this.fail('open'),
+        settle: () => this.fail('settle'),
+        voidPot: () => this.fail('voidPot'),
         refund: () => this.fail('refund'),
       })
       .contract(addresses.cups, championshipsAbi as Abi, {
@@ -321,3 +360,12 @@ export class World {
 
 const zero: Address = '0x0000000000000000000000000000000000000000';
 const noPot: PotEntry = { a: zero, b: zero, amount: 0n, opened: 0n, state: 0, game: `0x${'00'.repeat(32)}` };
+const noStorePot: StorePotEntry = {
+  players: [],
+  amount: 0n,
+  opened: 0n,
+  state: 0,
+  bundle: `0x${'00'.repeat(32)}`,
+  record: `0x${'00'.repeat(32)}`,
+};
+const VERIFIER_ROLE = keccak256(toHex('VERIFIER_ROLE'));
