@@ -17,7 +17,10 @@ export default {
       ctx: {
         client: sepoliaClient(rpc(env.SEPOLIA_RPC_URL)),
         relayer: privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex).address,
-        addresses: deployedAddresses(),
+        // Read when a route needs them, so `/health` and `/tx` answer even before the contracts are deployed.
+        get addresses() {
+          return deployedAddresses();
+        },
         now: () => Math.floor(Date.now() / 1000),
         dripWei: parseEther(env.DRIP_ETH ?? '0.0003'),
       },
