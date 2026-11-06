@@ -19,10 +19,11 @@ import {
   stakeDigest,
   usdc,
 } from "@egb/shared/names";
-import type { Address, Hex } from "viem";
+import { type Address, type Hex, isAddressEqual } from "viem";
 import type { ChainHead, ChainPort, ChainTxUpdate, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
 import { recordText } from "../core/stats.ts";
+import type { CupPlace, Settlement } from "../core/types.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import type { Reads, Settled } from "./reads.ts";
 import type { Relayer, RelayerReply } from "./relayer.ts";
@@ -108,8 +109,26 @@ export function seatOf(box: string, labelText: string, badge: Address, deadline:
   return { label: labelText, badge, box, deadline };
 }
 
+/** What the result did, from what the chain says at its receipt: the facts the result screen announces, and its lines. */
+export function settlementOf(order: ResultOrder, settled: Settled): Settlement {
+  const holds = order.winner !== null && settled.title !== null && isAddressEqual(settled.title.holder, order.badges[order.winner]);
+  const placeOf = (seat: 0 | 1): CupPlace | null => {
+    const rank = settled.cup?.standings.findIndex((row) => isAddressEqual(row.addr, order.badges[seat])) ?? -1;
+    const row = settled.cup?.standings[rank];
+    return row ? { rank, points: row.points } : null;
+  };
+  return {
+    lines: outcomeLines(order, settled),
+    names: settled.names,
+    paid: settled.pot === null ? null : order.winner === null ? settled.pot : settled.pot * 2,
+    title: holds && settled.title ? { name: settled.title.name, streak: settled.title.streak } : null,
+    cup: settled.cup ? { name: settled.cup.name, places: [placeOf(0), placeOf(1)] } : null,
+    stats: settled.stats,
+  };
+}
+
 /** The lines the result screen shows, from what the chain says the result did. */
-export function outcomeLines(order: ResultOrder, settled: Settled): string[] {
+function outcomeLines(order: ResultOrder, settled: Settled): string[] {
   const named = (seat: 0 | 1): string => settled.names[seat] ?? short(order.badges[seat]);
   const lines: string[] = [];
   if (order.winner === null) lines.push(settled.pot === null ? "A draw" : `A draw: ${settled.pot} USDC back to each`);
@@ -218,10 +237,10 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     nextRound: () => rounds.take(),
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
-    balance: (address) => reads.balance(address),
-    async player(address) {
-      const [name, balance] = await Promise.all([reads.nameOf(address), reads.balance(address)]);
-      return { address, name, balance, record: name ? await reads.stats(name) : null };
+    async player(address, block) {
+      const at = block === undefined ? undefined : BigInt(block);
+      const [name, balance] = await Promise.all([reads.nameOf(address, at), reads.balance(address, at)]);
+      return { address, name, balance, record: name ? await reads.stats(name, at) : null };
     },
     board: async (game) => reads.board(label(game)),
     open(order, watch) {
@@ -250,7 +269,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     },
     async outcome(order, hash) {
       if (!hash) throw new Error("a result with no hash");
-      return outcomeLines(order, await reads.settled(label(order.game), order.badges, hash));
+      return settlementOf(order, await reads.settled(label(order.game), order.badges, hash));
     },
     watchHead(listener) {
       let last = 0;

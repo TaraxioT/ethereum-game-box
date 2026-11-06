@@ -36,13 +36,13 @@ export interface Settled {
   readonly stats: readonly [PlayerRecord | null, PlayerRecord | null];
   /** The title's holder and streak at that block, or null. */
   readonly title: { readonly name: string; readonly holder: Address; readonly streak: number } | null;
-  /** The open cup's name and standings at that block, or null. */
-  readonly cup: { readonly label: string; readonly standings: readonly (Standing & { readonly addr: Address })[] } | null;
+  /** The open cup's label, ENS name and standings at that block, or null. */
+  readonly cup: { readonly label: string; readonly name: string; readonly standings: readonly (Standing & { readonly addr: Address })[] } | null;
 }
 
 export interface Reads {
   head(): Promise<ChainHead>;
-  balance(address: Address): Promise<number>;
+  balance(address: Address, block?: bigint): Promise<number>;
   /** `<label>.gamebox.eth`, or null. */
   nameOf(address: Address, block?: bigint): Promise<string | null>;
   /** A player's `stats` record, by its name: null with none, or one `PlayerStats` didn't write. */
@@ -177,8 +177,10 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
         const gwei = Number(block.baseFeePerGas ?? 0n) / 1e9;
         return { block: Number(block.number), at: Number(block.timestamp) * 1000, gasGwei: Math.round(gwei * 100) / 100 };
       }),
-    balance: (badge) =>
-      safely("a USDC balance", async () => Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge] })))),
+    balance: (badge, block) =>
+      safely("a USDC balance", async () =>
+        Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge], ...(block === undefined ? {} : { blockNumber: block }) }))),
+      ),
     nameOf: (badge, block) => safely("a player name", () => nameOf(badge, block)),
     stats: (name, block) => safely("a player's stats", () => stats(name, block)),
     roundTaken: (box, round) =>
@@ -235,7 +237,7 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
           names: [one, two],
           stats: [first, second],
           title: held,
-          cup: open ? { label: open.info.label, standings: open.standings.map((row) => ({ ...row, addr: row.addr as Address })) } : null,
+          cup: open ? { label: open.info.label, name: open.name, standings: open.standings.map((row) => ({ ...row, addr: row.addr as Address })) } : null,
         };
       }),
   };

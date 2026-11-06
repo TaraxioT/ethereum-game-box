@@ -83,6 +83,9 @@ export const TOPUP_USDC = 100;
 export const BOARD_MS = 5_000;
 /** Sepolia's pace, for the screen's block clock between heads. */
 export const BLOCK_MS = 12_000;
+/** A badge read at a transaction's block is tried again this often, this many times, while the RPC node catches up. */
+export const REREAD_MS = 2_000;
+export const REREAD_TRIES = 6;
 
 /** Who plays Player 2: the bot (the demo) or a person at the second station. */
 export type Opponent = "bot" | "hotseat";
@@ -472,30 +475,40 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   }
 
   /**
-   * Reads a badge's balance, player name and stats from chain; the seats and the lobby show them when they come back.
+   * Reads a badge's balance, player name and stats from chain; the seats, the ports and the lobby show them when they
+   * come back. With `block` (a transaction's), it reads at that block, trying again while the node is behind it, so
+   * what the transaction moved shows the moment it is in.
    */
-  function read(badge: Badge): void {
-    port.player(badge.address).then(
+  function read(address: `0x${string}`, block?: number, tries = REREAD_TRIES): void {
+    port.player(address, block).then(
       (card) => {
-        balances.set(card.address, card.balance);
-        names.set(card.address, card.name);
-        records.set(card.address, card.record);
-        if (sameBadge(lobby.badge, badge)) {
+        balances.set(address, card.balance);
+        names.set(address, card.name);
+        records.set(address, card.record);
+        if (lobby.badge?.address === address) {
+          const badge = lobby.badge;
           lobby = { ...lobby, card, proposal: card.name ? null : (lobby.proposal ?? proposeLabel(badge, proposals, ports.random())) };
           emit({ type: "lobby" });
         }
-        for (const seat of SEATS) if (sameBadge(seats[seat].badge, badge)) emit({ type: "seat", seat });
-        if (lastTaps.some((last) => sameBadge(last?.badge ?? null, badge))) emit({ type: "name", address: badge.address });
+        for (const seat of SEATS) if (seats[seat].badge?.address === address) emit({ type: "seat", seat });
+        if (lastTaps.some((last) => last?.badge.address === address)) emit({ type: "name", address });
       },
-      // Unread for now: the seat shows no balance, and the next read tries again.
-      () => {},
+      // Unread for now: the seat shows what it had; a read at a block the node hasn't reached yet tries again.
+      () => {
+        if (block !== undefined && tries > 1) timers.after(REREAD_MS, () => read(address, block, tries - 1));
+      },
     );
+  }
+
+  /** After a transaction that moved money, names or stats: each badge it touched, read at its block. */
+  function reread(addresses: readonly `0x${string}`[], tx: Tx): void {
+    for (const address of addresses) read(address, tx.block ?? undefined);
   }
 
   function readSeats(): void {
     for (const seat of SEATS) {
       const badge = seats[seat].badge;
-      if (badge) read(badge);
+      if (badge) read(badge.address);
     }
   }
 
@@ -511,7 +524,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (sameBadge(seats[other(seat)].badge, badge)) clearSeat(other(seat));
     seats[seat] = { badge, signed: false };
     emit({ type: "seat", seat });
-    read(badge);
+    read(badge.address);
     maybeLeaveJoin();
     return "join";
   }
@@ -579,9 +592,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
             setPhase("stake");
           }
         }),
-      () => {
-        for (const badge of badges) refreshBalance(badge);
-      },
+      (tx) => reread(badges, tx),
     );
   }
 
@@ -607,7 +618,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       calledOff: false,
       endedAt: null,
       refunded: [false, false],
-      lines: null,
+      settlement: null,
     });
     if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
     const play = startPlay(chosen as TeamGameId, seed, now);
@@ -622,21 +633,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond. */
   function drawTimer(standoff: QuickDrawState, now: number): void {
     timers.after(Math.max(0, standoff.drawAt - now), () => stepGame(null));
-  }
-
-  /** Reads a badge's balance again, after money moved. */
-  function refreshBalance(address: `0x${string}`): void {
-    port.balance(address).then(
-      (balance) => {
-        balances.set(address, balance);
-        for (const seat of SEATS) if (seats[seat].badge?.address === address) emit({ type: "seat", seat });
-        if (lobby.badge?.address === address && lobby.card) {
-          lobby = { ...lobby, card: { ...lobby.card, balance } };
-          emit({ type: "lobby" });
-        }
-      },
-      () => {},
-    );
   }
 
   // ── Built games ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -813,7 +809,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (!current.voided) cue("over", winner);
   }
 
-  /** Sends the result. Once it is paid, its lines are read from chain at its receipt, never made up here. */
+  /**
+   * Sends the result. Once it is paid, what it did is read from chain at its receipt, never made up here, and so are
+   * both players' balances, names and stats and every board: the title and the cup it moved show at once.
+   */
   function settle(settled: Match, order: ResultOrder): void {
     const paid = settled.stake * 2;
     const payees: (readonly [`0x${string}`, number])[] =
@@ -824,12 +823,13 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       (watch) => port.settle(order, watch),
       (tx) => {
         for (const [address, sum] of payees) land(address, sum);
-        for (const address of order.badges) refreshBalance(address);
+        reread(order.badges, tx);
         if (tx.step !== "paid") return;
+        readBoards();
         port.outcome(order, tx.hash).then(
-          (lines) => {
+          (settlement) => {
             if (match?.id !== settled.id) return;
-            match = { ...match, lines };
+            match = { ...match, settlement };
             emit({ type: "game" });
           },
           () => {},
@@ -857,10 +857,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       (watch) => port.refund(round, watch),
       (tx) => {
         refunding = false;
-        for (const address of badges) {
-          land(address, amount);
-          refreshBalance(address);
-        }
+        for (const address of badges) land(address, amount);
+        reread(badges, tx);
         if (tx.step !== "paid" || match?.id !== id) return;
         match = { ...match, refunded: [true, true] };
         emit({ type: "game" });
@@ -887,7 +885,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       lobby = { ...lobby, badge, card: null, proposal: null };
       emit({ type: "lobby" });
     }
-    read(badge);
+    read(badge.address);
     return "card";
   }
 
@@ -952,9 +950,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     send(
       { kind: "topup", seat: null, direction: "out", amount: TOPUP_USDC },
       (watch) => port.topup(badge.address, watch),
-      () => {
+      (tx) => {
         land(badge.address, TOPUP_USDC);
-        refreshBalance(badge.address);
+        reread([badge.address], tx);
       },
     );
   }
@@ -967,7 +965,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     send(
       { kind: "claim", seat: null, direction: "out", amount: 0 },
       (watch) => port.claim(label, badge.address, watch),
-      () => read(badge),
+      (tx) => reread([badge.address], tx),
     );
   }
 
@@ -993,7 +991,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const seatedHere = sameBadge(seats[seat].badge, badge);
     // Whoever taps is named on screen: their ENS name, read now if the Box doesn't know it yet.
     lastTaps[seat] = { badge, at: clock.now() };
-    if (!names.has(badge.address)) read(badge);
+    if (!names.has(badge.address)) read(badge.address);
     freshenBoards();
     switch (phase) {
       case "boot":

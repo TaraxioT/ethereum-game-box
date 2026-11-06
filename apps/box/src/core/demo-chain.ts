@@ -3,7 +3,7 @@
 // PAY_MS after it. No hashes: nothing here is on Sepolia, and the screen shows none. The Box itself runs the real port
 // (`src/chain/`).
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Board, GameId, Leader, PlayerCard, PlayerRecord } from "./types.ts";
+import type { Board, GameId, Leader, PlayerCard, PlayerRecord, Settlement } from "./types.ts";
 import { NO_RECORD, counted, recordText } from "./stats.ts";
 import { BLOCK_MS, TOPUP_USDC } from "./core.ts";
 import { chainLabel } from "./catalogue.ts";
@@ -103,7 +103,6 @@ export function createDemoChain(clock: Clock): DemoChain {
     nextRound: () => ++round,
     refundAfterMs: DEMO_REFUND_MS,
     stakeNeedsName: false,
-    balance: (address) => Promise.resolve(balanceOf(address)),
     player: (address): Promise<PlayerCard> =>
       Promise.resolve({ address, name: names.get(address) ?? null, balance: balanceOf(address), record: recordOf(address) }),
     board(game): Promise<Board> {
@@ -164,21 +163,33 @@ export function createDemoChain(clock: Clock): DemoChain {
         names.set(address, name);
       });
     },
-    outcome(order: ResultOrder): Promise<readonly string[]> {
-      const amount = paid.get(order.round);
-      const statsLines = order.badges.flatMap((address) => {
-        const r = recordOf(address);
+    outcome(order: ResultOrder): Promise<Settlement> {
+      const amount = paid.get(order.round) ?? null;
+      const stats = [recordOf(order.badges[0]), recordOf(order.badges[1])] as const;
+      const statsLines = order.badges.flatMap((address, i) => {
+        const r = stats[i];
         return r ? [`${nameOf(address)} stats: ${recordText(r)}`] : [];
       });
-      if (order.winner === null) return Promise.resolve([amount ? `A draw: ${amount} USDC back to each` : "A draw", ...statsLines]);
-      const winner = order.badges[order.winner];
       const label = chainLabel(order.game) ?? order.game;
-      const title = titles.get(label);
-      const lines = [amount ? `${nameOf(winner)} +${amount} USDC` : `${nameOf(winner)} wins`];
-      if (title?.holder === winner) {
-        lines.push(`${nameOf(winner)} now holds champion.${label}.gamebox.eth${title.streak > 1 ? `, streak ${title.streak}` : ""}`);
-      }
-      return Promise.resolve([...lines, ...statsLines]);
+      const title = order.winner === null ? undefined : titles.get(label);
+      const winner = order.winner === null ? null : order.badges[order.winner];
+      const holds = winner !== null && title?.holder === winner ? { name: `champion.${label}.gamebox.eth`, streak: title.streak } : null;
+      const lines =
+        winner === null
+          ? [amount ? `A draw: ${amount} USDC back to each` : "A draw"]
+          : [
+              amount ? `${nameOf(winner)} +${amount} USDC` : `${nameOf(winner)} wins`,
+              ...(holds ? [`${nameOf(winner)} now holds ${holds.name}${holds.streak > 1 ? `, streak ${holds.streak}` : ""}`] : []),
+            ];
+      const named = (address: Address): string | null => names.get(address) ?? null;
+      return Promise.resolve({
+        lines: [...lines, ...statsLines],
+        names: [named(order.badges[0]), named(order.badges[1])],
+        paid: amount,
+        title: holds,
+        cup: null,
+        stats,
+      });
     },
     watchHead(listener) {
       listeners.add(listener);

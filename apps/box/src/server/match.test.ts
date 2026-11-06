@@ -86,7 +86,7 @@ describe("whole matches over the link", () => {
     expect(final.seats.map((s) => s.balance)).toEqual([90, 110]);
     const phases = screen.messages.flatMap((m) => (m.t === "event" && m.event.type === "phase" ? [m.event.to] : []));
     expect(phases).toEqual(["attract", "home", "stake", "playing", "result"]);
-    expect(final.match?.lines).toEqual([
+    expect(final.match?.settlement?.lines).toEqual([
       "0xb2b2…b2b2 +20 USDC",
       "0xb2b2…b2b2 now holds champion.quickdraw.gamebox.eth",
       "0xa1a1…a1a1 stats: 0W 1L",

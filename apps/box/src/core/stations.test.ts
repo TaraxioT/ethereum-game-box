@@ -49,7 +49,7 @@ function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {
     calledOff: false,
     endedAt: null,
     refunded: [false, false],
-    lines: null,
+    settlement: null,
     ...extra,
   };
 }

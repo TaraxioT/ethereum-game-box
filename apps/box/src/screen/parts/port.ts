@@ -68,7 +68,7 @@ const styles = sheet(`
 }
 .name {
   max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: ltr;
-  font: 600 max(14px, calc(24 * var(--p))) / 1.15 var(--hud-body); letter-spacing: 0.02em; color: var(--fg);
+  font: 600 max(11px, calc(24 * var(--p) * var(--fit, 1))) / 1.15 var(--hud-body); letter-spacing: 0.02em; color: var(--fg);
 }
 .name span { color: var(--fg-3); }
 .tap { display: none; margin-top: calc(10 * var(--p)); font: 600 max(14px, calc(20 * var(--p))) / 1.15 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-4); }
@@ -146,8 +146,11 @@ export class EgbPort extends HTMLElement {
     const first = this.#address === undefined;
     // The player's ENS name once read from chain (`nova.gamebox.eth`), else the badge's own label.
     const name = seat.badge ? playerName(seat.badge, seat.ens) : "";
-    this.#name.replaceChildren(...nameParts(name));
-    this.#name.title = name;
+    if (this.#name.title !== name) {
+      this.#name.replaceChildren(...nameParts(name));
+      this.#name.title = name;
+      requestAnimationFrame(() => fitName(this.#name));
+    }
     // A balance not read from chain yet shows as an ellipsis.
     const balance = seat.balance === null ? "…" : seat.balance.toLocaleString("en-US", { maximumFractionDigits: 2 });
     setDigits(this.#num, seat.badge ? balance : "", !first && address === this.#address);
@@ -183,6 +186,13 @@ export class EgbPort extends HTMLElement {
     // The flash shows even under reduced motion: it is the only sign the tap was refused.
     this.#alarm.animate([{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }], { duration: 320, easing: "ease-out" });
   }
+}
+
+/** A long name is never cut short: its font shrinks until the whole name fits the port. */
+function fitName(name: HTMLElement): void {
+  name.style.removeProperty("--fit");
+  if (name.clientWidth === 0 || name.scrollWidth <= name.clientWidth) return;
+  name.style.setProperty("--fit", ((name.clientWidth - 1) / name.scrollWidth).toFixed(3));
 }
 
 /** `nova.gamebox.eth` → the badge's own label bright, the rest of the name quieter. */

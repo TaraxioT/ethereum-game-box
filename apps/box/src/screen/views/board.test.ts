@@ -38,7 +38,7 @@ describe("the board", () => {
   it("shows the games this Box plays, each with its title holder, streak and time left", () => {
     const rows = boardGames(board([game("quickdraw", NOVA, NOW + 250, 3), game("stockduel", NOVA, NOW - 5), game("tapwar", null, 0)], []), NOW);
     expect(rows.map((r) => [r.game, r.title.what, r.title.when, r.title.map])).toEqual([
-      ["QUICK DRAW", "nova.gamebox.eth ×3", "4M 10S", "champion.quickdraw.gamebox.eth"],
+      ["QUICK DRAW", "nova.gamebox.eth ×3", "4M 10S", "champion.quickdraw.gamebox.eth → nova.gamebox.eth"],
       ["STOCK DUEL", "UP FOR GRABS", "", "champion.stockduel.gamebox.eth"],
     ]);
   });
@@ -48,7 +48,7 @@ describe("the board", () => {
     const games = [game("quickdraw", null, 0), game("stockduel", null, 0)];
     const live = boardGames(board(games, [cup("4", { leader, prize: "25" })]), NOW);
     expect(live.map((r) => r.cup)).toEqual([
-      { what: "25 USDC · nova.gamebox.eth 6 PTS", when: "4M", tone: "live", map: "cup-4.quickdraw.gamebox.eth", play: "cup" },
+      { what: "25 USDC · nova.gamebox.eth 6 PTS", when: "4M", tone: "live", map: "cup-4.quickdraw.gamebox.eth → nova.gamebox.eth", play: "cup" },
       { what: "NONE OPEN", when: "", tone: "none", map: "", play: null },
     ]);
     const ended = boardGames(board(games, [cup("3", { ends: NOW - 1, leader })]), NOW);
@@ -58,7 +58,7 @@ describe("the board", () => {
   it("shows a cup closed in the last hour with its winner, forever, and drops an older one", () => {
     const games = [game("quickdraw", null, 0)];
     const won = cup("2", { closed: true, winner: NOVA, winnerName: "nova.gamebox.eth", ends: NOW - 60 });
-    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "nova.gamebox.eth · FOREVER", when: "WON", tone: "done", map: "cup-2.quickdraw.gamebox.eth", play: null });
+    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "nova.gamebox.eth · FOREVER", when: "WON", tone: "done", map: "cup-2.quickdraw.gamebox.eth → nova.gamebox.eth", play: null });
     expect(boardGames(board(games, [{ ...won, ends: NOW - 7_200 }]), NOW)[0]?.cup.what).toBe("NONE OPEN");
   });
 });

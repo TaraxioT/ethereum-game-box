@@ -20,7 +20,7 @@ import type { ChainTxUpdate, ResultOrder } from "../core/ports.ts";
 import { createFakeClock } from "../core/fake-clock.ts";
 import { softwareSigner } from "../signer/software.ts";
 import type { BoxSigner } from "../signer/signer.ts";
-import { createSepoliaChain, outcomeLines, POLL_MS, REFUND_AFTER_MS, resultOf, seatOf, stakeOf } from "./port.ts";
+import { createSepoliaChain, POLL_MS, REFUND_AFTER_MS, resultOf, seatOf, settlementOf, stakeOf } from "./port.ts";
 import { roundsFile } from "./rounds.ts";
 import { memoryReads, mockRelayer } from "./testing.ts";
 
@@ -226,42 +226,51 @@ describe("the Sepolia port on a mocked relayer", () => {
   });
 });
 
-describe("the result's lines", () => {
+describe("what a result did", () => {
   const order: ResultOrder = { round: 3, game: "stock-duel", badges: [A, B], winner: 1 };
   const names = ["nova.gamebox.eth", "kite.gamebox.eth"] as const;
+  const stats = [
+    { played: 3, wins: 2, losses: 1, draws: 0, streak: 0, best: 2 },
+    { played: 4, wins: 2, losses: 1, draws: 1, streak: 1, best: 1 },
+  ] as const;
 
-  it("say the payout, the title and each player's place, from what the chain says", () => {
-    const lines = outcomeLines(order, {
+  it("says the payout, the title and each player's place, from what the chain says", () => {
+    const settlement = settlementOf(order, {
       block: 1n,
       pot: 10,
       names,
-      stats: [
-        { played: 3, wins: 2, losses: 1, draws: 0, streak: 0, best: 2 },
-        { played: 4, wins: 2, losses: 1, draws: 1, streak: 1, best: 1 },
-      ],
+      stats,
       title: { name: "champion.stockduel.gamebox.eth", holder: B, streak: 2 },
       cup: {
         label: "mumbai-cup",
+        name: "mumbai-cup.stockduel.gamebox.eth",
         standings: [
           { name: "nova.gamebox.eth", addr: A as Address, points: 6, wins: 2, draws: 0, losses: 0 },
           { name: "kite.gamebox.eth", addr: B as Address, points: 3, wins: 1, draws: 0, losses: 2 },
         ],
       },
     });
-    expect(lines).toEqual([
-      "kite.gamebox.eth +20 USDC",
-      "kite.gamebox.eth now holds champion.stockduel.gamebox.eth, streak 2",
-      "mumbai-cup: nova.gamebox.eth 1st, 6 pts",
-      "mumbai-cup: kite.gamebox.eth 2nd, 3 pts",
-      "nova.gamebox.eth stats: 2W 1L",
-      "kite.gamebox.eth stats: 2W 1L 1D, streak 1",
-    ]);
+    expect(settlement).toEqual({
+      lines: [
+        "kite.gamebox.eth +20 USDC",
+        "kite.gamebox.eth now holds champion.stockduel.gamebox.eth, streak 2",
+        "mumbai-cup: nova.gamebox.eth 1st, 6 pts",
+        "mumbai-cup: kite.gamebox.eth 2nd, 3 pts",
+        "nova.gamebox.eth stats: 2W 1L",
+        "kite.gamebox.eth stats: 2W 1L 1D, streak 1",
+      ],
+      names,
+      paid: 20,
+      title: { name: "champion.stockduel.gamebox.eth", streak: 2 },
+      cup: { name: "mumbai-cup.stockduel.gamebox.eth", places: [{ rank: 0, points: 6 }, { rank: 1, points: 3 }] },
+      stats,
+    });
   });
 
-  it("say only what happened: no pot, no title move, a draw, a badge with no name", () => {
-    expect(outcomeLines(order, { block: 1n, pot: null, names: [null, null], stats: [null, null], title: { name: "t", holder: A, streak: 1 }, cup: null })).toEqual([
-      `${B.slice(0, 6)}…${B.slice(-4)} wins`,
-    ]);
-    expect(outcomeLines({ ...order, winner: null }, { block: 1n, pot: 10, names, stats: [null, null], title: null, cup: null })).toEqual(["A draw: 10 USDC back to each"]);
+  it("says only what happened: no pot, no title move, a draw, a badge with no name", () => {
+    const quiet = settlementOf(order, { block: 1n, pot: null, names: [null, null], stats: [null, null], title: { name: "t", holder: A, streak: 1 }, cup: null });
+    expect(quiet).toMatchObject({ lines: [`${B.slice(0, 6)}…${B.slice(-4)} wins`], paid: null, title: null, cup: null });
+    const draw = settlementOf({ ...order, winner: null }, { block: 1n, pot: 10, names, stats: [null, null], title: null, cup: null });
+    expect(draw).toMatchObject({ lines: ["A draw: 10 USDC back to each"], paid: 10, title: null });
   });
 });

@@ -7,6 +7,7 @@ import { gameOfLabel } from "../../core/catalogue.ts";
 import { honoursOf } from "../../core/honours.ts";
 import type { BoxEvent, BoxState, Phase, Seat } from "../../core/types.ts";
 import { el, place } from "./dom.ts";
+import { ensName } from "./ens-name.ts";
 import type { Layout } from "./layout.ts";
 
 /** Where a tap shows the card: Attract and Home, where nothing else names the player (Join, Stake, the result and the
@@ -49,19 +50,15 @@ export function createEnsTags(layout: Layout): EnsTags {
       return;
     }
     tag.hidden = false;
-    const head = el("div", "ens-tag-name");
-    if (card.ens) {
-      const dot = card.ens.indexOf(".");
-      head.append(el("b", "", card.ens.slice(0, dot)), el("span", "", card.ens.slice(dot)));
-    } else {
-      head.append(el("b", "", badgeLabel(card.badge).toLowerCase()), el("span", "", card.read ? " · no ENS name yet" : " · reading ENS…"));
-    }
+    const head = card.ens
+      ? ensName(card.ens, "ens-tag-name", { split: true })
+      : ensName(`${badgeLabel(card.badge).toLowerCase()}${card.read ? " · no ENS name yet" : " · reading ENS…"}`, "ens-tag-name");
     const rows = honoursOf(card.ens, state.boards, now).map((h) => {
       const row = el("div", "ens-tag-honour");
       row.dataset.kind = h.kind;
       row.append(
         el("span", "ens-tag-kind", h.kind === "title" ? `♛ ${gameWord(h.name)} CHAMPION${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS ${gameWord(h.name)} CUP · ${h.count} PTS`),
-        el("span", "ens-tag-map", `${h.name} → ${card.ens ?? ""}`),
+        ensName(`${h.name} → ${card.ens ?? ""}`, "ens-tag-map"),
       );
       return row;
     });

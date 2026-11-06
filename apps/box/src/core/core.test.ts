@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, REREAD_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -37,6 +37,10 @@ interface Recording extends ChainPort {
   readonly boards: string[];
   readonly balances: Map<string, number>;
   readonly names: Map<string, string>;
+  /** Each player read, with the block it was read at (null: the latest). */
+  readonly reads: (readonly [string, number | null])[];
+  /** The node's newest block: a read at a later one rejects, as a node behind the relayer's does. */
+  nodeAt: number;
   head(head: ChainHead): void;
 }
 
@@ -46,22 +50,28 @@ function recordingPort(): Recording {
   const boards: string[] = [];
   const balances = new Map<string, number>();
   const names = new Map<string, string>();
+  const reads: (readonly [string, number | null])[] = [];
   const heads = new Set<(head: ChainHead) => void>();
   // The port's rounds start where it says, not at 1: the core takes them as they come.
   let round = 40;
   const take = (kind: Sent["kind"]) => (order: unknown, watch: TxWatch) => void sent.push({ kind, order, watch });
-  return {
+  const port: Recording = {
     sent,
     outcomes,
     boards,
     balances,
     names,
+    reads,
+    nodeAt: Number.MAX_SAFE_INTEGER,
     onChain: (game) => chainLabel(game) !== null,
     nextRound: () => ++round,
     refundAfterMs: 3_600_000,
     stakeNeedsName: false,
-    balance: (address) => Promise.resolve(balances.get(address) ?? 100),
-    player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100, record: null }),
+    player(address, block) {
+      reads.push([address, block ?? null]);
+      if (block !== undefined && block > port.nodeAt) return Promise.reject(new Error(`header not found: ${block}`));
+      return Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100, record: null });
+    },
     board(game): Promise<Board> {
       boards.push(game);
       return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER }, cup: null, leaders: [], won: [] });
@@ -73,7 +83,14 @@ function recordingPort(): Recording {
     claim: (label, address, watch) => void sent.push({ kind: "claim", order: { label, address }, watch }),
     outcome(order, hash) {
       outcomes.push([order, hash]);
-      return Promise.resolve(["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
+      return Promise.resolve({
+        lines: ["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"],
+        names: ["nova.gamebox.eth", null],
+        paid: 20,
+        title: { name: "champion.quickdraw.gamebox.eth", streak: 1 },
+        cup: null,
+        stats: [null, null],
+      });
     },
     watchHead(listener) {
       heads.add(listener);
@@ -81,6 +98,7 @@ function recordingPort(): Recording {
     },
     head: (head) => heads.forEach((listener) => listener(head)),
   };
+  return port;
 }
 
 /** Moves a recorded transaction through to paid, or fails it. */
@@ -331,12 +349,12 @@ describe("the core on its ports", () => {
     await quickWin(r, 1);
     expect(core.state().match?.outcome).toEqual({ winner: 1 });
     // The pot lands in the next head; the result goes then, and its lines come from the chain once it is paid.
-    await until(r, (state) => state.match?.lines !== null);
+    await until(r, (state) => state.match?.settlement !== null);
     expect(r.chain.sent).toEqual(["open 1", "settle 1"]);
-    expect(await r.chain.balance(NOVA.address)).toBe(90);
-    expect(await r.chain.balance(KITE.address)).toBe(110);
+    expect((await r.chain.player(NOVA.address)).balance).toBe(90);
+    expect((await r.chain.player(KITE.address)).balance).toBe(110);
     expect(core.state().seats.map((seat) => seat.balance)).toEqual([90, 110]);
-    expect(core.state().match?.lines?.[0]).toMatch(/\+20 USDC$/);
+    expect(core.state().match?.settlement?.lines[0]).toMatch(/\+20 USDC$/);
 
     core.stop();
     r.chain.stop();
@@ -577,7 +595,7 @@ describe("the core on its ports", () => {
     expect(r.core.state()).toMatchObject({ phase: "home", match: null });
     await until(r, (state) => state.txs.length > 0 && state.txs.every((tx) => tx.step === "paid"));
     expect(r.chain.sent).toEqual(["open 1"]);
-    expect(await r.chain.balance(NOVA.address)).toBe(90);
+    expect((await r.chain.player(NOVA.address)).balance).toBe(90);
   });
 });
 
@@ -726,12 +744,39 @@ describe("stakes on chain", () => {
     expect(settle).toMatchObject({ kind: "settle", order });
     expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 20, seat: 1 });
     expect(r.core.state().seats[1].pending).toBe(20);
-    expect(r.core.state().match?.lines).toBeNull();
+    expect(r.core.state().match?.settlement).toBeNull();
     pay(settle);
     await flush();
     expect(r.chain.outcomes).toEqual([[order, HASH]]);
-    expect(r.core.state().match?.lines).toEqual(["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
+    expect(r.core.state().match?.settlement?.lines).toEqual(["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
     expect(r.core.state().seats[1].pending).toBe(0);
+  });
+
+  it("reads both players again at the result's block, and every board, the moment it is paid", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    await quickWin(r, 1);
+    const boardsBefore = r.chain.boards.length;
+    r.chain.reads.length = 0;
+    // The RPC node is a block behind the relayer's: a read at the result's block fails until it catches up.
+    r.chain.nodeAt = 11;
+    r.chain.balances.set(KITE.address, 120);
+    pay(r.chain.sent[1], 12);
+    await flush();
+    expect(r.chain.reads).toEqual([
+      [NOVA.address, 12],
+      [KITE.address, 12],
+    ]);
+    expect(r.chain.boards.length).toBeGreaterThan(boardsBefore);
+    expect(r.core.state().seats[1].balance).toBe(100);
+    r.chain.nodeAt = 12;
+    r.clock.advance(REREAD_MS);
+    await flush();
+    expect(r.chain.reads.slice(2)).toEqual([
+      [NOVA.address, 12],
+      [KITE.address, 12],
+    ]);
+    expect(r.core.state().seats[1].balance).toBe(120);
   });
 
   it("takes a fresh round from the port for each match", async () => {
@@ -932,7 +977,7 @@ describe("refund", () => {
     expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([10, 10]);
     await until(r, (state) => state.match?.refunded[0] === true);
     expect(r.core.state().match?.refunded).toEqual([true, true]);
-    expect([await r.chain.balance(NOVA.address), await r.chain.balance(KITE.address)]).toEqual([100, 100]);
+    expect([(await r.chain.player(NOVA.address)).balance, (await r.chain.player(KITE.address)).balance]).toEqual([100, 100]);
     r.clock.advance(REFUND_DONE_MS);
     expect(r.core.state().phase).toBe("home");
   });

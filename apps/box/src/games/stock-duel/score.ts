@@ -6,6 +6,7 @@ import type { Rect } from "../../screen/shell/layout.ts";
 import type { Seat } from "@egb/sdk";
 import type { PlayFor } from "../../core/types.ts";
 import { el, fitFont, place, play } from "../../screen/shell/dom.ts";
+import { ensName, setEns } from "../../screen/shell/ens-name.ts";
 import { ROUNDS_TO_WIN } from "./rules.ts";
 
 export interface StandingPlaces {
@@ -40,7 +41,7 @@ export function createStanding(places: StandingPlaces): Standing {
     const plate = el("div", `sd-plate s${seat}`);
     place(plate, r);
     const avatar = el("div", "sd-avatar", `P${seat + 1}`);
-    const name = el("b");
+    const name = ensName("", "sd-name", { split: true });
     const stake = el("span");
     const who = el("div", "sd-who");
     who.append(name, stake);
@@ -79,7 +80,7 @@ export function createStanding(places: StandingPlaces): Standing {
       const money = stake !== null && stake > 0;
       plates.forEach((p, seat) => {
         const name = players[seat]?.name ?? "";
-        if (p.name.textContent !== name) p.name.textContent = name;
+        setEns(p.name, name);
         p.stake.replaceChildren(...(money ? ["STAKE ", el("em", "", `${stake} USDC`)] : []));
       });
       pot.hidden = stake === null;

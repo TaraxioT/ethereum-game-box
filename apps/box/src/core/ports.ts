@@ -1,7 +1,7 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
 import type { Seat, StationView, Transcript, BuiltEvent, Outcome, TapNeed } from "@egb/sdk";
-import type { Badge, Board, GameId, GameInfo, PlayerCard, TxStep } from "./types.ts";
+import type { Badge, Board, GameId, GameInfo, PlayerCard, Settlement, TxStep } from "./types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };
@@ -109,9 +109,12 @@ export interface ChainPort {
   readonly refundAfterMs: number;
   /** Only a badge with a player name may stake (`DuelPot` refuses `NotAPlayer`): one without is sent to the lobby. */
   readonly stakeNeedsName: boolean;
-  balance(address: `0x${string}`): Promise<number>;
-  /** A badge's name, balance and stats. */
-  player(address: `0x${string}`): Promise<PlayerCard>;
+  /**
+   * A badge's name, balance and stats. With `block`, read at that block (a transaction's): an RPC node behind the
+   * relayer's would still answer from before it, so the screen would keep the old balance. Rejects while the node
+   * doesn't have the block yet.
+   */
+  player(address: `0x${string}`, block?: number): Promise<PlayerCard>;
   board(game: GameId): Promise<Board>;
   /** Sends both stakes into the pot (a Box-signed `Stake`). */
   open(order: StakeOrder, watch: TxWatch): void;
@@ -124,10 +127,10 @@ export interface ChainPort {
   /** `<label>.gamebox.eth` for a badge (a Box-signed `Seat`). */
   claim(label: string, address: `0x${string}`, watch: TxWatch): void;
   /**
-   * What a settled result did, read from chain at its receipt: the payout, the title, the championship. `hash` is the
+   * What a settled result did, read from chain at its receipt: the payout, the title, the cup, the stats. `hash` is the
    * result's transaction (null on a chain with no hashes: the demo's).
    */
-  outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<readonly string[]>;
+  outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<Settlement>;
   /** Calls back with each new head; returns the unsubscribe. */
   watchHead(listener: (head: ChainHead) => void): () => void;
 }

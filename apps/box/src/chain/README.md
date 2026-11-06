@@ -27,15 +27,16 @@ minutes the server refunds any past its delay (a match lost to a restart or a re
 Reads go to `SEPOLIA_RPC_URL`: USDC balances, `GameBoxNames.nameOf`, the pot and rounds, the head for the block clock,
 and through the Universal Resolver a player's `stats`, a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`),
 its open cup (`Championships.openCup`, then its name's `standings`) and `gamebox.eth`'s `leaderboard`. After a result is
-paid, its lines are read at the receipt's block: the `PotSettled` payout, whether the winner now holds the title, each
-player's place in the cup, and each player's new `stats`.
+paid, what it did is read at the receipt's block (`settlementOf`): the `PotSettled` payout, whether the winner now
+holds the title, each player's place in the cup, and each player's new `stats`. A player read after a transaction
+(`player(address, block)`) reads its balance, name and stats at that transaction's block.
 The RPC URL carries the node's key, so every error that leaves `reads.ts` has its URLs replaced by `<rpc>`.
 
 ## Modules
 
 | Module | What it is | API |
 |---|---|---|
-| `port.ts` | The port: requests, their steps, rounds, the sweep, the result's lines | `createSepoliaChain(options)`, `stakeOf`, `resultOf`, `seatOf`, `outcomeLines` |
+| `port.ts` | The port: requests, their steps, rounds, the sweep, what a result did | `createSepoliaChain(options)`, `stakeOf`, `resultOf`, `seatOf`, `settlementOf` |
 | `relayer.ts` | The relayer's HTTP API: POSTs answered with a `TxView` or an error | `relayerAt(url)` |
 | `reads.ts` | Sepolia reads, URLs redacted from every error | `sepoliaReads(rpcUrl)`, `redact` |
 | `rounds.ts` | `rounds.json`: the next round and the open pots | `roundsFile(file)` |

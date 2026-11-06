@@ -3,12 +3,14 @@
 // keyboard, `name-keys.ts`; a keyboard works too; the label rule is checked as they type), with ANOTHER and CLAIM
 // (Enter claims too). The Box vouches for the badge with its
 // own key: a badge can't sign a claim;
-// its stats over every game, from its name's `stats` record (the win streak, wins, losses, played, the best streak and
-// its place on the leaderboard); its USDC and TOP UP 100 USDC. Beside it, the game's title
-// (`champion.<game>.gamebox.eth`, its holder and streak), its open cup (the standings, the prize and a countdown to the
-// close) and the leaderboard over every game (`gamebox.eth`'s `leaderboard` record), read through the Universal
-// Resolver every few seconds while the lobby shows. The transaction bar follows each claim and top-up. BACK returns
-// Home, or to Stake when a short balance sent the player here.
+// every title it holds and cup it leads, each by its own ENS name, on one big scrolling line; its stats over every game,
+// from its name's `stats` record (the win streak, wins, losses, played, the best streak and its place on the
+// leaderboard); its USDC and TOP UP 100 USDC. Beside it, the game's title (`champion.<game>.gamebox.eth`, its holder
+// and streak), its open cup (the standings, the prize and a countdown to the close) and the leaderboard over every game
+// (`gamebox.eth`'s `leaderboard` record), read through the Universal Resolver every few seconds while the lobby shows.
+// Both panels lay their lines out inside their frames: names scroll, and the leaderboard shows the rows that fit. A
+// list is redrawn only when it changes, so its names keep scrolling. The transaction bar follows each claim and
+// top-up. BACK returns Home, or to Stake when a short balance sent the player here.
 import type { Board, BoxState, Leader, Lobby, PlayerRecord } from "../../core/types.ts";
 import { DEFAULT_FOCUS } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
@@ -22,12 +24,16 @@ import { clock } from "./refund.ts";
 import { cupLabel } from "./play-for.ts";
 import { ensName, setEns } from "../shell/ens-name.ts";
 import { honoursOf } from "../../core/honours.ts";
+import { honourWords } from "./seat-panel.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
 /** Where the name keyboard opens: right of the card, over the core, the board and the keys. */
 const NAME_KEYS = { x: 430, y: 300, w: 790, h: 420 };
-/** Leaderboard rows the board shows. */
+/** The panels' padding, as in views.css: their bodies fill the rest. */
+const PAD = { x: 22, y: 16 };
+/** Leaderboard rows the board draws (it shows the ones that fit), and cup standings. */
 const LEADERS_SHOWN = 5;
+const STANDINGS_SHOWN = 3;
 
 const usdc = (amount: number): string => `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`;
 
@@ -36,11 +42,22 @@ export function lobbyView(ctx: ViewContext): View {
   const page = pageLayout(layout);
   const root = el("div", "page lobby");
 
-  const card = document.createElement("egb-panel") as EgbPanel;
-  card.classList.add("lobby-card");
-  place(card, page.seats[0]);
-  const kicker = el("div", "lobby-kicker", "PLAYER");
-  const name = ensName("—", "lobby-name");
+  /** A panel whose body is a column exactly its inside's size, so nothing in it can spill past its frame. */
+  const panel = (className: string, rect: (typeof page.seats)[0]): { readonly frame: EgbPanel; readonly body: HTMLElement } => {
+    const frame = document.createElement("egb-panel") as EgbPanel;
+    frame.classList.add(className);
+    place(frame, rect);
+    const body = el("div", "lobby-body");
+    body.style.height = `${rect.h - 2 * PAD.y}px`;
+    frame.append(body);
+    return { frame, body };
+  };
+
+  const { frame: card, body: cardBody } = panel("lobby-card", page.seats[0]);
+  const top = el("div", "lobby-top");
+  const balance = el("div", "lobby-balance");
+  top.append(el("div", "lobby-kicker", "PLAYER"), balance);
+  const name = ensName("—", "lobby-name", { split: true });
   // The name to claim, typed over the proposal. Keys typed here are the field's alone.
   const field = document.createElement("input");
   Object.assign(field, { type: "text", className: "lobby-input", maxLength: 32, autocomplete: "off", spellcheck: false, placeholder: "your-name" });
@@ -52,29 +69,31 @@ export function lobbyView(ctx: ViewContext): View {
   const proposal = el("label", "lobby-claim");
   proposal.append(field, el("span", "lobby-suffix", ".gamebox.eth"));
   const fieldHint = el("div", "lobby-hint");
-  const balance = el("div", "lobby-balance");
-  const held = el("div", "lobby-honours");
+  // What this player holds: each title and cup by its own ENS name, every one resolving to theirs.
+  const heldHead = el("div", "lobby-kicker", "HOLDS ON ENS · EACH RESOLVES TO YOU");
+  const held = ensName("", "lobby-held");
   const statsHead = el("div", "lobby-kicker", "STATS");
   const stats = el("div", "lobby-stats");
-  const statsNote = el("div", "lobby-ens");
-  card.append(kicker, name, proposal, fieldHint, held, statsHead, stats, statsNote, balance);
+  const statsNote = ensName("", "lobby-note");
+  cardBody.append(top, name, proposal, fieldHint, heldHead, held, statsHead, stats, statsNote);
 
-  const board = document.createElement("egb-panel") as EgbPanel;
-  board.classList.add("lobby-board");
-  place(board, page.seats[1]);
+  const { frame: board, body: boardBody } = panel("lobby-board", page.seats[1]);
   const gameHead = el("div", "lobby-game");
-  const title = ensName("", "lobby-holder");
-  const titleName = ensName("", "lobby-ens");
-  const cup = el("div", "lobby-cup");
+  const title = ensName("", "lobby-holder", { split: true });
+  const titleName = ensName("", "lobby-map");
+  const cupRow = el("div", "lobby-cup");
+  const cupName = ensName("", "lobby-cup-name");
+  const cupLeft = el("span", "lobby-cup-left");
+  cupRow.append(cupName, cupLeft);
   const standings = el("ol", "lobby-standings");
   const leaders = el("ol", "lobby-standings lobby-leaders");
-  board.append(
+  boardBody.append(
     gameHead,
     el("div", "lobby-kicker", "TITLE"),
     title,
     titleName,
     el("div", "lobby-kicker", "CUP"),
-    cup,
+    cupRow,
     standings,
     el("div", "lobby-kicker", "LEADERBOARD · GAMEBOX.ETH"),
     leaders,
@@ -121,7 +140,7 @@ export function lobbyView(ctx: ViewContext): View {
     },
     done: () => field.blur(),
   });
-  place(nameKeys.el, NAME_KEYS);
+  place(nameKeys.el, { ...NAME_KEYS, x: NAME_KEYS.x + page.dx });
   root.append(nameKeys.el);
   field.addEventListener("focus", () => nameKeys.open());
   field.addEventListener("blur", () => nameKeys.close());
@@ -148,7 +167,8 @@ export function lobbyView(ctx: ViewContext): View {
     card.toggleAttribute("lit", lobby.badge !== null);
     const naming = Boolean(lobby.badge && c && !c.name);
     if (!lobby.badge) {
-      setEns(name, "—");
+      setEns(name, "TAP A BADGE");
+      name.classList.add("none");
       balance.textContent = "";
     } else {
       setEns(name, c === null ? "reading…" : (c.name ?? "NO NAME YET"));
@@ -167,14 +187,10 @@ export function lobbyView(ctx: ViewContext): View {
     const problem = labelProblem(field.value);
     fieldHint.textContent = problem ? `a name needs ${problem}` : "type a name, or keep this one · ENTER OR CLAIM";
     fieldHint.classList.toggle("bad", problem !== null && field.value !== "");
-    // What this player holds: each title and championship by its own ENS name, resolving to theirs.
-    held.replaceChildren(
-      ...honoursOf(c?.name ?? null, state.boards, link.now()).map((h) => {
-        const row = el("div", `lobby-honour ${h.kind}`);
-        row.append(el("b", "", h.kind === "title" ? `♛ TITLE${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS · ${h.count} PTS`), ensName(`${h.name} → ${c?.name ?? ""}`));
-        return row;
-      }),
-    );
+    const honours = honoursOf(c?.name ?? null, state.boards, link.now());
+    heldHead.hidden = honours.length === 0;
+    held.hidden = honours.length === 0;
+    setEns(held, honours.map(honourWords).join("   "));
     drawStats(c?.name ?? null, c?.record ?? null, state.board?.leaders ?? []);
     another.toggleAttribute("disabled", !naming || claiming);
     claim.toggleAttribute("disabled", !naming || claiming || problem !== null);
@@ -196,12 +212,12 @@ export function lobbyView(ctx: ViewContext): View {
     statsHead.hidden = ens === null;
     if (!ens) {
       stats.replaceChildren();
-      statsNote.textContent = "";
+      setEns(statsNote, "");
       return;
     }
     if (!r) {
       stats.replaceChildren(el("div", "lobby-stat none", "NO RESULTS YET"));
-      statsNote.textContent = `play a match: it writes ${ens}'s stats record`;
+      setEns(statsNote, `play a match: it writes ${ens}'s stats record`);
       return;
     }
     const rank = top.findIndex((row) => row.name === ens);
@@ -218,10 +234,16 @@ export function lobbyView(ctx: ViewContext): View {
       tile("BEST", String(r.best)),
       tile("RANK", rank < 0 ? "—" : `#${rank + 1}`, rank === 0 ? "hot" : ""),
     );
-    statsNote.textContent = `${ens} · stats record${r.draws > 0 ? ` · ${r.draws} draw${r.draws > 1 ? "s" : ""}` : ""}`;
+    setEns(statsNote, `${ens} · stats record${r.draws > 0 ? ` · ${r.draws} draw${r.draws > 1 ? "s" : ""}` : ""}`);
   }
 
+  /** What each list was last drawn from: a list is redrawn only when it changes, so its names keep scrolling. */
+  const drawn = { leaders: "", standings: "" };
+
   function drawLeaders(top: readonly Leader[], you: string | null): void {
+    const key = JSON.stringify([top.slice(0, LEADERS_SHOWN), you]);
+    if (key === drawn.leaders) return;
+    drawn.leaders = key;
     leaders.replaceChildren(
       ...(top.length === 0
         ? [el("li", "empty", "no results yet · every match counts")]
@@ -230,7 +252,7 @@ export function lobbyView(ctx: ViewContext): View {
             li.append(
               el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
               ensName(row.name, "who"),
-              el("span", "pts", `${row.wins}W ${row.losses}L${row.streak > 0 ? ` · STREAK ${row.streak}` : ""}`),
+              el("span", "pts", `${row.wins}W ${row.losses}L${row.streak > 0 ? ` ×${row.streak}` : ""}`),
             );
             return li;
           })),
@@ -244,37 +266,43 @@ export function lobbyView(ctx: ViewContext): View {
     if (!b) {
       setEns(title, "READING…");
       setEns(titleName, "");
-      cup.textContent = "";
-      standings.replaceChildren();
-      leaders.replaceChildren();
+      setEns(cupName, "");
+      cupLeft.textContent = "";
+      drawStandings(null);
+      drawLeaders([], null);
       return;
     }
     drawLeaders(b.leaders, state.lobby.card?.name ?? null);
     setEns(title, b.title ? `${b.title.holder}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS");
     title.classList.toggle("none", !b.title);
-    setEns(titleName, b.title ? b.title.name : "win a match to take it");
+    setEns(titleName, b.title ? `${b.title.name} → ${b.title.holder}` : "win one to take it");
     const c = b.cup;
     const left = c ? c.ends - link.now() : 0;
-    if (!c || left <= 0) {
-      cup.textContent = c ? `${cupLabel(c.name)} HAS ENDED · THE WINNER IS PAID AT THE CLOSE` : "NONE OPEN";
-      cup.classList.add("none");
-      standings.replaceChildren();
-      return;
-    }
-    cup.classList.remove("none");
-    cup.textContent = `${cupLabel(c.name)}${c.prize > 0 ? ` · ${usdc(c.prize)} PRIZE` : ""} · ${clock(left)} LEFT`;
+    const open = c !== null && left > 0;
+    cupRow.classList.toggle("none", !open);
+    setEns(cupName, !c ? "NONE OPEN" : open ? `${c.name}${c.prize > 0 ? ` · ${usdc(c.prize)} PRIZE` : ""}` : `${cupLabel(c.name)} HAS ENDED · THE WINNER IS PAID AT THE CLOSE`);
+    cupLeft.textContent = open ? `${clock(left)} LEFT` : "";
+    drawStandings(open ? c : null);
+  }
+
+  function drawStandings(c: Board["cup"]): void {
+    const key = JSON.stringify(c?.standings ?? null);
+    if (key === drawn.standings) return;
+    drawn.standings = key;
     standings.replaceChildren(
-      ...(c.standings.length === 0
-        ? [el("li", "empty", "no results yet · win 3, draw 1")]
-        : c.standings.map((row, i) => {
-            const li = el("li");
-            li.append(
-              el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
-              ensName(row.name, "who"),
-              el("span", "pts", `${row.points} PTS · ${row.wins}-${row.draws}-${row.losses}`),
-            );
-            return li;
-          })),
+      ...(!c
+        ? []
+        : c.standings.length === 0
+          ? [el("li", "empty", "no results yet · win 3, draw 1")]
+          : c.standings.slice(0, STANDINGS_SHOWN).map((row, i) => {
+              const li = el("li");
+              li.append(
+                el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
+                ensName(row.name, "who"),
+                el("span", "pts", `${row.points} PTS · ${row.wins}-${row.draws}-${row.losses}`),
+              );
+              return li;
+            })),
     );
   }
 

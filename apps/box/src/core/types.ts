@@ -147,8 +147,30 @@ export interface Match {
   readonly endedAt: number | null;
   /** Each seat has taken its stake back (Refund). */
   readonly refunded: readonly [boolean, boolean];
-  /** What the result did, read from chain after its receipt ("+20 USDC", the title, the championship); null before. */
-  readonly lines: readonly string[] | null;
+  /** What the result did, read from chain after its receipt (the payout, the title, the cup, the stats); null before. */
+  readonly settlement: Settlement | null;
+}
+
+/** A seat's place in a cup after a result: `rank` 0 is first. */
+export interface CupPlace {
+  readonly rank: number;
+  readonly points: number;
+}
+
+/** What a paid result did, read from chain at its receipt's block, never made up by the Box. */
+export interface Settlement {
+  /** Each thing it did, in words: the payout, the title, each player's place in the cup, each player's stats. */
+  readonly lines: readonly string[];
+  /** Each seat's player name at that block. */
+  readonly names: readonly [string | null, string | null];
+  /** USDC the pot paid: the winner's whole pot, or each seat's stake back on a draw; null when it settled no pot. */
+  readonly paid: number | null;
+  /** The game's title when the winner holds it now: its ENS name, and their streak on it (1: just taken). */
+  readonly title: { readonly name: string; readonly streak: number } | null;
+  /** The open cup the result scored: its ENS name and each seat's place in it (null: not in its standings). */
+  readonly cup: { readonly name: string; readonly places: readonly [CupPlace | null, CupPlace | null] } | null;
+  /** Each seat's stats after it, or null (no name, or no stats). */
+  readonly stats: readonly [PlayerRecord | null, PlayerRecord | null];
 }
 
 /** The badge a station read last, and its ENS name: the screen names whoever taps, wherever they tap. */

@@ -11,7 +11,8 @@ import { isTeamGame, MODE_STAKES, stakeOf } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
-import { el, place } from "../shell/dom.ts";
+import { el, fitFont, place } from "../shell/dom.ts";
+import { ensName, setEns } from "../shell/ens-name.ts";
 import { pageLayout } from "./page-layout.ts";
 import { honoursOf } from "../../core/honours.ts";
 import { createSeatPanel, type SeatTone } from "./seat-panel.ts";
@@ -41,11 +42,14 @@ export function stakeView(ctx: ViewContext): View {
   place(plate, page.plate);
   const kicker = el("span", "stake-kicker");
   const head = el("span", "stake-head");
-  const detail = el("span", "stake-detail");
-  plate.append(kicker, head, detail);
+  const plus = el("span", "stake-plus");
+  const detail = ensName("", "stake-detail");
+  plate.append(kicker, head, plus, detail);
+  /** The plate's lines fit inside its frame: a long one shrinks, the ENS line scrolls. */
+  const room = page.plate.w - 52;
 
   const keys = el("div", "page-keys stake-keys");
-  place(keys, layout.orientation === "portrait" ? page.keys : { ...page.keys, x: 96, w: 1088 });
+  place(keys, layout.orientation === "portrait" ? page.keys : { ...page.keys, x: 96 + page.dx, w: 1088 });
   const back = document.createElement("egb-key") as EgbKey;
   back.setAttribute("variant", "ghost");
   back.textContent = "BACK";
@@ -94,11 +98,15 @@ export function stakeView(ctx: ViewContext): View {
     return [`TAP TO SIGN ${amount} USDC`, "ask"];
   }
 
-  function say(k: string, h: string, d: string, alert = false): void {
+  function say(k: string, h: string, d: string, alert = false, p = ""): void {
     plate.toggleAttribute("alert", alert);
     kicker.textContent = k;
     head.textContent = h;
-    detail.textContent = d;
+    plus.textContent = p;
+    plus.hidden = p === "";
+    fitFont(head, room, 28);
+    fitFont(plus, room, 19);
+    setEns(detail, d);
   }
 
   function draw(state: BoxState): void {
@@ -124,11 +132,11 @@ export function stakeView(ctx: ViewContext): View {
     if (!money) return say("FREE PLAY", "THIS GAME ISN'T ON CHAIN", "NO USDC, NO TITLE");
     const open = latestOpen(state);
     if (!anySigned && state.playFor === "usdc" && open?.step === "failed") {
-      return say("THE STAKES DIDN'T GO IN", open.error ? open.error.toUpperCase() : "THE OPEN FAILED", "TAP BOTH BADGES TO TRY AGAIN", true);
+      return say("THE STAKES DIDN'T GO IN", "THE OPEN FAILED", "TAP BOTH BADGES TO TRY AGAIN", true, open.error ? open.error.toUpperCase() : "");
     }
     const line = onTheLine(state, game.title, link.now());
     const opening = state.seats.every((s) => s.signed);
-    say(opening ? "OPENING THE MATCH" : `${TIER[game.tier]} · ${state.board ? "LIVE" : "READING SEPOLIA…"}`, line.head, line.detail);
+    say(opening ? "OPENING THE MATCH" : `${TIER[game.tier]} · ${state.board ? "LIVE" : "READING SEPOLIA…"}`, line.head, line.detail, false, line.plus);
   }
 
   // The championship's countdown runs between the Box's events.

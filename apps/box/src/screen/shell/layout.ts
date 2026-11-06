@@ -74,7 +74,7 @@ export const LANDSCAPE: Layout = {
     { x: 868, y: 580, w: 176, h: 186 },
   ],
   txbar: { x: 452, y: 102, w: 376, h: 46 },
-  board: { x: 836, y: 176, w: 404, h: 300 },
+  board: { x: 836, y: 176, w: 404, h: 352 },
 };
 
 export const PORTRAIT: Layout = {
