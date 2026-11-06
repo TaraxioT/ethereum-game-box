@@ -4,7 +4,7 @@
   "name": "gamebox-demo-box",
   "account_id": "a22fe9411b81705409eb7cdf9be367e3",
   "main": "src/index.ts",
-  "compatibility_date": "2026-10-01",
+  "compatibility_date": "2026-07-29",
   "durable_objects": {
     "bindings": [{ "name": "DEMO_BOX", "class_name": "DemoBox" }]
   },

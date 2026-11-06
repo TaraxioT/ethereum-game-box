@@ -7,7 +7,7 @@
 // Needs SEPOLIA_RPC_URL (and for LIVE_DEV, DEMO_BOX_P256_KEY and the `sepolia-relayer` keystore).
 
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,23 +95,29 @@ async function done(id: string, what: string): Promise<TxView> {
   throw new Error(`${what} is not done after 6 minutes`);
 }
 
-async function waitFor(url: string) {
+async function waitFor(url: string, log: () => string) {
   for (let i = 0; i < 60; i++) {
     if (await fetch(url).then(() => true, () => false)) return;
     await sleep(1000);
   }
-  throw new Error(`${url} did not start`);
+  throw new Error(`${url} did not start:\n${log()}`);
 }
 
 function startDev(dir: string, port: number, env: Record<string, string>) {
   const file = join(secrets!, `${port}.env`);
   writeFileSync(file, Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n'), { mode: 0o600 });
+  const log = openSync(join(secrets!, `${port}.log`), 'w');
   const worker = spawn(
     'wrangler',
-    ['dev', '--port', String(port), '--env-file', file, '--persist-to', join(secrets!, `state-${port}`), '--log-level', 'warn'],
-    { cwd: fileURLToPath(new URL(dir, import.meta.url)), stdio: 'ignore' },
+    [
+      'dev',
+      ...['--port', String(port), '--inspector-port', String(port + 1000)],
+      ...['--env-file', file, '--persist-to', join(secrets!, `state-${port}`)],
+    ],
+    { cwd: fileURLToPath(new URL(dir, import.meta.url)), stdio: ['ignore', log, log] },
   );
   workers.push(worker);
+  return () => redact(readFileSync(join(secrets!, `${port}.log`), 'utf8').split('\n').slice(-15).join('\n'));
 }
 
 beforeAll(async () => {
@@ -121,16 +127,16 @@ beforeAll(async () => {
     encoding: 'utf8',
   }).trim();
   const origins = 'https://gamebox-names.pages.dev,http://localhost:*';
-  startDev('../../', 8787, { RELAYER_PRIVATE_KEY: relayerKey, SEPOLIA_RPC_URL: rpcUrl, ALLOWED_ORIGINS: origins });
-  await waitFor('http://localhost:8787/health');
-  startDev('../../../demo-box/', 8788, {
+  const relayerLog = startDev('../../', 8917, { RELAYER_PRIVATE_KEY: relayerKey, SEPOLIA_RPC_URL: rpcUrl, ALLOWED_ORIGINS: origins });
+  await waitFor('http://localhost:8917/health', relayerLog);
+  const demoBoxLog = startDev('../../../demo-box/', 8918, {
     DEMO_BOX_P256_KEY: process.env.DEMO_BOX_P256_KEY ?? '',
     SEPOLIA_RPC_URL: rpcUrl,
-    RELAYER_URL: 'http://localhost:8787',
+    RELAYER_URL: 'http://localhost:8917',
     ALLOWED_ORIGINS: origins,
   });
-  await waitFor('http://localhost:8788/box');
-  Object.assign(urls, { relayer: 'http://localhost:8787', demoBox: 'http://localhost:8788' });
+  await waitFor('http://localhost:8918/box', demoBoxLog);
+  Object.assign(urls, { relayer: 'http://localhost:8917', demoBox: 'http://localhost:8918' });
 }, 120_000);
 
 afterAll(() => {
