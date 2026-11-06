@@ -107,6 +107,7 @@ interface Keeping {
   tries: number;
   nextAt: number;
   root: Hex | null;
+  /** The payment, from the moment it leaves: a retry must know of it, or it could pay again. */
   tx: Hex | null;
 }
 
@@ -455,9 +456,15 @@ export class Judge {
     const { store, audits, now, scrub } = this.deps;
     if (now() < keeping.nextAt) return;
     try {
-      const landed = await audits.put((await getText(store, RECORD)) as string);
+      const landed = await audits.put((await getText(store, RECORD)) as string, {
+        paid: keeping.tx,
+        onPaid: (tx) => {
+          keeping.tx = tx;
+          return this.save(hearing);
+        },
+      });
       keeping.root = landed.root;
-      keeping.tx = landed.tx;
+      keeping.tx = landed.tx ?? keeping.tx;
       await this.save(hearing);
       await this.forget(hearing);
     } catch (error) {

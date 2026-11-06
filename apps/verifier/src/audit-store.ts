@@ -10,7 +10,15 @@ export interface Landed {
   readonly tx: Hex | null;
 }
 
+export interface Paying {
+  /** The transaction an earlier try paid with, or null. */
+  readonly paid: Hex | null;
+  /** Keeps a payment, the moment it leaves. */
+  onPaid(tx: Hex): Promise<void>;
+}
+
 export interface AuditStore {
-  /** Stores `text` exactly, or throws. Safe to call again for the same text. */
-  put(text: string): Promise<Landed>;
+  /** Stores `text` exactly, or throws. Safe to call again for the same text, with `paying` saying what was paid: however
+   *  a try ends, a retry pays only if nothing it knows of can still bring the file. */
+  put(text: string, paying: Paying): Promise<Landed>;
 }

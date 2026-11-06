@@ -510,6 +510,23 @@ describe('the upload', () => {
     error.mockRestore();
   });
 
+  it('remembers a payment between tries, across a restart, so a retry can say it paid', async () => {
+    const { world, judge } = await begun();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    world.audits.up = false;
+    world.audits.paysBeforeFailing = true;
+    world.now = (await judge.advance()) as number;
+    world.now = (await judge.advance()) as number;
+    expect(await judge.audit()).toMatchObject({ root: null, tx: `0x${'ef'.repeat(32)}` });
+
+    world.audits.up = true;
+    const restarted = world.judge();
+    await world.settle(restarted);
+    expect(world.audits.paid).toEqual([null, `0x${'ef'.repeat(32)}`]);
+    expect(await restarted.audit()).toMatchObject({ root: `0x${'cd'.repeat(32)}`, tx: `0x${'ef'.repeat(32)}` });
+    error.mockRestore();
+  });
+
   it('survives a restart, because the record is in the store', async () => {
     const { world, judge } = await begun();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);

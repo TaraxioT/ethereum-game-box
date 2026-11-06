@@ -36,6 +36,10 @@ export interface FakeZgSettings {
   storageUp: boolean;
   /** Whether the node ever sees the paid-for file. If not, the SDK waits on it for ever. */
   nodeSyncs: boolean;
+  /** Which `zgs_getFileInfo` from now fails, counting from 1, or 0 for none. */
+  fileInfoFailsOn: number;
+  /** What became of the last payment, as the chain tells it. */
+  payment: 'mined' | 'pending' | 'reverted' | 'gone';
 }
 
 /** One chat call, as it reached the fake. */
@@ -85,6 +89,8 @@ export class FakeZg {
     additionalInfo: '{}',
     storageUp: true,
     nodeSyncs: true,
+    fileInfoFailsOn: 0,
+    payment: 'mined',
   };
 
   private readonly enclave = privateKeyToAccount(generatePrivateKey());
@@ -215,6 +221,7 @@ export class FakeZg {
       case 'zgs_getShardConfig':
         return { numShard: 1, shardId: 0 };
       case 'zgs_getFileInfo':
+        if (this.settings.fileInfoFailsOn > 0 && --this.settings.fileInfoFailsOn === 0) throw new Error('the node failed');
         return this.fileInfo(params[0] as Hex);
       case 'zgs_uploadSegmentsByTxSeq':
         this.segments.push(...(params[0] as unknown[]));
@@ -271,6 +278,11 @@ export class FakeZg {
       case 'eth_sendRawTransaction':
         this.submissions += 1;
         return keccak256(params[0] as Hex);
+      case 'eth_getTransactionReceipt':
+        if (this.settings.payment === 'mined') return { status: '0x1' };
+        return this.settings.payment === 'reverted' ? { status: '0x0' } : null;
+      case 'eth_getTransactionByHash':
+        return this.settings.payment === 'gone' ? null : { hash: params[0] };
       default:
         throw new Error(`no fake for ${method}`);
     }

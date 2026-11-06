@@ -13,7 +13,7 @@ import { type Abi, type Address, type Hex, custom } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
 
 import type { AdmitContext, Doors } from '../src/admit.ts';
-import type { AuditStore, Landed } from '../src/audit-store.ts';
+import type { AuditStore, Landed, Paying } from '../src/audit-store.ts';
 import { failed } from '../src/failure.ts';
 import { returnJudgement, takeJudgement } from '../src/gate.ts';
 import { type AgentRunner, Judge, type RunResult, type Ticket, judgementName } from '../src/judge.ts';
@@ -173,17 +173,25 @@ export class FakeRelayer implements PayRelayer {
 /** A death in the middle of an alarm. */
 export class Crash extends Error {}
 
+const STORAGE_TX: Hex = `0x${'ef'.repeat(32)}`;
+
 /** An audit store that fails until told otherwise, and keeps what lands. */
 export class FakeAudits implements AuditStore {
   up = true;
   tries = 0;
+  /** Pays before it fails, as an upload that dies waiting on a node does. */
+  paysBeforeFailing = false;
+  /** What each try was told had been paid. */
+  readonly paid: (Hex | null)[] = [];
   readonly landed: string[] = [];
 
-  async put(text: string): Promise<Landed> {
+  async put(text: string, { paid, onPaid }: Paying): Promise<Landed> {
     this.tries += 1;
+    this.paid.push(paid);
+    if (!paid && (this.up || this.paysBeforeFailing)) await onPaid(STORAGE_TX);
     if (!this.up) throw new Error(`upload failed at ${RPC_SECRET}`);
     this.landed.push(text);
-    return { root: `0x${'cd'.repeat(32)}`, tx: `0x${'ef'.repeat(32)}` };
+    return { root: `0x${'cd'.repeat(32)}`, tx: paid ? null : STORAGE_TX };
   }
 }
 

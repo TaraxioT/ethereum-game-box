@@ -104,7 +104,19 @@ the reply's text to the signature, and 0G's own SDK check doesn't either. Say "e
 A real `wrangler deploy --dry-run` bundles the SDK, and it ran a whole upload in workerd against the fake. So there's no
 second container. It needs one change: the SDK's RPC goes through an old axios that asks for `XMLHttpRequest`, which
 fails in a Worker, so `src/zg-storage.ts` gives its indexer and node clients a `fetch` transport. That transport also
-carries the timeout, because the SDK waits for a node to sync in a loop with no end. `skipTx` stops a retry paying twice.
+carries the timeout, because the SDK waits for a node to sync in a loop with no end.
+
+The upload retries for ever, so it mustn't pay each time. `skipTx` isn't enough: the SDK reads a failed `zgs_getFileInfo`
+as "no such file", a node says the same until it has synced a payment, and either way the SDK pays. So:
+
+- A payment is saved in the Durable Object the moment it leaves the wallet.
+- Before each try, the file is read from the node where a failure throws, so a node that can't answer costs nothing.
+- With no file and a payment that is mined or pending, the try ends and waits for the node. Only one that reverted or
+  vanished is paid again.
+- A try that finds the file gets a wallet that refuses to send, so the SDK's own read failing can't pay either.
+
+The one gap: a Durable Object that dies between the send and the save forgets that payment. The file read still stops a
+second one once the node has synced it.
 
 The uploads pay in 0G on 0G's chain. That and the provider reads are the only use of a chain other than Sepolia.
 
