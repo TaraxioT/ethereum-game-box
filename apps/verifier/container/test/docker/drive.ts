@@ -8,8 +8,15 @@ import { BURST, JOB, type Probe, PROBES, VERDICT, VERIFIER_HOST, VERIFIER_PORT }
 const VERIFIER = `http://${VERIFIER_HOST}:${VERIFIER_PORT}`;
 const MODEL_PORT = 80;
 
-/** One reply a probe, with the burst behind the last, which keeps the run inside its turn limit. */
-const TURNS = PROBES.map((probe, index) => (index === PROBES.length - 1 ? [probe, ...BURST] : [probe]));
+const PROBES_A_REPLY = 2;
+
+/** Two probes a reply, then the burst, which keeps the run inside its turn limit. */
+const TURNS = [
+  ...Array.from({ length: Math.ceil(PROBES.length / PROBES_A_REPLY) }, (_, index) =>
+    PROBES.slice(index * PROBES_A_REPLY, (index + 1) * PROBES_A_REPLY),
+  ),
+  BURST,
+];
 
 /** Shell calls with a real usage figure, or the probes' long outputs would count against the token limit. */
 const probeCalls = (probes: readonly Probe[]): Step =>

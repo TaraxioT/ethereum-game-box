@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import {
   allBlocked,
   BURST,
+  DECOY_NAME,
+  DECOY_VALUE,
   FIND_SERVER,
   INTERNET_PROBES,
   noSecrets,
@@ -184,7 +186,7 @@ try {
   docker("pull", "--quiet", ...PLATFORM_ARGS, NODE_IMAGE);
   docker("build", ...PLATFORM_ARGS, "--quiet", "--tag", IMAGE, FOLDER);
   docker("network", "create", "--internal", NETWORK);
-  startVerifier(VERIFIER);
+  startVerifier(VERIFIER, "--env", `${DECOY_NAME}=${DECOY_VALUE}`);
   await waitForPort(VERIFIER);
 
   checkProcesses();

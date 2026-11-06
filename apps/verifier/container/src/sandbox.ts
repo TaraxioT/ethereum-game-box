@@ -2,11 +2,13 @@
 // memory or environment through /proc, and the image keeps the server's files from them. The server holds only the
 // capabilities `setpriv` needs to make the switch (see the Dockerfile), and the shell keeps none of them.
 import { execFile, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import type { Sandbox } from "./shell.ts";
 
 const AGENT = "agent";
+const REAP = fileURLToPath(new URL("reap.ts", import.meta.url));
 
 const AS_AGENT = [
   "setpriv",
@@ -23,22 +25,26 @@ const AS_AGENT = [
 /** The shell's fork bombs and full disks stop here, ahead of the server's memory and disk. */
 const BOUNDED = ["prlimit", "--nproc=128", "--nofile=256", `--fsize=${64 * 1024 * 1024}`, "--core=0", "--"] as const;
 
+/** Runs `reap.ts`, which says why the agent can't fight it. It's outside BOUNDED, so a fork bomb at its process limit
+ *  can't block it, and it gets no environment, so this process can't show the agent the server's. */
+const reap = (): Promise<void> =>
+  new Promise((resolve, reject) => {
+    spawn(process.execPath, [REAP], { stdio: "ignore", env: {} })
+      .on("error", reject)
+      .on("close", (code) => (code === 0 ? resolve() : reject(new Error(`reap.ts ended with ${code}`))));
+  });
+
 export const agentSandbox: Sandbox = {
   command: (script) => [...BOUNDED, ...AS_AGENT, "bash", "-c", script],
-  // `kill -1` reaches every process the agent owns, including one that left the shell's process group. It runs outside
-  // BOUNDED, so a fork bomb at its process limit can't block it.
-  stop: () =>
-    new Promise((resolve) => {
-      const [file, ...args] = AS_AGENT;
-      spawn(file, [...args, "bash", "-c", "kill -KILL -1"], { stdio: "ignore" }).on("close", () => resolve());
-    }),
+  stop: reap,
 };
 
-/** Throws unless the switch of user really works. Without this, a failing `setpriv` would only show up as shell
- *  errors, and the model could still submit a verdict without having read the log. */
+/** Throws unless the switch of user and the cleanup really work. Without this, a failing `setpriv` would only show up as
+ *  shell errors, and the model could still submit a verdict without having read the log. */
 export async function checkSandbox(): Promise<void> {
   if (process.getuid?.() === 0) throw new Error("the server is running as root");
   const [file, ...args] = agentSandbox.command("id -un");
-  const { stdout } = await promisify(execFile)(file, args);
+  const { stdout } = await promisify(execFile)(file, args, { env: {} });
   if (stdout.trim() !== AGENT) throw new Error(`the shell runs as ${stdout.trim()}`);
+  await reap();
 }

@@ -42,24 +42,34 @@ check.
 | Tokens across the run | 200,000, counting each turn's whole prompt | fails the run |
 | One shell call | 20 s, 16 KiB of output | stops the call and tells the model |
 
+Tokens are counted from each reply's usage, and each prompt is also estimated before it goes out, at three bytes a token,
+because one reply can make any number of shell calls. A prompt that would pass the limit isn't sent.
+
 The Worker has to wait longer than the wall time before it gives up on a run.
 
 ## The sandbox
 
-Two users, and the image starts as root only to leave it.
+Three users, and the image starts as root only to leave it.
 
 - **`judge` (10000)** runs tini and the server. It keeps three capabilities, `setuid`, `setgid` and `setpcap`, which
-  `setpriv` needs to start the shell. That's less than root, but it isn't nothing: a process with `setuid` could become
-  root. What keeps the agent away from it is that it's a different user.
+  `setpriv` needs to start the shell, and `reap.ts` to change user. That's less than root, but it isn't nothing: a
+  process with `setuid` could become root. What keeps the agent away from it is that it's a different user.
 - **`agent` (10001)** runs the shell, through `setpriv`. It has no capabilities in any set, `no_new_privs`, and an
   environment of just `PATH`, `HOME` and `LANG`. It can't read the server's memory, environment or files, and it
   can't change the two files it was given. `prlimit` caps its processes, open files and file sizes.
+- **`reaper` (10002)** runs only `src/reap.ts`, which ends the agent's processes.
 
-Nothing the agent starts outlives its call: `kill -KILL -1` as the agent ends every process it owns, even one that left
-the shell's process group. A call ends only after that has finished, or a late kill would hit the next call. tini reaps
-what's left, which Node wouldn't, and zombies would otherwise use up the shell's process limit.
+Nothing the agent starts outlives its call. As each call ends, `reap.ts` makes one `kill -1` with the agent's effective
+ID, which ends every process the agent owns at once, even one that left the shell's process group. The agent can't kill
+or freeze it first, because the kernel checks a target's real and saved IDs, and those are `reaper`'s. It gets no
+environment either, so it can't show the agent the server's.
 
-The server checks all this as it starts, and exits rather than serve if it's root or the switch of user fails.
+A call ends only after that has finished, or a late kill would hit the next call. If it fails, the call fails, and if it
+never finishes, the run's wall time still ends the run. tini reaps what's left, which Node wouldn't, and zombies would
+otherwise use up the shell's process limit.
+
+The server checks all this as it starts, and exits rather than serve if it's root, or the switch of user or the cleanup
+fails.
 
 ## What the Worker must do
 
@@ -70,7 +80,8 @@ must:
 
 - accept only `POST /v1/chat/completions`;
 - set `max_tokens`, the model, `X-0G-Provider-Trust-Mode: private` and `verify_tee: true` itself, whatever it's sent;
-- cap the turns and tokens, at no more than the limits above.
+- cap the turns and tokens, at no more than the limits above;
+- refuse a request too large to fit those limits before it reaches 0G, as a shell's request is checked by nothing else.
 
 It must also answer anything but `200` for a turn it can't prove: that's what fails the run here.
 
@@ -79,8 +90,9 @@ It must also answer anything but `200` for a turn it can't prove: that's what fa
 - `pnpm test`: the loop, the shell and the server, with real bash and a fake model server.
 - `pnpm test:docker`: builds the real image and runs one job on an internal Docker network, with the fake model as
   `zg.internal`. The agent's shell then tries to break out from inside: it reads the environment, the server's memory
-  and files, and the internet, and it runs a fork bomb. Controls show that the probes can succeed and the checks
-  can fail. `EGB_DOCKER_PLATFORM=linux/amd64` builds for what Cloudflare runs.
+  and files, and the internet, it runs a fork bomb, and it leaves processes that watch, kill or freeze whatever the
+  server starts next. Controls show that the probes can succeed and the checks can fail.
+  `EGB_DOCKER_PLATFORM=linux/amd64` builds for what Cloudflare runs.
 
 An internal Docker network stands in for `enableInternet = false`. It doesn't prove Cloudflare: the plan's own check,
 from a shell in a live container, still has to run there. That run will also show whether Cloudflare grants the three

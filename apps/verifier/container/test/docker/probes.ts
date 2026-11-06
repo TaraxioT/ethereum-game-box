@@ -6,6 +6,9 @@ export const VERIFIER_HOST = "verifier";
 export const VERIFIER_PORT = 8080;
 export const SERVER_UID = 10000;
 export const AGENT_UID = 10001;
+/** Set in the server's environment, to see whether the agent can ever read it. */
+export const DECOY_NAME = "EGB_DECOY";
+export const DECOY_VALUE = "from-the-server";
 
 /** The Worker's secrets, by name, and anything else that looks like one. */
 const SECRET_NAMES = /KEY|SECRET|TOKEN|PASSWORD|MNEMONIC|PRIVATE|RPC/i;
@@ -67,6 +70,26 @@ function noSurvivors(output: string): string | null {
   const alive = output.split("\n").filter((line) => line.startsWith("alive:"));
   return alive.length > 0 ? alive.join("; ") : null;
 }
+
+/** Starts Perl in its own session and off the call's pipes, so it's still running when the call ends. */
+const daemon = (perl: string): string => `setsid perl -e '${perl}' < /dev/null > /dev/null 2>&1 &`;
+
+/** Attacks each PID about to be handed out, which is where the server's next helper will appear. */
+const fighter = (signal: string): string => daemon(`while (1) { kill "${signal}", $$ + 1 .. $$ + 60 }`);
+
+/** Writes down each environment naming the decoy in the next PIDs, in a file the next call can read. Once each, or the
+ *  file would pass the call's output limit and hide what came last. */
+const WATCHER = daemon(
+  `open(OUT, ">>", "seen.txt"); select(OUT); $| = 1; print "watching\\n";
+while (1) {
+  for my $pid ($$ + 1 .. $$ + 60) {
+    open(IN, "<", "/proc/$pid/environ") or next;
+    my $env = join("", <IN>);
+    close(IN);
+    print "$env\\n" if $env =~ /${DECOY_NAME}/ && !$seen{$env}++;
+  }
+}`,
+);
 
 export interface Probe {
   readonly name: string;
@@ -158,6 +181,42 @@ cat /proc/$server/environ; head -c 1 /proc/$server/mem; ls /proc/$server/fd; ls 
     name: "nothing survives the fork bomb, and the shell can fork again",
     command: `${LIST_AGENT_PROCESSES}\n(echo forked)`,
     check: (output) => noSurvivors(output) ?? requireAll(output, "forked"),
+  },
+  {
+    name: "control: a process left running can read the environment of what starts next",
+    // Not the script's last command, which bash would run in its own process, behind the watcher.
+    command: `${WATCHER}\n${DECOY_NAME}=from-the-agent sleep 0.3\necho slept`,
+    check: (output) => requireAll(output, "slept"),
+  },
+  {
+    name: "the shell can't read the server's environment from anything the server starts",
+    command: `cat seen.txt`,
+    check: (output) =>
+      requireAll(output, "watching", `${DECOY_NAME}=from-the-agent`) ??
+      (output.includes(DECOY_VALUE) ? "it read the server's environment" : null),
+  },
+  {
+    name: "control: a process left running can kill what starts next",
+    command: `${fighter("KILL")}\nsleep 5; echo "sleep exit=$?"`,
+    check: (output) => requireAll(output, "sleep exit=137"),
+  },
+  {
+    name: "nothing survives that call, even a process that kills whatever starts next",
+    command: LIST_AGENT_PROCESSES,
+    check: noSurvivors,
+  },
+  {
+    name: "control: a process left running can freeze what starts next",
+    command: `${fighter("STOP")}
+sleep 5 &
+for try in {1..5000}; do read -r _ _ state _ < /proc/$!/stat; [ "$state" = T ] && break; done
+echo "sleep state=$state"; kill -KILL $!`,
+    check: (output) => requireAll(output, "sleep state=T"),
+  },
+  {
+    name: "nothing survives that call, even a process that freezes whatever starts next",
+    command: LIST_AGENT_PROCESSES,
+    check: noSurvivors,
   },
   {
     name: "jq counts the log's taps",

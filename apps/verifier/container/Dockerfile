@@ -9,6 +9,8 @@ RUN apt-get update \
   && useradd --uid 10000 --gid judge --no-create-home --shell /usr/sbin/nologin judge \
   && groupadd --gid 10001 agent \
   && useradd --uid 10001 --gid agent --no-create-home --shell /usr/sbin/nologin agent \
+  && groupadd --gid 10002 reaper \
+  && useradd --uid 10002 --gid reaper --no-create-home --shell /usr/sbin/nologin reaper \
   && install -d -o root -g judge -m 750 /app
 
 # Only the server's user can list or read its code.
