@@ -35,10 +35,10 @@ tap within `REMATCH_TAP_MS` = 4000 ms of the result asks for a rematch (the team
 
 ## The screen
 
-While both stakes go into the pot (from the second signature until the open is in a block), the team screen plays
+While both stakes go into the pot (from the second signature until the open is confirmed on chain), the team screen plays
 the walk-out: the two stand back to back at the sign's post, pace ten paces apart as the sign counts them, turn, and
 each raises a revolver and thumbs its hammer back (a click), then holsters it; the sign reads READY and a brass wire
-plate over it follows the transaction. The standoff starts when the stakes land: a walk not yet done hurries to the
+plate over it follows the transaction. The standoff starts only once the stakes are confirmed, never before: a walk not yet done hurries to the
 marks. Nothing in the walk-out is timed to the draw.
 
 The team screen draws the standoff in flat layered silhouette: the light dims from the standoff's start over the

@@ -9,7 +9,7 @@
 // Before that, while both stakes go into the pot (the routes bring this screen up on the second signature), the two
 // stand back to back by the sign, pace ten paces apart as the sign counts them, turn, and each raises a revolver and
 // thumbs its hammer back. A brass wire plate over the sign follows the transaction. The standoff begins when the
-// stakes are in a block: if that comes before the walk is done, the two hurry to their marks.
+// stakes are confirmed on chain, never before: if that comes before the walk is done, the two hurry to their marks.
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";

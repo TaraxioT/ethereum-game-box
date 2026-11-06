@@ -12,7 +12,8 @@
 //     anything the rules get wrong (over budget, a throw, a crash) voids the match and sends both stakes back.
 //   - A tap that touched before the phase changed never reaches the new phase.
 // Every finished match goes to the match log as a transcript. Stakes go on chain the moment both seats sign, and the
-// match opens at once: the transaction bar follows the pot, and the result waits only for the pot to land.
+// match begins once they are confirmed in the pot: the transaction bar follows the pot, and the result goes when the
+// match ends.
 import type { Seat } from "@egb/sdk";
 import { hash32, other, SEATS } from "@egb/sdk";
 import type { ChainHead, CorePorts, ResultOrder, RulesSnapshot, TapEvent, TapPlan, TapSource, TimerHandle, TxWatch } from "./ports.ts";
@@ -260,12 +261,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let lobby: Lobby = { badge: null, card: null, proposal: null, from: "home" };
   /** How many labels the lobby has proposed to the badge on show. */
   let proposals = 0;
-  /**
-   * Each on-chain match's pot, by match id: on its way, open on chain, or never opened (the open failed), and the
-   * result held until it lands. Kept per match, so a result decided before its pot landed is still sent after a
-   * rematch or a reset.
-   */
-  const pots = new Map<number, { state: "pending" | "open" | "none"; then: (() => void) | null }>();
   let refunding = false;
   let opponent: Opponent = bot ? "bot" : "hotseat";
   let power = true;
@@ -531,8 +526,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /**
    * Both seats signed. A game on chain first moves both stakes into the pot (a Box-signed `Stake`): the Box stays on
-   * Stake, showing the open's progress, until it is in a block, and then the match begins. An open that fails sends
-   * both players back to sign again, with nothing staked. A game off chain (a built game) begins at once.
+   * Stake, showing the open's progress, until it is confirmed on chain (a block past its own: the relayer's `done`,
+   * `paid` here), and only then does the match begin; in a block alone isn't enough. An open that fails sends both
+   * players back to sign again, with nothing staked. A game off chain (a built game) begins at once.
    */
   function openMatch(): void {
     if (!game) throw new Error("no game was chosen");
@@ -546,8 +542,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const amount = stake;
     const waiting = epoch;
     let begun = false;
-    const pot: { state: "pending" | "open" | "none"; then: (() => void) | null } = { state: "pending", then: null };
-    pots.set(id, pot);
     send(
       { kind: "open", seat: null, direction: "in", amount: amount * 2 },
       (watch) =>
@@ -555,26 +549,21 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           watch(update);
           // Only the wait that sent it acts on it: a reset or a new phase since has moved on.
           if (begun || epoch !== waiting || phase !== "stake") return;
-          if (update.step === "in-block" || update.step === "paid") {
+          if (update.step === "paid") {
             begun = true;
             beginMatch(id, chosen, badges, round, amount);
           } else if (update.step === "failed") {
-            pots.delete(id);
             cue("error");
             setPhase("stake");
           }
         }),
-      (tx) => {
-        pot.state = tx.step === "paid" ? "open" : "none";
+      () => {
         for (const badge of badges) refreshBalance(badge);
-        const settleNow = pot.then;
-        pot.then = null;
-        settleNow?.();
       },
     );
   }
 
-  /** The match begins: its stakes (`amount` each, 0 off chain) are in the pot's block, or there are none. */
+  /** The match begins: its stakes (`amount` each, 0 off chain) are confirmed in the pot, or there are none. */
   function beginMatch(id: number, chosen: GameId, badges: [`0x${string}`, `0x${string}`], round: number, amount: number): void {
     const now = clock.now();
     // The seed takes fresh randomness, so nobody can work out the draw from the seats and the round.
@@ -744,18 +733,14 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const { winner } = match.outcome;
     record(winner, match.endedAt ?? clock.now());
     if (!power) {
-      pots.delete(match.id);
       setPhase("refund");
       cue("error");
       return;
     }
     const current = match;
     if (port.onChain(current.game) && !current.voided) {
-      const order: ResultOrder = { round: current.round, game: current.game, badges: addresses(), winner };
-      // The result goes once the pot has landed, so it settles the pot it belongs to.
-      const pot = pots.get(current.id);
-      if (pot?.state === "pending") pot.then = () => settle(current, order);
-      else settle(current, order);
+      // The match began only once its pot was confirmed (or has none), so the result settles a pot that is there.
+      settle(current, { round: current.round, game: current.game, badges: addresses(), winner });
     }
     setPhase("result");
     if (!current.voided) cue("over", winner);
@@ -763,8 +748,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** Sends the result. Once it is paid, its lines are read from chain at its receipt, never made up here. */
   function settle(settled: Match, order: ResultOrder): void {
-    const paid = pots.get(settled.id)?.state === "open" ? settled.stake * 2 : 0;
-    pots.delete(settled.id);
+    const paid = settled.stake * 2;
     const payees: (readonly [`0x${string}`, number])[] =
       paid === 0 ? [] : order.winner === null ? order.badges.map((a) => [a, settled.stake] as const) : [[order.badges[order.winner], paid] as const];
     for (const [address, sum] of payees) owe(address, sum);
@@ -1183,8 +1167,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     },
     reset() {
       stopBuilt();
-      // A pot that never settles stays on chain until its refund opens; the server refunds it then. A result already
-      // decided is still sent once its pot lands.
+      // A pot that never settles stays on chain until its refund opens; the server refunds it then.
       setPhase("home");
     },
     stop() {

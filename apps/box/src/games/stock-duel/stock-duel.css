@@ -238,14 +238,14 @@
 .sd-pre-head { font: 900 32px/1.1 var(--display); letter-spacing: 0.02em; color: var(--ink); }
 .sd-pre.opened .sd-pre-head { color: #7dffa8; }
 .sd-pre-sub { font: 600 14px/1.3 var(--body); letter-spacing: 0.06em; color: var(--ink-2); }
-.sd-pre-lamps { display: flex; gap: 10px; }
+.sd-pre-lamps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 /* An exchange's status lamp: dark until its step is done, the next one pulsing amber. */
 .sd-pre-lamp {
-  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 999px; background: var(--well);
-  font: 700 12px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 999px; background: var(--well);
+  font: 700 11px/1 var(--mono); letter-spacing: 0.04em; color: var(--ink-3);
   box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.7), 0 1px 0 rgb(255 255 255 / 0.08);
 }
-.sd-pre-lamp i { width: 10px; height: 10px; border-radius: 50%; background: #2a2e38; }
+.sd-pre-lamp i { width: 8px; height: 8px; border-radius: 50%; background: #2a2e38; }
 .sd-pre-lamp[lit] { color: var(--ink); }
 .sd-pre-lamp[lit] i { background: #4be38a; box-shadow: 0 0 8px rgb(75 227 138 / 0.8); }
 .sd-pre-lamp[next] i { background: #ffbf3d; animation: sd-pre-pulse 0.9s ease-in-out infinite alternate; }

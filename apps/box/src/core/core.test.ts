@@ -173,17 +173,19 @@ async function toPlaying<C extends ChainPort>(r: Rig<C>, game: "quick-draw" | "s
   await flush();
   instantTap(core, 0, NOVA, 1);
   instantTap(core, 1, KITE, 1);
-  await potInBlock(r);
+  await potConfirmed(r);
   expect(core.state().phase).toBe("playing");
 }
 
-/** Both seats signed: the Box waits on Stake until the pot's open is in a block, then the match begins. */
-async function potInBlock<C extends ChainPort>(r: Rig<C>): Promise<void> {
+/** Both seats signed: the Box waits on Stake until the pot's open is confirmed, then the match begins. */
+async function potConfirmed<C extends ChainPort>(r: Rig<C>): Promise<void> {
   expect(r.core.state().phase).toBe("stake");
   expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "open" });
   const recorded = (r.chain as Partial<Recording>).sent?.findLast((sent) => sent.kind === "open");
-  if (recorded) recorded.watch({ step: "in-block", hash: HASH, etherscan: null, block: 7, error: null });
-  else await until(r, (state) => state.phase === "playing");
+  if (recorded) {
+    recorded.watch({ step: "in-block", hash: HASH, etherscan: null, block: 7, error: null });
+    recorded.watch({ step: "paid", hash: HASH, etherscan: null, block: 7, error: null });
+  } else await until(r, (state) => state.phase === "playing");
 }
 
 /** Plays the running Quick Draw to a win for `seat` and waits out the end hold. */
@@ -501,7 +503,7 @@ describe("what the screen hears", () => {
     instantTap(core, 0, NOVA, 1);
     instantTap(core, 1, KITE, 1);
     expect(meanings(r)).toEqual(["wake", "join", "join", "sign", "ignored", "open"]);
-    await potInBlock(r);
+    await potConfirmed(r);
     expect(moments(r)).toContainEqual(["round", null]);
   });
 
@@ -585,10 +587,12 @@ describe("stakes on chain", () => {
     instantTap(r.core, 0, NOVA, 1);
     r.core.send({ type: "back" });
     expect(r.core.state().phase).toBe("stake");
+    // In a block isn't confirmed: the match waits for the confirmation.
     open?.watch({ step: "in-block", hash: HASH, etherscan: null, block: 9, error: null });
+    expect(r.core.state()).toMatchObject({ phase: "stake", match: null });
+    open?.watch({ step: "paid", hash: HASH, etherscan: null, block: 9, error: null });
     expect(r.core.state().phase).toBe("playing");
     expect(r.core.state().match).toMatchObject({ round: 41, stake: 10 });
-    open?.watch({ step: "paid", hash: HASH, etherscan: null, block: 9, error: null });
     expect(r.core.state().txs[0]).toMatchObject({ step: "paid", hash: HASH, block: 9, etherscan: `https://sepolia.etherscan.io/tx/${HASH}` });
     const steps = r.events.flatMap((event) => (event.type === "tx" ? [event.tx.step] : []));
     expect(steps).toEqual(["signed", "sent", "in-block", "paid"]);
@@ -609,17 +613,15 @@ describe("stakes on chain", () => {
     // Signing again opens a fresh round.
     instantTap(r.core, 0, NOVA, 1);
     instantTap(r.core, 1, KITE, 1);
-    await potInBlock(r);
+    await potConfirmed(r);
     expect(r.core.state().match?.round).toBe(42);
   });
 
-  it("sends the result only once the pot has landed, with the same round, and shows what the chain says it did", async () => {
+  it("sends the result when the match ends, with the same round, and shows what the chain says it did", async () => {
     const r = rigOn(recordingPort);
     await toPlaying(r, "quick-draw");
     await quickWin(r, 1);
-    // The game is over, but the pot is still on its way: no result yet.
-    expect(r.chain.sent.map((sent) => sent.kind)).toEqual(["open"]);
-    pay(r.chain.sent[0]);
+    expect(r.chain.sent.map((sent) => sent.kind)).toEqual(["open", "settle"]);
     const settle = r.chain.sent[1];
     const order: ResultOrder = { round: 41, game: "quick-draw", badges: [NOVA.address, KITE.address], winner: 1 };
     expect(settle).toMatchObject({ kind: "settle", order });
@@ -633,39 +635,16 @@ describe("stakes on chain", () => {
     expect(r.core.state().seats[1].pending).toBe(0);
   });
 
-  it("plays on when the pot fails after the match began (the relayer gave up), and still reports the result, with nothing paid", async () => {
-    const r = rigOn(recordingPort);
-    await toPlaying(r, "quick-draw");
-    fail(r.chain.sent[0], "PotExists");
-    expect(r.core.state().phase).toBe("playing");
-    await quickWin(r, 0);
-    expect(r.chain.sent.map((sent) => sent.kind)).toEqual(["open", "settle"]);
-    expect(r.chain.sent[1]?.order).toMatchObject({ round: 41, winner: 0 });
-    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 0 });
-    expect(r.core.state().seats[0].pending).toBe(0);
-  });
-
-  it("still sends a result decided before its pot landed after a rematch", async () => {
-    const r = rigOn(recordingPort);
-    await toPlaying(r, "quick-draw");
-    await quickWin(r, 0);
-    r.core.send({ type: "rematch" });
-    expect(r.core.state().phase).toBe("stake");
-    pay(r.chain.sent[0]);
-    expect(r.chain.sent[1]).toMatchObject({ kind: "settle", order: { round: 41, winner: 0 } });
-  });
-
   it("takes a fresh round from the port for each match", async () => {
     const r = rigOn(recordingPort);
     await toPlaying(r, "quick-draw");
-    pay(r.chain.sent[0]);
     await quickWin(r, 0);
     pay(r.chain.sent[1]);
     r.core.send({ type: "rematch" });
     await flush();
     instantTap(r.core, 0, NOVA, 1);
     instantTap(r.core, 1, KITE, 1);
-    await potInBlock(r);
+    await potConfirmed(r);
     expect(r.chain.sent.filter((sent) => sent.kind === "open").map((sent) => (sent.order as StakeOrder).round)).toEqual([41, 42]);
     expect(r.core.state().match?.round).toBe(42);
   });

@@ -6,7 +6,7 @@
 // their stakes and pips, the round and the pot.
 //
 // Before the match, while both stakes go into the pot, it shows the pre-market (premarket.ts) and rings the opening
-// bell when they are in a block; the deal follows.
+// bell when they are confirmed on chain; the deal follows.
 //
 // It draws from `state.match.play` and animates the moment each state change brings. The drums follow the clock, so
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.

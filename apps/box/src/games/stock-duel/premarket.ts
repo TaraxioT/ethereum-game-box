@@ -1,8 +1,8 @@
 // The pre-market, while both stakes go into the pot (the routes bring the game's screen up on the second signature):
 // a slab in the tray says the market opens when the stakes clear, three status lamps follow the transaction (signed,
-// sent, in a block) with its hash and the seconds so far, and a ticker tape crawls along the slab's foot with the
+// sent, in a block, confirmed) with its hash and the seconds so far, and a ticker tape crawls along the slab's foot with the
 // chain's own numbers (the block, the gas, the pot). It never shows a stock's numbers: the hands are dealt after.
-// When the stakes are in a block the opening bell rings, the slab flashes MARKET OPEN and goes.
+// When the stakes are confirmed the opening bell rings, the slab flashes MARKET OPEN and goes.
 import type { BoxState, Tx } from "../../core/types.ts";
 import type { Rect } from "../../screen/shell/layout.ts";
 import { calm, el, place, play, wait } from "../../screen/shell/dom.ts";

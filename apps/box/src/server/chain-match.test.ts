@@ -54,7 +54,7 @@ async function inject(tb: TestBox, seat: Seat, badge: Address): Promise<void> {
 }
 
 describe("a match with its stakes on Sepolia", () => {
-  it("waits on Stake until the pot is in a block, sends the result once it is done, and reads its lines from the chain", async () => {
+  it("waits on Stake until the pot is confirmed, not just in a block, sends the result when the match ends, and reads its lines from the chain", async () => {
     const { tb, relayer, reads } = await rig();
     const core = tb.box.core;
     core.send({ type: "booted" });
@@ -66,7 +66,7 @@ describe("a match with its stakes on Sepolia", () => {
     core.send({ type: "play" });
     await inject(tb, 0, NOVA);
     await inject(tb, 1, KITE);
-    // Both signed: the Box waits on Stake with only the open out, until the open is in a block.
+    // Both signed: the Box waits on Stake with only the open out, until the open is confirmed.
     expect(core.state().phase).toBe("stake");
     expect(relayer.posted.map((p) => p.path)).toEqual(["/duel/open"]);
     const stake = relayer.posted[0]!.body.stake as Record<string, string>;
@@ -74,10 +74,15 @@ describe("a match with its stakes on Sepolia", () => {
     expect(core.state().txs.map((t) => [t.kind, t.step, t.amount])).toEqual([["open", "sent", 20]]);
     const [open] = relayer.ids();
     relayer.advance(open!, "in-block");
+    await tb.settle(() => core.state().txs[0]?.step === "in-block", POLL_MS * 2, 100);
+    // In a block isn't confirmed: still on Stake, no match.
+    expect(core.state()).toMatchObject({ phase: "stake", match: null });
+    relayer.advance(open!, "done");
+    reads.balances.set(NOVA, 90).set(KITE, 90);
     await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
-    expect(core.state().txs[0]?.step).toBe("in-block");
+    expect(core.state().txs[0]?.step).toBe("paid");
 
-    // Player 2 wins the draw; the game ends and holds, but the result waits for the pot to be done.
+    // Player 2 wins the draw; the game ends and holds, and the result goes.
     await tb.settle(() => {
       const play = core.state().match?.play;
       return play?.game === "quick-draw" && play.state.phase === "draw";
@@ -87,10 +92,6 @@ describe("a match with its stakes on Sepolia", () => {
     tb.advance(SETTLE_MS + END_HOLD_MS + 100);
     await flush();
     expect(core.state().phase).toBe("result");
-    expect(relayer.posted.map((p) => p.path)).toEqual(["/duel/open"]);
-
-    relayer.advance(open!, "done");
-    reads.balances.set(NOVA, 90).set(KITE, 90);
     await tb.settle(() => relayer.posted.length === 2, POLL_MS * 2, 100);
     const result = relayer.posted[1]!;
     expect(result.path).toBe("/box/result");
@@ -103,7 +104,8 @@ describe("a match with its stakes on Sepolia", () => {
     await tb.settle(() => core.state().match?.lines !== null, POLL_MS * 2, 100);
     expect(core.state().match?.lines).toEqual(["kite.gamebox.eth +20 USDC", "kite.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
     expect(core.state().seats.map((s) => s.balance)).toEqual([90, 110]);
-    expect(core.state().txs.map((t) => [t.kind, t.step, t.hash !== null])).toEqual([["open", "paid", true], ["settle", "paid", true]]);
+    // The open was confirmed before the match began, so only the settle is still on screen.
+    expect(core.state().txs.map((t) => [t.kind, t.step, t.hash !== null])).toEqual([["settle", "paid", true]]);
   });
 
   it("sends a seat short of the stake to the lobby, where it tops up and claims its name", async () => {

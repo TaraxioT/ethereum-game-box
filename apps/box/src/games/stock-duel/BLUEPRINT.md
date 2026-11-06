@@ -31,7 +31,7 @@ then both badges' verified rolls choose the stat, and the higher number takes th
 
 ## The flow
 
-Join → Stake → pre-market while the stakes go in (the opening bell rings when they are in a block) → deal → pick →
+Join → Stake → pre-market while the stakes go in (the opening bell rings when they are confirmed) → deal → pick →
 reveal (the dial turns to the stat, the cards turn over, the seals come down) → the next pick, or over → Result.
 
 ## The screen
@@ -45,8 +45,8 @@ screen keeps it in a frame: each hand as a column of graphite cards whose front 
 white stat chip over the two played cards at the reveal, the score at the top, and a slab naming the winner.
 
 Before the deal, while both stakes go into the pot, a pre-market slab sits over the wells: status lamps for the
-transaction (signed, sent, in a block), its hash and seconds, and an amber ticker tape of the chain's own numbers (block,
-gas, pot). It never shows a stock's numbers. When the stakes are in a block the opening bell rings, the slab reads
+transaction (signed, sent, in a block, confirmed), its hash and seconds, and an amber ticker tape of the chain's own numbers (block,
+gas, pot). It never shows a stock's numbers. When the stakes are confirmed on chain the opening bell rings, the slab reads
 MARKET OPEN and goes, and the deal begins.
 
 The comps it was built to, at the Pi's 1280×800: [the match](look/slab-match.png) and
