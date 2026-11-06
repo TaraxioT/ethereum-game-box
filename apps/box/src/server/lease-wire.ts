@@ -1,0 +1,56 @@
+// The lease's HTTP wire: its routes and what they answer, as the server (lease.ts) and the screen (the lease pill and
+// the offline gate) see them. GBX travels as decimal strings, times as unix seconds. Types and constants only.
+import type { AdminJob } from "./admin-wire.ts";
+
+export const LEASE = {
+  /** GET, anyone: LeaseReply. */
+  status: "/api/lease",
+  /** POST StakeBody, launcher token: 202 AdminJob. */
+  stake: "/api/lease/stake",
+  /** POST, launcher token: 202 AdminJob. */
+  unstake: "/api/lease/unstake",
+} as const;
+
+/**
+ * Whether the Box may host. `off`: no Sepolia here (the simulator), nothing gates it. `checking`: not read yet.
+ * `open`: GBX is staked and its name is Active. `closed`: it isn't, and the Box refuses every tap and command.
+ */
+export type LeaseGate = "off" | "checking" | "open" | "closed";
+
+export interface LeaseStatus {
+  readonly label: string;
+  /** `<label>.gamebox.eth`. */
+  readonly name: string;
+  readonly standing: "none" | "active" | "suspended" | "revoked";
+  /** The name's expiry; 0 with no name. */
+  readonly expiry: number;
+  /** The lease's start and end; null with nothing staked. */
+  readonly startedAt: number | null;
+  readonly endsAt: number | null;
+  /** GBX staked. */
+  readonly stake: string;
+  /** Who staked, and gets it back. */
+  readonly operator: string | null;
+  /** GBX per hour. */
+  readonly ratePerHour: string;
+  readonly minHours: number;
+  readonly maxHours: number;
+  /** The staker's GBX; null with no admin key. */
+  readonly gbx: string | null;
+}
+
+export interface LeaseReply {
+  readonly gate: LeaseGate;
+  /** The chain's time when answered: the screen counts `endsAt` down from it. */
+  readonly now: number;
+  /** Null before the first read, and with the gate off. */
+  readonly status: LeaseStatus | null;
+  /** The address that stakes and unstakes (EGB_ADMIN_KEY's); null when this Box can't send. */
+  readonly staker: string | null;
+  readonly error: string | null;
+  readonly jobs: readonly AdminJob[];
+}
+
+export interface StakeBody {
+  readonly hours: number;
+}

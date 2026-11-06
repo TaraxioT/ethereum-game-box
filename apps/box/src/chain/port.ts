@@ -61,6 +61,8 @@ export interface SepoliaChain extends ChainPort {
   sweep(): Promise<void>;
   /** Whether the signer's key is the one `GameBoxNames` holds for this Box, said in the log. */
   checkKey(): Promise<boolean>;
+  /** The signer's public key. */
+  publicKey(): Promise<{ readonly qx: Hex; readonly qy: Hex }>;
   stop(): void;
 }
 
@@ -279,6 +281,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
       log(same ? `chain: the signer's key is ${box}'s (${mine.qx.slice(0, 10)}…)` : `chain: the signer's key ${mine.qx.slice(0, 10)}… is not ${box}'s (${registered.qx.slice(0, 10)}…): the relayer will refuse every request`);
       return same;
     },
+    publicKey: () => signer.publicKey(),
     async sweep() {
       for (const [round, openedAt] of rounds.open()) {
         if (clock.now() - openedAt < REFUND_AFTER_MS) continue;

@@ -37,6 +37,8 @@ import { createGameRoutes } from "./games/routes.ts";
 import { createLibrary, type Library } from "./library/library.ts";
 import { createRulesHost, type RulesHost } from "./rules/host.ts";
 import { tapsRoutes } from "./taps-api.ts";
+import { gatedCore } from "./lease-gate.ts";
+import { leaseOnSepolia, leaseRoutes, type LeaseWatch } from "./lease.ts";
 
 export interface BoxOptions {
   readonly settings: Settings;
@@ -136,12 +138,29 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     if (event.type === "phase") log(`core: ${event.from} -> ${event.to}`);
     else if (event.type === "tap") log(`core: seat ${event.seat} tap ${event.accepted ? "accepted" : "not taken"}`);
   });
+  // A Box on Sepolia hosts only while GBX is staked on it: closed, the outside's taps and commands don't reach the
+  // core, and the core goes back Home.
+  const lease: LeaseWatch | null =
+    sepolia && settings.chain.kind === "sepolia"
+      ? leaseOnSepolia({
+          label: settings.chain.box,
+          rpcUrl: settings.chain.rpcUrl,
+          admin: settings.admin,
+          key: () => sepolia.publicKey(),
+          clock,
+          log,
+        })
+      : null;
+  lease?.onGate((gate) => {
+    if (gate !== "open") core.reset();
+  });
+  const outside = lease ? gatedCore(core, () => lease.gate() === "open", (seat) => taps?.buzz(seat, "no")) : core;
   const token = createLauncherToken();
   let commit: string | null = null;
   let builder: Builder | null = null;
   const routes = [
     ...apiRoutes({
-      core,
+      core: outside,
       commit: () => commit,
       uptimeMs: () => performance.now() - started,
       roster: () => taps?.roster().map(badgeOf) ?? [],
@@ -151,6 +170,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     }),
     ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind }),
     ...adminRoutes(settings.admin ? adminOnSepolia(settings.admin, log) : null),
+    ...leaseRoutes(lease),
     ...boardRoutes(settings.chain.kind === "sepolia" ? settings.chain.rpcUrl : (settings.admin?.rpcUrl ?? null)),
   ];
   const games = createGameRoutes({
@@ -161,7 +181,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     assets: createFrameAssets(log),
   });
   const server = http.createServer(createHandler({ routes, games, screenDir: settings.screenDir, token, log }));
-  const link = attachLink(server, core, log);
+  const link = attachLink(server, outside, log);
 
   // Listen first: the kiosk and the deploy's health check get answers before anything slow (opening the receiver,
   // the commit lookup; the library scan later).
@@ -195,7 +215,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       dataDir: settings.dataDir,
       clock,
       plan: (seat) => core.plan(seat),
-      onTap: (event) => core.tap(event, "station"),
+      onTap: (event) => outside.tap(event, "station"),
       log,
       ...(options.fake ? { fake: options.fake } : {}),
     });
@@ -233,6 +253,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     stop() {
       stopping ??= (async () => {
         link.close();
+        lease?.stop();
         core.stop();
         server.closeAllConnections();
         await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close(), builder?.stop()]);
