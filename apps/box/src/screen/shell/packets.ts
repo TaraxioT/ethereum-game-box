@@ -7,7 +7,7 @@
 import type { Layout } from "./layout.ts";
 import { lengths, pointAtLength, slice } from "./route.ts";
 import { TRACE_NAMES, tracesFor, type Trace, type TraceName } from "./traces.ts";
-import { GRID, bend, canvasSize, drawTraces } from "./grid.ts";
+import { GRID, bend, canvasSize, drawTraces, glowOf } from "./grid.ts";
 import { calm } from "./dom.ts";
 
 export interface RunOptions {
@@ -118,7 +118,7 @@ export function createPackets(layout: Layout, scale: number): Packets {
     const c = s.getContext("2d");
     if (c) {
       c.scale(2, 2);
-      c.shadowColor = colour;
+      c.shadowColor = glowOf(colour);
       c.shadowBlur = 20;
       c.fillStyle = GRID.hot;
       c.beginPath();
