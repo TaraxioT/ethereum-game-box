@@ -3,9 +3,9 @@
 // `Relay` is its logic over a plain store and client (the tests run it in memory); `Sender` is the Durable Object
 // around it, which polls receipts with an alarm while anything is pending.
 
-import type { RelayerHealth, TxView } from '@egb/shared/names';
+import type { RelayerHealth, TxStep, TxView } from '@egb/shared/names';
 import { DurableObject } from 'cloudflare:workers';
-import { type Address, type Hex, type LocalAccount, formatEther, parseGwei } from 'viem';
+import { type Hex, type LocalAccount, formatEther, parseGwei } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { type Client, describe, etherscanTx, rpc, sepoliaClient } from './chain.ts';
@@ -13,14 +13,16 @@ import type { Env } from './env.ts';
 import { Limits, limitsFor } from './limits.ts';
 import { Replay } from './replay.ts';
 import type { RefusalStatus } from './refusal.ts';
-import type { Prepared } from './request.ts';
+import type { Call, Prepared } from './request.ts';
 import { revertName } from './revert.ts';
 import type { Store } from './store.ts';
 
 interface TxRecord extends TxView {
   createdAt: number;
   locks: string[];
-  call: { to: Address; data: Hex; value: bigint };
+  call: Call;
+  /** A claim's primary-name call, sent once the claim is in a block. */
+  primaryCall?: Call;
 }
 
 export type Submitted = { ok: true; tx: TxView } | { ok: false; status: RefusalStatus; error: string };
@@ -41,7 +43,9 @@ const NONCE_ERROR = /nonce too (low|high)|invalid nonce|replacement transaction 
 /** A transaction is `done` once the head is this many blocks past its block, so lagging nodes have it too. */
 const CONFIRMATIONS = 1;
 
-const view = ({ createdAt: _c, locks: _l, call: _call, ...tx }: TxRecord): TxView => tx;
+const view = ({ createdAt: _c, locks: _l, call: _call, primaryCall: _p, ...tx }: TxRecord): TxView => tx;
+
+const settled = (step: TxStep) => step.status === 'done' || step.status === 'failed';
 
 export class Relay {
   private readonly replay: Replay;
@@ -102,39 +106,71 @@ export class Relay {
       }
       await this.advance(record, head);
       await this.save(record);
-      if (record.status !== 'done' && record.status !== 'failed') left++;
+      if (!settled(record)) left++;
     }
     return left > 0;
   }
 
   private async advance(record: TxRecord, head: number): Promise<void> {
+    await this.advanceStep(record, record.call, head);
+    const call = record.primaryCall;
+    if (!call) return;
+    const step = (record.primaryName ??= { status: 'signed' });
+    if (step.status === 'signed' && record.status === 'failed') {
+      Object.assign(step, { status: 'failed', error: 'not sent: the claim failed' });
+      if (call.replay) await this.replay.forget(call.replay.key);
+    } else if (step.status === 'signed' && (record.status === 'in-block' || record.status === 'done')) {
+      await this.send(step, call);
+    }
+    await this.advanceStep(step, call, head);
+    // The request is done once its last step has settled.
+    if (record.status === 'done' && !settled(step)) record.status = 'in-block';
+  }
+
+  /** Moves one sent transaction along from its receipt. */
+  private async advanceStep(step: TxStep, call: Call, head: number): Promise<void> {
     const { client, account } = this.options;
-    if (record.status === 'sent' && record.hash) {
-      const receipt = await client.getTransactionReceipt({ hash: record.hash }).catch(() => null);
+    if (step.status === 'sent' && step.hash) {
+      const receipt = await client.getTransactionReceipt({ hash: step.hash }).catch(() => null);
       if (!receipt) return;
-      record.block = Number(receipt.blockNumber);
-      record.gasUsed = receipt.gasUsed.toString();
-      record.fee = (receipt.gasUsed * receipt.effectiveGasPrice).toString();
+      step.block = Number(receipt.blockNumber);
+      step.gasUsed = receipt.gasUsed.toString();
+      step.fee = (receipt.gasUsed * receipt.effectiveGasPrice).toString();
       if (receipt.status === 'success') {
-        record.status = 'in-block';
+        step.status = 'in-block';
       } else {
         // Replay the call at the receipt's block to name the revert.
+        const { to, data, value } = call;
         const revert = await client
-          .call({ account: account.address, ...record.call, blockNumber: receipt.blockNumber })
+          .call({ account: account.address, to, data, value, blockNumber: receipt.blockNumber })
           .then(() => `out of gas or reverted without data (gas used ${receipt.gasUsed})`, revertName);
-        Object.assign(record, { status: 'failed', revert, error: `reverted with ${revert}` });
+        Object.assign(step, { status: 'failed', revert, error: `reverted with ${revert}` });
       }
     }
-    if (record.status === 'in-block' && record.block !== undefined && head >= record.block + CONFIRMATIONS) {
-      record.status = 'done';
+    if (step.status === 'in-block' && step.block !== undefined && head >= step.block + CONFIRMATIONS) {
+      step.status = 'done';
+    }
+  }
+
+  /** Sends `call` through the nonce queue as `step`. A send that fails frees its replay key. */
+  private async send(step: TxStep, call: Call): Promise<void> {
+    try {
+      step.hash = await this.serial(() => this.broadcast(call));
+      step.etherscan = etherscanTx(step.hash);
+      step.status = 'sent';
+    } catch (error) {
+      Object.assign(step, { status: 'failed', error: `not sent: ${describe(error)}` });
+      if (call.replay) await this.replay.forget(call.replay.key);
     }
   }
 
   private async admitAndSend(request: Prepared, ip: string): Promise<Submitted> {
     const { store, now } = this.options;
     const at = now();
-    if (request.replay && (await this.replay.seen(request.replay.key, at))) {
-      return { ok: false, status: 409, error: 'already sent: this signed request is a replay' };
+    for (const call of [request, request.primaryName]) {
+      if (call?.replay && (await this.replay.seen(call.replay.key, at))) {
+        return { ok: false, status: 409, error: 'already sent: this signed request is a replay' };
+      }
     }
     const held = new Set<string>();
     for (const record of await this.pendingRecords()) record.locks.forEach((lock) => held.add(lock));
@@ -145,32 +181,37 @@ export class Relay {
     if (hit) return { ok: false, status: 429, error: `rate limit: ${hit.what}` };
 
     await this.limits.take(limits, at);
-    if (request.replay) await this.replay.record(request.replay.key, request.replay.until);
+    const { kind, locks, primaryName, to, data, value, gas, replay } = request;
+    for (const call of [request, primaryName]) {
+      if (call?.replay) await this.replay.record(call.replay.key, call.replay.until);
+    }
     const record: TxRecord = {
       id: crypto.randomUUID(),
-      kind: request.kind,
+      kind,
       status: 'signed',
       createdAt: at,
-      locks: request.locks,
-      call: { to: request.to, data: request.data, value: request.value },
+      locks,
+      call: { to, data, value, gas, ...(replay && { replay }) },
+      ...(primaryName && { primaryCall: primaryName, primaryName: { status: 'signed' } }),
     };
     await this.save(record);
+    // Already inside the queue: broadcast directly.
     try {
-      record.hash = await this.broadcast(request);
+      record.hash = await this.broadcast(record.call);
       record.etherscan = etherscanTx(record.hash);
       record.status = 'sent';
-      await this.save(record);
       await this.options.wake();
     } catch (error) {
       Object.assign(record, { status: 'failed', error: `not sent: ${describe(error)}` });
-      await this.save(record);
-      if (request.replay) await this.replay.forget(request.replay.key);
+      for (const call of [request, primaryName]) if (call?.replay) await this.replay.forget(call.replay.key);
+      if (record.primaryName) Object.assign(record.primaryName, { status: 'failed', error: 'not sent: the claim failed' });
     }
+    await this.save(record);
     return { ok: true, tx: view(record) };
   }
 
   /** Signs and sends with the next nonce. On a nonce error it reads the nonce from the chain and tries once more. */
-  private async broadcast(request: Prepared): Promise<Hex> {
+  private async broadcast(request: Call): Promise<Hex> {
     const { client, account, tipWei } = this.options;
     const block = await client.getBlock();
     const fees = { maxPriorityFeePerGas: tipWei, maxFeePerGas: (block.baseFeePerGas ?? 0n) * 2n + tipWei };

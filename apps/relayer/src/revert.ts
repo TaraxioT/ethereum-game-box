@@ -5,6 +5,7 @@ import { type Abi, type Hex, BaseError, decodeErrorResult } from 'viem';
 import {
   boxAccountAbi,
   boxResultsAbi,
+  defaultReverseRegistrarAbi,
   demoLicencesAbi,
   gameBoxNamesAbi,
   permissionedRegistryAbi,
@@ -18,6 +19,7 @@ const errors: Abi = [
   gameBoxNamesAbi,
   playerStatsAbi,
   boxResultsAbi,
+  defaultReverseRegistrarAbi,
   demoLicencesAbi,
   boxAccountAbi,
   permissionedRegistryAbi,

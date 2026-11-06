@@ -1,4 +1,5 @@
-// `POST /names/claim`: a badge's signed claim of `<label>.gamebox.eth`, sent as `GameBoxNames.claimPlayer`.
+// `POST /names/claim`: a badge's signed claim of `<label>.gamebox.eth`, sent as `GameBoxNames.claimPlayer`, and
+// optionally its primary name (`primary-name.ts`), sent after it.
 
 import { claimNameDigest, fullName, gameBoxNamesAbi, labelProblem, permissionedRegistryAbi } from '@egb/shared/names';
 import { encodeFunctionData, labelhash } from 'viem';
@@ -7,6 +8,7 @@ import * as field from '../parse.ts';
 import { Refusal } from '../refusal.ts';
 import { CREATES_STORAGE_GAS, type Context, type Prepared, requireDeadline, simulate } from '../request.ts';
 import { requireBadgeSignature } from '../verify.ts';
+import { preparePrimaryName } from './primary-name.ts';
 
 /** `IPermissionedRegistry.Status.AVAILABLE`. */
 const AVAILABLE = 0;
@@ -42,6 +44,8 @@ export async function prepareClaim(ctx: Context, input: unknown): Promise<Prepar
 
   const data = encodeFunctionData({ ...names, functionName: 'claimPlayer', args: [label, badge, deadline, signature] });
   await simulate(ctx, { to: ctx.addresses.names, data });
+  const primaryName =
+    body.primaryName === undefined ? undefined : await preparePrimaryName(ctx, body.primaryName, label, badge);
   return {
     kind: 'claim',
     to: ctx.addresses.names,
@@ -50,5 +54,6 @@ export async function prepareClaim(ctx: Context, input: unknown): Promise<Prepar
     gas: CREATES_STORAGE_GAS,
     replay: { key: digest, until: Number(deadline) },
     locks: [`label:${label}`, `badge:${badge.toLowerCase()}`],
+    ...(primaryName && { primaryName }),
   };
 }

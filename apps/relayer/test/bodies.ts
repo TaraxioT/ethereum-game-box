@@ -5,6 +5,7 @@ import {
   executeDigest,
   fullName,
   permissionedResolverAbi,
+  primaryNameMessage,
   resultDigest,
   type Result,
 } from '@egb/shared/names';
@@ -22,6 +23,12 @@ export async function claimBody(label: string, badge: PrivateKeyAccount, options
     claimNameTypedData({ label, badge: badge.address, deadline }, addresses.names),
   );
   return { label, badge: badge.address, deadline, signature };
+}
+
+export async function primaryNameConsent(label: string, badge: PrivateKeyAccount, options: { expiry?: bigint; signer?: PrivateKeyAccount } = {}) {
+  const expiry = options.expiry ?? BigInt(NOW + 1800);
+  const raw = primaryNameMessage({ badge: badge.address, name: fullName(label), expiry }, addresses.reverseRegistrar);
+  return { expiry, signature: await (options.signer ?? badge).signMessage({ message: { raw } }) };
 }
 
 export function setTextData(key: string, value: string, label = BOX): Hex {

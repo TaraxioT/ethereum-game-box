@@ -1,7 +1,7 @@
 // A request that passed every check, ready for the sender, and the steps every route shares: the `eth_call` of the
 // exact call and its gas limit.
 
-import { type TxKind, contractAddress } from '@egb/shared/names';
+import { type TxKind, contractAddress, ensAddress } from '@egb/shared/names';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
@@ -13,6 +13,8 @@ export interface Addresses {
   names: Address;
   results: Address;
   licences: Address;
+  /** ENS's `DefaultReverseRegistrar`, which sets a badge's primary name. */
+  reverseRegistrar: Address;
 }
 
 export function deployedAddresses(): Addresses {
@@ -20,6 +22,7 @@ export function deployedAddresses(): Addresses {
     names: contractAddress('GameBoxNames'),
     results: contractAddress('BoxResults'),
     licences: contractAddress('DemoLicences'),
+    reverseRegistrar: ensAddress('DefaultReverseRegistrar'),
   };
 }
 
@@ -35,16 +38,22 @@ export interface Context {
   dripWei: bigint;
 }
 
-export interface Prepared {
-  kind: TxKind;
+/** One transaction, checked. */
+export interface Call {
   to: Address;
   data: Hex;
   value: bigint;
   gas: bigint;
   /** Refused for good once sent (a signed digest, or a badge's one drip), until `until` (unix seconds, 0: never). */
   replay?: { key: string; until: number };
+}
+
+export interface Prepared extends Call {
+  kind: TxKind;
   /** Refused while a request holding any of these is pending (a label, a badge, a Box nonce or round). */
   locks: string[];
+  /** A claim's primary-name call, sent once the claim is in a block. */
+  primaryName?: Call;
 }
 
 /**
