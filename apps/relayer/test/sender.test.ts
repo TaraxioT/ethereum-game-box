@@ -24,13 +24,13 @@ describe('the nonce queue', () => {
     expect(world.chain.calls.get('eth_getTransactionCount')).toBe(1);
   });
 
-  it('sends with the configured tip', async () => {
+  it('sends with the configured tip and a fee cap of three base fees', async () => {
     const world = new World();
     await world.relay.submit(request(1), 'ip');
     const { parseTransaction } = await import('viem');
     const tx = parseTransaction(world.chain.sent[0]!.raw);
     expect(tx.maxPriorityFeePerGas).toBe(2_000_000_000n);
-    expect(tx.maxFeePerGas).toBe(2n * 1_000_000_000n + 2_000_000_000n);
+    expect(tx.maxFeePerGas).toBe(3n * 1_000_000_000n + 2_000_000_000n);
   });
 
   it('resyncs on a nonce error and retries once', async () => {

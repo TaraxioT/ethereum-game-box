@@ -10,7 +10,7 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sender"] }],
   "vars": {
-    "TIP_GWEI": "1",
+    "TIP_GWEI": "2",
     "DRIP_ETH": "0.0003",
     "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
   },

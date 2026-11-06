@@ -43,6 +43,10 @@ const NONCE_ERROR = /nonce too (low|high)|invalid nonce|replacement transaction 
 /** A transaction is `done` once the head is this many blocks past its block, so lagging nodes have it too. */
 const CONFIRMATIONS = 1;
 
+/** The fee cap is this many base fees plus the tip: room for the base fee to rise for several full blocks, so a sent
+ *  transaction is never priced out of the next one. Only the base fee actually charged is paid. */
+const FEE_CAP_BASES = 3n;
+
 const view = ({ createdAt: _c, locks: _l, call: _call, primaryCall: _p, ...tx }: TxRecord): TxView => tx;
 
 const settled = (step: TxStep) => step.status === 'done' || step.status === 'failed';
@@ -214,7 +218,7 @@ export class Relay {
   private async broadcast(request: Call): Promise<Hex> {
     const { client, account, tipWei } = this.options;
     const block = await client.getBlock();
-    const fees = { maxPriorityFeePerGas: tipWei, maxFeePerGas: (block.baseFeePerGas ?? 0n) * 2n + tipWei };
+    const fees = { maxPriorityFeePerGas: tipWei, maxFeePerGas: (block.baseFeePerGas ?? 0n) * FEE_CAP_BASES + tipWei };
     for (let attempt = 0; ; attempt++) {
       const nonce =
         this.nonce ?? (await client.getTransactionCount({ address: account.address, blockTag: 'pending' }));
@@ -264,8 +268,9 @@ export class Relay {
   }
 }
 
-/** How often the alarm polls for receipts while anything is pending. */
-const POLL_MS = 4000;
+/** How often the alarm polls for receipts while anything is pending: a Sepolia block is 12 s, so a receipt is seen
+ *  within 1.5 s of its block. */
+const POLL_MS = 1500;
 
 export class Sender extends DurableObject<Env> {
   private readonly relay: Relay;
