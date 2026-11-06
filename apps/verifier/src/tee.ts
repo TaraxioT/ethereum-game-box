@@ -47,6 +47,7 @@ export interface ZgServices {
 
 export interface SignedChatOptions {
   readonly services: ZgServices;
+  /** Call it unbound: the Workers `fetch` throws "Illegal invocation" as a method of anything else. */
   readonly fetch: typeof fetch;
   /** Waits between tries for the signature, which 0G may not have ready the moment the reply lands. */
   readonly sleep: (ms: number) => Promise<void>;
@@ -111,17 +112,17 @@ export class SignedChatCheck implements TeeCheck {
 
   /** The enclave's signature for `chatId`. Its `signing_address` field is the provider's say-so, so it goes unread. */
   private async signature(service: ZgService, chatId: string): Promise<{ text: string; signature: Hex } | null> {
+    const { fetch: get, sleep } = this.options;
     const url = `${service.url}/v1/proxy/signature/${encodeURIComponent(chatId)}?model=${encodeURIComponent(service.model)}`;
     for (let tries = 1; ; tries++) {
-      const reply = await this.options
-        .fetch(url, { signal: AbortSignal.timeout(SIGNATURE_MS) })
+      const reply = await get(url, { signal: AbortSignal.timeout(SIGNATURE_MS) })
         .then((response) => (response.ok ? response.json() : null))
         .catch(() => null);
       if (isRecord(reply) && typeof reply.text === 'string' && typeof reply.signature === 'string' && isHex(reply.signature)) {
         return { text: reply.text, signature: reply.signature };
       }
       if (tries === SIGNATURE_TRIES) return null;
-      await this.options.sleep(SIGNATURE_WAIT_MS);
+      await sleep(SIGNATURE_WAIT_MS);
     }
   }
 }

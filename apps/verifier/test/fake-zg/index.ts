@@ -57,6 +57,14 @@ const json = (body: unknown, init?: ResponseInit) => Response.json(body, init);
 
 type RpcCall = { id: unknown; method: string; params?: unknown[] };
 
+/** `run`, refusing to be called as a method, as `fetch` does in workerd. */
+function workersStrict(run: typeof fetch): typeof fetch {
+  return function (this: unknown, input, init) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    return run(input, init);
+  };
+}
+
 export class FakeZg {
   /** The fake's own base URL: set it to the server's, and a provider's record points back here. */
   url = 'http://zg.fake';
@@ -89,12 +97,13 @@ export class FakeZg {
     return this.enclave.address;
   }
 
-  /** A `fetch` that only knows this fake. `down` fails the way an unreachable host does. */
-  readonly fetch: typeof fetch = async (input, init) => {
+  /** A `fetch` that only knows this fake. It is as strict as the Workers one about how it's called, and `down` fails the
+   *  way an unreachable host does. */
+  readonly fetch: typeof fetch = workersStrict(async (input, init) => {
     const request = new Request(input, init);
     if (this.settings.chat === 'down' && new URL(request.url).pathname.startsWith('/v1/')) throw new TypeError('fetch failed');
     return this.handle(request);
-  };
+  });
 
   async handle(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);

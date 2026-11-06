@@ -16,6 +16,7 @@ export interface ProxyOptions {
   readonly apiKey: string;
   readonly model: string;
   readonly tee: TeeCheck;
+  /** Call it unbound: the Workers `fetch` throws "Illegal invocation" as a method of anything else. */
   readonly fetch: typeof fetch;
   readonly scrub: Scrub;
 }
@@ -48,10 +49,11 @@ export async function proxyTurn(options: ProxyOptions, text: string): Promise<Tu
     response,
   });
 
+  const { fetch: send } = options;
   let response: Response;
   let replyText: string;
   try {
-    response = await options.fetch(`${options.baseUrl}/chat/completions`, {
+    response = await send(`${options.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${options.apiKey}`,

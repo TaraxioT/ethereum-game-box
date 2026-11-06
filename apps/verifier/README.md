@@ -59,8 +59,8 @@ Then the pot's Durable Object takes over, and its alarm does the rest:
 `outboundByHost` set, no other name resolves. The handler runs here in the Worker, and each container's ticket is kept in
 its own Durable Object, so the code inside can't claim to be another run.
 
-`outboundByHost` is assigned after the class, as Cloudflare's docs do. A `static` field would shadow the setter that
-registers the handler, every call would be refused, and the package's README shows that form anyway.
+`outboundByHost` is assigned after the class, as Cloudflare's docs do. A `static` field, as the package's README shows,
+would shadow the setter that registers the handler, and every call would be refused.
 
 `src/proxy.ts` is the model's only caller. It keeps the fields a chat needs, sets `model`, `max_tokens`, `verify_tee: true`
 and the header `X-0G-Provider-Trust-Mode: private` itself, and records each turn as an `AgentTurn`. It counts turns too,
