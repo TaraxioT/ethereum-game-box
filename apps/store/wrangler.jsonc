@@ -1,0 +1,10 @@
+// The game store Worker. Its one secret (`STORE_PUBLISH_TOKEN`) is set with `wrangler secret put`, and for `wrangler
+// dev` in `.dev.vars` (see `.dev.vars.example`); never here.
+{
+  "name": "gamebox-store",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-06",
+  "r2_buckets": [{ "binding": "BUNDLES", "bucket_name": "gamebox-bundles" }],
+  "observability": { "enabled": true }
+}
