@@ -1500,6 +1500,19 @@ export const playerStatsAbi = [
   },
   {
     "type": "function",
+    "name": "LEADERBOARD_WRITE_GAS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "NAMES",
     "inputs": [],
     "outputs": [
@@ -1520,6 +1533,45 @@ export const playerStatsAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TOP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "leaderboardText",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "text",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "leaders",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "stateMutability": "view"
@@ -1611,6 +1663,76 @@ export const playerStatsAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalsOf",
+    "inputs": [
+      {
+        "name": "player",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IPlayerStats.Totals",
+        "components": [
+          {
+            "name": "wins",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "losses",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "draws",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "streak",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "best",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "reached",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "LeaderboardSkipped",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LeaderboardWritten",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",

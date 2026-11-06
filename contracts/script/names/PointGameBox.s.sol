@@ -2,14 +2,22 @@
 pragma solidity 0.8.26;
 
 import {DefaultRecord} from "../../src/names/DefaultRecord.sol";
-import {IPermissionedRegistry, IRegistry, IVerifiableFactory} from "../../src/names/IENSv2.sol";
+import {
+    IPermissionedRegistry,
+    IPermissionedResolver,
+    IRegistry,
+    IVerifiableFactory,
+    ResolverRoles
+} from "../../src/names/IENSv2.sol";
+import {NameLib} from "../../src/names/NameLib.sol";
 import {NamesScript} from "./NamesScript.sol";
 
 /// @notice Points `gamebox.eth` at our names: its subregistry at the registry `GameBoxNames` created, and its resolver
 ///         at its own `PermissionedResolver` holding the default record (`DefaultRecord`), deployed here through ENS's
-///         `VerifiableFactory` with the deployer as its only root holder. Only the `.eth` owner of `gamebox.eth`
-///         (holding `SET_SUBREGISTRY` and `SET_RESOLVER` on it) can run it. It grants and revokes nothing on
-///         `gamebox.eth` itself. Skips what is done.
+///         `VerifiableFactory` with the deployer as its only root holder. On that resolver it lets `PlayerStats` write
+///         the `leaderboard` key and nothing else (run it again after a new `PlayerStats`). Only the `.eth` owner of
+///         `gamebox.eth` (holding `SET_SUBREGISTRY` and `SET_RESOLVER` on it) can run it. It grants and revokes nothing
+///         on `gamebox.eth` itself. Skips what is done.
 contract PointGameBox is NamesScript {
     uint256 internal constant GAMEBOX = uint256(keccak256("gamebox"));
     /// @notice The `VerifiableFactory` salt of `gamebox.eth`'s resolver (the factory salts by sender too).
@@ -34,6 +42,15 @@ contract PointGameBox is NamesScript {
             );
         }
         if (eth.getResolver("gamebox") != resolver) eth.setResolver(GAMEBOX, resolver);
+        address stats = _deployed("PlayerStats");
+        require(stats != address(0), "PlayerStats is not deployed: run DeployNames first");
+        if (!IPermissionedResolver(resolver)
+                .hasRoles(ResolverRoles.textResource("leaderboard"), ResolverRoles.SET_TEXT, stats)) {
+            IPermissionedResolver(resolver)
+                .grantSetterRoles(
+                    abi.encodeCall(IPermissionedResolver.setText, (NameLib.PARENT_DNS, "leaderboard", "")), stats
+                );
+        }
         vm.stopBroadcast();
         _saveAddress(".names.gameboxResolver", resolver);
     }

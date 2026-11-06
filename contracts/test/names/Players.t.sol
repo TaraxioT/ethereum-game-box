@@ -252,12 +252,18 @@ contract PlayersTest is NamesFork {
         assertFalse(bobs.hasRoles(ResolverRoles.textResource("stats"), ResolverRoles.SET_TEXT, address(stats)));
 
         vm.expectEmit(address(stats));
-        emit IPlayerStats.StatsWritten(alice, '{"stockduel":{"wins":1,"losses":0,"draws":0}}');
+        emit IPlayerStats.StatsWritten(
+            alice,
+            '{"played":1,"wins":1,"losses":0,"draws":0,"streak":1,"best":1,"games":{"stockduel":{"wins":1,"losses":0,"draws":0}}}'
+        );
         vm.expectEmit(address(stats));
         emit IPlayerStats.StatsSkipped(bob);
         submit(result(box, "stockduel", 1, alice, bob, false));
 
-        assertEq(resolveText("egbt-alice.gamebox.eth", "stats"), '{"stockduel":{"wins":1,"losses":0,"draws":0}}');
+        assertEq(
+            resolveText("egbt-alice.gamebox.eth", "stats"),
+            '{"played":1,"wins":1,"losses":0,"draws":0,"streak":1,"best":1,"games":{"stockduel":{"wins":1,"losses":0,"draws":0}}}'
+        );
         assertEq(resolveText("egbt-bob.gamebox.eth", "stats"), "");
         assertEq(resolveAddr("champion.stockduel.gamebox.eth"), alice);
         // The count still moves on chain.
@@ -276,7 +282,10 @@ contract PlayersTest is NamesFork {
         vm.expectEmit(address(stats));
         emit IPlayerStats.StatsSkipped(bob);
         submit(result(box, "stockduel", 1, bob, alice, false));
-        assertEq(resolveText("egbt-alice.gamebox.eth", "stats"), '{"stockduel":{"wins":0,"losses":1,"draws":0}}');
+        assertEq(
+            resolveText("egbt-alice.gamebox.eth", "stats"),
+            '{"played":1,"wins":0,"losses":1,"draws":0,"streak":0,"best":0,"games":{"stockduel":{"wins":0,"losses":1,"draws":0}}}'
+        );
         assertEq(resolveAddr("champion.stockduel.gamebox.eth"), bob);
     }
 
@@ -314,7 +323,7 @@ contract PlayersTest is NamesFork {
         submit(result(box, "stockduel", 2, bob, alice, false));
         assertEq(
             resolveText("egbt-alice.gamebox.eth", "stats"),
-            '{"quickdraw":{"wins":0,"losses":0,"draws":1},"stockduel":{"wins":0,"losses":1,"draws":0}}'
+            '{"played":2,"wins":0,"losses":1,"draws":1,"streak":0,"best":0,"games":{"quickdraw":{"wins":0,"losses":0,"draws":1},"stockduel":{"wins":0,"losses":1,"draws":0}}}'
         );
         // A draw crowns nobody.
         assertEq(names.getTitle("quickdraw").holder, address(0));

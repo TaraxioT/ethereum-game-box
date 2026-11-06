@@ -20,7 +20,8 @@ import {NamesScript} from "./NamesScript.sol";
 ///         USDC's game spender. The deployer is USDC's admin and minter and `Championships`' admin.
 /// @dev Skips whatever is already deployed and wired to the contracts it depends on, so a new `GameBoxNames` (delete
 ///      its entry in `deployments/sepolia.json` first) brings new copies of everything bound to it, and the factory
-///      and USDC stay.
+///      and USDC stay. Deleting `PlayerStats`' entry brings a new `PlayerStats` and `BoxResults`; the old `BoxResults`
+///      loses `REFEREE_ROLE`. Run `PointGameBox` after it, to let the new `PlayerStats` write the leaderboard.
 contract DeployNames is NamesScript {
     function run() external {
         vm.startBroadcast();
@@ -50,7 +51,8 @@ contract DeployNames is NamesScript {
                 names, usdc, IVerifiableFactory(_ens("VerifiableFactory")), _ens("PermissionedResolverImpl"), deployer
             );
         }
-        BoxResults results = BoxResults(_deployed("BoxResults"));
+        address previousResults = _deployed("BoxResults");
+        BoxResults results = BoxResults(previousResults);
         if (
             address(results) == address(0) || results.NAMES() != names || results.STATS() != stats
                 || results.POT() != pot || results.CUPS() != cups
@@ -63,6 +65,10 @@ contract DeployNames is NamesScript {
         _grant(names, names.LICENSOR_ROLE(), deployer);
         _grant(names, names.LICENSOR_ROLE(), address(licences));
         _grant(names, names.REFEREE_ROLE(), address(results));
+        // A new `BoxResults` (after a new `PlayerStats`) replaces the old one as the referee.
+        if (previousResults != address(results) && names.hasRole(names.REFEREE_ROLE(), previousResults)) {
+            names.revokeRole(names.REFEREE_ROLE(), previousResults);
+        }
         _grant(names, names.SEATER_ROLE(), address(seats));
         if (names.statsWriter() != address(stats)) names.setStatsWriter(address(stats));
         if (names.championships() == address(0)) names.setChampionships(address(cups));

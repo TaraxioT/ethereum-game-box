@@ -27,8 +27,14 @@ contract EndToEndTest is NamesFork {
         assertEq(resolveAddr("champion.quickdraw.gamebox.eth"), alice);
         assertEq(resolveText("champion.quickdraw.gamebox.eth", "holder"), "egbt-alice.gamebox.eth");
         assertEq(resolveText("champion.quickdraw.gamebox.eth", "streak"), "1");
-        assertEq(resolveText("egbt-alice.gamebox.eth", "stats"), '{"quickdraw":{"wins":1,"losses":0,"draws":0}}');
-        assertEq(resolveText("egbt-bob.gamebox.eth", "stats"), '{"quickdraw":{"wins":0,"losses":1,"draws":0}}');
+        assertEq(
+            resolveText("egbt-alice.gamebox.eth", "stats"),
+            '{"played":1,"wins":1,"losses":0,"draws":0,"streak":1,"best":1,"games":{"quickdraw":{"wins":1,"losses":0,"draws":0}}}'
+        );
+        assertEq(
+            resolveText("egbt-bob.gamebox.eth", "stats"),
+            '{"played":1,"wins":0,"losses":1,"draws":0,"streak":0,"best":0,"games":{"quickdraw":{"wins":0,"losses":1,"draws":0}}}'
+        );
 
         // Bob wins: the title moves.
         submit(result("mumbai-01", "quickdraw", 2, bob, alice, false));
