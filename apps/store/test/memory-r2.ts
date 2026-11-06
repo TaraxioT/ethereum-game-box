@@ -14,6 +14,8 @@ export class MemoryR2 {
   readonly writes: string[] = [];
   /** How many R2 calls have been made. */
   calls = 0;
+  /** How many bodies `get` gave out were cancelled. */
+  bodiesCancelled = 0;
   /** How many keys `list` returns before it asks for a cursor. */
   pageSize = 1000;
   private barrier: Barrier | null = null;
@@ -64,8 +66,18 @@ export class MemoryR2 {
     const bytes = this.objects.get(key);
     if (!bytes) return null;
     const text = () => new TextDecoder().decode(bytes);
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        controller.enqueue(bytes.slice());
+        controller.close();
+      },
+      cancel: () => {
+        this.bodiesCancelled++;
+      },
+    });
     return {
-      body: new Blob([new Uint8Array(bytes)]).stream(),
+      body,
+      size: bytes.length,
       text: async () => text(),
       json: async () => JSON.parse(text()) as unknown,
     };

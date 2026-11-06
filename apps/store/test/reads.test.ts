@@ -145,6 +145,7 @@ describe('/bundles/<hash>.zip', () => {
     expect(await hashOf(bytes)).toBe(hash);
     expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(response.headers.get('content-type')).toBe('application/zip');
+    expect(response.headers.get('content-length')).toBe(String(zip.length));
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
   });
 
@@ -178,12 +179,55 @@ describe('/bundles/<hash>.zip', () => {
   });
 });
 
+describe('HEAD', () => {
+  it('says a zip is there and how big, with the headers a GET has and no body', async () => {
+    const { upload, call } = store();
+    const zip = zipOf();
+    const hash = await hashOf(zip);
+    await upload(zip);
+
+    const [head, get] = [await call(`/bundles/${hash}.zip`, { method: 'HEAD' }), await call(`/bundles/${hash}.zip`)];
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-length')).toBe(String(zip.length));
+    expect(Object.fromEntries(head.headers)).toEqual(Object.fromEntries(get.headers));
+    expect(await head.text()).toBe('');
+  });
+
+  it('says the index is there and how big, with the headers a GET has and no body', async () => {
+    const { upload, call } = store();
+    await upload(zipOf());
+
+    const [head, get] = [await call('/index.json', { method: 'HEAD' }), await call('/index.json')];
+    expect(head.status).toBe(200);
+    expect(Object.fromEntries(head.headers)).toEqual(Object.fromEntries(get.headers));
+    expect(await head.text()).toBe('');
+    expect(head.headers.get('content-length')).toBe(String((await get.arrayBuffer()).byteLength));
+  });
+
+  it('leaves no zip open behind it', async () => {
+    const { r2, upload, call } = store();
+    const zip = zipOf();
+    await upload(zip);
+    await call(`/bundles/${await hashOf(zip)}.zip`, { method: 'HEAD' });
+    expect(r2.bodiesCancelled).toBe(1);
+  });
+
+  it('is a 404 for what GET finds nothing at, with no body', async () => {
+    const { call } = store();
+    for (const path of [`/bundles/0x${'ab'.repeat(32)}.zip`, '/bundles', '/']) {
+      const response = await call(path, { method: 'HEAD' });
+      expect(response.status, path).toBe(404);
+      expect(await response.text(), path).toBe('');
+    }
+  });
+});
+
 describe('CORS', () => {
-  it('answers a read preflight from any origin, for GET alone', async () => {
+  it('answers a read preflight from any origin, for reads alone', async () => {
     const response = await store().call('/index.json', { method: 'OPTIONS' });
     expect(response.status).toBe(204);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
-    expect(response.headers.get('access-control-allow-methods')).toBe('GET');
+    expect(response.headers.get('access-control-allow-methods')).toBe('GET, HEAD');
   });
 
   it('gives an upload no CORS at all', async () => {
