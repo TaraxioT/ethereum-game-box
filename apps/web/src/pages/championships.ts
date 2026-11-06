@@ -178,7 +178,9 @@ export async function championshipsPage(): Promise<HTMLElement> {
   const d = await dir();
   const open = openCups(d);
   const frozen = closedCups(d).find(hasWinner);
-  const [live, last] = await Promise.all([Promise.all(open.map((cup) => readCup(client, cup))), frozen ? readCup(client, frozen) : null]);
+  // A block behind the head, which every public RPC node has.
+  const at = (await client.getBlockNumber({ cacheTime: 0 })) - 1n;
+  const [live, last] = await Promise.all([Promise.all(open.map((cup) => readCup(client, cup, at))), frozen ? readCup(client, frozen, at) : null]);
   append(
     page,
     h("h2", {}, "OPEN NOW"),

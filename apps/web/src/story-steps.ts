@@ -100,6 +100,10 @@ export const STEPS: Step[] = [
         gone ? `The title moved to ${fullName(opponent.label)}, and ${fullName(label)}'s token is gone.` : "The title stayed put: check the strip for the results.",
       );
       await show(`#/name/${titleName(STORY_GAME)}`, "transfer");
+      // The public RPCs answer from nodes up to a block apart: read the title again a block later.
+      await new Promise((resolve) => setTimeout(resolve, 12_000));
+      await render(true);
+      setFocus("transfer");
     },
   },
   {

@@ -207,7 +207,7 @@ export async function treePage(): Promise<HTMLElement> {
     h(
       "p.intro",
       {},
-      "Game Box is a console you play by tapping a badge. Each Box, player, game and champion title is an ENSv2 name in ",
+      "Game Box is a console you play by tapping a badge. Each Box, player, game, champion title and championship is an ENSv2 name in ",
       h("b", {}, "a registry we deployed"),
       ", and each one has ",
       h("b", {}, "its own resolver"),

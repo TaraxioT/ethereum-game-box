@@ -40,11 +40,13 @@ export function readStandings(text: string | null): Standing[] | null {
   }
 }
 
-export async function readCup(client: PublicClient, entry: CupEntry): Promise<CupView> {
+/** Every read at one block, so the records agree with each other even when the public RPCs answer from nodes a
+ * block apart. */
+export async function readCup(client: PublicClient, entry: CupEntry, blockNumber: bigint): Promise<CupView> {
   const [addr, records, where] = await Promise.all([
-    readAddress(client, entry.name),
-    readTexts(client, entry.name, Object.values(CUP_KEYS)),
-    locate(client, entry.name),
+    readAddress(client, entry.name, blockNumber),
+    readTexts(client, entry.name, Object.values(CUP_KEYS), blockNumber),
+    locate(client, entry.name, blockNumber),
   ]);
   return {
     entry,
