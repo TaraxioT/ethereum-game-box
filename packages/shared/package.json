@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./names": "./src/names/index.ts"
+    "./names": "./src/names/index.ts",
+    "./web": "./src/web/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

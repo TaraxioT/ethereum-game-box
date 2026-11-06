@@ -12,6 +12,7 @@
 | `src/deployments.ts` | Loads `deployments/sepolia.json`, so no app hard-codes an address |
 | `src/chains.ts` | Sepolia and Robinhood Chain settings, with RPC URLs taken from the environment |
 | `src/names/` | The ENS names under `gamebox.eth`, imported as `@egb/shared/names` (below) |
+| `src/web/` | What the sites (`apps/web`, `apps/operator`) need in a browser, imported as `@egb/shared/web` (below) |
 
 ## `src/names/`
 
@@ -53,6 +54,18 @@ Either way `s` must be low (at most n/2), or the contracts refuse it; every enco
 `keccak256(encodeCalls(calls))` (`executeBatchDigest`). A `ClaimName` for an account (the agent's) is signed raw over
 the claim digest: the account's ERC-1271 `isValidSignature` takes the raw form only. On chain the public key is `qx`,
 `qy` (`P256Account.publicKey()`), and a Box name's `boxKey` record is `0x04` + x + y.
+
+## `src/web/`
+
+Browser-side code both sites use. It holds no DOM code (that is `@egb/ui`) and no state of its own: each site makes
+its own client, head watch and transaction log.
+
+| Module | Holds |
+|---|---|
+| `chain.ts` | `sepoliaClient(urls)` over public RPCs with a fallback (`PUBLIC_SEPOLIA_RPCS`), `ETHERSCAN`, `LOG_CHUNK`, and `watchHead(client)`, the polled head block (`HeadWatch`: `head`, `onHead`, `stop`) |
+| `errors.ts` | Reverts by name, from every names ABI and the ENSv2 slice: `decodeRevert`, `revertData`, `errorName` |
+| `relayer.ts` | `relayerClient(base)` and `demoBoxClient(base)` over HTTP, typed with `names/api.ts`; `ApiRefusal`; the live `RELAYER_URL` and `DEMO_BOX_URL` |
+| `txs.ts` | `txLog({ follow })`: the writes a transaction strip draws (`onTxs`, `relayed`, `direct`), with `Tx`, `TxFailed` and `fromView` |
 
 ## Rules
 
