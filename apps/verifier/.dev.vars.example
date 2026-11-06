@@ -1,0 +1,11 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+VERIFIER_PRIVATE_KEY=
+ZG_API_KEY=
+ZG_STORAGE_KEY=
+SEPOLIA_RPC_URL=
+# With the fake 0G (`pnpm --filter @egb/verifier fake-zg`), set these too. It prints them when it starts.
+# ZG_BASE_URL=http://127.0.0.1:8790/v1
+# ZG_RPC=http://127.0.0.1:8790/rpc
+# ZG_SERVING_CONTRACT=0x00000000000000000000000000000000000000d1
+# ZG_STORAGE_RPC=http://127.0.0.1:8790/rpc
+# ZG_STORAGE_INDEXER=http://127.0.0.1:8790/indexer

@@ -31,7 +31,7 @@ Each of these was asked and answered on 6 November.
 | Who publishes | The team only. |
 | Where the store lives | A Worker, with the zips in R2. |
 | What "agent" means | A full agent with a shell, inside the container. |
-| Which 0G | Testnet first, then mainnet by configuration, in Private mode. |
+| Which 0G | Mainnet only, in Private mode. Testnet is unavailable, and the account holds 1 USD, so tests use a fake. |
 | Where the keys live | In the Worker. The container holds no secrets. |
 | When it fails | One retry on a fresh container, then an instant refund. |
 | Bundle versions | Immutable and pinned by hash. A new version is a new listing. |
@@ -48,10 +48,13 @@ Each of these was asked and answered on 6 November.
 
 Say this plainly on the site and in the demo.
 
-- **0G proves the model.** In Private mode each turn runs in an attested enclave, and the Worker refuses any reply
-  that isn't `tee_verified`. Say "each turn passed an attested enclave".
-- **0G doesn't prove the prompt.** Its signature covers the reply, and its docs don't say it covers the request. No
-  contract can check that a verdict came from the real log.
+- **0G proves an enclave handled each turn.** In Private mode each turn runs in an attested enclave. Mainnet's replies
+  carry no `tee_verified` field, so the Worker checks each turn itself: the enclave's signature for that chat must
+  recover to the key 0G's serving contract lists for the provider. It refuses any reply that fails. Say "each turn
+  passed an attested enclave".
+- **0G doesn't prove the prompt or the reply.** The signed text is two hashes of ciphertext, which nobody outside the
+  enclave can recompute, so the signature binds neither the prompt nor the reply's text to that chat. No contract can
+  check that a verdict came from the real log.
 - **The Worker and the container aren't enclaves.** Whoever runs them could feed the agent a false log or sign a false
   verdict. The verifier key is trusted, and the contract limits the damage: it pays only the match's players, and
   only the exact pot.
@@ -93,7 +96,7 @@ Say this plainly on the site and in the demo.
 to the address it came from. If the verifier never answers at all, anyone can call the refund after a delay, and the
 Box's sweep does so.
 
-A failure is any of: a timeout, 0G unreachable, a reply that isn't `tee_verified`, an agent that says it can't judge,
+A failure is any of: a timeout, 0G unreachable, a reply that fails the TEE check, an agent that says it can't judge,
 or a verdict that fails the Worker's checks.
 
 ## 6. The bundle
@@ -190,15 +193,16 @@ Join, Stake and Result draw two sides. This pass widens all of it to four.
 
 Each step ends with tests, and step 1 can stop the plan.
 
-1. **Prove 0G.** On testnet: is there a private model, do tool calls work, and does `verify_tee` come back? Does the
-   0G Storage SDK run in a Worker? If not, a second container with no agent does the upload.
+1. **Prove 0G.** On mainnet: is there a private model, do tool calls work, and does `verify_tee` come back? Does the
+   0G Storage SDK run in a Worker? Done: tool calls work, `tee_verified` doesn't come back so the Worker checks the
+   enclave's signature itself, and the SDK runs in the Worker with a `fetch` transport, so no second container.
 2. **The bundle.** The format, the reader and a sample game, Tap Rush.
 3. **The store.** The Worker, R2, `store:publish` and a deploy.
 4. **The contract.** `StorePot`, its forge tests, Store USDC, the deploy and the relayer's routes.
-5. **The verifier.** The Worker, the container, the agent and the failure paths, against a fake 0G and then testnet.
+5. **The verifier.** The Worker, the container, the agent and the failure paths, against a fake 0G.
 6. **The Box, two seats.** The library, the frame's powers, the log and the chain. A full staked match on the Pi.
 7. **Four seats.** The core, the settings, the stations and every screen.
-8. **Mainnet 0G.** Switch by configuration and play one match.
+8. **Mainnet 0G.** Deploy with the real key and play one match.
 
 ## 12. Build detail
 
@@ -260,8 +264,8 @@ arrives, and steps 5 to 7 get their detail from its results.
 
 ## 13. Needed from the team
 
-- A 0G testnet key from pc.testnet.0g.ai, and a mainnet key from pc.0g.ai before step 8.
-- A funded 0G wallet for Storage: the testnet faucet first, then real 0G.
+- A mainnet 0G key from pc.0g.ai before step 8.
+- A wallet funded with real 0G, for Storage.
 - A new verifier key, as a Worker secret.
 - A funded Sepolia deployer key in `.env`, for step 4.
 - `forge`: Foundry isn't on the main development Mac yet, so contract tests need it installed.
@@ -290,7 +294,7 @@ These came up while writing the plan. Each has a default the build will use unle
 - [ ] Killing the verifier mid-run retries once, then refunds each stake to its address.
 - [ ] A forged verdict, one that doesn't add up, and one from a wrong key are all refused.
 - [ ] With the verifier down, the refund works after the delay.
-- [ ] Every model turn is `tee_verified`, on mainnet 0G.
+- [ ] Every model turn passes the TEE check, on mainnet 0G.
 - [ ] The audit record is on 0G Storage, and its hash matches the chain.
 - [ ] The container has no secrets and can't reach the internet, proved by a test run from its shell.
 - [ ] `pnpm typecheck`, the tests and `pnpm contracts:test` pass.
