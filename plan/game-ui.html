@@ -151,13 +151,13 @@ chips, copper, brass, gunmetal, chains, needles, LCD segments, keycaps, wood or 
 </thead>
 <tbody><tr>
 <td><strong>Grid</strong></td>
-<td>The void; a faint 64 px grid on the back wall; one horizon line; a perspective floor vanishing under the core, with the core&#39;s soft reflection on it. Every trace from the ports, the block readout and the programs runs into the core as a light line, unpowered at 18 %, ending in a lit terminal bar where it meets a part.</td>
+<td>A world with depth, not a flat void. A storm-dark sky lifts to a hazy blue at the horizon, with faint cloud banks lit from beneath; two ranges of distant ridges with lit crests, and a far city of towers off to the side of the core. One horizon line, hottest at the vanishing point, with a thin anamorphic flare. A glossy floor whose perspective grid (every fourth line a major one with its bloom) fades into haze at the horizon, with the core&#39;s and the city&#39;s light streaked down it and a pool of light under each program. Every trace from the ports, the block readout and the programs runs into the core as a light line sunk in a dark channel, unpowered at 20 %, ending in a lit terminal bar where it meets a part. HUD brackets in the stage&#39;s corners and rulers down its sides, a vignette and a fine static grain over it all.</td>
 <td>Never. Drawn once per layout and scale and cached. Packets run along its traces as light trails.</td>
 </tr>
 <tr>
 <td><strong>Core</strong></td>
-<td>An outer ring of light with four notches, a ring of 24 segments, a thin inner ring round a dark disc, and the real six-facet Ethereum mark in wireframe: near-black facets edged in hot lines.</td>
-<td>Holds still. Ignites segment by segment at boot. Swells (a ring grows out and fades, the segments bloom) when a transaction lands or a block seals. Turns once like a coin when a game launches.</td>
+<td>An instrument: a blue halo on the air behind it, a dial of fine ticks outside an outer ring of light with four notches, a ring of 24 segments with hot centres, a thin inner ring round a glass disc lit blue from deep inside (fine rings in it, a sheen at its top left, a ring of small printed words), and the real six-facet Ethereum mark in wireframe: near-black facets edged in hot lines. Two broken orbit rings, one outside the ring and one inside the glass.</td>
+<td>The orbit rings turn very slowly, in opposite directions (90 s and 140 s a turn, compositor-only). Ignites segment by segment at boot, then its detail fades up. Swells (a ring grows out and fades, the segments bloom) when a transaction lands or a block seals. Turns once like a coin when a game launches.</td>
 </tr>
 <tr>
 <td><strong>Ports</strong></td>
@@ -181,8 +181,8 @@ chips, copper, brass, gunmetal, chains, needles, LCD segments, keycaps, wood or 
 </tr>
 <tr>
 <td><strong>Programs</strong></td>
-<td>The rack&#39;s cartridges: chamfered frames round an art window with a faint grid and the game&#39;s art in light lines (Quick Draw a bolt, Stock Duel orange and cyan candlesticks), the title under it. Unbuilt games are sealed: the window hatched, a small <code>SOON</code> tag.</td>
-<td>The focused one lifts on a spring and only then lights its frame and a hot foot bar.</td>
+<td>The rack&#39;s cartridges: chamfered glass frames with a header (<code>PRG 01</code> and three status lights) over an art window lit from below with a faint grid and the game&#39;s art in light lines (Quick Draw a bolt, Stock Duel orange and cyan candlesticks), the title under it, a strip of light along the foot, and a reflection on the floor&#39;s gloss. Unbuilt games are sealed: the window hatched, a small <code>SOON</code> tag.</td>
+<td>The focused one lifts on a spring and only then lights its frame, status lights, foot strip and a hot foot bar.</td>
 </tr>
 <tr>
 <td><strong>Transaction progress</strong></td>
@@ -190,8 +190,10 @@ chips, copper, brass, gunmetal, chains, needles, LCD segments, keycaps, wood or 
 <td>Each step lights (and flickers once) when it happens, at the simulated chain&#39;s real pace.</td>
 </tr>
 </tbody></table></div>
-<p><strong>Palette.</strong> Void <code>#010409</code>, panel fills <code>#030a12</code>, deep <code>#061522</code>. System light <code>#cfe8f6</code> with a white <code>#ffffff</code>
-core and a <code>rgb(150 200 230 / 0.42)</code> bloom. Seats: Player 1 orange <code>#ff9b3d</code>, Player 2 cyan <code>#3fd9ff</code>, each with its
+<p><strong>Palette.</strong> Void <code>#010409</code>, the horizon&#39;s haze <code>#0c2c44</code>. Panels, keys and tags are glass (<code>--glass</code>): a dark
+blue fill lit faintly from above with a sheen along its top. System light <code>#cfe8f6</code> with a white <code>#ffffff</code> core that
+blooms blue (<code>--sys-glow</code> <code>#4aa8e8</code>, bloom <code>rgb(74 168 232 / 0.5)</code>), as a lit tube does; the blue is the system&#39;s,
+distinct from Player 2&#39;s cyan. Seats: Player 1 orange <code>#ff9b3d</code>, Player 2 cyan <code>#3fd9ff</code>, each with its
 own bloom. Alert red <code>#ff2d3d</code>. Text <code>#eaf7ff</code>, <code>#a9c4d2</code>, <code>#6d8796</code>, <code>#3e5462</code>. System light is never cyan: cyan is
 Player 2&#39;s alone and orange Player 1&#39;s. A win is the winner&#39;s seat colour, not green; a loss dims to 40 %, not red.
 Red means something is wrong (Refund, <code>CUT POWER</code>, <code>NEEDS n EGB</code>, a refused tap). Money is plain text in mono. No
@@ -199,8 +201,8 @@ gold, lavender, violet or mint.</p>
 <p><strong>Light.</strong> A lit line has three layers: a 1 px hot core, a 2 px line in its colour, and a bloom. Glow is static:
 box-shadow, text-shadow, stacked SVG strokes, or blur baked once into the cached Grid. No CSS filters, SVG blurs,
 blend modes or backdrop filters, and no shadow, stroke width or blur ever animates. A glow reaches at most 24 px.
-Chamfered shapes are inline SVG (one polygon stroked four times, split into a line layer and a bloom layer); circles
-use box-shadow. Animated light is opacity on a pre-glowed layer. A frame is at 30 % idle, 100 % with its bloom when
+Chamfered shapes are inline SVG, split into a line layer (the line over its hot core, the two cut edges lit brighter
+like a bevel, a faint inner line 4 px inside for the panel&#39;s thickness) and a bloom layer; circles use box-shadow. Animated light is opacity on a pre-glowed layer. A frame is at 30 % idle, 100 % with its bloom when
 active, 12 % disabled, 25 % when nothing is seated.</p>
 <p><strong>Type.</strong> Syncopate (700, wide caps) for display: titles, keys, the Result banner, the Refund head. Oxanium (600,
 squared caps) for labels, names, statuses and panels. JetBrains Mono (700, tabular) for every number. All
