@@ -1,6 +1,6 @@
 // `POST /usdc/topup`: the lobby's top-up. It mints `TOPUP` test USDC (`FakeUSDC.mint`, which the relayer's wallet may
 // call as its minter) to a player holding less than `TOPUP_BELOW`. The player is an address, or an ENS name resolved
-// with stock viem through the Universal Resolver.
+// with stock viem through the Universal Resolver. `POST /store/topup` is the same on Store USDC (`store-pot.ts`).
 
 import { fakeUsdcAbi, formatUsdc, usdc } from '@egb/shared/names';
 import { type Address, encodeFunctionData, getAddress, isAddress } from 'viem';
@@ -35,9 +35,10 @@ async function playerAddress(ctx: Context, player: string): Promise<Address> {
   return address;
 }
 
-export async function prepareTopup(ctx: Context, input: unknown): Promise<Prepared> {
+/** The mint of `TOPUP` of the `FakeUSDC` at `address` to the player in `input`. */
+export async function prepareMint(ctx: Context, input: unknown, address: Address, kind: 'topup' | 'store-topup'): Promise<Prepared> {
   const player = await playerAddress(ctx, field.text(field.object(input), 'player'));
-  const token = { address: ctx.addresses.usdc, abi: fakeUsdcAbi } as const;
+  const token = { address, abi: fakeUsdcAbi } as const;
   const balance = await ctx.client.readContract({ ...token, functionName: 'balanceOf', args: [player] });
   if (balance >= TOPUP_BELOW) {
     throw new Refusal(409, `${player} already holds ${formatUsdc(balance)} USDC (top-ups are for under ${formatUsdc(TOPUP_BELOW)})`);
@@ -46,11 +47,15 @@ export async function prepareTopup(ctx: Context, input: unknown): Promise<Prepar
   const call = { to: token.address, data: encodeFunctionData({ ...token, functionName: 'mint', args: [player, TOPUP] }) };
   await simulate(ctx, call);
   return {
-    kind: 'topup',
+    kind,
     account: player,
     ...call,
     value: 0n,
     gas: await estimatedGas(ctx, call),
-    locks: [`topup:${player.toLowerCase()}`],
+    locks: [`${kind}:${player.toLowerCase()}`],
   };
+}
+
+export function prepareTopup(ctx: Context, input: unknown): Promise<Prepared> {
+  return prepareMint(ctx, input, ctx.addresses.usdc, 'topup');
 }
