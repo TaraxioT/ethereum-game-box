@@ -46,6 +46,10 @@
       "address": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
       "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UpgradableUniversalResolverProxy.json"
     },
+    "UniversalHelper": {
+      "address": "0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UniversalHelper.json"
+    },
     "RootRegistry": {
       "address": "0xB458D6a3a77919449d03e7A6903C26827c1eC43f",
       "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/RootRegistry.json"

@@ -160,6 +160,69 @@ contract BoxesTest is NamesFork {
         assertEq(qx, bytes32(uint256(1)));
     }
 
+    uint256 internal newKey = p256Key("egb-test-box-new");
+
+    /// @dev A lost Box moves to a new key and account, made by the factory.
+    function _rotate() internal returns (P256Account next) {
+        (bytes32 qx, bytes32 qy) = p256Public(newKey);
+        next = P256Account(payable(accounts.deploy(qx, qy)));
+        vm.expectEmit(address(names));
+        emit IGameBoxNames.BoxKeyChanged(BOX, address(next), qx, qy);
+        vm.prank(admin);
+        names.setBoxKey(BOX, qx, qy, address(next));
+        assertEq(resolveAddr(BOX_NAME), address(next));
+        assertEq(resolveText(BOX_NAME, "boxKey"), vm.toString(abi.encodePacked(bytes1(0x04), qx, qy)));
+        assertEq(names.getBox(BOX).account, address(next));
+    }
+
+    /// @dev After a rotation the old account's signed heartbeat reverts and the new one's lands.
+    function test_aRotatedBoxWritesWithTheNewAccountOnly() public {
+        address resolver = registerBox(BOX, 30 days);
+        P256Account next = _rotate();
+        bytes memory data = abi.encodeCall(IPermissionedResolver.setText, (NameLib.dnsName(BOX), "game", "stockduel"));
+        uint256 deadline = block.timestamp + 60;
+        bytes memory oldSig = rawSign(boxKey, demoBox.executeDigest(resolver, 0, data, 1, deadline));
+        bytes memory newSig = rawSign(newKey, next.executeDigest(resolver, 0, data, 1, deadline));
+        vm.expectRevert();
+        demoBox.execute(resolver, 0, data, 1, deadline, oldSig);
+        next.execute(resolver, 0, data, 1, deadline, newSig);
+        assertEq(resolveText(BOX_NAME, "game"), "stockduel");
+    }
+
+    /// @dev After a rotation BoxResults refuses the old key and takes the new one.
+    function test_aRotatedBoxReportsWithTheNewKeyOnly() public {
+        registerBox(BOX, 30 days);
+        (address alice,) = claim("egbt-alice");
+        (address bob,) = claim("egbt-bob");
+        _rotate();
+        IBoxResults.Result memory r = result(BOX, "stockduel", 1, alice, bob, false);
+        (bytes32 sr, bytes32 ss) = p256Sign(boxKey, results.resultDigest(r));
+        vm.expectRevert(IBoxResults.InvalidSignature.selector);
+        results.submit(r, sr, ss);
+        (sr, ss) = p256Sign(newKey, results.resultDigest(r));
+        results.submit(r, sr, ss);
+        assertEq(resolveAddr("champion.stockduel.gamebox.eth"), alice);
+    }
+
+    function test_setBoxKeyRefusals() public {
+        registerBox(BOX, 30 days);
+        address stranger = account("stranger");
+        bytes32 licensor = names.LICENSOR_ROLE();
+        vm.prank(stranger);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, licensor)
+        );
+        names.setBoxKey(BOX, bytes32(uint256(1)), bytes32(uint256(2)), stranger);
+        vm.startPrank(admin);
+        vm.expectRevert(IGameBoxNames.ZeroValue.selector);
+        names.setBoxKey(BOX, bytes32(0), bytes32(uint256(2)), stranger);
+        vm.expectRevert(IGameBoxNames.ZeroValue.selector);
+        names.setBoxKey(BOX, bytes32(uint256(1)), bytes32(uint256(2)), address(0));
+        vm.expectRevert(abi.encodeWithSelector(IGameBoxNames.UnknownBox.selector, "egbt-none"));
+        names.setBoxKey("egbt-none", bytes32(uint256(1)), bytes32(uint256(2)), stranger);
+        vm.stopPrank();
+    }
+
     /// @dev The Box writes its heartbeat through its own account: a P-256-signed `execute`.
     function test_boxWritesLastSeenThroughItsAccount() public {
         address resolver = registerBox(BOX, 30 days);

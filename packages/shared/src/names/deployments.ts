@@ -23,6 +23,7 @@ export interface OurContract {
 
 export type EnsName =
   | 'UniversalResolver'
+  | 'UniversalHelper'
   | 'RootRegistry'
   | 'ETHRegistry'
   | 'ETHRegistrar'
