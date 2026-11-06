@@ -11,13 +11,14 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoBox"] }],
   // The relayer, called through a service binding: a Worker can't fetch another workers.dev Worker on its account.
   "services": [{ "binding": "RELAYER", "service": "gamebox-relayer" }],
-  // Restarts the heartbeat alarm if it ever stops.
+  // Restarts the heartbeat alarm (which also closes ended championships) if it ever stops.
   "triggers": { "crons": ["0 * * * *"] },
   "vars": {
     "RELAYER_URL": "https://gamebox-relayer.mathew.workers.dev",
     "PUBLIC_URL": "https://gamebox-demo-box.mathew.workers.dev",
-    "BOX_LABEL": "mumbai-01",
+    "BOX_LABEL": "demo-01",
     "DEFAULT_GAME": "stockduel",
+    "CUP_GAMES": "stockduel,quickdraw",
     "AGENT_LABEL": "bot",
     "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
   },

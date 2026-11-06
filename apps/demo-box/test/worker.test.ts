@@ -27,6 +27,7 @@ describe('the demo Box Worker', () => {
     for (const [path, init] of [
       ['/box', undefined],
       ['/result', { method: 'POST', body: '{}' }],
+      ['/stake', { method: 'POST', body: '{}' }],
       ['/agent', undefined],
       ['/agent/setup', { method: 'POST' }],
       ['/mcp', { method: 'POST', body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' }],

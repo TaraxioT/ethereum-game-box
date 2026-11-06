@@ -1,7 +1,10 @@
-// What the demo Box and its agent read from Sepolia: Boxes, text records, settled rounds, and accounts and names.
+// What the demo Box and its agent read from Sepolia: Boxes, text records, used rounds, open championships, and accounts
+// and names.
 
 import {
   boxResultsAbi,
+  championshipsAbi,
+  duelPotAbi,
   fullName,
   gameBoxNamesAbi,
   p256AccountFactoryAbi,
@@ -38,7 +41,10 @@ export interface BoxChain {
   /** A text record of `<label>.gamebox.eth`, read from its own resolver (which answers only through ENSIP-10
    *  `resolve`). Reads cost nothing, so the Box reads a record before it writes it. */
   text(resolver: Address, label: string, key: string): Promise<string>;
-  roundUsed(box: string, round: bigint): Promise<boolean>;
+  /** Whether `(box, round)` has a result in `BoxResults` or a pot in `DuelPot`: a round is used once, for both. */
+  roundTaken(box: string, round: bigint): Promise<boolean>;
+  /** The game's open championship, or `null`. */
+  openCup(game: string): Promise<{ label: string; ends: number } | null>;
 }
 
 /** The reads the agent makes, on top of the text records. */
@@ -55,6 +61,8 @@ export interface AgentChain extends Pick<BoxChain, 'text'> {
 export interface Contracts {
   names: Address;
   results: Address;
+  pot: Address;
+  cups: Address;
   factory: Address;
   /** `gamebox.eth`'s own registry. */
   registry: Address;
@@ -79,13 +87,19 @@ export function sepoliaChain(rpcUrl: string, contracts: Contracts): BoxChain & A
       });
       return decodeFunctionResult({ ...call, data: answer });
     },
-    roundUsed(box, round) {
-      return client.readContract({
-        address: contracts.results,
-        abi: boxResultsAbi,
-        functionName: 'roundUsed',
-        args: [box, round],
-      });
+    async roundTaken(box, round) {
+      const [used, pot] = await Promise.all([
+        client.readContract({ address: contracts.results, abi: boxResultsAbi, functionName: 'roundUsed', args: [box, round] }),
+        client.readContract({ address: contracts.pot, abi: duelPotAbi, functionName: 'getPot', args: [box, round] }),
+      ]);
+      return used || pot.state !== 0;
+    },
+    async openCup(game) {
+      const cups = { address: contracts.cups, abi: championshipsAbi } as const;
+      const id = await client.readContract({ ...cups, functionName: 'openCup', args: [game] });
+      if (id === 0n) return null;
+      const cup = await client.readContract({ ...cups, functionName: 'getCup', args: [id] });
+      return { label: cup.label, ends: Number(cup.ends) };
     },
     accountOf(qx, qy) {
       return client.readContract({
