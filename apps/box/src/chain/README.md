@@ -41,7 +41,7 @@ from the core's entries, signs a `Judge` ("Game Box Verifier" v1, its verifying 
 keccak256 of its exact JSON text, and sends that same text to `POST /judge`. A verifier that is down or busy gets it
 again after 5 seconds, then doubling up to every 2 minutes (a try can use up one of the judgements it allows a Box in an
 hour), each try signed afresh, as a long outage outlasts a deadline. Then `GET /judge/<box>/<round>` is followed every 2
-seconds to `paid`, `refunded` or `failed`. Failed, a refusal, or 20 minutes with no end to it (`JUDGE_GIVE_UP_MS`, past
+seconds to `paid`, `refunded` or `failed`. Failed, a refusal, or 30 minutes with no end to it (`JUDGE_GIVE_UP_MS`, past
 the verifier's two runs and its payment) go to the core's Refund. Only the chain pays: what the verifier says is shown,
 and it can't move a stake or end a pot. Whatever it says, the round stays on the file for the sweep, which reads the
 chain: it forgets a pot that is over, and refunds one that isn't.

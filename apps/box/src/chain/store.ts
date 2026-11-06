@@ -28,8 +28,9 @@ export const JUDGE_POLL_MS = 2_000;
  *  judgements it allows a Box in an hour, so a short outage mustn't spend them. */
 export const JUDGE_RETRY_MS = 5_000;
 export const JUDGE_RETRY_MAX_MS = 2 * 60_000;
-/** A run takes up to 7 minutes, then its one retry, then the transaction: past this, the Box stops waiting. */
-export const JUDGE_GIVE_UP_MS = 20 * 60_000;
+/** The verifier can wait 10 minutes for a free container, take 7 for a run and 7 for its one retry, and then send the
+ *  transaction: past this, the Box stops waiting. Sooner would call a full pool's honest match failed before it paid. */
+export const JUDGE_GIVE_UP_MS = 30 * 60_000;
 
 export interface StoreChainOptions {
   /** The Box's label, `mumbai-01`. */
