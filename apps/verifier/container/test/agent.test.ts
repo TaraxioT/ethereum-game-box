@@ -26,11 +26,16 @@ afterEach(async () => {
   model = undefined;
 });
 
-async function run(script: Script, limits: Partial<Limits> = {}, signal = new AbortController().signal) {
+async function run(
+  script: Script,
+  limits: Partial<Limits> = {},
+  signal = new AbortController().signal,
+  sandbox = bashSandbox,
+) {
   model = await startFakeModel(script);
   return runAgent({
     modelUrl: model.url,
-    sandbox: bashSandbox,
+    sandbox,
     limits: { ...FAST_LIMITS, ...limits },
     folder: await workFolder(),
     signal,
@@ -231,6 +236,11 @@ describe("runAgent", () => {
 
   it("fails at the wall time during a shell call", async () => {
     await expect(run(steps(shellCall("sleep 30")), { runMs: 200, shellMs: 2_000 })).rejects.toThrow("timed out");
+  });
+
+  it("fails at the wall time when a call's cleanup never ends", async () => {
+    const sandbox = { ...bashSandbox, stop: () => new Promise<void>(() => {}) };
+    await expect(run(steps(shellCall("true")), { runMs: 200 }, undefined, sandbox)).rejects.toThrow("timed out");
   });
 
   it("stops when the Worker stops waiting", async () => {

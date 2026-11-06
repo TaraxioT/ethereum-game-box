@@ -9,7 +9,8 @@ import type { Limits } from "./limits.ts";
 export interface Sandbox {
   /** The command that runs `bash -c script`. */
   readonly command: (script: string) => readonly [string, ...string[]];
-  /** Kills everything the agent has running, resolving once that's done. `shell` is this call's process. */
+  /** Kills everything the agent has running, resolving once that's done and rejecting if it can't be. `shell` is this
+   *  call's process. */
   readonly stop: (shell: ChildProcess) => Promise<void>;
 }
 
@@ -50,9 +51,12 @@ export function runShell(script: string, job: ShellJob): Promise<ShellResult> {
     let stopped: ShellResult["stopped"] = null;
     let stopping = Promise.resolve();
 
-    /** A call ends only after its stops have, or one that ran late would kill the next call. */
+    /** A call ends only after its stops have, or one that ran late would kill the next call. A stop that fails may leave
+     *  the agent's processes running, so it fails the call. */
     const stopAll = (): void => {
-      stopping = stopping.then(() => sandbox.stop(shell));
+      stopping = stopping
+        .then(() => sandbox.stop(shell))
+        .catch(() => reject(new RunFailure("the shell can't be stopped")));
     };
     const halt = (why: "time" | "output"): void => {
       if (stopped) return;
@@ -84,8 +88,11 @@ export function runShell(script: string, job: ShellJob): Promise<ShellResult> {
     shell.on("exit", stopAll);
     shell.on("close", (exitCode) => {
       clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-      void stopping.then(() => resolve({ output: Buffer.concat(chunks).toString("utf8"), exitCode, stopped }));
+      // The run's end still counts until then: it's all that ends a call whose stop never does.
+      void stopping.then(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve({ output: Buffer.concat(chunks).toString("utf8"), exitCode, stopped });
+      });
     });
   });
 }

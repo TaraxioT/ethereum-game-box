@@ -101,6 +101,28 @@ describe("runShell", () => {
     expect(cleaned).toBe(true);
   });
 
+  it("fails the call when the run ends after bash has gone, with the cleanup still going", async () => {
+    const controller = new AbortController();
+    let cleaning = (): void => {};
+    const cleanup = new Promise<void>((resolve) => (cleaning = resolve));
+    const stop: Sandbox["stop"] = () => {
+      cleaning();
+      return new Promise(() => {});
+    };
+    const running = runShell("true", await job({ sandbox: { ...bashSandbox, stop }, signal: controller.signal }));
+    await cleanup;
+    await delay(100);
+    controller.abort();
+    await expect(running).rejects.toThrow("the run timed out");
+  });
+
+  it("fails the call when its cleanup fails, as the agent's processes may still be running", async () => {
+    const stop: Sandbox["stop"] = () => Promise.reject(new Error("no killer"));
+    await expect(runShell("true", await job({ sandbox: { ...bashSandbox, stop } }))).rejects.toThrow(
+      "the shell can't be stopped",
+    );
+  });
+
   it("fails the call when the run ends", async () => {
     const controller = new AbortController();
     const running = runShell("sleep 30", await job({ signal: controller.signal }));
