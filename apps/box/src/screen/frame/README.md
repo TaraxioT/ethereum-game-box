@@ -71,8 +71,8 @@ error only puts up the quiet plate: the taps still count.
 **What the CSP can't do.** Under `default-src 'none'` and the sandbox, Chromium still lets a page reach the network four
 ways: `<link rel="prerender">` sends a full GET to any URL, `preconnect` opens a connection, `dns-prefetch` looks a name
 up, and WebRTC sends UDP (`webrtc 'block'` isn't enforced). The host can't take those away, because a nested `srcdoc`
-frame gets a fresh window. Only the kiosk's own start can stop them: Chromium needs the flags in `KIOSK_WALLS`
-(`server/games/sandbox.test.ts`).
+frame gets a fresh window. Only the kiosk's own start can stop them: `deploy/pi/units/egb-kiosk.service` starts Chromium
+with `--host-resolver-rules` and `--webrtc-ip-handling-policy`, and `server/games/sandbox.test.ts` runs that line's flags.
 
 | Module | What it is | API |
 |---|---|---|

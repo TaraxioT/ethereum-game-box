@@ -1,8 +1,9 @@
-// The sandbox proved in a real browser: Chromium with the kiosk's flags, on the real handler, routes and CSPs, with the
-// real view, gate and channel (screen/frame/sandbox-kiosk.ts). A second server and a UDP socket on this machine's real
-// address stand for the outside world. Each scenario is a bundle that tries something, and the proof is what the outside
-// and the Box then saw, not what the page says. Skipped without a Chromium (EGB_CHROMIUM names one, else the Pi's,
-// Playwright's or Chrome), or without a network address to stand the outside on.
+// The sandbox proved in a real browser: Chromium with the flags the Pi's kiosk unit starts it with, read from that file,
+// on the real handler, routes and CSPs, with the real view, gate and channel (screen/frame/sandbox-kiosk.ts). A second
+// server and a UDP socket on this machine's real address stand for the outside world. Each scenario is a bundle that
+// tries something, and the proof is what the outside and the Box then saw, not what the page says. Skipped without a
+// Chromium (EGB_CHROMIUM names one, else the Pi's, Playwright's or Chrome), or without a network address to stand the
+// outside on.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import dgram from "node:dgram";
@@ -56,6 +57,16 @@ const FLOOD_SECONDS = 10;
  * either. Only the browser's own start can stop them: no name resolves but the Box's own, and WebRTC has no route out.
  */
 const KIOSK_WALLS = ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost", "--webrtc-ip-handling-policy=disable_non_proxied_udp"];
+
+/** The flags that only place a window on the Pi's display or name its folders: a headless browser has neither. */
+const DISPLAY_ONLY = /^--(kiosk|app|start-fullscreen|window-|user-data-dir|password-store|ozone-platform)/;
+
+/** The flags the Pi's kiosk starts Chromium with, split as systemd splits ExecStart: on spaces, outside double quotes. */
+function kioskFlags(): string[] {
+  const unit = readFileSync(file("../../../../../deploy/pi/units/egb-kiosk.service"), "utf8").replaceAll("\\\n", " ");
+  const start = /^ExecStart=(.*)$/m.exec(unit)?.[1] ?? "";
+  return [...start.matchAll(/"([^"]*)"|\S+/g)].map(([word, quoted]) => quoted ?? word).filter((word) => word.startsWith("--"));
+}
 
 /** A tiny valid PNG. */
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
@@ -423,10 +434,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
         "--disable-background-networking",
         "--disable-component-update",
         "--disable-sync",
-        // From deploy/pi/units/egb-kiosk.service, the two that loosen anything.
-        "--autoplay-policy=no-user-gesture-required",
-        "--use-fake-ui-for-media-stream",
-        ...KIOSK_WALLS,
+        ...kioskFlags().filter((flag) => !DISPLAY_ONLY.test(flag)),
         `http://127.0.0.1:${boxPort}/`,
       ],
       { stdio: "ignore" },
@@ -511,6 +519,10 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
   it("hears a page that leaves up to the moment it does", () => {
     expect(events(reportOf("leaves for the API"), "before")).toEqual([null]);
   });
+});
 
-  it.todo("deploy/pi/units/egb-kiosk.service starts Chromium with KIOSK_WALLS: until it does, a game reaches the network on the Pi");
+describe("the Pi's kiosk", () => {
+  it("starts Chromium behind the walls: without them a listed game reaches the network", () => {
+    expect(kioskFlags()).toEqual(expect.arrayContaining(KIOSK_WALLS));
+  });
 });

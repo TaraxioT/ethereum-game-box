@@ -52,12 +52,14 @@ Tests: `routes.test.ts` on a real server over a library with bundled built games
 Host refused, CORS and types on everything the frame loads, the parts defining themselves, the icon check, and what a
 sealed or unknown game gets; and a bundle's CSP, its exact paths, its one page, and no token.
 
-`sandbox.test.ts` proves the walls in a real browser: Chromium with the kiosk's flags, on the real handler, CSPs, view,
-gate and channel, with a second server and a UDP socket as the outside. A game's own files load and its taps and words
-go through. Then 50-odd tries at getting out (fetch, beacon, image, form, WebSocket, WebRTC, every kind of link hint, parent
-access, storage, workers, devices, eval) fail, and the outside's own count says nothing reached it: no request, no
-connection, no packet, no name looked up. Forged and flooding messages stop at the gate, and each way of leaving
-loses the page. It is skipped without a Chromium; `EGB_CHROMIUM` names one.
+`sandbox.test.ts` proves the walls in a real browser: Chromium with the flags `deploy/pi/units/egb-kiosk.service` starts
+it with, read from that file, on the real handler, CSPs, view, gate and channel, with a second server and a UDP socket as
+the outside. A game's own files load and its taps and words go through. Then 50-odd tries at getting out (fetch, beacon,
+image, form, WebSocket, WebRTC, every kind of link hint, parent access, storage, workers, devices, eval) fail, and the
+outside's own count says nothing reached it: no request, no connection, no packet, no name looked up. Forged and flooding
+messages stop at the gate, and each way of leaving loses the page. It is skipped without a Chromium; `EGB_CHROMIUM` names
+one.
 
-**It passes only with `KIOSK_WALLS`.** Without those two flags `<link rel="prerender">` reaches the outside, with the
-CSP and sandbox in place. See `screen/frame/README.md`.
+**It passes only with the unit's two walls.** Without `--host-resolver-rules` and `--webrtc-ip-handling-policy`,
+`<link rel="prerender">` reaches the outside, with the CSP and sandbox in place, and a test fails if the unit loses
+either. See `screen/frame/README.md`.

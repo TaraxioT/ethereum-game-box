@@ -18,12 +18,18 @@ ExecStartPre=-/usr/bin/wlopm --on *
 # Flags as the Pi's working kiosk runs them. The window flags cover a fresh profile, where kiosk mode alone opened a
 # 1050x700 window. --autoplay-policy lets sounds play with no click on the page; --use-fake-ui-for-media-stream grants
 # the microphone with no prompt for push-to-talk. Neither touches the Pi's audio devices or volume.
+# --host-resolver-rules and --webrtc-ip-handling-policy are the store's walls: a game's page can still send a prerender
+# or WebRTC past its CSP and sandbox, so no name resolves but this machine's, and WebRTC has no route out. The screen
+# itself reaches nothing else (its CSP is 'self'). apps/box/src/server/games/sandbox.test.ts starts Chromium with this
+# line's flags and fails without these two.
 ExecStart=/usr/bin/chromium --kiosk --app=http://127.0.0.1:8790/ \
   --start-fullscreen --window-position=0,0 --window-size=1280,720 \
   --user-data-dir=%h/.config/egb-chromium --password-store=basic \
   --no-first-run --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
   --disable-pinch --overscroll-history-navigation=0 --disable-features=Translate \
   --autoplay-policy=no-user-gesture-required --use-fake-ui-for-media-stream \
+  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost" \
+  --webrtc-ip-handling-policy=disable_non_proxied_udp \
   --ozone-platform=wayland
 Restart=always
 RestartSec=3
