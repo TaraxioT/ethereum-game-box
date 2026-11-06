@@ -2,7 +2,7 @@
 // a `RunFailure`. The verdict is only a proposal: the Worker checks it, and only the Worker signs.
 import type { AgentVerdict } from "@egb/shared/store";
 
-import { askModel, type ChatMessage } from "./chat.ts";
+import { askModel, type ChatMessage, type ChatRequest, estimateTokens } from "./chat.ts";
 import { RunFailure } from "./failure.ts";
 import type { Limits } from "./limits.ts";
 import { SYSTEM_PROMPT, taskMessage } from "./prompt.ts";
@@ -27,21 +27,24 @@ export async function runAgent(job: AgentJob): Promise<AgentVerdict> {
     { role: "user", content: taskMessage(limits.turns) },
   ];
   let tokens = 0;
+  const checkTokens = (spent: number): void => {
+    if (spent > limits.tokens) throw new RunFailure("the run passed its token limit");
+  };
 
   for (let turn = 0; turn < limits.turns; turn++) {
-    const reply = await askModel(
-      modelUrl,
-      {
-        messages,
-        tools: TOOLS,
-        tool_choice: "required",
-        max_tokens: limits.replyTokens,
-        chat_template_kwargs: { enable_thinking: false },
-      },
-      AbortSignal.any([signal, AbortSignal.timeout(limits.modelMs)]),
-    );
+    const request: ChatRequest = {
+      messages,
+      tools: TOOLS,
+      tool_choice: "required",
+      max_tokens: limits.replyTokens,
+      chat_template_kwargs: { enable_thinking: false },
+    };
+    const body = JSON.stringify(request);
+    // Before sending too: one reply can make any number of shell calls, so one prompt could pass the run's whole limit.
+    checkTokens(tokens + estimateTokens(body));
+    const reply = await askModel(modelUrl, body, AbortSignal.any([signal, AbortSignal.timeout(limits.modelMs)]));
     tokens += reply.tokens;
-    if (tokens > limits.tokens) throw new RunFailure("the run passed its token limit");
+    checkTokens(tokens);
 
     const actions = readCalls(reply.calls);
     messages.push({ role: "assistant", content: reply.content, tool_calls: actions.map(({ call }) => call) });

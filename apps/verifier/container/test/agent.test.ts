@@ -191,23 +191,37 @@ describe("runAgent", () => {
   it("fails at the token limit, counting what each reply reports", async () => {
     const costly = reply(
       { role: "assistant", content: null, tool_calls: [toolCall("shell", { command: "true" })] },
-      { total_tokens: 60 },
+      { total_tokens: 6_000 },
     );
-    await expect(run(steps(costly), { tokens: 100 })).rejects.toThrow("token limit");
+    await expect(run(steps(costly), { tokens: 10_000 })).rejects.toThrow("token limit");
     expect(model?.requests).toHaveLength(2);
   });
 
   it("counts a reply with no usage against the token limit", async () => {
-    await expect(run(steps(shellCall("true")), { tokens: 100 })).rejects.toThrow("token limit");
+    await expect(run(steps(shellCall("true")), { tokens: 1_500 })).rejects.toThrow("token limit");
     expect(model?.requests).toHaveLength(1);
   });
 
   it("refuses a verdict that arrives past the token limit", async () => {
     const costly = reply(
       { role: "assistant", content: null, tool_calls: [toolCall("submit_verdict", SPLIT)] },
-      { total_tokens: 101 },
+      { total_tokens: 10_001 },
     );
-    await expect(run(steps(costly), { tokens: 100 })).rejects.toThrow("token limit");
+    await expect(run(steps(costly), { tokens: 10_000 })).rejects.toThrow("token limit");
+  });
+
+  it("sends nothing if the first prompt is already past the token limit", async () => {
+    await expect(run(steps(verdictCall(SPLIT)), { tokens: 100 })).rejects.toThrow("token limit");
+    expect(model?.requests).toHaveLength(0);
+  });
+
+  it("doesn't send a prompt past the token limit, however many calls one reply made", async () => {
+    const flood = Array.from({ length: 8 }, (_, index) => toolCall("shell", { command: "yes 0123456789" }, `call-${index}`));
+    const running = run(steps(reply({ role: "assistant", content: null, tool_calls: flood }, { total_tokens: 1 }), verdictCall(SPLIT)), {
+      tokens: 5_000,
+    });
+    await expect(running).rejects.toThrow("token limit");
+    expect(model?.requests).toHaveLength(1);
   });
 
   it("fails at the wall time, however quick each turn is", async () => {

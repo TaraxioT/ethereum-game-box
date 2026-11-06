@@ -31,10 +31,13 @@ export interface ChatReply {
   readonly tokens: number;
 }
 
-/** A reply with no usage still counts against the limit, at a pessimistic three characters a token. */
+/** What a text will cost, at a pessimistic three bytes a token. */
+export const estimateTokens = (text: string): number => Math.ceil(Buffer.byteLength(text) / 3);
+
+/** A reply with no usage still counts against the limit, at the estimate. */
 function tokensOf(reply: Record<string, unknown>, request: string, text: string): number {
   const total = isRecord(reply.usage) ? reply.usage.total_tokens : undefined;
-  return typeof total === "number" ? total : Math.ceil((request.length + text.length) / 3);
+  return typeof total === "number" ? total : estimateTokens(request) + estimateTokens(text);
 }
 
 function parseReply(text: string, request: string): ChatReply {
@@ -54,8 +57,8 @@ function parseReply(text: string, request: string): ChatReply {
   };
 }
 
-export async function askModel(url: string, request: ChatRequest, signal: AbortSignal): Promise<ChatReply> {
-  const body = JSON.stringify(request);
+/** Sends `body`, a `ChatRequest` as JSON. */
+export async function askModel(url: string, body: string, signal: AbortSignal): Promise<ChatReply> {
   let status: number;
   let text: string;
   try {
