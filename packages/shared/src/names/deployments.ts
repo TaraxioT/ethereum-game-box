@@ -1,8 +1,9 @@
 // Reads `deployments/sepolia.json`, so no app hard-codes an address. `ens` holds ENS's contracts (each with the source
 // it was read from); `contracts` holds ours, each with its deploy block, transaction and verification; `names` holds
-// the proxies `GameBoxNames` created (its registry, the shared resolvers and the title registries).
+// the proxies `GameBoxNames` created (its registry, the shared resolvers and the title registries) and `gamebox.eth`'s
+// own resolver.
 
-import { type Address, type Hex, getAddress } from 'viem';
+import { type Address, type Hex, getAddress, isAddress } from 'viem';
 
 import sepolia from '../../../../deployments/sepolia.json' with { type: 'json' };
 
@@ -22,6 +23,7 @@ export interface OurContract {
 
 export type EnsName =
   | 'UniversalResolver'
+  | 'UniversalHelper'
   | 'RootRegistry'
   | 'ETHRegistry'
   | 'ETHRegistrar'
@@ -33,6 +35,7 @@ export type EnsName =
   | 'ReverseRegistrar';
 
 export type ContractName =
+  | 'P256AccountFactory'
   | 'GameBoxNames'
   | 'PlayerStats'
   | 'BoxResults'
@@ -40,8 +43,10 @@ export type ContractName =
   | 'DemoBoxAccount'
   | (string & {});
 
-/** The proxies our contracts created through ENS's `VerifiableFactory` and that never move. */
+/** The proxies we created through ENS's `VerifiableFactory` and that never move. */
 export interface NamesProxies {
+  /** `gamebox.eth`'s own resolver: the default record every free `*.gamebox.eth` name resolves to (wildcard). */
+  gameboxResolver: Address;
   /** `gamebox.eth`'s own `UserRegistry`. */
   registry: Address;
   /** The resolver of every champion title. */
@@ -86,4 +91,17 @@ export function contractAddress(name: ContractName): Address {
 export function namesProxies(): NamesProxies {
   if (!file.names) throw new Error('names is not in deployments/sepolia.json');
   return file.names;
+}
+
+function addressesIn(value: unknown): Address[] {
+  if (typeof value === 'string') return isAddress(value, { strict: false }) ? [getAddress(value)] : [];
+  if (typeof value === 'object' && value !== null) return Object.values(value).flatMap(addressesIn);
+  return [];
+}
+
+/** Every contract address in `deployments/sepolia.json`: ours (`contracts`), ENS's (`ens`) and the proxies
+ *  `GameBoxNames` created (`names`), checksummed, once each. The external tokens (`external`) are not ours and are
+ *  left out. */
+export function deployedAddresses(): Address[] {
+  return [...new Set(addressesIn([file.contracts, file.ens, file.names]))];
 }

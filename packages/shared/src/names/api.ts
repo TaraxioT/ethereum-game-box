@@ -9,9 +9,11 @@ export type JsonUint = string | number;
 /** `POST /names/claim`: a badge's signed `ClaimName`. */
 export interface ClaimRequest {
   label: string;
+  /** The badge: a wallet, or a contract account such as an agent's `P256Account`. */
   badge: Address;
   deadline: JsonUint;
-  /** The badge's EIP-712 signature (ECDSA, or ERC-1271 for a contract wallet). */
+  /** The badge's EIP-712 signature: ECDSA, or for a contract account what its ERC-1271 `isValidSignature` takes (a
+   *  `P256Account` takes the raw P-256 form, `rawSignature` in `webauthn.ts`). */
   signature: Hex;
   primaryName?: PrimaryNameConsent;
 }
@@ -24,16 +26,29 @@ export interface PrimaryNameConsent {
   signature: Hex;
 }
 
-/** `POST /box/execute`: a call the Box's P-256 key signed for its `BoxAccount`. */
-export interface ExecuteRequest {
-  account: Address;
+/** One call in an `ExecuteRequest`. */
+export interface CallJson {
   target: Address;
   value: JsonUint;
   data: Hex;
+}
+
+/** `POST /account/execute`: a call (`execute`) or a batch (`executeBatch`) a `P256Account`'s key signed, over
+ *  `executeDigest` or `executeBatchDigest` (`messages.ts`). */
+export type ExecuteRequest = {
+  /** The `P256Account`: any account `P256AccountFactory` made. */
+  account: Address;
   nonce: JsonUint;
   deadline: JsonUint;
-  r: Hex;
-  s: Hex;
+  /** Raw `r ‖ s` (64 bytes) or a passkey's assertion, encoded by `webauthn.ts`. Low `s` either way. */
+  signature: Hex;
+} & ({ call: CallJson; calls?: never } | { calls: CallJson[]; call?: never });
+
+/** `POST /account/deploy`: deploys the `P256Account` of a public key through `P256AccountFactory` (a new passkey's
+ *  account). The 202 is a `TxView`; the account's address is `accountOf(qx, qy)` before and after. */
+export interface DeployAccountRequest {
+  qx: Hex;
+  qy: Hex;
 }
 
 /** `POST /box/result`: a match result the Box's P-256 key signed. */
@@ -61,7 +76,7 @@ export interface DripRequest {
   badge: Address;
 }
 
-export type TxKind = 'claim' | 'execute' | 'result' | 'popup' | 'drip';
+export type TxKind = 'claim' | 'execute' | 'deploy' | 'result' | 'popup' | 'drip';
 export type TxStatus = 'signed' | 'sent' | 'in-block' | 'done' | 'failed';
 
 /** One transaction of a request. */
@@ -104,6 +119,23 @@ export interface RelayerHealth {
   /** The head block. */
   block: number;
   tipGwei: string;
+}
+
+/** The agent's setup step it needs next, or `done`. */
+export type AgentStep = 'deploy' | 'claim' | 'records' | 'done';
+
+/** `GET /agent` on the demo Box: `bot.gamebox.eth`, the practice opponent. */
+export interface AgentView {
+  label: string;
+  name: string;
+  /** Its `P256Account`: `P256AccountFactory.accountOf(qx, qy)`. */
+  account: Address;
+  qx: Hex;
+  qy: Hex;
+  /** The ENSIP-26 records it publishes. */
+  records: Record<string, string>;
+  /** The setup step it needs next, or `done`. */
+  next: AgentStep;
 }
 
 /** `POST /result` on the demo Box. */

@@ -45,8 +45,14 @@ export class FakeChain {
   readonly sent: Sent[] = [];
   readonly contracts = new Map<string, FakeContract>();
   readonly balances = new Map<string, bigint>();
+  /** Code by address (lower-cased); an address not here has none. */
+  readonly code = new Map<string, Hex>();
+  /** Logs as the node returns them, filtered by address and topics on `eth_getLogs`. */
+  readonly logs: { address: Address; topics: Hex[]; data: Hex }[] = [];
   readonly receipts = new Map<string, { status: 'success' | 'reverted'; block: number }>();
   head = 100;
+  /** What `eth_estimateGas` answers for a call that doesn't revert. */
+  estimate = 200_000n;
   /** The account nonce the node expects next. */
   chainNonce = 0;
   /** Makes the next sends fail with these messages, one per send. */
@@ -76,14 +82,16 @@ export class FakeChain {
       case 'eth_getBalance':
         return numberToHex(this.balances.get(String(p[0]).toLowerCase()) ?? 0n);
       case 'eth_getCode':
-        return '0x';
+        return this.code.get(String(p[0]).toLowerCase()) ?? '0x';
+      case 'eth_getLogs':
+        return this.getLogs(p[0] as { address?: Address; topics?: (Hex | null)[] });
       case 'eth_getTransactionCount':
         return numberToHex(this.chainNonce);
       case 'eth_call':
         return this.call(p[0] as { to?: Address; data: Hex });
       case 'eth_estimateGas':
         await this.call(p[0] as { to?: Address; data: Hex });
-        return numberToHex(200_000);
+        return numberToHex(this.estimate);
       case 'eth_sendRawTransaction':
         return this.send(p[0] as Hex);
       case 'eth_getTransactionReceipt':
@@ -93,9 +101,23 @@ export class FakeChain {
     }
   }
 
+  private getLogs({ address, topics = [] }: { address?: Address; topics?: (Hex | null)[] }): unknown[] {
+    return this.logs
+      .filter((log) => !address || log.address.toLowerCase() === address.toLowerCase())
+      .filter((log) => topics.every((topic, i) => topic === null || log.topics[i]?.toLowerCase() === topic.toLowerCase()))
+      .map((log, i) => ({
+        ...log,
+        blockNumber: numberToHex(this.head),
+        blockHash: `0x${'33'.repeat(32)}`,
+        transactionHash: `0x${'44'.repeat(32)}`,
+        transactionIndex: '0x0',
+        logIndex: numberToHex(i),
+        removed: false,
+      }));
+  }
+
   private async call({ to, data }: { to?: Address; data?: Hex }): Promise<Hex> {
-    // A deployless ERC-6492 validator call (an ERC-1271 check): no wallet contract here, so it says no.
-    if (!to) return `0x${'00'.repeat(32)}`;
+    if (!to) return '0x';
     const contract = this.contracts.get(to.toLowerCase());
     if (!contract || !data || data === '0x') return '0x';
     const { functionName, args } = decodeFunctionData({ abi: contract.abi, data });

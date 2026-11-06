@@ -1,13 +1,16 @@
 // The label rule, the same one `GameBoxNames` checks on chain: 3 to 32 characters of `a-z`, `0-9` and `-`, with no
 // hyphen at either end. Every label that passes is already ENS-normalised.
 
+import { type Hex, toHex } from 'viem';
+import { packetToBytes } from 'viem/ens';
+
 /** The parent of every Game Box name. */
 export const PARENT_NAME = 'gamebox.eth';
 
 export const LABEL_MIN_LENGTH = 3;
 export const LABEL_MAX_LENGTH = 32;
 
-/** Every pop-up Box's label starts with this; `DemoLicences.openPopup(label)` adds it. */
+/** Every pop-up Box's label starts with this; `GameBoxNames.registerPopup(label, ofBox, expiry)` adds it. */
 export const POPUP_PREFIX = 'popup-';
 
 /** Why `label` breaks the rule, in a few words for a person, or `null` if it is a valid label. */
@@ -39,4 +42,9 @@ export function fullName(label: string): string {
 /** `champion.<game>.gamebox.eth`, the game's title. */
 export function titleName(game: string): string {
   return `champion.${fullName(game)}`;
+}
+
+/** `<label>.gamebox.eth` DNS-encoded, as a resolver's `setText` and `resolve` take the name. */
+export function dnsName(label: string): Hex {
+  return toHex(packetToBytes(fullName(label)));
 }

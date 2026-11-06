@@ -1,4 +1,4 @@
-import { demoLicencesAbi } from '@egb/shared/names';
+import { gameBoxNamesAbi } from '@egb/shared/names';
 import { type Abi, parseEther } from 'viem';
 import { describe, expect, it } from 'vitest';
 
@@ -24,7 +24,7 @@ describe('POST /box/popup', () => {
 
   it('refuses a pop-up that is still live', async () => {
     const world = new World();
-    world.boxes.set('popup-stage', { ...world.boxes.get('mumbai-01')!, expiry: BigInt(NOW + 60) });
+    world.popups.set('popup-stage', BigInt(NOW + 60));
     const res = await world.post('/box/popup', { label: 'stage' });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/popup-stage.gamebox.eth is live/);
@@ -33,15 +33,15 @@ describe('POST /box/popup', () => {
 
   it('opens a lapsed pop-up again', async () => {
     const world = new World();
-    world.boxes.set('popup-stage', { ...world.boxes.get('mumbai-01')!, expiry: BigInt(NOW - 1) });
+    world.popups.set('popup-stage', BigInt(NOW - 1));
     expect((await world.post('/box/popup', { label: 'stage' })).status).toBe(202);
   });
 
   it('passes an eth_call revert on by name', async () => {
     const world = new World();
-    world.reverts.set('openPopup', [demoLicencesAbi as Abi, 'InvalidLabel', ['x']]);
+    world.reverts.set('openPopup', [gameBoxNamesAbi as Abi, 'BoxNotLive', ['mumbai-01']]);
     const res = await world.post('/box/popup', { label: 'stage' });
-    expect(res).toMatchObject({ status: 422, body: { revert: 'InvalidLabel' } });
+    expect(res).toMatchObject({ status: 422, body: { revert: 'BoxNotLive' } });
     expect(world.chain.sent).toHaveLength(0);
   });
 
@@ -86,6 +86,15 @@ describe('POST /names/drip', () => {
     const world = new World();
     const res = await world.post('/names/drip', { badge: newBadge().address });
     expect(res.status).toBe(403);
+    expect(world.chain.sent).toHaveLength(0);
+  });
+
+  it('refuses a contract account, which acts through /account/execute', async () => {
+    const world = new World();
+    world.players.set(BOX_ACCOUNT.toLowerCase(), 'robot');
+    const res = await world.post('/names/drip', { badge: BOX_ACCOUNT });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/contract account needs no ETH/);
     expect(world.chain.sent).toHaveLength(0);
   });
 

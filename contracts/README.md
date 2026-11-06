@@ -6,7 +6,7 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 
 | Folder | Holds |
 |---|---|
-| `src/box/` | The Box's account (`BoxAccount`), the Box registry (register, rotate, revoke a Box's P-256 key) and P-256 verification with low-s enforced |
+| `src/box/` | The P-256 account every role-holder uses (`P256Account`), its factory (`P256AccountFactory`), and P-256 verification through the EIP-7951 precompile with low `s` enforced. Box licences and key rotation live in `names/GameBoxNames.sol` |
 | `src/games/` | The game interface and escrow (open, settle, refund), then one contract per game |
 | `src/token/` | The Game Box token and its launch through Uniswap's auction |
 | `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
@@ -42,57 +42,69 @@ from the source the Sepolia deployment was built from (`ensdomains/contracts-v2`
 
 | Contract | Does |
 |---|---|
-| `box/P256.sol` | P-256 verification through the EIP-7951 precompile at `0x100`. It refuses a high `s`, and an empty answer (a chain without the precompile) counts as invalid. The digest goes to the precompile as it is: the Box signs the raw 32-byte EIP-712 digest, with no SHA-256 |
-| `box/BoxAccount.sol` | A Box's account, bound to one P-256 key. `execute(target, value, data, nonce, deadline, r, s)` runs a call the key signed over EIP-712 `Execute` (domain `Game Box`). Any unused nonce works once. It refuses an expired deadline, a used nonce, a high `s` and a call to itself, and a revert in the target bubbles up |
-| `names/GameBoxNames.sol` | The registrar of `gamebox.eth`. Its constructor creates `gamebox.eth`'s `UserRegistry`, the shared title resolver and the shared game resolver. It registers Box licences (`registerBox`, `renewBox`, `setBoxStatus`, `setBoxKey`), player names (`claimPlayer`, with the badge's EIP-712 `ClaimName` consent, ECDSA or ERC-1271), games with their title registries (`addGame`) and champion titles (`crown`) |
+| `box/P256.sol` | P-256 verification through the EIP-7951 precompile at `0x100`. It refuses a high `s`, and an empty answer (a chain without the precompile) counts as invalid. The digest goes to the precompile as it is: a raw signer signs the 32-byte EIP-712 digest, with no SHA-256 |
+| `box/P256Account.sol` | The account of the Box, an operator, the agent and the admin, bound to one P-256 key; no ECDSA key holds any power. `execute(target, value, data, nonce, deadline, signature)` and `executeBatch(calls, nonce, deadline, signature)` run what the key signed over EIP-712 `Execute` (domain `Game Box`); anyone may submit them. A signature is raw (`r ‖ s`, for the HYP2003 and Worker keys) or a passkey's WebAuthn assertion whose challenge is the digest, checked with OpenZeppelin's `WebAuthn.sol` with user verification required. Any unused nonce works once. It refuses an expired deadline, a used nonce and a high `s`, and a revert in a target bubbles up. ERC-1271 (raw) lets it sign a `ClaimName`; the ERC-1155 receiver lets it own names. `rotateKey` (a signed call to itself) moves it to a new key |
+| `box/P256AccountFactory.sol` | Deploys `P256Account`s with CREATE2 salted by the key, so `accountOf(qx, qy)` gives a passkey's account before it exists. `deploy` is open to anyone |
+| `names/GameBoxNames.sol` | The registrar of `gamebox.eth`. Its constructor creates `gamebox.eth`'s `UserRegistry`, the shared title resolver and the shared game resolver. It registers Box licences (`registerBox`, `renewBox`, `setBoxStatus`, `setBoxKey`), pop-up Boxes linked to their Box's record (`registerPopup`), player names (`claimPlayer`, with the badge's EIP-712 `ClaimName` consent, ECDSA or ERC-1271), games with their title registries (`addGame`) and champion titles (`crown`). It locks the canonical parent of every registry it creates, and `handOverRegistrar` moves its registry roles to a successor |
 | `names/PlayerStats.sol` | Counts wins, losses and draws per player and game, and writes each player's `stats` record. It takes results only from `GameBoxNames`' `REFEREE_ROLE`. A player who revoked its `stats` role (or whose resolver fails) is skipped with `StatsSkipped`, and the opponent's result still settles |
 | `names/BoxResults.sol` | The referee for now. `submit(result, r, s)` checks a result signed by a Box's P-256 key over EIP-712 `Result` (domain `Game Box Results`), then crowns the winner and records stats. It refuses an unknown Box, an expired Box, a Box that isn't `active`, a used `(box, round)`, an expired deadline, a player without a name, and `winner == loser` |
-| `names/DemoLicences.sol` | A licensor for now. `openPopup(label)` registers `popup-<label>.gamebox.eth` to the demo operator, run by the demo Box, for exactly 10 minutes, for anyone |
-| `names/NameLib.sol` | The label rule (3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end) and the DNS-encoded names |
+| `names/DemoLicences.sol` | A licensor for now. `openPopup(label)` calls `registerPopup(label, "mumbai-01", now + 10 minutes)`, for anyone |
+| `names/DefaultRecord.sol` | `gamebox.eth`'s own `PermissionedResolver` set-up: the default record (on the empty name `0x00`) with `url` and `description` and no `addr`, which every free `*.gamebox.eth` name resolves to |
+| `names/NameLib.sol` | The label rule (3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the DNS-encoded names and namehashes |
 
 ### Names and records
 
 | Name | Expiry | Resolver | Writers |
 |---|---|---|---|
+| `gamebox.eth` | its `.eth` registration | its own, holding the default record | `gamebox.eth`'s owner: the default record's `url` and `description` |
+| any free `*.gamebox.eth` | n/a | `gamebox.eth`'s (wildcard): the default record, no `addr` | nobody of its own |
 | `<box>.gamebox.eth` | its licence | its own | `GameBoxNames`: `addr`, `boxKey`, `status`. Operator: `commission`, `location`, `description`, `games`. Box: `lastSeen`, `game` |
-| `popup-<x>.gamebox.eth` | 10 minutes | its own, new for each licence | as above, with the demo Box as the Box |
+| `popup-<x>.gamebox.eth` | 10 minutes | its Box's, linked (`linkToNode`) to the Box's record | none of its own: it serves exactly its Box's records, then the default once it lapses |
 | `<player>.gamebox.eth` | never (`2^64 − 1`) | its own | badge: every role. `PlayerStats`: `stats` only, until the badge revokes it |
-| `bot.gamebox.eth` | never | its own | the agent: every role, and its ENSIP-26 records. `PlayerStats`: `stats` |
+| `bot.gamebox.eth` | never | its own | the agent's `P256Account`: every role, and its ENSIP-26 records. `PlayerStats`: `stats` |
 | `<game>.gamebox.eth` | never: it lasts as long as `gamebox.eth` | the shared game resolver | `GameBoxNames`: `title`, `titleTerm` |
 | `champion.<game>.gamebox.eth` | the term after the last win (7 days for Stock Duel, 15 minutes for Quick Draw) | the shared title resolver | `GameBoxNames`: `addr`, `holder`, `start`, `streak`, `round` |
 
 Each Box and each player has its own resolver, because a `PermissionedResolver` role covers a key on every name the
 resolver serves. Game names and titles have separate shared resolvers: when a name has no resolver, the Universal
 Resolver falls back to the nearest parent's, so a lapsed title must not fall back to a resolver that still holds its
-records.
+records. For the same reason a lapsed Box or pop-up name, or any label nobody registered, falls back to `gamebox.eth`'s
+resolver: it has no record for that name, so it answers with its default record.
 
 ### Roles
 
 | Where | Who | Holds |
 |---|---|---|
-| `GameBoxNames` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE` (adds games, sets the stats writer) and `LICENSOR_ROLE` |
-| | `DemoLicences` | `LICENSOR_ROLE`: issues and manages Box licences |
+| `GameBoxNames` (OpenZeppelin `AccessControl`) | deployer, until the admin hand-over | `DEFAULT_ADMIN_ROLE` (adds games, sets the stats writer, hands the registry roles over) and `LICENSOR_ROLE` |
+| | `DemoLicences` | `LICENSOR_ROLE`: issues and manages Box licences and pop-ups |
 | | `BoxResults` | `REFEREE_ROLE`: crowns, and is the role `PlayerStats` takes results from |
-| `gamebox.eth`'s registry, root | `GameBoxNames` | `REGISTRAR \| RENEW \| SET_PARENT`, and nobody else holds a root role, so it is emancipated |
-| a title registry, root | `GameBoxNames` | `REGISTRAR \| UNREGISTER \| RENEW \| SET_PARENT`. Moving a title is unregister + register, so it isn't emancipated |
-| a Box name's token | operator | nothing: it can't transfer the name or re-point its resolver or subregistry |
+| `gamebox.eth`'s registry, root | `GameBoxNames` | `REGISTRAR \| RENEW` and their admins, and nobody else holds a root role, so it is emancipated. Nobody holds `SET_PARENT` |
+| a title registry, root | `GameBoxNames` | `REGISTRAR \| UNREGISTER \| RENEW` and their admins. Moving a title is unregister + register, so it isn't emancipated. Nobody holds `SET_PARENT` |
+| a Box or pop-up name's token | operator | nothing: it can't transfer the name or re-point its resolver or subregistry |
 | a player name's token | badge | `UNREGISTER`, `RENEW`, `SET_SUBREGISTRY` and `SET_RESOLVER` with their admins, and `CAN_TRANSFER_ADMIN` |
 | a title's token | holder | nothing: a transfer reverts `TransferDisallowed` |
-| a Box resolver, root | `GameBoxNames` | `SET_TEXT_ADMIN \| SET_ADDRESS`, kept so it can move the Box's keys to a new account. It only ever grants the eight Box keys |
+| a Box resolver, root | `GameBoxNames` | `SET_TEXT_ADMIN \| SET_ADDRESS \| LINK`: it moves the Box's keys to a new account and links pop-ups to the Box's record. It only ever grants the eight Box keys. Nobody holds `UPGRADE` |
 | a Box resolver, per key | `GameBoxNames`, operator, Box | `SET_TEXT` on its own keys (table above) |
 | a player resolver, root | badge | every role and every admin role. `GameBoxNames` holds `SET_TEXT_ADMIN` only inside `claimPlayer`, to grant `stats`, and drops it in the same call |
 | a player resolver, `stats` | `PlayerStats` | `SET_TEXT`, until the badge revokes it |
 | the title and game resolvers, root | `GameBoxNames` | `SET_TEXT \| SET_ADDRESS`: it is their only writer |
+| `gamebox.eth`'s resolver, root | `gamebox.eth`'s owner | `SET_TEXT \| SET_TEXT_ADMIN`: it rewrites the default record and can hand that on. Nobody holds `UPGRADE` |
 
 Choices the design left open, made here:
 
 - **A separate game resolver** (`GAME_RESOLVER`), with `title` and `titleTerm` on each game name, so a lapsed title has
   no records to fall back to.
 - **Game names never expire** (`2^64 − 1`): a subname can't outlive `gamebox.eth`, so they last exactly as long as it.
-- **The licensor's powers:** `renewBox`, `setBoxStatus` and `setBoxKey(label, account, qx, qy)` need `LICENSOR_ROLE`.
-  `setBoxKey` takes a new account too, since a `BoxAccount` is bound to one key.
-- **A label that is or was a Box can't be claimed as a player name** (`LabelHeldByBox`), so pop-up labels can be
-  reused.
+- **The licensor's powers:** `renewBox`, `setBoxStatus`, `setBoxKey(label, qx, qy, account)` and `registerPopup` need
+  `LICENSOR_ROLE`. `setBoxKey` takes the new account too, since the Box's key and its account move together.
+- **A pop-up needs a live Box** (`BoxNotLive`), is registered to that Box's operator, and is not a Box of its own: it
+  can't report results. `GameBoxNames` adds the `popup-` prefix.
+- **A label that is or was a Box or a pop-up can't be claimed as a player name** (`LabelHeldByBox`), so pop-up labels
+  can be reused.
+- **`handOverRegistrar` also moves `UNREGISTER` and its admin on each title registry**, so the successor can move titles.
+- **`executeBatch` signs `Execute` with the account itself as `target`**, `value` 0 and `dataHash` =
+  `keccak256(abi.encode(calls))`. That encoding starts with four zero bytes, which match no function, so a batch
+  signature never runs as a single call. `rotateKey` is a signed `execute` to the account itself.
 - **The Box resolver roles** and **the player roles** in the table above.
 - **`PlayerStats` checks `REFEREE_ROLE` on `GameBoxNames`**, so referees are granted in one place. It keeps counting a
   revoked player on chain, and writes `stats` in a caught call capped at 400k gas: a badge controls its resolver and
@@ -120,58 +132,63 @@ primary name is a separate, optional consent the badge signs alongside it.
 
 Sepolia charges far more than mainnet for new code and storage (about 1,542 gas per byte of new code and 111k per new
 storage slot), and forge's local gas estimates don't know that. Send every names script with `--skip-simulation`, so
-forge takes `eth_estimateGas` from the node, and `-g 150` for the estimate plus 50%. Measured on Sepolia:
+forge takes `eth_estimateGas` from the node, and `-g 150` for the estimate plus 50%. `eth_estimateGas` comes out too
+low for nested calls that create storage, so the scripts send every call that creates a registry, a resolver or an
+account with an explicit limit of `2^24 + 4M` (`NamesScript.CREATE_GAS`); a limit above `2^24` holds the excess as a
+reservoir for state gas. Measured on Sepolia:
 
 | Action | Creates | Gas | Transaction |
 |---|---|---|---|
-| deploy `GameBoxNames` | `gamebox.eth`'s registry, the title resolver, the game resolver | 33,473,246 | `0xcfdbc18d…985ce1` |
-| deploy `PlayerStats` | | 8,602,979 | `0x66e031ed…9bb1a3` |
-| deploy `BoxResults` | | 7,594,889 | `0xe9056c7c…0aada7` |
-| deploy `BoxAccount` | | 4,282,300 | `0xf3036a19…b97133` |
-| deploy `DemoLicences` | | 3,151,479 | `0x4ae926d9…dcc326` |
-| `addGame` | a title registry | 2,109,753 (Stock Duel), 2,122,265 (Quick Draw) | `0xd8135cdb…e7d721`, `0x091e8121…c38c4f` |
-| `registerBox` | a Box resolver and its eight grants | 4,649,562 | `0x22862aa5…f50a62` |
-| `openPopup` | a Box resolver and its eight grants | 4,772,680 | `0x2e25b1be…c908ab` |
-| `claimPlayer` | a player resolver | 2,003,659 | `0xc19d1aad…7569b8` |
-| `BoxAccount.execute` (a heartbeat `setText`) | | 280,109 | `0x7a202e5a…cf1f7f` |
-| `grantRole` | | 133,549 | `0x5f7ab581…3d81a3` |
+| deploy `P256AccountFactory` | | 17,682,819 | `0x1f1e2a24…b38f8d` |
+| deploy `GameBoxNames` | `gamebox.eth`'s registry, the title resolver, the game resolver | 37,734,927 | `0xbc9fb379…ff5772` |
+| deploy `PlayerStats` | | 8,601,943 | `0xd01f88c2…59771a` |
+| deploy `BoxResults` | | 7,594,877 | `0x76d2845b…55da5e` |
+| deploy `DemoLicences` | | 1,952,190 | `0x0cec5700…3ce372` |
+| `P256AccountFactory.deploy` | the demo Box's `P256Account` | 15,416,997 | `0x4afe6c08…7622cc` |
+| `addGame` | a title registry | 2,336,519 (Stock Duel), 2,140,452 (Quick Draw) | `0xb7dc5da7…a877df`, `0x10a3706e…6d6952` |
+| `VerifiableFactory.deployProxy` | `gamebox.eth`'s resolver with its default record | 1,475,830 | `0xe0df2a90…eb9e1e` |
+| `setSubregistry`, `setResolver` on `gamebox.eth` | | 41,680, 41,668 | `0xaefc1183…b73d40`, `0xbad1032f…0b001b` |
+| `grantRole` | | 133,505 | `0xddbccb29…ba0f2a` |
+
+`registerBox`, `registerPopup` and `claimPlayer` are measured when `mumbai-01`, its first pop-up and `bot.gamebox.eth`
+are registered.
 
 ### Deploy
 
-From `contracts/`, with the repo `.env` loaded. Each script skips what is already done. A second run of a deploy script
-without `--broadcast` records each new contract's block and transaction in `deployments/sepolia.json`.
+From `contracts/`, with the repo `.env` loaded. No script reads a private key: the deployer signs through its cast
+keystore, and the demo Box's key is given as its public key (`DEMO_BOX_QX`, `DEMO_BOX_QY`). Each script skips what is
+already done, and a second run of a deploy script without `--broadcast` records each new contract's block and
+transaction in `deployments/sepolia.json`. Scripts and the relayer share the deployer's nonce, so pause the relayer
+while a script broadcasts.
 
 ```sh
 F="--rpc-url sepolia --account sepolia-deployer --password '' --broadcast --skip-simulation --slow -g 150 \
   --with-gas-price 2gwei --priority-gas-price 1gwei"
-forge script script/names/DeployNames.s.sol $F                    # contracts, roles, the stats writer
+forge script script/names/DeployNames.s.sol $F       # factory, contracts, roles, stats writer, the demo Box's account
 forge script script/names/DeployNames.s.sol --rpc-url sepolia --account sepolia-deployer --password ''   # record
-forge script script/names/PointGameBox.s.sol $F                   # gamebox.eth -> our registry (its owner only)
-forge script script/names/AddGames.s.sol $F                       # stockduel (7 days), quickdraw (15 minutes)
-forge script script/names/RegisterBox.s.sol $F                    # mumbai-01 for 30 days, and a demo Box heartbeat
-forge script script/names/ClaimAgent.s.sol --sig "claim()" $F     # bot.gamebox.eth, with the agent's signature
-G="--rpc-url sepolia --broadcast --skip-simulation -g 150 --with-gas-price 2gwei --priority-gas-price 1gwei"
-forge script script/names/OperatorRecords.s.sol $G                # the operator writes its four keys
-forge script script/names/ClaimAgent.s.sol --sig "records()" $G   # the agent writes its ENSIP-26 records
+forge script script/names/AddGames.s.sol $F          # stockduel (7 days), quickdraw (15 minutes)
+forge script script/names/PointGameBox.s.sol $F      # gamebox.eth -> our registry, and its default-record resolver
+forge script script/names/RegisterBox.s.sol $F       # mumbai-01 for 30 days to OPERATOR_ACCOUNT (a P256Account)
 ```
 
-`DEMO_BOX_P256_KEY`, `DEMO_OPERATOR_KEY` and `AGENT_PRIVATE_KEY` live only in `.env`. The operator and the agent each
-need a little ETH for their own writes.
+`PointGameBox` needs the `.eth` owner of `gamebox.eth`. The operator's first records and the Box's heartbeat go through
+their `P256Account`s and the relayer, never from a key on disk.
 
 ### Verify and check
 
 - `pnpm names:verify` verifies our contracts with `forge verify-contract` (constructor arguments read from the creation
-  transaction) and marks them `verified`. Every `VerifiableFactory` proxy is a 77-byte clone of one proxy logic contract
+  transaction, or for an account the factory made, from its `AccountDeployed` event) and marks them `verified`. Every `VerifiableFactory` proxy is a 77-byte clone of one proxy logic contract
   (`ens.VerifiableProxyLogic`), which was unverified, and Etherscan's proxy verification alone left the proxies without
   source. So the script verifies that logic contract from the source ENS deployed it with: the metadata of ENS's
   `VerifiableFactory` deployment (`verifiable-factory` at `c1090aec`, solc 0.8.25, 1,000 runs) embeds every source
   file. Since then Etherscan shows the source of every clone, current and future. The script then links each proxy
-  (found from `GameBoxNames`' events) to its ERC-1967 implementation with `verifyproxycontract`. Etherscan's API reports
+  (`gamebox.eth`'s resolver and those found from `GameBoxNames`' events) to its ERC-1967 implementation with `verifyproxycontract`. Etherscan's API reports
   the clones as `Proxy = 2` (a minimal proxy of the logic contract), not `1`. Sourcify wasn't needed. Run it again
   after new claims and licences.
 - `pnpm names:check` reads the live deployment and fails on any mismatch: every address has code, every contract and
   proxy is verified, each role table is as above (holders and assignee counts), and every name resolves through the
-  Universal Resolver with stock viem.
+  Universal Resolver with stock viem: players, Boxes, live pop-ups as their Box, games, titles, and a free label as the
+  default record.
 
 ### Tests
 

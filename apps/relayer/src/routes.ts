@@ -7,6 +7,7 @@ import { guarded } from './guard.ts';
 import { Refusal } from './refusal.ts';
 import type { Context, Prepared } from './request.ts';
 import { prepareClaim } from './requests/claim.ts';
+import { prepareDeploy } from './requests/deploy.ts';
 import { prepareDrip } from './requests/drip.ts';
 import { prepareExecute } from './requests/execute.ts';
 import { preparePopup } from './requests/popup.ts';
@@ -29,7 +30,8 @@ export interface Deps {
 const prepare: Record<string, (ctx: Context, body: unknown) => Promise<Prepared>> = {
   '/names/claim': prepareClaim,
   '/names/drip': prepareDrip,
-  '/box/execute': prepareExecute,
+  '/account/execute': prepareExecute,
+  '/account/deploy': prepareDeploy,
   '/box/result': prepareResult,
   '/box/popup': preparePopup,
 };

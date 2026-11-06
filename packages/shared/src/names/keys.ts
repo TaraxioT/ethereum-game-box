@@ -4,13 +4,15 @@
 /** ENSIP-9 coin type of the `addr` record (Ethereum). */
 export const COIN_TYPE_ETH = 60n;
 
-/** Box names (`<box>.gamebox.eth`). `addr` is the Box's `BoxAccount`. */
+/** Box names (`<box>.gamebox.eth`). `addr` is the Box's `P256Account`. A pop-up (`popup-<x>.gamebox.eth`) is linked
+ *  to its Box's record, so it has the same keys and values. */
 export const BOX_KEYS = {
   /** Written by `GameBoxNames`. The Box's P-256 key, uncompressed: `0x04` + x + y (65 bytes, hex). */
   boxKey: 'boxKey',
   /** Written by `GameBoxNames`. One of `BOX_STATUS`. */
   status: 'status',
-  /** Written by the operator. The operator's commission, in basis points. */
+  /** Written by the operator. The operator's commission, in basis points, from `COMMISSION_MIN_BPS` to
+   *  `COMMISSION_MAX_BPS`. */
   commission: 'commission',
   /** Written by the operator. Where the Box stands. */
   location: 'location',
@@ -31,11 +33,24 @@ export const BOX_OPERATOR_KEYS = [
   BOX_KEYS.description,
   BOX_KEYS.games,
 ] as const;
+/** The operator's commission bounds, in basis points of the Box's half: 10% to 90% (`plan/README.md`). */
+export const COMMISSION_MIN_BPS = 1_000;
+export const COMMISSION_MAX_BPS = 9_000;
+
 export const BOX_DEVICE_KEYS = [BOX_KEYS.lastSeen, BOX_KEYS.game] as const;
 
 /** The values of a Box's `status`. */
 export const BOX_STATUS = ['active', 'suspended', 'revoked'] as const;
 export type BoxStatus = (typeof BOX_STATUS)[number];
+
+/** The default record on `gamebox.eth`'s own resolver, which every unregistered or expired `*.gamebox.eth` name
+ *  resolves to (wildcard). It has no `addr`. Written by `gamebox.eth`'s owner. */
+export const DEFAULT_KEYS = {
+  /** Where the name can be claimed. */
+  url: 'url',
+  /** `This Game Box name is free.` */
+  description: 'description',
+} as const;
 
 /** Player names (`<player>.gamebox.eth`). `addr` is the badge, which may write every key. */
 export const PLAYER_KEYS = {

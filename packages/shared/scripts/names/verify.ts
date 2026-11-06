@@ -1,7 +1,8 @@
 // `pnpm names:verify`: verifies every contract of the names deployment on Etherscan, and marks ours `verified` in
 // `deployments/sepolia.json`. Run it after every deploy and whenever new names were claimed; it skips what is done.
 //
-// - Our contracts: `forge verify-contract`, with the constructor arguments read from the creation transaction.
+// - Our contracts: `forge verify-contract`, with the constructor arguments read from the creation transaction, or for
+//   an account `P256AccountFactory` made, from its `AccountDeployed` event.
 // - The proxy logic every `VerifiableFactory` proxy clones: if it is unverified, it is verified from the source ENS
 //   deployed it with (the `VerifiableFactory` deployment's metadata). Once it is, Etherscan shows the source of every
 //   proxy (each is a 77-byte clone of it).
@@ -13,9 +14,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import type { Address } from 'viem';
+import { type Address, type PublicClient, encodeAbiParameters, getAbiItem } from 'viem';
 
-import { verifiableFactoryAbi } from '../../src/names/abis.ts';
+import { p256AccountFactoryAbi, verifiableFactoryAbi } from '../../src/names/abis.ts';
 import { ensAddress, ourContract } from '../../src/names/deployments.ts';
 import { discover } from './discover.ts';
 import { redact, run, sepoliaClient } from './env.ts';
@@ -26,14 +27,32 @@ const deploymentsPath = `${root}deployments/sepolia.json`;
 
 /** Our contracts, by their name in `deployments/sepolia.json`, and their source. */
 const OURS: Record<string, string> = {
+  P256AccountFactory: 'src/box/P256AccountFactory.sol:P256AccountFactory',
   GameBoxNames: 'src/names/GameBoxNames.sol:GameBoxNames',
   PlayerStats: 'src/names/PlayerStats.sol:PlayerStats',
   BoxResults: 'src/names/BoxResults.sol:BoxResults',
   DemoLicences: 'src/names/DemoLicences.sol:DemoLicences',
-  DemoBoxAccount: 'src/box/BoxAccount.sol:BoxAccount',
+  DemoBoxAccount: 'src/box/P256Account.sol:P256Account',
 };
 
+/** The account `P256AccountFactory` deployed at `account`: its constructor arguments, the key it was made for. */
+async function accountArgs(client: PublicClient, account: Address, block: number): Promise<string> {
+  const [log] = await client.getLogs({
+    address: ourContract('P256AccountFactory')!.address,
+    event: getAbiItem({ abi: p256AccountFactoryAbi, name: 'AccountDeployed' }),
+    args: { account },
+    fromBlock: BigInt(block),
+    toBlock: BigInt(block),
+  });
+  if (!log) throw new Error(`no AccountDeployed for ${account} in block ${block}`);
+  return encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }], [log.args.qx!, log.args.qy!]);
+}
+
+/** Accounts our factory created: their constructor arguments come from its event, not a creation transaction. */
+const FACTORY_MADE = new Set(['DemoBoxAccount']);
+
 async function verifyOurs(): Promise<boolean> {
+  const client = sepoliaClient();
   const file = JSON.parse(readFileSync(deploymentsPath, 'utf8')) as {
     contracts: Record<string, { address: Address; verified: boolean }>;
   };
@@ -43,6 +62,9 @@ async function verifyOurs(): Promise<boolean> {
     if (!entry) continue;
     if (!(await sourceInfo(entry.address)).ContractName) {
       console.log(`${name}: forge verify-contract`);
+      const args = FACTORY_MADE.has(name)
+        ? ['--constructor-args', await accountArgs(client, entry.address, entry.deployBlock)]
+        : ['--guess-constructor-args'];
       try {
         execFileSync(
           'forge',
@@ -54,7 +76,7 @@ async function verifyOurs(): Promise<boolean> {
             'sepolia',
             '--rpc-url',
             process.env.SEPOLIA_RPC_URL ?? '',
-            '--guess-constructor-args',
+            ...args,
             '--watch',
           ],
           { cwd: `${root}contracts`, stdio: 'pipe' },

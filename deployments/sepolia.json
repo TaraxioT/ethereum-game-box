@@ -4,41 +4,47 @@
     "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   },
   "contracts": {
-    "GameBoxNames": {
-      "address": "0xb090ae6dD89b25d1B79718853c439D1354Bf62c5",
-      "deployBlock": 12075390,
-      "txHash": "0xcfdbc18db2242855faced12948dec204d0b971542db69e9c5310440583985ce1",
-      "verified": true
-    },
-    "PlayerStats": {
-      "address": "0xed859863f70358e66E5B5e90dF7da43a047c7e14",
-      "deployBlock": 12075391,
-      "txHash": "0x66e031ed203520748a90eb0a380396d9f99dcd2ad0b0e2f810ede2c6f99bb1a3",
-      "verified": true
-    },
-    "BoxResults": {
-      "address": "0x925Fe55Fb22bbe7666eC0Fe14d7d0f3CaEF7ccdA",
-      "deployBlock": 12075392,
-      "txHash": "0xe9056c7cf008866364a53284955b1e60e9b2ab6c53883bc263422a102d0aada7",
-      "verified": true
-    },
-    "DemoBoxAccount": {
-      "address": "0x3dfbC6D78B0D28134178a03041468D0E9A18d082",
-      "deployBlock": 12075393,
-      "txHash": "0xf3036a19289aae9eb9614103171ba300d8cdd463479d761ef2d0855d55b97133",
-      "verified": true
-    },
-    "DemoLicences": {
-      "address": "0x22609BB56f41EA3a995560536d249e5b46c12830",
-      "deployBlock": 12075394,
-      "txHash": "0x4ae926d95c6476be92c23d846265ed5241b497fb0cd33a654033768dcdccc326",
-      "verified": true
-    },
     "GBX": {
       "address": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
       "deployBlock": 12075265,
       "txHash": "0x30576b3df0ea0b74e830207c9f6b56e824e705afec5d9b3f570f84e0baeea59a",
-      "verified": false
+      "verified": true
+    },
+    "P256AccountFactory": {
+      "address": "0x1fDd35751Be26387DD0B8c26c4A1a79640Cc1E7A",
+      "deployBlock": 12075662,
+      "txHash": "0x1f1e2a24355956e316cb5e289c8e35d0775de0b9ec95f6de0d6e6c64d6b38f8d",
+      "verified": true
+    },
+    "GameBoxNames": {
+      "address": "0x5C1E1948526975E1c7e0Df2AD227e06D00e71e46",
+      "deployBlock": 12075663,
+      "txHash": "0xbc9fb379262ced65db08bc31d7c87cdd2357aaa10474ddc228d4332026ff5772",
+      "verified": true
+    },
+    "PlayerStats": {
+      "address": "0xfeb17783c2094c0F047Db7DD867B1792C1078d25",
+      "deployBlock": 12075664,
+      "txHash": "0xd01f88c28b18fa75f4a2c7a70e4b56013708bb0cc125ed42048af217c159771a",
+      "verified": true
+    },
+    "BoxResults": {
+      "address": "0x61CAC5E0bfB48F27f4424aC057D793300EeF1532",
+      "deployBlock": 12075665,
+      "txHash": "0x76d2845b26a385a50c93ea1fbc45df5271354c23cf1174900230a0cde255da5e",
+      "verified": true
+    },
+    "DemoLicences": {
+      "address": "0x40BB9311da9b73d3Efd121FF844124847b473677",
+      "deployBlock": 12075666,
+      "txHash": "0x0cec57008826a6db1927c5da015ec68baf30e7b76b45f649ef4b81efc43ce372",
+      "verified": true
+    },
+    "DemoBoxAccount": {
+      "address": "0xB1eF64e46049585cF76549cbd839E9d09819EA38",
+      "deployBlock": 12075671,
+      "txHash": "0x4afe6c08dfa0716f6aab7a664d4cb1c20e333c762bc6bbae0a6f65679d7622cc",
+      "verified": true
     },
     "BoxStaking": {
       "address": "0xEABdE4D7b969bdAF524C9E7A55082A51c5Eee513",
@@ -51,6 +57,10 @@
     "UniversalResolver": {
       "address": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
       "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UpgradableUniversalResolverProxy.json"
+    },
+    "UniversalHelper": {
+      "address": "0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UniversalHelper.json"
     },
     "RootRegistry": {
       "address": "0xB458D6a3a77919449d03e7A6903C26827c1eC43f",
@@ -90,12 +100,13 @@
     }
   },
   "names": {
-    "registry": "0xE6F0f5e2f77b2aE21B2Df9C9E3b305A9A842594e",
-    "titleResolver": "0x910DE3EC48fBB13fBE2AD578919a0a3e1cdc2960",
-    "gameResolver": "0xb604dD8294F9726C9aAA9AE9E33dE158F7c0dE03",
+    "registry": "0x6ACCd2185a609F2aF612a84957B3471d0A2AfEDf",
+    "titleResolver": "0x0C7D87E2C3e02Cd115e098e5907DA1ae4fACB143",
+    "gameResolver": "0xC7c3a8267DC40fE0A662166CbFAcF55eA2434222",
     "titles": {
-      "stockduel": "0xee271396124CE5FD69E8D57A4ee93B543Ffb6Ba2",
-      "quickdraw": "0x4211D4aD598Fa488966a71035f6cFb274426201c"
-    }
+      "stockduel": "0xDd67f45a1FED946a7b8134ff5381acaE07AdfD0F",
+      "quickdraw": "0x35224498aA20a9b653F24102eeAf74B948b95952"
+    },
+    "gameboxResolver": "0xa4054304EA92A52D96Fc68dacEe3582f9f3Bc3C8"
   }
 }

@@ -211,8 +211,10 @@ interface IPermissionedResolver is IEnhancedAccessControl {
     event TextUpdated(uint256 indexed recordId, string indexed keyHash, string key, string value);
     event AddressUpdated(uint256 indexed recordId, uint256 coinType, bytes addressBytes);
     event ResourceArgument(uint256 indexed resource, bytes arg);
+    event Linked(uint256 indexed recordId, bytes32 indexed node, bytes name);
 
     error UnsupportedResolverProfile(bytes4 selector);
+    error InvalidRecord();
 
     /// @notice Sets up a new proxy. `calls` run with the role checks skipped; a `grantSetterRoles` in them still
     ///         reverts, because the factory is the caller there.
@@ -221,6 +223,16 @@ interface IPermissionedResolver is IEnhancedAccessControl {
     function setText(bytes calldata name, string calldata key, string calldata value) external;
     /// @notice Writes the `coinType` address of the DNS-encoded `name`. Needs `SET_ADDRESS` on it or the root.
     function setAddress(bytes calldata name, uint256 coinType, bytes calldata addressBytes) external;
+    /// @notice Makes the DNS-encoded `sourceName` use the record `targetNode` uses now (record aliasing). Needs root
+    ///         `LINK`. Reverts `InvalidRecord` if `targetNode` has no record yet.
+    function linkToNode(bytes calldata sourceName, bytes32 targetNode) external;
+    /// @notice Makes `sourceName` use record `recordId`; 0 unlinks it. Needs root `LINK`.
+    function linkToRecord(bytes calldata sourceName, uint256 recordId) external;
+    /// @notice The record `node` uses, or 0 if it has none (then it reads the default record, the one the empty name
+    ///         `0x00` uses).
+    function getRecordId(bytes32 node) external view returns (uint256);
+    /// @notice How many records the resolver has created.
+    function getRecordCount() external view returns (uint256);
     /// @notice Grants `account` the role for the one argument in `setter` (ABI-encoded setter calldata).
     function grantSetterRoles(bytes calldata setter, address account) external returns (bool);
     /// @notice The argument, resource and role a setter's calldata maps to.

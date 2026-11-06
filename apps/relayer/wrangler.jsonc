@@ -12,7 +12,7 @@
   "vars": {
     "TIP_GWEI": "1",
     "DRIP_ETH": "0.0003",
-    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev"
+    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
   },
   "observability": { "enabled": true }
 }

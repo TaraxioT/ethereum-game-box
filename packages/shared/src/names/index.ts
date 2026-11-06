@@ -4,6 +4,8 @@ export * from './deployments.ts';
 export * from './keys.ts';
 export * from './labels.ts';
 export * from './messages.ts';
+export * from './p256.ts';
 export * from './primaryName.ts';
 export * from './roles.ts';
 export * from './vectors.ts';
+export * from './webauthn.ts';

@@ -39,6 +39,13 @@ library NameLib {
         return string.concat(label, ".gamebox.eth");
     }
 
+    /// @notice The namehash of `<label>.gamebox.eth`, the node a resolver keys its records by.
+    function node(string memory label) internal pure returns (bytes32) {
+        bytes32 eth = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        bytes32 gamebox = keccak256(abi.encodePacked(eth, keccak256("gamebox")));
+        return keccak256(abi.encodePacked(gamebox, keccak256(bytes(label))));
+    }
+
     /// @notice The labelhash, which a registry takes as `anyId`.
     function id(string memory label) internal pure returns (uint256) {
         return uint256(keccak256(bytes(label)));

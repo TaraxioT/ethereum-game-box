@@ -1,15 +1,29 @@
 // A fake Game Box names deployment on the fake chain, with the relayer's routes and sender wired to it.
 
 import {
-  boxAccountAbi,
   boxResultsAbi,
   defaultReverseRegistrarAbi,
   demoLicencesAbi,
   gameBoxNamesAbi,
+  p256AccountAbi,
+  p256AccountFactoryAbi,
   permissionedRegistryAbi,
+  rawSignature,
 } from '@egb/shared/names';
 import { p256 } from '@noble/curves/nist.js';
-import { type Abi, type Address, type Hex, bytesToHex, hexToBytes, labelhash, numberToHex, parseEther, toHex } from 'viem';
+import {
+  type Abi,
+  type Address,
+  type Hex,
+  bytesToHex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  hexToBytes,
+  labelhash,
+  numberToHex,
+  parseEther,
+  toHex,
+} from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 import type { Addresses, Context } from '../src/request.ts';
@@ -20,34 +34,55 @@ import { MemoryStore } from './memory-store.ts';
 
 export const NOW = 1_800_000_000;
 
+export const REGISTRY: Address = '0x00000000000000000000000000000000000000a4';
 export const addresses: Addresses = {
   names: '0x00000000000000000000000000000000000000a1',
   results: '0x00000000000000000000000000000000000000a2',
   licences: '0x00000000000000000000000000000000000000a3',
+  factory: '0x00000000000000000000000000000000000000a6',
+  factoryBlock: 50n,
+  registry: REGISTRY,
   reverseRegistrar: '0x00000000000000000000000000000000000000a5',
+  targets: new Set(
+    [
+      '0x00000000000000000000000000000000000000a1',
+      '0x00000000000000000000000000000000000000a2',
+      '0x00000000000000000000000000000000000000a3',
+      '0x00000000000000000000000000000000000000a4',
+      '0x00000000000000000000000000000000000000a5',
+      '0x00000000000000000000000000000000000000a6',
+    ].map((address) => address.toLowerCase()),
+  ),
 };
-export const REGISTRY: Address = '0x00000000000000000000000000000000000000a4';
 export const BOX_ACCOUNT: Address = '0x00000000000000000000000000000000000000B0';
 export const BOX_RESOLVER: Address = '0x00000000000000000000000000000000000000C0';
 export const BOX = 'mumbai-01';
 
 const N = p256.Point.CURVE().n;
+const ACCOUNT_CODE: Hex = '0x6080';
 
-/** A software Box key, signing raw digests the way the contracts check them. */
+/** A software P-256 key, signing raw digests the way the contracts check them. */
 export function boxKey() {
   const secret = p256.utils.randomSecretKey();
   const point = p256.getPublicKey(secret, false);
+  const sign = (digest: Hex, { highS = false } = {}): { r: Hex; s: Hex } => {
+    const sig = p256.sign(hexToBytes(digest), secret, { prehash: false, lowS: true });
+    const r = bytesToHex(sig.subarray(0, 32));
+    const s = BigInt(bytesToHex(sig.subarray(32)));
+    return { r, s: numberToHex(highS ? N - s : s, { size: 32 }) };
+  };
   return {
     qx: bytesToHex(point.subarray(1, 33)),
     qy: bytesToHex(point.subarray(33)),
-    sign(digest: Hex, { highS = false } = {}): { r: Hex; s: Hex } {
-      const sig = p256.sign(hexToBytes(digest), secret, { prehash: false, lowS: true });
-      const r = bytesToHex(sig.subarray(0, 32));
-      const s = BigInt(bytesToHex(sig.subarray(32)));
-      return { r, s: numberToHex(highS ? N - s : s, { size: 32 }) };
+    sign,
+    /** The raw `r ‖ s` form a `P256Account` takes; with `highS`, the same signature with a high `s`. */
+    raw(digest: Hex, { highS = false } = {}): Hex {
+      const { r, s } = sign(digest);
+      return highS ? `0x${r.slice(2)}${numberToHex(N - BigInt(s), { size: 32 }).slice(2)}` : rawSignature(BigInt(r), BigInt(s));
     },
   };
 }
+export type Key = ReturnType<typeof boxKey>;
 
 interface BoxEntry {
   operator: Address;
@@ -59,6 +94,13 @@ interface BoxEntry {
   expiry: bigint;
 }
 
+interface AccountEntry {
+  qx: Hex;
+  qy: Hex;
+  /** Whether `accountOf` of its current key is its address (false once it rotated). */
+  matchesKey: boolean;
+}
+
 export class World {
   readonly chain = new FakeChain();
   readonly store = new MemoryStore();
@@ -66,8 +108,14 @@ export class World {
   readonly relayerAccount = privateKeyToAccount(generatePrivateKey());
   readonly players = new Map<string, string>();
   readonly boxes = new Map<string, BoxEntry>();
+  readonly popups = new Map<string, bigint>();
   readonly registered = new Set<string>();
+  readonly resolvers = new Map<string, Address>([[BOX, BOX_RESOLVER]]);
   readonly usedRounds = new Set<string>();
+  readonly usedNonces = new Set<string>();
+  readonly accounts = new Map<string, AccountEntry>();
+  /** Signatures (lower-cased) each account's `isValidSignature` accepts. */
+  readonly erc1271 = new Map<string, Set<string>>();
   /** Function name -> the contract error its `eth_call` reverts with. */
   readonly reverts = new Map<string, [Abi, string, unknown[]]>();
   readonly relay: Relay;
@@ -84,10 +132,7 @@ export class World {
       resolver: BOX_RESOLVER,
       expiry: BigInt(NOW + 30 * 86_400),
     });
-    const fail = (name: string) => {
-      const revert = this.reverts.get(name);
-      if (revert) throw new Revert(...revert);
-    };
+    this.addAccount(BOX_ACCOUNT, this.key);
     const none: BoxEntry = {
       operator: zero,
       account: zero,
@@ -105,24 +150,27 @@ export class World {
           return label ? `${label}.gamebox.eth` : '';
         },
         getBox: ([label]) => this.boxes.get(String(label)) ?? none,
+        getPopup: ([label]) => ({ ofBox: this.popups.has(String(label)) ? BOX : '', expiry: this.popups.get(String(label)) ?? 0n }),
         REGISTRY: () => REGISTRY,
-        claimPlayer: () => (fail('claimPlayer'), zero),
+        claimPlayer: () => (this.fail('claimPlayer'), zero),
       })
       .contract(REGISTRY, permissionedRegistryAbi as Abi, {
         getStatus: ([id]) => (this.registered.has(toHex(id as bigint, { size: 32 })) ? 2 : 0),
+        getResolver: ([label]) => this.resolvers.get(String(label)) ?? zero,
+      })
+      .contract(addresses.factory, p256AccountFactoryAbi as Abi, {
+        accountOf: ([qx, qy]) => this.accountOf(qx as Hex, qy as Hex),
+        deploy: ([qx, qy]) => (this.fail('deploy'), this.accountOf(qx as Hex, qy as Hex)),
       })
       .contract(addresses.results, boxResultsAbi as Abi, {
         roundUsed: ([box, round]) => this.usedRounds.has(`${box}:${round}`),
-        submit: () => fail('submit'),
+        submit: () => this.fail('submit'),
       })
       .contract(addresses.licences, demoLicencesAbi as Abi, {
-        openPopup: ([label]) => (fail('openPopup'), `popup-${label}`),
+        openPopup: ([label]) => (this.fail('openPopup'), `popup-${label}`),
       })
       .contract(addresses.reverseRegistrar, defaultReverseRegistrarAbi as Abi, {
-        setNameForAddrWithSignature: () => fail('setNameForAddrWithSignature'),
-      })
-      .contract(BOX_ACCOUNT, boxAccountAbi as Abi, {
-        execute: () => (fail('execute'), '0x'),
+        setNameForAddrWithSignature: () => this.fail('setNameForAddrWithSignature'),
       });
 
     this.relay = new Relay({
@@ -141,6 +189,41 @@ export class World {
       dripWei: parseEther('0.0003'),
     };
     this.deps = { ctx, relayer: this.relay, allowedOrigins: 'https://gamebox-names.pages.dev,http://localhost:*' };
+  }
+
+  private fail(name: string): void {
+    const revert = this.reverts.get(name);
+    if (revert) throw new Revert(...revert);
+  }
+
+  /** The factory's address for a key: a stand-in for CREATE2. */
+  accountOf(qx: Hex, qy: Hex): Address {
+    for (const [address, entry] of this.accounts) {
+      if (entry.matchesKey && entry.qx === qx && entry.qy === qy) return address as Address;
+    }
+    return `0x${qx.slice(2, 42)}`;
+  }
+
+  /** A deployed `P256Account` of `key` at `address`. With `rotated`, its key no longer gives its address; with
+   *  `madeByFactory: false`, the factory never deployed it either. */
+  addAccount(address: Address, key: Pick<Key, 'qx' | 'qy'>, options: { rotated?: boolean; madeByFactory?: boolean } = {}) {
+    const { rotated = false, madeByFactory = true } = options;
+    this.accounts.set(address.toLowerCase(), { qx: key.qx, qy: key.qy, matchesKey: madeByFactory && !rotated });
+    this.chain.code.set(address.toLowerCase(), ACCOUNT_CODE);
+    if (rotated && madeByFactory) {
+      const topics = encodeEventTopics({ abi: p256AccountFactoryAbi, eventName: 'AccountDeployed', args: { account: address } });
+      const data = encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }], [`0x${'11'.repeat(32)}`, `0x${'22'.repeat(32)}`]);
+      this.chain.logs.push({ address: addresses.factory, topics: topics as Hex[], data });
+    }
+    this.chain.contract(address, p256AccountAbi as Abi, {
+      publicKey: () => [key.qx, key.qy],
+      nonceUsed: ([nonce]) => this.usedNonces.has(`${address.toLowerCase()}:${nonce}`),
+      isValidSignature: ([, signature]) =>
+        this.erc1271.get(address.toLowerCase())?.has(String(signature).toLowerCase()) ? '0x1626ba7e' : '0xffffffff',
+      execute: () => (this.fail('execute'), '0x'),
+      executeBatch: () => (this.fail('executeBatch'), []),
+    });
+    return this;
   }
 
   register(label: string): void {

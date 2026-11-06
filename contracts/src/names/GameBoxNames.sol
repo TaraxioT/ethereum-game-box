@@ -38,13 +38,19 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     /// @notice Player and game names never expire (they last as long as `gamebox.eth`).
     uint64 internal constant FOREVER = type(uint64).max;
 
-    /// @notice Our root roles on `gamebox.eth`'s registry. None controls a registered name, so it is emancipated.
+    /// @inheritdoc IGameBoxNames
+    string public constant POPUP_PREFIX = "popup-";
+
+    /// @notice Our root roles on `gamebox.eth`'s registry. None controls a registered name, so it is emancipated. The
+    ///         admins are there so `handOverRegistrar` can grant them on.
     uint256 internal constant PARENT_REGISTRY_ROLES =
-        RegistryRoles.REGISTRAR | RegistryRoles.RENEW | RegistryRoles.SET_PARENT;
+        RegistryRoles.REGISTRAR | RegistryRoles.REGISTRAR_ADMIN | RegistryRoles.RENEW | RegistryRoles.RENEW_ADMIN;
     /// @notice Our root roles on a title registry. `UNREGISTER` moves a title, so title registries are not
     ///         emancipated.
     uint256 internal constant TITLE_REGISTRY_ROLES =
-        RegistryRoles.REGISTRAR | RegistryRoles.UNREGISTER | RegistryRoles.RENEW | RegistryRoles.SET_PARENT;
+        PARENT_REGISTRY_ROLES | RegistryRoles.UNREGISTER | RegistryRoles.UNREGISTER_ADMIN;
+    /// @notice Held only while a new registry's canonical parent is set, then revoked: nobody can move it after.
+    uint256 internal constant PARENT_LOCK_ROLES = RegistryRoles.SET_PARENT | RegistryRoles.SET_PARENT_ADMIN;
     /// @notice A player's roles on its name's token: everything a token role can be, transfer included.
     uint256 internal constant PLAYER_TOKEN_ROLES = RegistryRoles.UNREGISTER | RegistryRoles.UNREGISTER_ADMIN
         | RegistryRoles.RENEW | RegistryRoles.RENEW_ADMIN | RegistryRoles.SET_SUBREGISTRY
@@ -56,8 +62,10 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         | ResolverRoles.SET_DATA | ResolverRoles.LINK | ResolverRoles.CAN_NAME | ResolverRoles.UPGRADE;
     /// @notice A badge's roles on its own resolver: every role and every admin role.
     uint256 internal constant PLAYER_RESOLVER_ROLES = RESOLVER_ALL_ROLES | (RESOLVER_ALL_ROLES << 128);
-    /// @notice Our root roles on a Box resolver: grant and revoke text keys, and rewrite `addr` when the Box moves.
-    uint256 internal constant BOX_RESOLVER_ROLES = ResolverRoles.SET_TEXT_ADMIN | ResolverRoles.SET_ADDRESS;
+    /// @notice Our root roles on a Box resolver: grant and revoke text keys and rewrite `addr` when the Box moves, and
+    ///         link pop-ups to the Box's record.
+    uint256 internal constant BOX_RESOLVER_ROLES =
+        ResolverRoles.SET_TEXT_ADMIN | ResolverRoles.SET_ADDRESS | ResolverRoles.LINK;
     /// @notice Our root roles on the shared title and game resolvers: we are their only writer.
     uint256 internal constant SHARED_RESOLVER_ROLES = ResolverRoles.SET_TEXT | ResolverRoles.SET_ADDRESS;
 
@@ -95,6 +103,8 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     mapping(uint256 labelId => Game) private _games;
     mapping(uint256 labelId => TitleData) private _titles;
     mapping(address badge => string label) private _labels;
+    mapping(uint256 labelId => string ofBox) private _popups;
+    address[] private _titleRegistries;
 
     /// @param factory ENS's `VerifiableFactory`.
     /// @param registryImpl ENS's `UserRegistry` implementation.
@@ -114,8 +124,7 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         RESOLVER_IMPL = resolverImpl;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
 
-        REGISTRY = _newRegistry(PARENT_REGISTRY_ROLES);
-        REGISTRY.setParent(ethRegistry, "gamebox");
+        REGISTRY = _newRegistry(PARENT_REGISTRY_ROLES, ethRegistry, "gamebox");
         TITLE_RESOLVER = _newResolver(_grant(address(this), SHARED_RESOLVER_ROLES), new bytes[](0));
         GAME_RESOLVER = _newResolver(_grant(address(this), SHARED_RESOLVER_ROLES), new bytes[](0));
     }
@@ -159,7 +168,7 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     }
 
     /// @inheritdoc IGameBoxNames
-    function setBoxKey(string calldata label, address account, bytes32 qx, bytes32 qy)
+    function setBoxKey(string calldata label, bytes32 qx, bytes32 qy, address account)
         external
         onlyRole(LICENSOR_ROLE)
     {
@@ -175,6 +184,31 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         _grantText(r, name, "game", account);
         (box.account, box.qx, box.qy) = (account, qx, qy);
         emit BoxKeyChanged(label, account, qx, qy);
+    }
+
+    /// @inheritdoc IGameBoxNames
+    function registerPopup(string calldata label, string calldata ofBox, uint64 expiry)
+        external
+        onlyRole(LICENSOR_ROLE)
+        returns (string memory popupLabel)
+    {
+        popupLabel = string.concat(POPUP_PREFIX, label);
+        if (bytes(label).length == 0 || bytes(label)[0] == "-" || !NameLib.isValidLabel(popupLabel)) {
+            revert InvalidLabel(label);
+        }
+        BoxData storage box = _box(ofBox);
+        if (REGISTRY.getExpiry(NameLib.id(ofBox)) <= block.timestamp) revert BoxNotLive(ofBox);
+        REGISTRY.register(popupLabel, box.operator, IRegistry(address(0)), box.resolver, 0, expiry);
+        IPermissionedResolver(box.resolver).linkToNode(NameLib.dnsName(popupLabel), NameLib.node(ofBox));
+        _popups[NameLib.id(popupLabel)] = ofBox;
+        emit PopupRegistered(popupLabel, ofBox, box.operator, expiry);
+    }
+
+    /// @inheritdoc IGameBoxNames
+    function getPopup(string calldata popupLabel) external view returns (Popup memory) {
+        uint256 id = NameLib.id(popupLabel);
+        string memory ofBox = _popups[id];
+        return Popup(ofBox, bytes(ofBox).length == 0 ? 0 : REGISTRY.getExpiry(id));
     }
 
     /// @inheritdoc IGameBoxNames
@@ -206,7 +240,8 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         if (stats == address(0)) revert StatsWriterNotSet();
         string memory held = labelOf(badge);
         if (bytes(held).length != 0) revert BadgeHasName(badge, held);
-        if (_boxes[NameLib.id(label)].status != BoxStatus.None) revert LabelHeldByBox(label);
+        uint256 id = NameLib.id(label);
+        if (_boxes[id].status != BoxStatus.None || bytes(_popups[id]).length != 0) revert LabelHeldByBox(label);
         if (!SignatureChecker.isValidSignatureNow(badge, claimDigest(label, badge, deadline), signature)) {
             revert InvalidClaimSignature();
         }
@@ -263,9 +298,9 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         uint256 id = NameLib.id(label);
         if (_games[id].titleRegistry != address(0)) revert GameExists(label);
 
-        IPermissionedRegistry registry = _newRegistry(TITLE_REGISTRY_ROLES);
-        registry.setParent(REGISTRY, label);
+        IPermissionedRegistry registry = _newRegistry(TITLE_REGISTRY_ROLES, REGISTRY, label);
         titleRegistry = address(registry);
+        _titleRegistries.push(titleRegistry);
         _games[id] = Game(titleRegistry, titleTerm);
 
         REGISTRY.register(label, address(this), registry, GAME_RESOLVER, 0, FOREVER);
@@ -318,6 +353,16 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     }
 
     /// @inheritdoc IGameBoxNames
+    function handOverRegistrar(address next) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (next == address(0)) revert ZeroValue();
+        _handOver(REGISTRY, PARENT_REGISTRY_ROLES, next);
+        for (uint256 i; i < _titleRegistries.length; ++i) {
+            _handOver(IPermissionedRegistry(_titleRegistries[i]), TITLE_REGISTRY_ROLES, next);
+        }
+        emit RegistrarHandedOver(next);
+    }
+
+    /// @inheritdoc IGameBoxNames
     function setStatsWriter(address stats) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (stats == address(0)) revert ZeroValue();
         statsWriter = stats;
@@ -338,9 +383,23 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
         if (box.status == BoxStatus.None) revert UnknownBox(label);
     }
 
-    function _newRegistry(uint256 roles) private returns (IPermissionedRegistry) {
-        bytes memory init = abi.encodeCall(IEACGrantInitializable.initialize, (_grant(address(this), roles)));
-        return IPermissionedRegistry(FACTORY.deployProxy(REGISTRY_IMPL, _proxyCount++, init));
+    /// @dev A new `UserRegistry` with `roles` for us and its canonical parent locked: we take `SET_PARENT` and its
+    ///      admin only to call `setParent`, then revoke both, so nobody holds them.
+    function _newRegistry(uint256 roles, IRegistry parent, string memory label)
+        private
+        returns (IPermissionedRegistry registry)
+    {
+        bytes memory init = abi.encodeCall(
+            IEACGrantInitializable.initialize, (_grant(address(this), roles | PARENT_LOCK_ROLES))
+        );
+        registry = IPermissionedRegistry(FACTORY.deployProxy(REGISTRY_IMPL, _proxyCount++, init));
+        registry.setParent(parent, label);
+        registry.revokeRootRoles(PARENT_LOCK_ROLES, address(this));
+    }
+
+    function _handOver(IPermissionedRegistry registry, uint256 roles, address next) private {
+        registry.grantRootRoles(roles, next);
+        registry.revokeRootRoles(roles, address(this));
     }
 
     function _newResolver(Grant[] memory grants, bytes[] memory calls) private returns (address) {
@@ -367,7 +426,8 @@ contract GameBoxNames is IGameBoxNames, AccessControl, ERC1155Holder, EIP712 {
     }
 
     /// @dev A Box resolver: we write `addr`, `boxKey` and `status` while it is set up, then grant the eight Box keys
-    ///      (two to us, four to the operator, two to the Box). We keep `SET_TEXT_ADMIN` to move the Box's keys later.
+    ///      (two to us, four to the operator, two to the Box). We keep `SET_TEXT_ADMIN` and `SET_ADDRESS` to move the
+    ///      Box to a new account later, and `LINK` for its pop-ups.
     function _newBoxResolver(bytes memory name, address operator, address account, string memory key)
         private
         returns (address resolver)
