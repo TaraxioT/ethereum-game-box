@@ -45,8 +45,8 @@ contract ChampionshipsTest is NamesFork {
 
     function _open() internal returns (uint256 id) {
         vm.startPrank(admin);
-        usdc.mint(admin, PRIZE);
-        usdc.approve(address(cups), PRIZE);
+        fakeUsdc.mint(admin, PRIZE);
+        fakeUsdc.approve(address(cups), PRIZE);
         id = cups.open(GAME, CUP, ends, PRIZE);
         vm.stopPrank();
     }
@@ -100,8 +100,8 @@ contract ChampionshipsTest is NamesFork {
 
     function test_openRegistersTheNameWithItsOwnResolver() public {
         vm.startPrank(admin);
-        usdc.mint(admin, PRIZE);
-        usdc.approve(address(cups), PRIZE);
+        fakeUsdc.mint(admin, PRIZE);
+        fakeUsdc.approve(address(cups), PRIZE);
         vm.expectEmit(true, false, false, false, address(cups));
         emit IChampionships.CupOpened(1, GAME, CUP, address(0), ends, PRIZE, admin);
         uint256 id = cups.open(GAME, CUP, ends, PRIZE);
@@ -135,8 +135,8 @@ contract ChampionshipsTest is NamesFork {
         IPermissionedResolver r = IPermissionedResolver(c.resolver);
         assertEq(r.roles(0, address(cups)), ALL_RESOLVER_ROLES);
         assertEq(r.roleCount(0), ALL_RESOLVER_ROLES);
-        assertEq(usdc.balanceOf(address(cups)), PRIZE);
-        assertEq(usdc.balanceOf(admin), 0);
+        assertEq(fakeUsdc.balanceOf(address(cups)), PRIZE);
+        assertEq(fakeUsdc.balanceOf(admin), 0);
     }
 
     function test_openRefusals() public {
@@ -329,8 +329,8 @@ contract ChampionshipsTest is NamesFork {
         vm.prank(closer);
         assertEq(cups.close(GAME), players[2]);
 
-        assertEq(usdc.balanceOf(players[2]), PRIZE);
-        assertEq(usdc.balanceOf(address(cups)), 0);
+        assertEq(fakeUsdc.balanceOf(players[2]), PRIZE);
+        assertEq(fakeUsdc.balanceOf(address(cups)), 0);
         assertEq(cups.openCup(GAME), 0);
         IChampionships.Cup memory c = cups.getCup(id);
         assertTrue(c.closed);
@@ -395,7 +395,7 @@ contract ChampionshipsTest is NamesFork {
         vm.expectEmit(address(cups));
         emit IChampionships.CupClosed(id, GAME, CUP, address(0), PRIZE);
         assertEq(cups.close(GAME), address(0));
-        assertEq(usdc.balanceOf(admin), PRIZE);
+        assertEq(fakeUsdc.balanceOf(admin), PRIZE);
         assertEq(uint8(_titles().getStatus(NameLib.id(CUP))), uint8(IPermissionedRegistry.Status.AVAILABLE));
         assertEq(IPermissionedResolver(cups.getCup(id).resolver).roleCount(0), 0);
         assertEq(resolveText(CUP_NAME, "standings"), "");
