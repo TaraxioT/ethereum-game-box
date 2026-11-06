@@ -153,6 +153,16 @@
 .lobby-input:disabled { opacity: 0.5; }
 .lobby-suffix { flex: none; }
 .lobby-claim[hidden], .lobby-hint[hidden] { display: none; }
+/* The lobby's name keyboard: glass keys of light, one row per line of the label's characters. */
+.name-keys { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--glass); border: 1px solid var(--sys); box-shadow: 0 0 18px var(--sys-bloom); z-index: 5; }
+.name-keys[hidden] { display: none; }
+.name-keys-row { display: flex; gap: 8px; flex: 1 1 0; justify-content: center; }
+.name-key { flex: 1 1 0; max-width: 72px; min-width: 0; font: 700 26px/1 var(--mono); color: var(--fg); background: transparent; border: 1px solid var(--fg-4); text-transform: none; touch-action: manipulation; cursor: pointer; }
+.name-key:active { background: var(--sys); color: var(--void); }
+.name-key.erase { max-width: 150px; flex-grow: 2; }
+.name-key.done, .name-key.go { max-width: none; font: 700 20px/1 var(--hud-display); letter-spacing: 0.08em; }
+.name-key.go { border-color: var(--sys); color: var(--sys-hot); text-shadow: var(--glow-text); }
+.name-key.go:disabled { opacity: 0.3; text-shadow: none; }
 .lobby-hint { font: 600 12px/1.3 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); margin-top: 3px; }
 .lobby-hint.bad { color: var(--alert, #ff5a5a); }
 .lobby-honours { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }

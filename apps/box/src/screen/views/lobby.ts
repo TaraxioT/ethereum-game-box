@@ -1,6 +1,7 @@
 // The lobby: a badge tapped on either station shows its card, read from chain: its player name, or (with none yet) a
-// name field holding the proposed label, which the player may type over (the Pi's touch keyboard or a keyboard; the
-// label rule is checked as they type), with ANOTHER and CLAIM (Enter claims too). The Box vouches for the badge with its
+// name field holding the proposed label, which the player may type over (a tap on the field opens the Box's own
+// keyboard, `name-keys.ts`; a keyboard works too; the label rule is checked as they type), with ANOTHER and CLAIM
+// (Enter claims too). The Box vouches for the badge with its
 // own key: a badge can't sign a claim;
 // its stats over every game, from its name's `stats` record (the win streak, wins, losses, played, the best streak and
 // its place on the leaderboard); its USDC and TOP UP 100 USDC. Beside it, the game's title
@@ -14,6 +15,7 @@ import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { labelProblem } from "@egb/shared/names";
+import { createNameKeys } from "./name-keys.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { clock } from "./refund.ts";
@@ -21,6 +23,8 @@ import { cupLabel, shortName } from "./play-for.ts";
 import { honoursOf } from "../../core/honours.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
+/** Where the name keyboard opens: right of the card, over the core, the board and the keys. */
+const NAME_KEYS = { x: 430, y: 300, w: 790, h: 420 };
 /** Leaderboard rows the board shows. */
 const LEADERS_SHOWN = 5;
 
@@ -42,6 +46,8 @@ export function lobbyView(ctx: ViewContext): View {
   field.setAttribute("autocapitalize", "off");
   field.setAttribute("enterkeyhint", "done");
   field.setAttribute("aria-label", "the name to claim");
+  // The Box draws its own keyboard: the system's opens under the full-screen kiosk.
+  field.setAttribute("inputmode", "none");
   const proposal = el("label", "lobby-claim");
   proposal.append(field, el("span", "lobby-suffix", ".gamebox.eth"));
   const fieldHint = el("div", "lobby-hint");
@@ -96,6 +102,29 @@ export function lobbyView(ctx: ViewContext): View {
   keys.append(back, another, claim, topup);
   root.append(card, board, plate, keys);
 
+  /** Puts `text` in place of the field's selection (or at its caret), then reads the field as typed. */
+  const edit = (text: string, back = false): void => {
+    let start = field.selectionStart ?? field.value.length;
+    const end = field.selectionEnd ?? start;
+    if (back && start === end) start = Math.max(0, start - 1);
+    field.setRangeText(text, start, end, "end");
+    field.dispatchEvent(new Event("input"));
+  };
+  const nameKeys = createNameKeys({
+    type: (ch) => edit(ch),
+    erase: () => edit("", true),
+    claim: () => {
+      if (claim.hasAttribute("disabled")) return;
+      field.blur();
+      claim.click();
+    },
+    done: () => field.blur(),
+  });
+  place(nameKeys.el, NAME_KEYS);
+  root.append(nameKeys.el);
+  field.addEventListener("focus", () => nameKeys.open());
+  field.addEventListener("blur", () => nameKeys.close());
+
   /** The badge and proposal the field was last filled for: a new one refills it, typing keeps it. */
   let filledFor = "";
   field.addEventListener("input", () => {
@@ -133,6 +162,7 @@ export function lobbyView(ctx: ViewContext): View {
       field.value = naming ? (lobby.proposal ?? "") : "";
     }
     field.disabled = claiming;
+    if (!naming && document.activeElement === field) field.blur();
     const problem = labelProblem(field.value);
     fieldHint.textContent = problem ? `a name needs ${problem}` : "type a name, or keep this one · ENTER OR CLAIM";
     fieldHint.classList.toggle("bad", problem !== null && field.value !== "");
@@ -147,6 +177,7 @@ export function lobbyView(ctx: ViewContext): View {
     drawStats(c?.name ?? null, c?.record ?? null, state.board?.leaders ?? []);
     another.toggleAttribute("disabled", !naming || claiming);
     claim.toggleAttribute("disabled", !naming || claiming || problem !== null);
+    nameKeys.claimable(naming && !claiming && problem === null);
     topup.toggleAttribute("disabled", !lobby.badge || topping);
     plate.textContent = !lobby.badge
       ? "TAP YOUR BADGE ON EITHER STATION"
