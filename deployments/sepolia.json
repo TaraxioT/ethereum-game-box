@@ -1,7 +1,6 @@
 {
   "chainId": 11155111,
   "external": {
-    "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     "PoolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
     "PoolSwapTest": "0x9B6b46e2c869aa39918Db7f52f5557FE577B6eEe",
     "PoolModifyLiquidityTest": "0x0C478023803a644c94c4CE1C1e7b9A087e411B0A"
@@ -80,15 +79,15 @@
       "verified": true
     },
     "BoxStaking": {
-      "address": "0x1BC15489258C2eA080F99c4182Dd661489a003FC",
-      "deployBlock": 12076176,
-      "txHash": "0xb0de3ebb7496a70169d92472aeaf2d1506271d221b24c46bd78cec043122615b",
+      "address": "0x321BF7e789ED168A24fa8ecEb19a602ef2B91E56",
+      "deployBlock": 12076206,
+      "txHash": "0x3a902c8572967175177935a296eda739e00a53abc4887ded4d2d5fa70eb3c13a",
       "verified": false
     },
     "GameBoxHook": {
-      "address": "0x9c466D8ca99051c1F1B59157C01771B84a979080",
-      "deployBlock": 12076180,
-      "txHash": "0x92259ca46dea4504d502e37720cd34b07d1160abdef18c5aaa6857a012001091",
+      "address": "0xF4BbB7CCF834183d143b3c77C2C96331bb51D080",
+      "deployBlock": 12076211,
+      "txHash": "0x217ce910b2cc563c0d95199759e7d63d4b9c1a6ada874448e09d7b8805eaa41c",
       "verified": false
     }
   },
@@ -150,11 +149,11 @@
   },
   "pools": {
     "GBX_USDC": {
-      "currency0": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-      "currency1": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
+      "currency0": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
+      "currency1": "0xF3e90E1a0a17A4680e52573b6188D6c94442493B",
       "fee": 8388608,
-      "hooks": "0x9c466D8ca99051c1F1B59157C01771B84a979080",
-      "id": "0xb33197dbc6b283f2c9f52a43da4bd1e05b6299eca8f1254eaf7045c36141f471",
+      "hooks": "0xF4BbB7CCF834183d143b3c77C2C96331bb51D080",
+      "id": "0x062d1ac7d864146fe4bc977b8cfbb1e3ab25c2871ecbe1a576ef75871caabe66",
       "tickSpacing": 60
     }
   }
