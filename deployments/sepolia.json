@@ -45,6 +45,12 @@
       "deployBlock": 12075671,
       "txHash": "0x4afe6c08dfa0716f6aab7a664d4cb1c20e333c762bc6bbae0a6f65679d7622cc",
       "verified": true
+    },
+    "BoxStaking": {
+      "address": "0xEABdE4D7b969bdAF524C9E7A55082A51c5Eee513",
+      "deployBlock": 12075736,
+      "txHash": "0xfe943ba4267ea2abc7d092b10635bf26baa3104ebd1107f526933f707f03ece9",
+      "verified": false
     }
   },
   "ens": {
