@@ -20,7 +20,7 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 `forge init` conventions; libraries (`lib/`) are installed, not committed: `pnpm contracts:install`. Sepolia gas
 estimates run low: deploy with `cast estimate` plus 50%, or a fixed high `--gas-limit`.
 
-Deploy (from `contracts/`, with `ALCHEMY_API_KEY` exported):
+Deploy (from `contracts/`, with `SEPOLIA_RPC_URL` exported):
 
 ```sh
 forge script script/DeployGBX.s.sol --rpc-url sepolia --account sepolia-deployer --broadcast

@@ -3,5 +3,39 @@
   "external": {
     "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   },
-  "contracts": {}
+  "contracts": {},
+  "ens": {
+    "UniversalResolver": {
+      "address": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UpgradableUniversalResolverProxy.json"
+    },
+    "RootRegistry": {
+      "address": "0xB458D6a3a77919449d03e7A6903C26827c1eC43f",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/RootRegistry.json"
+    },
+    "ETHRegistry": {
+      "address": "0xD4eBcbBdF463C9c45784603Db0dDD499BC44A8B4",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/ETHRegistry.json"
+    },
+    "ETHRegistrar": {
+      "address": "0xf633e7FC17e2bbE0D0965D18ec1821dcB754a3d3",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/ETHRegistrar.json"
+    },
+    "VerifiableFactory": {
+      "address": "0xDa70306C98E97eCe36F997a21368e53298572991",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/VerifiableFactory.json"
+    },
+    "VerifiableProxyLogic": {
+      "address": "0xC41576B4B809B99CF0fF2e5B41b4F147cd9b6BDd",
+      "source": "https://github.com/ensdomains/verifiable-factory/blob/c1090aec465ab30d494c96bd7d2a147b4f0b0173/src/UUPSProxyLogic.sol"
+    },
+    "UserRegistryImpl": {
+      "address": "0x9BD8a88719068D09ecee662f36C0E3856708366a",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UserRegistryImpl.json"
+    },
+    "PermissionedResolverImpl": {
+      "address": "0x115eb53F0c60696633855F90b138178Fb40b2b2C",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/PermissionedResolverImpl.json"
+    }
+  }
 }

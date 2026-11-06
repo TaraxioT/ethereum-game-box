@@ -11,6 +11,18 @@
 | `src/abis/` | Contract ABIs, generated from `contracts/out` after each build |
 | `src/deployments.ts` | Loads `deployments/sepolia.json`, so no app hard-codes an address |
 | `src/chains.ts` | Sepolia and Robinhood Chain settings, with RPC URLs taken from the environment |
+| `src/names/` | The ENS names under `gamebox.eth`, imported as `@egb/shared/names` (below) |
+
+## `src/names/`
+
+| Module | Holds |
+|---|---|
+| `keys.ts` | Every record key, grouped by who may write it (Box, player, game and title names), the Box `status` values, and the ENSIP-26 agent keys (`agent-context`, `agent-endpoint[<protocol>]`) |
+| `labels.ts` | The label rule (`labelProblem`: 3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the same one `GameBoxNames` checks, and the pop-up, full and title names |
+| `messages.ts` | The three EIP-712 messages (`ClaimName`, `Execute`, `Result`): the typed data a wallet signs and the digest the contract checks |
+| `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, and `GameBoxNames`' own roles |
+| `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
+| `deployments.ts` | `ensAddress(name)` and `contractAddress(name)` from `deployments/sepolia.json` |
 
 ## Rules
 
