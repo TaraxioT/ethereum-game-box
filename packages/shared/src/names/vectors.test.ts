@@ -7,8 +7,16 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 
 import { claimNameDigest, claimNameTypedData, executeDigest, resultDigest } from './messages.ts';
+import { primaryNameDigest, primaryNameMessage } from './primaryName.ts';
 import { REGISTRY_ROLES, RESOLVER_ROLES } from './roles.ts';
-import { CLAIM_NAME_VECTOR, EXECUTE_VECTOR, P256_VECTOR_KEY, RESULT_VECTOR, ROLE_VECTORS } from './vectors.ts';
+import {
+  CLAIM_NAME_VECTOR,
+  EXECUTE_VECTOR,
+  P256_VECTOR_KEY,
+  PRIMARY_NAME_VECTOR,
+  RESULT_VECTOR,
+  ROLE_VECTORS,
+} from './vectors.ts';
 
 const HALF_N = 0x7fffffff800000007fffffffffffffffde737d56d38bcf4279dce5617e3192a8n;
 const publicKey = hexToBytes(`0x04${P256_VECTOR_KEY.qx.slice(2)}${P256_VECTOR_KEY.qy.slice(2)}`);
@@ -62,6 +70,19 @@ describe('Result', () => {
       lowS: true,
     });
     expect(p256.verify(signature, hexToBytes(RESULT_VECTOR.digest), publicKey, { prehash: false })).toBe(true);
+  });
+});
+
+describe('primary name', () => {
+  it('matches the DefaultReverseRegistrar message and digest', () => {
+    const { message, registrar, raw, digest } = PRIMARY_NAME_VECTOR;
+    expect(primaryNameMessage(message, registrar)).toBe(raw);
+    expect(primaryNameDigest(message, registrar)).toBe(digest);
+  });
+
+  it('is signed as viem signMessage signs it', async () => {
+    const { privateKey, raw, signature } = PRIMARY_NAME_VECTOR;
+    expect(await privateKeyToAccount(privateKey).signMessage({ message: { raw } })).toBe(signature);
   });
 });
 

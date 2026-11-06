@@ -7,6 +7,7 @@ import type { Address, Hex } from 'viem';
 import vectors from './vectors.json' with { type: 'json' };
 
 import type { ClaimName, Execute, Result } from './messages.ts';
+import type { PrimaryName } from './primaryName.ts';
 
 /** `ClaimName` for `alice`, signed by the badge as viem `signTypedData` (and `eth_signTypedData_v4`) produces it. */
 export const CLAIM_NAME_VECTOR = {
@@ -67,7 +68,24 @@ export const RESULT_VECTOR = {
   s: vectors.result.s as Hex,
 } as const;
 
-/** The role bits as `IENSv2.sol` defines them, for `roles.test.ts`. */
+/** A badge's primary-name message for ENS's `DefaultReverseRegistrar`, signed with `personal_sign` as viem
+ *  `signMessage({ message: { raw } })` signs it. */
+export const PRIMARY_NAME_VECTOR = {
+  privateKey: vectors.claimName.privateKey as Hex,
+  registrar: vectors.primaryName.registrar as Address,
+  message: {
+    badge: vectors.primaryName.badge as Address,
+    name: vectors.primaryName.name,
+    expiry: BigInt(vectors.primaryName.expiry),
+  } satisfies PrimaryName,
+  /** The 32 bytes signed. */
+  raw: vectors.primaryName.message as Hex,
+  /** Their ERC-191 digest. */
+  digest: vectors.primaryName.digest as Hex,
+  signature: vectors.primaryName.signature as Hex,
+} as const;
+
+/** The role bits as `IENSv2.sol` defines them, for `vectors.test.ts`. */
 export const ROLE_VECTORS = {
   registry: vectors.registryRoles as Record<string, Hex>,
   resolver: vectors.resolverRoles as Record<string, Hex>,

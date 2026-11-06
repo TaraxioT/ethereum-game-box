@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
 import {RegistryRoles, ResolverRoles} from "../../src/names/IENSv2.sol";
 import {NamesFork} from "./NamesFork.sol";
@@ -27,6 +29,7 @@ contract VectorsTest is NamesFork {
         vm.serializeString(json, "claimName", _claim());
         vm.serializeString(json, "execute", _execute(p256Key_));
         vm.serializeString(json, "result", _result(p256Key_));
+        vm.serializeString(json, "primaryName", _primaryName());
         string memory p = "p256";
         vm.serializeString(p, "privateKey", vm.toString(bytes32(p256Key_)));
         vm.serializeString(p, "qx", vm.toString(qx));
@@ -81,6 +84,33 @@ contract VectorsTest is NamesFork {
         vm.serializeBytes32(o, "digest", digest);
         vm.serializeBytes32(o, "r", r);
         return vm.serializeBytes32(o, "s", s);
+    }
+
+    /// @dev The badge's `default.reverse` message for its primary name, as ENS's `DefaultReverseRegistrar` hashes it.
+    function _primaryName() internal returns (string memory) {
+        address registrar =
+            vm.parseJsonAddress(vm.readFile("../deployments/sepolia.json"), ".ens.DefaultReverseRegistrar.address");
+        address badge = vm.addr(BADGE_KEY);
+        string memory name = "alice.gamebox.eth";
+        bytes32 message = keccak256(
+            abi.encodePacked(
+                registrar,
+                bytes4(keccak256("setNameForAddrWithSignature(address,uint256,string,bytes)")),
+                badge,
+                DEADLINE,
+                name
+            )
+        );
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(BADGE_KEY, digest);
+        string memory o = "primaryName";
+        vm.serializeAddress(o, "registrar", registrar);
+        vm.serializeAddress(o, "badge", badge);
+        vm.serializeString(o, "name", name);
+        vm.serializeString(o, "expiry", vm.toString(DEADLINE));
+        vm.serializeBytes32(o, "message", message);
+        vm.serializeBytes32(o, "digest", digest);
+        return vm.serializeBytes(o, "signature", abi.encodePacked(r, s, v));
     }
 
     function _role(string memory o, string memory name, uint256 bit) internal returns (string memory) {
