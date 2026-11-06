@@ -24,7 +24,7 @@ const resolverOf = (label: string) => `0x${label.length.toString(16).padStart(40
 
 const decode = (data: Hex) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args as [Hex, string, string];
 
-function setup(options: { popups?: Record<string, Partial<BoxInfo>>; reply?: (path: string, body: unknown) => Reply } = {}) {
+function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Record<string, string>; reply?: (path: string, body: unknown) => Reply } = {}) {
   const boxes: Record<string, BoxInfo> = {
     'mumbai-01': { account: ACCOUNT, resolver: resolverOf('mumbai-01'), expiry: NOW + 86_400, status: 1 },
   };
@@ -34,6 +34,7 @@ function setup(options: { popups?: Record<string, Partial<BoxInfo>>; reply?: (pa
   const usedRounds = new Set<string>();
   const chain: BoxChain = {
     box: async (label) => boxes[label] ?? { account: `0x${'00'.repeat(20)}`, resolver: `0x${'00'.repeat(20)}`, expiry: 0, status: 0 },
+    game: async (_box, label) => options.games?.[label] ?? '',
     roundUsed: async (box, round) => usedRounds.has(`${box}:${round}`),
     recentPopups: async () => Object.keys(options.popups ?? {}),
   };
@@ -76,10 +77,10 @@ describe('the signer', () => {
 
 describe('the heartbeat', () => {
   it("signs a BoxAccount.execute of lastSeen on mumbai-01's resolver, over the right digest", async () => {
-    const { box, posts, signer } = setup();
+    const { box, posts, signer } = setup({ games: { 'mumbai-01': 'quickdraw' } });
     const ids = await box.heartbeat();
-    expect(ids).toEqual(['id-1', 'id-2']);
-    expect(posts).toHaveLength(2);
+    expect(ids).toEqual(['id-1']);
+    expect(posts).toHaveLength(1);
     const body = posts[0]!.body as Record<string, string>;
     expect(posts[0]!.path).toBe('/box/execute');
     expect(body).toMatchObject({ account: ACCOUNT, target: resolverOf('mumbai-01'), value: '0', deadline: String(NOW + 600) });
@@ -95,23 +96,13 @@ describe('the heartbeat', () => {
     expect((await box.view()).lastSeen).toBe(NOW);
   });
 
-  it('writes game on the first beat and when it changes, lastSeen on every beat', async () => {
-    const { box, posts } = setup();
-    await box.heartbeat();
+  it('writes game only where the record differs, and lastSeen on every beat', async () => {
+    const { box, posts } = setup({ games: { 'mumbai-01': 'stockduel' } });
     await box.heartbeat();
     expect(posts.map((p) => decode(p.body.data as Hex).slice(1))).toEqual([
       ['lastSeen', String(NOW)],
       ['game', 'quickdraw'],
-      ['lastSeen', String(NOW)],
     ]);
-  });
-
-  it('writes game again if the relayer refused it', async () => {
-    let n = 0;
-    const { box, posts } = setup({ reply: () => (++n === 2 ? { status: 502, body: { error: 'down' } } : { status: 202, body: { id: `id-${n}` } }) });
-    await box.heartbeat();
-    await box.heartbeat();
-    expect(posts.map((p) => decode(p.body.data as Hex)[1])).toEqual(['lastSeen', 'game', 'lastSeen', 'game']);
   });
 
   it('beats on every live pop-up it runs, and skips the lapsed and the foreign ones', async () => {
@@ -165,8 +156,7 @@ describe('POST /result', () => {
   });
 
   it('shows the game it reported in the next heartbeat', async () => {
-    const { box, posts } = setup();
-    await box.heartbeat();
+    const { box, posts } = setup({ games: { 'mumbai-01': 'quickdraw' } });
     await box.report({ ...report, game: 'stockduel' }, 'ip');
     await box.heartbeat();
     expect(decode(posts.at(-1)!.body.data as Hex).slice(1)).toEqual(['game', 'stockduel']);

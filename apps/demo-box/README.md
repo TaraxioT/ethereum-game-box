@@ -20,9 +20,18 @@ At the event, the Box signs only after a real match. `POST /result` takes 10 per
 ## Heartbeat
 
 A Durable Object alarm every 5 minutes signs a `BoxAccount.execute` of `PermissionedResolver.setText(lastSeen, <unix
-seconds>)` on `mumbai-01.gamebox.eth` and on every live pop-up it runs, and of `game` when the game the Box is
-running (the game of its last result there, or `DEFAULT_GAME`) is not the one it last wrote. Each write goes through
-`POST /box/execute`. Every request, and an hourly cron, restarts the alarm if it has stopped.
+seconds>)` on `mumbai-01.gamebox.eth` and on every live pop-up it runs. It reads each name's `game` first (through
+its resolver's ENSIP-10 `resolve`, which costs nothing) and writes `game` only where it differs from the game the Box
+is running (the game of its last result there, or `DEFAULT_GAME`). Each write goes through `POST /box/execute`.
+Every request, and an hourly cron, restarts the alarm if it has stopped.
+
+Measured on Sepolia: a `lastSeen` write is 182,050 gas (280,000 the first time a name gets one), and a `game` write
+172,000. At the relayer's 1 gwei tip and a near-zero base fee, mumbai-01's beat costs about 0.00018 ETH, so **about
+0.052 ETH a day** (288 beats). Each pop-up adds two or three writes over its 10 minutes, about 0.0007 ETH.
+
+Each beat is one transaction per write. `PermissionedResolver` has `multicall`, but with `game` written only when it
+changes a beat is a single write per name, so batching would save almost nothing and isn't worth widening the
+relayer's allowlist check for.
 
 ## Signing
 
