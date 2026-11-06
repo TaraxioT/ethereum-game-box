@@ -1,5 +1,6 @@
 // The Box's lease on screen (`/api/lease`, server/lease.ts). The Box hosts only while GBX is staked on it:
-// - Leased: a tag beside the settings gear shows the time left. Tapped, it opens the lease: the Box's ENS name, a
+// - Leased: a tag under the settings gear, in the strip left of player 1's port so it never covers a name: a lit dot
+//   that folds the time left away and back (remembered on this screen), and the time left. Tapped, the time opens the lease: the Box's ENS name, a
 //   clock running down to the lease's end over a bar of what is left, what is staked and by whom, and SLIDE TO UNSTAKE
 //   (every GBX back to the staker; the Box goes offline as the transaction lands).
 // - Not leased (or not read yet): BOX OFFLINE over the stage, under the gear, with the name and why. On the kiosk's
@@ -31,6 +32,24 @@ const TICK_MS = 1_000;
 const JOB_SHOWN_MS = 90_000;
 /** The stake the slider starts on: a short demo. */
 const DEFAULT_HOURS = 3;
+/** localStorage: `1` while the tag is folded to its dot. */
+const FOLDED_KEY = "gamebox-lease-folded";
+
+function readFolded(): boolean {
+  try {
+    return localStorage.getItem(FOLDED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveFolded(folded: boolean): void {
+  try {
+    localStorage.setItem(FOLDED_KEY, folded ? "1" : "0");
+  } catch {
+    // No storage: it stays folded or not until the screen reloads.
+  }
+}
 
 const WHY: Readonly<Record<LeaseStatus["standing"], string>> = {
   none: "This Box has no name yet. Stake GBX to register it and turn it on.",
@@ -72,12 +91,24 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
   let skew = 0;
   const chainNow = (): number => Date.now() / 1000 - skew;
 
-  // --- The tag, beside the gear ---
-  const tag = framed(el("button", "lease-tag"), CHAMFER);
-  tag.type = "button";
+  // --- The tag, under the gear: the dot folds the time away, the time opens the lease ---
+  const tag = el("div", "lease-tag");
   tag.hidden = true;
+  const fold = framed(el("button", "lease-fold"), CHAMFER);
+  fold.type = "button";
+  fold.setAttribute("aria-label", "Show or hide the lease's time left");
+  fold.append(el("i", "lease-dot"));
+  const tagOpen = framed(el("button", "lease-tag-open"), CHAMFER);
+  tagOpen.type = "button";
   const tagTime = el("span", "lease-tag-time");
-  tag.append(el("i", "lease-dot"), el("span", "lease-tag-word", "LEASED"), tagTime);
+  tagOpen.append(el("span", "lease-tag-word", "LEASED"), tagTime);
+  tag.append(fold, tagOpen);
+  setFolded(readFolded());
+
+  function setFolded(folded: boolean): void {
+    tagOpen.hidden = folded;
+    fold.setAttribute("aria-expanded", String(!folded));
+  }
 
   // --- The lease, opened from the tag ---
   const page = el("div", "lease-page");
@@ -261,7 +292,8 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
     if (!status || last?.gate !== "open" || !status.endsAt) return;
     const now = chainNow();
     const rest = status.endsAt - now;
-    tagTime.textContent = clock(rest);
+    // Days over the time, to stay inside the strip.
+    tagTime.textContent = clock(rest).replace(" ", "\n");
     left.textContent = clock(rest);
     const whole = status.startedAt ? status.endsAt - status.startedAt : 0;
     barFill.style.transform = `scaleX(${whole > 0 ? Math.min(1, Math.max(0, rest / whole)) : 0})`;
@@ -296,7 +328,7 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
     if (!page.hidden) return close();
     sound.play("ui-select");
     page.hidden = false;
-    tag.setAttribute("aria-expanded", "true");
+    tagOpen.setAttribute("aria-expanded", "true");
     say(out, "");
     void refresh();
   }
@@ -305,10 +337,16 @@ export function mountLease(host: HTMLElement, sound: Sound): void {
     if (page.hidden) return;
     sound.play("ui-back");
     page.hidden = true;
-    tag.setAttribute("aria-expanded", "false");
+    tagOpen.setAttribute("aria-expanded", "false");
   }
 
-  tag.addEventListener("click", open);
+  tagOpen.addEventListener("click", open);
+  fold.addEventListener("click", () => {
+    const folded = !tagOpen.hidden;
+    sound.play(folded ? "ui-back" : "ui-select");
+    setFolded(folded);
+    saveFolded(folded);
+  });
   page.addEventListener("click", (e) => {
     if (e.target === page) close();
   });

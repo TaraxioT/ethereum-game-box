@@ -1,25 +1,27 @@
-/* The lease (`lease.ts`): a tag beside the gear with the time left; the lease over the stage, its clock glowing over a
+/* The lease (`lease.ts`): a tag under the gear with the time left; the lease over the stage, its clock glowing over a
    bar of what is left and a red slide to unstake; and BOX OFFLINE, framed in alert red, with the stake picker. Glow is
    static; only transform and opacity move. */
 
-/* The tag: a lit dot, LEASED and the clock, right of the gear. */
-.lease-tag {
-  position: fixed; left: 62px; top: 10px; z-index: 10; height: 44px; display: flex; align-items: center; gap: 10px;
-  padding: 0 16px; margin: 0; border: 0; background: none; cursor: pointer; color: var(--fg-2);
-}
+/* The tag: a dot that folds the rest away, and LEASED over the clock. */
+.lease-tag { position: fixed; left: 10px; top: 62px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .lease-tag[hidden] { display: none; }
-.lease-tag > :not(svg, .frame-fill) { position: relative; }
-:is(.lease-tag, .lease-panel, .lease-gate-panel) .frame-fill { position: absolute; inset: 0; background: var(--glass); }
-.lease-tag .frame-line { opacity: 0.55; }
-.lease-tag .frame-bloom { opacity: 0; }
-.lease-tag[aria-expanded="true"] .frame-bloom { opacity: 1; }
-.lease-tag:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
+.lease-fold, .lease-tag-open { position: relative; margin: 0; border: 0; background: none; cursor: pointer; color: var(--fg-2); }
+.lease-fold { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; }
+.lease-tag-open { width: 86px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 9px 0; }
+.lease-tag-open[hidden] { display: none; }
+:is(.lease-fold, .lease-tag-open) > :not(svg, .frame-fill) { position: relative; }
+:is(.lease-fold, .lease-tag-open, .lease-panel, .lease-gate-panel) .frame-fill { position: absolute; inset: 0; background: var(--glass); }
+:is(.lease-fold, .lease-tag-open) .frame-line { opacity: 0.55; }
+:is(.lease-fold, .lease-tag-open) .frame-bloom { opacity: 0; }
+.lease-tag-open[aria-expanded="true"] .frame-bloom { opacity: 1; }
+.lease-fold[aria-expanded="false"] .frame-line { opacity: 0.3; }
+:is(.lease-fold, .lease-tag-open):focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
 .lease-dot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--sys-hot); box-shadow: 0 0 6px var(--sys-glow), 0 0 12px var(--sys-bloom);
   animation: lease-breathe 2.4s ease-in-out infinite;
 }
-.lease-tag-word { font: 700 12px/1 var(--hud-display); letter-spacing: 0.18em; color: var(--sys); }
-.lease-tag-time { font: 600 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.lease-tag-word { font: 700 11px/1 var(--hud-display); letter-spacing: 0.18em; color: var(--sys); }
+.lease-tag-time { font: 600 14px/1.25 var(--mono); white-space: pre-line; text-align: center; font-variant-numeric: tabular-nums; color: var(--fg); }
 @keyframes lease-breathe { 50% { opacity: 0.35; } }
 
 /* The lease: one panel in the middle of the window, fitting the Pi's 1280×720 with no scrolling. */
