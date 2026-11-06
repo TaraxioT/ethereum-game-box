@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BoxEvent, BoxState, Cue, Tx } from "../types.ts";
+import type { BoxEvent, BoxState, Cue, Tx } from "../../core/types.ts";
 import type { SimLink } from "./control.ts";
-import { ANCHOR_AT, BLOCK_MS, blockAt } from "./chain.ts";
-import { createSimLink, END_HOLD_MS, REFUND_DONE_MS } from "./engine.ts";
-import { PAY_MS, SEND_MS } from "./txs.ts";
+import { ANCHOR_AT, BLOCK_MS, blockAt } from "../../core/chain.ts";
+import { END_HOLD_MS, REFUND_DONE_MS } from "../../core/core.ts";
+import { PAY_MS, SEND_MS } from "../../core/txs.ts";
+import { createSimLink } from "./sim.ts";
 
 /** One second after a block, so the first block lands 11 s in. */
 const START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
@@ -19,7 +20,7 @@ beforeEach(() => {
 afterEach(() => {
   link.stop();
   vi.useRealTimers();
-  vi.doUnmock("../../../games/quick-draw/rules.ts");
+  vi.doUnmock("../../games/quick-draw/rules.ts");
   vi.resetModules();
 });
 
@@ -155,14 +156,14 @@ describe("SimLink", () => {
 
   it("returns both stakes on a draw", async () => {
     vi.resetModules();
-    vi.doMock("../../../games/quick-draw/rules.ts", async (importOriginal) => {
-      const original = await importOriginal<typeof import("../../../games/quick-draw/rules.ts")>();
+    vi.doMock("../../games/quick-draw/rules.ts", async (importOriginal) => {
+      const original = await importOriginal<typeof import("../../games/quick-draw/rules.ts")>();
       return {
         ...original,
         rules: { ...original.rules, outcome: (state: { phase: string }) => (state.phase === "done" ? { winner: null } : null) },
       };
     });
-    const { createSimLink: make } = await import("./engine.ts");
+    const { createSimLink: make } = await import("./sim.ts");
     open(make);
     link.setOpponent("hotseat");
     toHome();
@@ -204,7 +205,7 @@ describe("SimLink", () => {
     link.tap(0);
     expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: false });
     until((s) => s.chain.block >= match.refundBlock, 40_000);
-    expect(link.state().stations[0]).toMatchObject({ big: "TAP", bottom: "REFUND" });
+    expect(link.state().stations[0]).toMatchObject({ big: "TAP", small: "to refund" });
     link.tap(0);
     expect(lastTap()).toEqual({ type: "tap", seat: 0, accepted: true });
     link.tap(0);

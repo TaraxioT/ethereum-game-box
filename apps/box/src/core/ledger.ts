@@ -1,19 +1,27 @@
 // The simulated EGB ledger: a balance per badge address, a faucet for badges that can't cover a stake, and the match
-// escrow. Pure: every
-// operation returns a new ledger.
+// escrow. Pure: every operation returns a new ledger. Where it is kept is the host's (LedgerStore).
 import type { Seat } from "@egb/sdk";
+import type { LedgerData, LedgerStore } from "./ports.ts";
 
 /** The faucet tops a badge that can't cover the stake back up to this. */
 export const FAUCET_EGB = 100;
 
-export interface Ledger {
-  /** Whole EGB per address. An address is here once the faucet has paid it. */
-  readonly balances: Readonly<Record<string, number>>;
-  /** EGB held for the open match. */
-  readonly escrow: number;
-}
+/** Whole EGB per address (an address is here once the faucet has paid it), and the EGB held for the open match. */
+export type Ledger = LedgerData;
 
 export const EMPTY_LEDGER: Ledger = { balances: {}, escrow: 0 };
+
+/** A ledger kept in memory only: the demo's, and tests'. */
+export function memoryLedgerStore(initial: Ledger = EMPTY_LEDGER): LedgerStore & { current(): Ledger } {
+  let kept = initial;
+  return {
+    load: () => kept,
+    save(ledger) {
+      kept = ledger;
+    },
+    current: () => kept,
+  };
+}
 
 export function balanceOf(ledger: Ledger, address: string): number {
   return ledger.balances[address] ?? 0;

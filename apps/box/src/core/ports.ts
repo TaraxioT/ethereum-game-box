@@ -1,7 +1,7 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
 import type { Seat, StationView, Transcript, BuiltEvent, Outcome, TapNeed } from "@egb/sdk";
-import type { Badge, GameInfo } from "../screen/link/types.ts";
+import type { Badge, GameInfo } from "./types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };

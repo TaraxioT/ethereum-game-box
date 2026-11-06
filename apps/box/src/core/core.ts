@@ -1,31 +1,38 @@
-// The simulated Box: the phase machine, composed from the catalogue, chain clock, ledger, transactions, stations and
-// bot, behind BoxLink and SimControl. Time comes from Date.now() and timers, so fake timers drive it in tests.
+// The Box's core: the phase machine, composed from the catalogue, chain clock, ledger, transactions and station
+// views, behind BoxLink. It has no DOM, no Node APIs and no clock of its own: everything comes through CorePorts,
+// so SimLink runs it in the browser, the Box server on the Pi, and tests on a fake clock.
+//
+// Taps come in as TapEvents: a `touch`, then `done` or `fail`. A tap is judged at its touch time. A known badge on a
+// tap that needs no roll is acted on at its touch (Quick Draw); a tap that needs the chip's roll, or a chip the roster
+// didn't know yet, waits for its `done`. A tap that touched before the phase changed never reaches the new phase.
+import type { Seat } from "@egb/sdk";
+import { hash32, other, SEATS } from "@egb/sdk";
+import type { CorePorts, TapEvent, TapPlan, TimerHandle } from "./ports.ts";
 import type {
   Badge,
   BoxEvent,
+  BoxLink,
   BoxState,
   Cue,
   GameId,
+  GameInfo,
   Match,
   MatchPlay,
   Phase,
-  PlayableGameId,
   ScreenCommand,
   SeatState,
-} from "../types.ts";
-import type { Opponent, SimLink } from "./control.ts";
-import type { Seat } from "@egb/sdk";
-import { SEATS } from "@egb/sdk";
-import { hash32, mulberry32 } from "@egb/sdk";
-import { rules as quickDraw } from "../../../games/quick-draw/rules.ts";
-import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../../../games/stock-duel/rules.ts";
-import { defaultStake, DEFAULT_FOCUS, GAMES, gameInfo } from "./catalogue.ts";
+  StationView,
+  TeamGameId,
+} from "./types.ts";
+import { rules as quickDraw } from "../games/quick-draw/rules.ts";
+import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
+import { defaultStake, DEFAULT_FOCUS, isTeamGame } from "./catalogue.ts";
 import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
-import { balanceOf, EMPTY_LEDGER, faucet, FAUCET_EGB, lock, refund, settle, type Ledger } from "./ledger.ts";
+import { balanceOf, faucet, FAUCET_EGB, lock, refund, settle, type Ledger } from "./ledger.ts";
 import { createTxBook } from "./txs.ts";
-import { BOT_BADGE, DESK_BADGES } from "./badges.ts";
 import { stationViews, type StationInput } from "./stations.ts";
-import { createBot } from "./bot.ts";
+import { tapPlan } from "./plan.ts";
+import { createTimers } from "./timers.ts";
 
 /** Join waits this long with both seats full before moving on to Stake. */
 export const JOIN_SETTLE_MS = 700;
@@ -42,6 +49,30 @@ export const REFUND_AFTER_BLOCKS = 3;
 /** A refund opens at least this many blocks after the Box missed its settle. */
 export const REFUND_MIN_WAIT_BLOCKS = 2;
 
+/** Who plays Player 2: the bot (the demo) or a person at the second station. */
+export type Opponent = "bot" | "hotseat";
+
+export interface CoreOptions {
+  /** The bot's badge. With the opponent `bot`, Player 2's seat is the bot's alone. Absent: always hot seat. */
+  readonly bot?: Badge;
+}
+
+export interface Core extends BoxLink {
+  /** A tap at a station: `touch`, then exactly one `done` or `fail`, sharing a tap id from `nextTap`. */
+  tap(event: TapEvent): void;
+  /** What the next tap at this seat should ask of the badge. */
+  plan(seat: Seat): TapPlan;
+  /** A fresh tap id. Every source of taps (the stations, injected taps, the demo desk) takes its ids here. */
+  nextTap(): number;
+  opponent(): Opponent;
+  setOpponent(opponent: Opponent): void;
+  /** Off: the Box can't settle the match it is running, so it goes to Refund when the game ends. */
+  power(): boolean;
+  setPower(on: boolean): void;
+  /** Stops every timer. */
+  stop(): void;
+}
+
 type TapResult = "accepted" | "ignored" | "refused";
 
 interface SeatSlot {
@@ -49,15 +80,28 @@ interface SeatSlot {
   signed: boolean;
 }
 
+/** A tap between its touch and its done or fail. */
+interface OpenTap {
+  readonly seat: Seat;
+  readonly at: number;
+  /** The phase change count at the touch: a tap from before the last change is dropped. */
+  readonly epoch: number;
+  /** Already judged at its touch. */
+  acted: boolean;
+}
+
+/** What a tap brings to a game: when the chip touched, and its verified roll when the plan was `random`. */
+interface GameTap {
+  readonly seat: Seat;
+  readonly at: number;
+  readonly roll: number | null;
+}
+
 function sameBadge(a: Badge | null, b: Badge | null): boolean {
   return a !== null && b !== null && a.address === b.address;
 }
 
-function isPlayable(id: GameId): id is PlayableGameId {
-  return id === "quick-draw" || id === "stock-duel";
-}
-
-function startPlay(game: PlayableGameId, seed: number, now: number): MatchPlay {
+function startPlay(game: TeamGameId, seed: number, now: number): MatchPlay {
   return game === "quick-draw"
     ? { game, state: quickDraw.start(seed, now) }
     : { game, state: stockDuel.start(seed, now) };
@@ -98,92 +142,89 @@ function playCues(before: MatchPlay, after: MatchPlay, frontsBefore: readonly (n
   return cues;
 }
 
-function createTimers() {
-  const handles = new Set<ReturnType<typeof setTimeout>>();
-  const intervals = new Set<ReturnType<typeof setInterval>>();
-  return {
-    after(ms: number, run: () => void): ReturnType<typeof setTimeout> {
-      const handle = setTimeout(() => {
-        handles.delete(handle);
-        run();
-      }, ms);
-      handles.add(handle);
-      return handle;
-    },
-    every(ms: number, run: () => void): ReturnType<typeof setInterval> {
-      const handle = setInterval(run, ms);
-      intervals.add(handle);
-      return handle;
-    },
-    cancel(handle: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null): void {
-      if (handle === null) return;
-      clearTimeout(handle);
-      clearInterval(handle);
-      handles.delete(handle);
-      intervals.delete(handle);
-    },
-    clear(): void {
-      for (const handle of handles) clearTimeout(handle);
-      for (const handle of intervals) clearInterval(handle);
-      handles.clear();
-      intervals.clear();
-    },
-  };
+/** One game step: a tick (tap null) or a tap. A Stock Duel tap without its badge's roll changes nothing. */
+function nextPlay(play: MatchPlay, tap: GameTap | null, now: number): MatchPlay {
+  if (play.game === "quick-draw") {
+    const next = quickDraw.step(play.state, tap === null ? { type: "tick", now } : { type: "tap", seat: tap.seat, now: tap.at });
+    return next === play.state ? play : { game: "quick-draw", state: next };
+  }
+  if (tap?.roll === null) return play;
+  const next =
+    tap === null
+      ? stockDuel.step(play.state, { type: "tick", now })
+      : stockDuel.step(play.state, { type: "tap", seat: tap.seat, now: tap.at, roll: tap.roll });
+  return next === play.state ? play : { game: "stock-duel", state: next };
 }
 
-export function createSimLink(options: { seed?: number } = {}): SimLink {
-  const seed = (options.seed ?? Date.now()) >>> 0;
-  const rnd = mulberry32(seed);
-  const timers = createTimers();
+const viewKey = (view: StationView): string => JSON.stringify(view);
+
+export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
+  const { clock } = ports;
+  const bot = options.bot ?? null;
+  const timers = createTimers(clock);
   const listeners = new Set<(state: BoxState, event: BoxEvent) => void>();
+  /** The simulated chain's randomness in [0, 1). */
+  const rnd = (): number => ports.random() / 2 ** 32;
 
   let phase: Phase = "boot";
-  let focus: GameId = DEFAULT_FOCUS;
+  /** Bumped on every phase change: taps that touched before it are dropped. */
+  let epoch = 0;
+  let games: readonly GameInfo[] = ports.library.games();
+  let focus: GameId = games.some((g) => g.id === DEFAULT_FOCUS) ? DEFAULT_FOCUS : (games[0]?.id ?? DEFAULT_FOCUS);
   const seats: [SeatSlot, SeatSlot] = [
     { badge: null, signed: false },
     { badge: null, signed: false },
   ];
-  let stake = defaultStake(gameInfo(DEFAULT_FOCUS));
-  let game: PlayableGameId | null = null;
+  const focused = gameOf(focus);
+  if (!focused) throw new Error("the library has no games");
+  let stake = defaultStake(focused);
+  let game: TeamGameId | null = null;
   let match: Match | null = null;
   let matchCount = 0;
-  let ledger: Ledger = EMPTY_LEDGER;
-  /** Faucet payments signed but not yet in a block, by address. */
+  let ledger: Ledger = ports.ledger.load();
   /** EGB on its way to each address: faucet, payout and refund transactions not yet in a block. */
   const incoming = new Map<string, number>();
   const fauceting = new Set<string>();
   /** Refund transactions sent and not yet landed, by seat. */
   const refunding: [boolean, boolean] = [false, false];
   let openTxId: number | null = null;
-  let opponent: Opponent = "bot";
+  let opponent: Opponent = bot ? "bot" : "hotseat";
   let power = true;
+  const open = new Map<number, OpenTap>();
+  let tapCount = 0;
 
-  const head = blockAt(Date.now());
+  const head = blockAt(clock.now());
   const chain = { block: head.block, blockAt: head.at, gasGwei: firstGas(rnd) };
 
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
-  let joinTimer: ReturnType<typeof setTimeout> | null = null;
-  let tickTimer: ReturnType<typeof setInterval> | null = null;
+  let idleTimer: TimerHandle | null = null;
+  let joinTimer: TimerHandle | null = null;
+  let tickTimer: TimerHandle | null = null;
   let lastFronts: readonly [number | null, number | null] = [null, null];
+  /** What each station was last sent. */
+  const shown: [string, string] = ["", ""];
 
-  const book = createTxBook({
-    step(tx) {
-      emit({ type: "tx", tx });
-      if (tx.id === openTxId && tx.step === "in-block" && tx.block !== null) openMatch(tx.block);
+  const book = createTxBook(
+    {
+      step(tx) {
+        emit({ type: "tx", tx });
+        if (tx.id === openTxId && tx.step === "in-block" && tx.block !== null) openMatch(tx.block);
+      },
+      // A `tx` event for a transaction no longer in `txs` tells the screen it left.
+      drop(tx) {
+        emit({ type: "tx", tx });
+      },
     },
-    // A `tx` event for a transaction no longer in `txs` tells the screen it left.
-    drop(tx) {
-      emit({ type: "tx", tx });
-    },
-  });
+    clock,
+  );
 
-  const bot = createBot({
-    badge: BOT_BADGE,
-    state: () => state,
-    active: () => opponent === "bot",
-    tap: () => press(1, BOT_BADGE),
-    rnd: mulberry32(hash32("bot", seed)),
-  });
+  function gameOf(id: GameId): GameInfo | undefined {
+    return games.find((info) => info.id === id);
+  }
+
+  function setLedger(next: Ledger): void {
+    ledger = next;
+    ports.ledger.save(next);
+  }
 
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
@@ -198,7 +239,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   function snapshot(): BoxState {
     const input: StationInput = {
       phase,
-      games: GAMES,
+      games,
       focus,
       seats: [seatState(0), seatState(1)],
       chain: { block: chain.block, blockAt: chain.blockAt, blockMs: BLOCK_MS, gasGwei: chain.gasGwei },
@@ -206,15 +247,26 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       match,
       txs: book.list(),
     };
-    return { ...input, stations: stationViews(input, Date.now()) };
+    return { ...input, stations: stationViews(input, clock.now()) };
   }
 
   let state = snapshot();
 
+  /** Sends each station its view when it changed. */
+  function showStations(): void {
+    for (const seat of SEATS) {
+      const view = state.stations[seat];
+      const key = viewKey(view);
+      if (key === shown[seat]) continue;
+      shown[seat] = key;
+      ports.stations.show(seat, view);
+    }
+  }
+
   function emit(event: BoxEvent): void {
     state = snapshot();
+    showStations();
     for (const listener of [...listeners]) listener(state, event);
-    bot.update();
   }
 
   function cue(name: Cue): void {
@@ -240,6 +292,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   function setPhase(to: Phase): void {
     const from = phase;
     phase = to;
+    epoch++;
     timers.cancel(joinTimer);
     joinTimer = null;
     if (to === "home" || to === "stake") {
@@ -275,7 +328,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
 
   /** The bot's badge sits only on Player 2's seat, and only while the bot plays; nobody else sits there then. */
   function fits(seat: Seat, badge: Badge): boolean {
-    const isBot = sameBadge(badge, BOT_BADGE);
+    const isBot = sameBadge(badge, bot);
     return opponent === "bot" ? (seat === 1) === isBot : !isBot;
   }
 
@@ -309,7 +362,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     fauceting.add(address);
     owe(address, amount);
     book.submit({ kind: "faucet", seat, direction: "out", amount }, () => {
-      ledger = faucet(ledger, address, amount);
+      setLedger(faucet(ledger, address, amount));
       land(address, amount);
       fauceting.delete(address);
     });
@@ -325,8 +378,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   function takeSeat(seat: Seat, badge: Badge): TapResult {
     if (sameBadge(seats[seat].badge, badge)) return "accepted";
     if (!fits(seat, badge)) return "ignored";
-    const otherSeat: Seat = seat === 0 ? 1 : 0;
-    if (sameBadge(seats[otherSeat].badge, badge)) clearSeat(otherSeat);
+    if (sameBadge(seats[other(seat)].badge, badge)) clearSeat(other(seat));
     seats[seat] = { badge, signed: false };
     emit({ type: "seat", seat });
     fundIfLow(seat, badge);
@@ -352,7 +404,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       const both = addresses();
       const amount = stake;
       openTxId = book.submit({ kind: "open", seat: null, direction: "in", amount: amount * 2 }, () => {
-        ledger = lock(ledger, both, amount);
+        setLedger(lock(ledger, both, amount));
       }).id;
     }
     return "accepted";
@@ -363,7 +415,9 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     if (!game) throw new Error("no game was chosen");
     const [one, two] = addresses();
     const id = ++matchCount;
-    const play = startPlay(game, hash32("match", id, one, two, block), Date.now());
+    const now = clock.now();
+    // The seed takes fresh randomness, so nobody can work out the draw from the seats and the block.
+    const play = startPlay(game, hash32("match", id, one, two, block, ports.random()), now);
     refunding[0] = false;
     refunding[1] = false;
     match = {
@@ -376,43 +430,30 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       outcome: null,
       refunded: [false, false],
     };
-    lastFronts = fronts(play, Date.now());
+    lastFronts = fronts(play, now);
     setPhase("playing");
     cue("boot");
     tickTimer = timers.every(TICK_MS, () => stepGame(null));
     // The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
-    if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - Date.now()), () => stepGame(null));
+    if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - now), () => stepGame(null));
   }
 
   // ── Playing ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-  function nextPlay(play: MatchPlay, tapSeat: Seat | null, now: number): MatchPlay {
-    if (play.game === "quick-draw") {
-      const next = quickDraw.step(play.state, tapSeat === null ? { type: "tick", now } : { type: "tap", seat: tapSeat, now });
-      return next === play.state ? play : { game: "quick-draw", state: next };
-    }
-    // A badge's tap carries its own signed randomness: a fresh uint32 per tap.
-    const next = stockDuel.step(
-      play.state,
-      tapSeat === null ? { type: "tick", now } : { type: "tap", seat: tapSeat, now, roll: Math.floor(rnd() * 2 ** 32) >>> 0 },
-    );
-    return next === play.state ? play : { game: "stock-duel", state: next };
-  }
-
-  /** Steps the game with a tick (tapSeat null) or a tap. Returns whether the game changed. */
-  function stepGame(tapSeat: Seat | null): boolean {
+  /** Steps the game with a tick (tap null) or a tap. Returns whether the game changed. */
+  function stepGame(tap: GameTap | null): boolean {
     if (!match || match.outcome) return false;
-    const now = Date.now();
+    const now = clock.now();
     const before = match.play;
-    const after = nextPlay(before, tapSeat, now);
+    const after = nextPlay(before, tap, now);
     const changed = after !== before;
     const outcome = changed ? outcomeOf(after) : null;
     if (changed) match = { ...match, play: after, outcome };
     const cues = playCues(before, after, lastFronts, now);
     lastFronts = fronts(after, now);
+    if (changed) emit({ type: "game" });
     // The Rolodex turns with the clock, so the stations can change while the game state does not.
-    const stationsMoved = JSON.stringify(snapshot().stations) !== JSON.stringify(state.stations);
-    if (changed || stationsMoved) emit({ type: "game" });
+    else if (JSON.stringify(snapshot().stations) !== JSON.stringify(state.stations)) emit({ type: "stations" });
     for (const name of cues) cue(name);
     if (outcome) {
       timers.cancel(tickTimer);
@@ -437,7 +478,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     const payees = winner === null ? both.map((a) => [a, amount] as const) : [[both[winner], amount * 2] as const];
     for (const [address, sum] of payees) owe(address, sum);
     book.submit({ kind: "settle", seat: winner, direction: "out", amount: amount * 2 }, () => {
-      ledger = settle(ledger, both, amount, winner);
+      setLedger(settle(ledger, both, amount, winner));
       for (const [address, sum] of payees) land(address, sum);
     });
     setPhase("result");
@@ -455,7 +496,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     refunding[seat] = true;
     owe(address, amount);
     book.submit({ kind: "refund", seat, direction: "out", amount }, () => {
-      ledger = refund(ledger, address, amount);
+      setLedger(refund(ledger, address, amount));
       land(address, amount);
       refunding[seat] = false;
       if (!match || match.id !== id) return;
@@ -472,7 +513,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
 
   // ── Taps ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  function handleTap(seat: Seat, badge: Badge): TapResult {
+  function handleTap(seat: Seat, badge: Badge, at: number, roll: number | null): TapResult {
     const seatedHere = sameBadge(seats[seat].badge, badge);
     switch (phase) {
       case "boot":
@@ -488,31 +529,55 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       case "stake":
         return seatedHere ? sign(seat) : "ignored";
       case "playing":
-        return seatedHere && stepGame(seat) ? "accepted" : "ignored";
+        return seatedHere && stepGame({ seat, at, roll }) ? "accepted" : "ignored";
       case "refund":
         return seatedHere ? claimRefund(seat) : "ignored";
     }
   }
 
-  function press(seat: Seat, badge: Badge): void {
-    const result = handleTap(seat, badge);
-    emit({ type: "tap", seat, accepted: result === "accepted" });
+  /** Tells the screen and the station how a tap went: one short buzz for an accepted tap, two for any other. */
+  function report(seat: Seat, result: TapResult): void {
+    const accepted = result === "accepted";
+    ports.stations.buzz(seat, accepted ? "ok" : "no");
+    emit({ type: "tap", seat, accepted });
     emit({ type: "buzz", seat });
-    if (result === "accepted") cue("tap");
+    if (accepted) cue("tap");
     if (result === "refused") cue("error");
   }
 
-  /** With the bot playing, Player 2's seat is the bot's. */
-  function botHolds(seat: Seat): boolean {
-    if (seat !== 1 || opponent !== "bot") return false;
-    const badge = seats[1].badge;
-    return badge === null || sameBadge(badge, BOT_BADGE);
+  function judge(seat: Seat, badge: Badge, at: number, roll: number | null): void {
+    report(seat, handleTap(seat, badge, at, roll));
   }
 
-  function deskBadgeFor(seat: Seat): Badge | null {
-    const seated = seats[seat].badge;
-    if (seated) return seated;
-    return DESK_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
+  function tap(event: TapEvent): void {
+    switch (event.phase) {
+      case "touch": {
+        const entry: OpenTap = { seat: event.seat, at: event.at, epoch, acted: false };
+        open.set(event.tap, entry);
+        // Judged by its touch: a known badge whose tap needs no roll is acted on now, not when the chip answers.
+        if (event.badge && tapPlan(state, event.seat) !== "random") {
+          entry.acted = true;
+          judge(event.seat, event.badge, event.at, null);
+        }
+        return;
+      }
+      case "done": {
+        const entry = open.get(event.tap);
+        open.delete(event.tap);
+        if (!entry || entry.acted) return;
+        // A tap that began before the phase changed (a stake tap whose chip answered after the match opened) would
+        // land in a phase it was never meant for.
+        if (entry.epoch !== epoch) return report(entry.seat, "ignored");
+        judge(entry.seat, event.badge, entry.at, event.roll);
+        return;
+      }
+      case "fail": {
+        const entry = open.get(event.tap);
+        open.delete(event.tap);
+        if (entry && !entry.acted) report(entry.seat, "ignored");
+        return;
+      }
+    }
   }
 
   // ── Screen commands ───────────────────────────────────────────────────────────────────────────────────────────
@@ -527,13 +592,13 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
         if (phase === "attract") setPhase("home");
         return;
       case "focus":
-        if (phase !== "home" || cmd.game === focus || !GAMES.some((info) => info.id === cmd.game)) return;
+        if (phase !== "home" || cmd.game === focus || !gameOf(cmd.game)) return;
         focus = cmd.game;
         emit({ type: "focus", game: focus });
         return;
       case "play": {
-        const info = gameInfo(focus);
-        if (phase !== "home" || !info.ready || !isPlayable(info.id)) return;
+        const info = gameOf(focus);
+        if (phase !== "home" || !info?.ready || !isTeamGame(info.id)) return;
         game = info.id;
         if (!info.stakes.includes(stake)) {
           stake = defaultStake(info);
@@ -544,7 +609,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       }
       case "stake":
         if (phase !== "stake" || !nobodySigned() || cmd.amount === stake) return;
-        if (!game || !gameInfo(game).stakes.includes(cmd.amount)) return;
+        if (!game || !gameOf(game)?.stakes.includes(cmd.amount)) return;
         stake = cmd.amount;
         emit({ type: "stake", amount: stake });
         fundSeats();
@@ -569,11 +634,11 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   // ── The clock ─────────────────────────────────────────────────────────────────────────────────────────────────
 
   function scheduleBlock(): void {
-    const now = Date.now();
+    const now = clock.now();
     timers.after(nextBlockAt(now) - now, () => {
       // The next block is armed first, so nothing a block sets off can stop the chain.
       scheduleBlock();
-      const sealed = blockAt(Date.now());
+      const sealed = blockAt(clock.now());
       if (sealed.block > chain.block) {
         chain.block = sealed.block;
         chain.blockAt = sealed.at;
@@ -596,10 +661,17 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     emit({ type: "gas", gwei: gas });
   });
 
+  const unwatchLibrary = ports.library.subscribe(() => {
+    games = ports.library.games();
+    if (!gameOf(focus) && games[0]) focus = games[0].id;
+    emit({ type: "games" });
+  });
+
+  showStations();
+
   return {
-    badges: [...DESK_BADGES, BOT_BADGE],
-    botBadge: BOT_BADGE,
     state: () => state,
+    now: () => clock.now(),
     subscribe(listener) {
       listeners.add(listener);
       return () => {
@@ -607,20 +679,17 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
       };
     },
     send: command,
-    tap(seat, badge) {
-      if (botHolds(seat)) return;
-      const chosen = badge ?? deskBadgeFor(seat);
-      if (chosen) press(seat, chosen);
-    },
+    tap,
+    plan: (seat) => tapPlan(state, seat),
+    nextTap: () => ++tapCount,
     opponent: () => opponent,
     setOpponent(next) {
-      if (next === opponent) return;
+      if (next === opponent || (next === "bot" && !bot)) return;
       opponent = next;
       if (outsideMatch()) {
         fitSeatsToOpponent();
         if (phase === "stake" && !bothSeated()) setPhase("join");
       }
-      bot.update();
     },
     power: () => power,
     setPower(on) {
@@ -629,7 +698,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
     stop() {
       timers.clear();
       book.stop();
-      bot.stop();
+      unwatchLibrary();
     },
   };
 }

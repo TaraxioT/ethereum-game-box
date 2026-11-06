@@ -6,7 +6,9 @@
     "dev": "vite",
     "dev:box": "VITE_EGB_MODE=box vite",
     "build": "vite build",
+    "build:box": "VITE_EGB_MODE=box vite build",
     "preview": "vite preview",
+    "start": "node src/server/main.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json && tsc -p tsconfig.server.json",
     "test": "vitest run"
   },

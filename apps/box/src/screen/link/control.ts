@@ -1,8 +1,9 @@
 // The simulated Box's hardware side: what the drawn tap stations, the badges and the DEMO plate drive. It is not
 // part of BoxLink: on a real Box, taps come from the stations and nobody can cut the power from the screen.
-import type { Badge, BoxLink, Seat } from "../types.ts";
+import type { Opponent } from "../../core/core.ts";
+import type { Badge, BoxLink, Seat } from "../../core/types.ts";
 
-export type Opponent = "bot" | "hotseat";
+export type { Opponent };
 
 export interface SimControl {
   /** The badges lying on the desk, plus the bot's. */

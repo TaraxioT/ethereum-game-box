@@ -5,5 +5,7 @@
     "types": [],
     "erasableSyntaxOnly": true
   },
-  "include": ["src/core"]
+  "include": ["src/core"],
+  // The hosts' real clock is the one file here that touches timers; anything in the core that imports it fails.
+  "exclude": ["src/core/system-clock.ts"]
 }

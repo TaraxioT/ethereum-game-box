@@ -1,6 +1,6 @@
 // A seat's panel on a page: a bevelled gunmetal module in the seat's colour with a socket, the badge's blockie and
 // name, and one status line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Lit when the story is about this seat.
-import type { Seat, SeatState } from "../link/types.ts";
+import type { Seat, SeatState } from "../../core/types.ts";
 import { blockieSvg } from "../parts/blockie.ts";
 import { el, play } from "../shell/dom.ts";
 

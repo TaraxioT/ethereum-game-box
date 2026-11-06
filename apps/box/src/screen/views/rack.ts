@@ -1,6 +1,6 @@
 // The cartridge rack: one keycap cartridge per game, standing in its housing along the bottom of the board. Home
 // focuses one; attract shows them idle.
-import type { GameId, GameInfo } from "../link/types.ts";
+import type { GameId, GameInfo } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { EgbCart } from "../parts/cart.ts";
 import { el, place, play } from "../shell/dom.ts";

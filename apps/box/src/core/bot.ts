@@ -1,7 +1,8 @@
 // The bot on Player 2's seat. A pure planner says what the bot is waiting to do and how long a person would take to
-// do it; a small scheduler turns that into one timed tap at a time.
-import type { Badge, BoxState } from "../types.ts";
-import { frontRemainingMs } from "../../../games/stock-duel/rules.ts";
+// do it; a small scheduler on the core's clock turns that into one timed tap at a time.
+import type { Badge, BoxState } from "./types.ts";
+import type { Clock, TimerHandle } from "./ports.ts";
+import { frontRemainingMs } from "../games/stock-duel/rules.ts";
 
 export const BOT_SEAT = 1;
 
@@ -95,6 +96,7 @@ export interface BotDriver {
 
 export interface BotDeps {
   readonly badge: Badge;
+  readonly clock: Clock;
   state(): BoxState;
   /** false: the bot sits out (hot seat). */
   active(): boolean;
@@ -103,16 +105,17 @@ export interface BotDeps {
 }
 
 export function createBot(deps: BotDeps): BotDriver {
+  const { clock } = deps;
   let planned: string | null = null;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let timer: TimerHandle | null = null;
 
   function cancel(): void {
-    if (timer !== null) clearTimeout(timer);
+    clock.cancel(timer);
     timer = null;
   }
 
   function current(): BotIntent | null {
-    return deps.active() ? botIntent(deps.state(), Date.now(), deps.badge) : null;
+    return deps.active() ? botIntent(deps.state(), clock.now(), deps.badge) : null;
   }
 
   return {
@@ -124,10 +127,10 @@ export function createBot(deps: BotDeps): BotDriver {
       if (!intent) return;
       const delay = botDelay(intent, deps.rnd);
       if (delay === null) return;
-      timer = setTimeout(() => {
+      timer = clock.after(delay, () => {
         timer = null;
         if (current()?.key === intent.key) deps.tap();
-      }, delay);
+      });
     },
     stop() {
       cancel();

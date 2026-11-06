@@ -1,8 +1,8 @@
 // The badges lying on the desk: NFC cards with a chip, the badge's blockie and its name. Drag one (mouse or touch)
 // onto a puck and it taps there, then slides home; dropped anywhere else it springs back. A seated badge wears a
 // seat-colour lamp.
-import type { SimControl } from "../link/sim/control.ts";
-import type { Badge, BoxState } from "../link/types.ts";
+import type { SimControl } from "../link/control.ts";
+import type { Badge, BoxState } from "../../core/types.ts";
 import { blockieSvg } from "../parts/blockie.ts";
 import { calm, el } from "../shell/dom.ts";
 import type { Puck } from "./puck.ts";

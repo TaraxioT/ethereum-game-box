@@ -173,7 +173,7 @@
 .dk-oled {
   position: relative;
   width: var(--oled-w, 96px);
-  height: calc(var(--oled-w, 96px) / 2);
+  height: calc(var(--oled-w, 96px) * 40 / 72);
   border-radius: 2px;
   background: #020306;
   box-shadow: 0 0 0 2px #0c0e15, 0 0 0 3px rgb(255 255 255 / 0.06), 0 2px 4px rgb(0 0 0 / 0.7);

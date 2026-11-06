@@ -1,17 +1,20 @@
 // The one interface between the screen and the Box. The screen reads `BoxState`, hears `BoxEvent`s and sends
-// `ScreenCommand`s; whatever runs the Box (the simulated one today, the Box server later) sits behind `BoxLink`.
-import type { Seat } from "@egb/sdk";
-import type { QuickDrawState } from "../../games/quick-draw/types.ts";
-import type { StockDuelState } from "../../games/stock-duel/types.ts";
+// `ScreenCommand`s; whatever runs the Box (SimLink in the demo, LiveLink to the Box server) sits behind `BoxLink`.
+import type { Seat, StationView } from "@egb/sdk";
+import type { QuickDrawState } from "../games/quick-draw/types.ts";
+import type { StockDuelState } from "../games/stock-duel/types.ts";
 
-export type { Seat };
+export type { Seat, StationView };
 
-export type GameId = "quick-draw" | "stock-duel" | "bet-on-x" | "b17";
-/** The games the Box can run today. */
-export type PlayableGameId = "quick-draw" | "stock-duel";
+/** A game's id: lower-case words joined by `-` (a team game's, or a built game's folder). */
+export type GameId = string;
+/** The games whose rules run in the core. */
+export type TeamGameId = "quick-draw" | "stock-duel";
 
 export interface GameInfo {
   readonly id: GameId;
+  /** `team`: shipped with the Box. `built`: made by the game builder, its rules in a sandboxed child process. */
+  readonly kind: "team" | "built";
   readonly title: string;
   readonly players: number;
   /** A typical match, in minutes. */
@@ -21,6 +24,8 @@ export interface GameInfo {
   readonly tier: "refereed" | "verified";
   /** false: sealed on Home with a SOON plate; Play stays dark. */
   readonly ready: boolean;
+  /** A built game's cartridge art (its icon.svg, served by the Box). null: a team game's art is the cartridge's own. */
+  readonly icon: string | null;
 }
 
 export interface Badge {
@@ -74,7 +79,7 @@ export type MatchPlay =
 
 export interface Match {
   readonly id: number;
-  readonly game: PlayableGameId;
+  readonly game: TeamGameId;
   /** EGB per seat. */
   readonly stake: number;
   /** The block the match opened in, and the block after which either seat may take its stake back. */
@@ -85,13 +90,6 @@ export interface Match {
   readonly outcome: { readonly winner: Seat | null } | null;
   /** Each seat has taken its stake back (Refund). */
   readonly refunded: readonly [boolean, boolean];
-}
-
-/** What a tap station's 128×64 OLED shows: a small top line, a big middle and a small bottom line. */
-export interface StationView {
-  readonly top: string;
-  readonly big: string;
-  readonly bottom: string;
 }
 
 export type Phase =
@@ -115,6 +113,7 @@ export interface BoxState {
   readonly match: Match | null;
   /** Transactions still on screen, newest last. */
   readonly txs: readonly Tx[];
+  /** What each tap station's OLED shows (`@egb/sdk`'s model: tag, big, small and the tap overrides). */
   readonly stations: readonly [StationView, StationView];
 }
 
@@ -133,6 +132,10 @@ export type BoxEvent =
   | { readonly type: "stake"; readonly amount: number }
   | { readonly type: "tx"; readonly tx: Tx }
   | { readonly type: "game" }
+  /** Only the stations' views moved, with the clock (Stock Duel's Rolodex turning): nothing on the screen animates. */
+  | { readonly type: "stations" }
+  /** The library changed: a game was installed or removed. */
+  | { readonly type: "games" }
   | { readonly type: "buzz"; readonly seat: Seat }
   | { readonly type: "cue"; readonly cue: Cue };
 
@@ -151,6 +154,8 @@ export type ScreenCommand =
 
 export interface BoxLink {
   state(): BoxState;
+  /** The Box's clock (ms since the epoch). Views time their animations by it, never by the screen's own clock. */
+  now(): number;
   subscribe(listener: (state: BoxState, event: BoxEvent) => void): () => void;
   send(command: ScreenCommand): void;
 }

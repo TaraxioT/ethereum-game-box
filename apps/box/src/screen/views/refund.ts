@@ -1,7 +1,7 @@
 // Refund: the Box missed its settle, so the escrow's safety net opens. The match waits out its timeout in blocks;
 // then each player taps to take their own stake back (a transaction each), or REFUND ALL sends whatever is still
 // owed: a refund always pays the stake's owner, whoever asks. Both refunded, the Box goes Home.
-import type { BoxState } from "../link/types.ts";
+import type { BoxState } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPlate } from "../parts/plate.ts";

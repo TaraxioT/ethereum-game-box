@@ -1,7 +1,7 @@
 // The keyboard stands in for the stations: A taps Player 1, L taps Player 2. Held keys don't repeat a tap, and
 // typing into a field (or a shortcut with a modifier) never taps.
-import type { SimControl } from "../link/sim/control.ts";
-import type { Seat } from "../link/types.ts";
+import type { SimControl } from "../link/control.ts";
+import type { Seat } from "../../core/types.ts";
 
 const KEYS: Readonly<Record<string, Seat>> = { a: 0, l: 1 };
 

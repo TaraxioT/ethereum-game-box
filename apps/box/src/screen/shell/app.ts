@@ -1,7 +1,7 @@
 // The app: the screen area (the window, less the desk in Demo mode), the stage scaled into it, the machine on the
 // stage and the router in the machine's view layer. It feeds every Box state change to both, rebuilds the stage when
 // the window turns between landscape and portrait, and runs the boot.
-import type { BoxLink } from "../link/types.ts";
+import type { BoxLink } from "../../core/types.ts";
 import type { Sound, ViewContext } from "../views/view.ts";
 import { layoutFor, orientationFor, type Layout } from "./layout.ts";
 import { applyFit, createStage, fit } from "./stage.ts";
@@ -74,13 +74,21 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
   });
   resize();
 
+  /** This screen has shown its boot sequence (or came up on a Box already past it). */
+  let booted = link.state().phase !== "boot";
+
   link.subscribe((state, event) => {
     machine?.update(state, event);
     if (event.type === "cue") sound.play(event.cue);
     if (state.phase !== "boot") router?.update(state, event);
+    // A Box server that restarted under a screen that has already booted starts in boot again: carry it on.
+    else if (booted && event.type === "init") link.send({ type: "booted" });
   });
 
-  if (link.state().phase === "boot" && machine && layout) {
-    void boot(machine, layout, sound).then(() => link.send({ type: "booted" }));
+  if (!booted && machine && layout) {
+    void boot(machine, layout, sound).then(() => {
+      booted = true;
+      link.send({ type: "booted" });
+    });
   }
 }
