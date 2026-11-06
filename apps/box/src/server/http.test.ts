@@ -1,10 +1,13 @@
-import { get } from "node:http";
+import { readdirSync, writeFileSync } from "node:fs";
+import { createServer, get, type Server } from "node:http";
 import { rm } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import { tempDir } from "../builder/forge/test-helpers.ts";
 import { LINK_PATH } from "../core/wire.ts";
-import { loopbackHost, sameOrigin, within } from "./http.ts";
+import { loopbackHost, sameOrigin, sendFile, within } from "./http.ts";
 import { CSP, LAUNCHER_HEADER } from "./security.ts";
 import { busy } from "./api.ts";
 import { PAGE, post, startTestBox, type TestBox } from "./testing.ts";
@@ -117,6 +120,55 @@ describe("the loopback-host and same-origin rules", () => {
     const elsewhere = new WebSocket(`${box.url.replace("http", "ws")}/other`);
     const missing = await new Promise<number>((resolve) => elsewhere.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0)));
     expect(missing).toBe(404);
+  });
+});
+
+describe("sendFile", () => {
+  const LARGE = 8 * 1024 * 1024; // past what a socket's buffers hold, so a transfer is still going when the client leaves
+  const openFiles = () => readdirSync("/dev/fd").length;
+  let server: Server | null = null;
+
+  afterEach(() => {
+    server?.closeAllConnections();
+    server?.close();
+    server = null;
+  });
+
+  /** A server sending a large file to everyone, and each request's send so far. */
+  async function serve(): Promise<{ url: string; sends: Promise<boolean>[] }> {
+    const file = join(tempDir("egb-http-"), "large.bin");
+    writeFileSync(file, Buffer.alloc(LARGE, 7));
+    const sends: Promise<boolean>[] = [];
+    const listening = createServer((_req, res) => void sends.push(sendFile(res, file)));
+    server = listening;
+    await new Promise<void>((done) => listening.listen(0, "127.0.0.1", done));
+    return { url: `http://127.0.0.1:${(listening.address() as AddressInfo).port}/`, sends };
+  }
+
+  function abandon(url: string): Promise<void> {
+    return new Promise((done) => {
+      const req = get(url, (res) =>
+        res.once("data", () => {
+          req.destroy();
+          done();
+        }),
+      );
+      req.on("error", () => {});
+    });
+  }
+
+  it("sends a whole file", async () => {
+    const { url } = await serve();
+    expect((await (await fetch(url)).arrayBuffer()).byteLength).toBe(LARGE);
+    expect((await fetch(url, { method: "HEAD" })).headers.get("content-length")).toBe(String(LARGE));
+  });
+
+  it("lets go of the file when the client leaves part way: a game can abort its own requests at will", async () => {
+    const { url, sends } = await serve();
+    const before = openFiles();
+    for (let i = 0; i < 20; i++) await abandon(url);
+    expect(await Promise.all(sends)).toEqual(Array.from({ length: 20 }, () => true));
+    await vi.waitFor(() => expect(openFiles()).toBeLessThanOrEqual(before));
   });
 });
 

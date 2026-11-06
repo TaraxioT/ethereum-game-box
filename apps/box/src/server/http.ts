@@ -3,6 +3,7 @@ import type http from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
+import { pipeline } from "node:stream/promises";
 
 const MIME: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -66,20 +67,15 @@ export function within(rootDir: string, pathname: string): string | null {
   return file === root || file.startsWith(root + sep) ? file : null;
 }
 
-/** Streams a file if it exists; false when it doesn't (the caller decides what a miss means). */
+/**
+ * Streams a file if it exists; false when it doesn't (the caller decides what a miss means). A client that goes away, or
+ * a read that fails, ends the send: the pipeline closes both ends, so neither the file nor this promise is left open.
+ */
 export async function sendFile(res: http.ServerResponse, file: string, headers: Readonly<Record<string, string>> = {}): Promise<boolean> {
   const info = await stat(file).catch(() => null);
   if (!info?.isFile()) return false;
   res.writeHead(200, { "content-type": mimeOf(file), "content-length": String(info.size), ...headers });
-  await new Promise<void>((done) => {
-    const stream = createReadStream(file);
-    stream.on("error", () => {
-      res.destroy();
-      done();
-    });
-    stream.on("end", done);
-    stream.pipe(res);
-  });
+  await pipeline(createReadStream(file), res).catch(() => {});
   return true;
 }
 
