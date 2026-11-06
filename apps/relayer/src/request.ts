@@ -2,9 +2,11 @@
 // exact call and its gas limit.
 
 import { CREATES_STORAGE_GAS, type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
+import { storePotAddress, storeUsdcAddress } from '@egb/shared/store';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
+import type { Opens } from './pot-opened.ts';
 import { Refusal } from './refusal.ts';
 import { isRevert, revertName } from './revert.ts';
 import { deployedTargets } from './targets.ts';
@@ -18,6 +20,10 @@ export interface Addresses {
   usdc: Address;
   /** `DuelPot`: a match's USDC pot. */
   pot: Address;
+  /** `StorePot` and its stake token, Store USDC (a second `FakeUSDC`): `undefined` until they are deployed, and the store
+   *  routes refuse until then. */
+  storePot: Address | undefined;
+  storeUsdc: Address | undefined;
   /** `Championships`. */
   cups: Address;
   /** `BoxSeats`: player names a Box vouched for. */
@@ -42,6 +48,8 @@ export function deployedAddresses(): Addresses {
     licences: contractAddress('DemoLicences'),
     usdc: contractAddress('FakeUSDC'),
     pot: contractAddress('DuelPot'),
+    storePot: storePotAddress(),
+    storeUsdc: storeUsdcAddress(),
     cups: contractAddress('Championships'),
     seats: contractAddress('BoxSeats'),
     factory: factory.address,
@@ -72,12 +80,16 @@ export interface Call {
   gas: bigint;
   /** Refused for good once sent (a signed digest, or a badge's one drip), until `until` (unix seconds, 0: never). */
   replay?: { key: string; until: number };
+  /** The stake this call opens a pot with: anyone may send it, so this call failing doesn't mean there is no pot. */
+  opens?: Opens;
 }
 
 export interface Prepared extends Call {
   kind: TxKind;
   /** Whom the per-address rate limits count: an `execute`'s `P256Account`, a top-up's player. */
   account?: Address;
+  /** The Box a store pot's rate limit counts. */
+  box?: string;
   /** Refused while a request holding any of these is pending (a label, a badge, a Box nonce or round). */
   locks: string[];
   /** A claim's primary-name call, sent once the claim is in a block. */
@@ -87,10 +99,10 @@ export interface Prepared extends Call {
 /** The limit for a call that creates a resolver or a registry (shared with every other sender). */
 export { CREATES_STORAGE_GAS };
 
-/** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
-export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {
+/** `run()`, with a revert as a 422 named by its contract error. */
+async function refusingReverts<T>(run: () => Promise<T>): Promise<T> {
   try {
-    await ctx.client.call({ account: ctx.relayer, ...call });
+    return await run();
   } catch (error) {
     if (!isRevert(error)) throw error;
     const name = revertName(error);
@@ -98,9 +110,14 @@ export async function simulate(ctx: Context, call: { to: Address; data: Hex; val
   }
 }
 
-/** `eth_estimateGas` plus 50%. */
+/** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
+export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {
+  await refusingReverts(() => ctx.client.call({ account: ctx.relayer, ...call }));
+}
+
+/** `eth_estimateGas` plus 50%. The chain can move on after the `eth_call`, so a revert here is a 422 too. */
 export async function estimatedGas(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<bigint> {
-  const gas = await ctx.client.estimateGas({ account: ctx.relayer, ...call });
+  const gas = await refusingReverts(() => ctx.client.estimateGas({ account: ctx.relayer, ...call }));
   return gas + gas / 2n;
 }
 
