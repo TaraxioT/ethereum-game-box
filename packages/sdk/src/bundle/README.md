@@ -21,6 +21,11 @@ sha256 of the zip, as `0x` hex. Its code is untrusted: it runs only in the kiosk
   `.svg`, `.woff2` or `.mp3`. Folders are fine; `..`, dotfiles, capitals and backslashes aren't.
 - **The manifest:** the fields in plan section 6 and no others, with its layout free. A repeated key is refused, so
   nobody can read one set of instructions while the parser takes another.
+- **Its words:** `title` and `blurb` are printable ASCII on one line, the stations' own alphabet. `verifier.instructions`
+  is printable ASCII and newlines, with at most 4 spaces or newlines in a row. The team's review is the only control on
+  what the judge is told, so what a reader sees must be all there is: no invisible or right-to-left characters, no
+  look-alikes, and no words pushed out of sight. That covers how the words look, not what they say, so they still need
+  reading to the end. `minutes` is the match's time limit, 1 to 30.
 
 ## The one shape
 

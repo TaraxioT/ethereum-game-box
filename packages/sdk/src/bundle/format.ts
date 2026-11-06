@@ -4,6 +4,7 @@
 // pack.ts and read.ts. Its code is untrusted and runs only in the kiosk's sandboxed frame.
 import { isRecord, strayKey } from "../check.ts";
 import { PLAYER_LIMITS, sharedManifestProblems, type TapNeed } from "../manifest.ts";
+import { printable } from "../station.ts";
 
 export const BUNDLE_FORMAT = 1;
 
@@ -21,9 +22,9 @@ export interface BundleManifest {
   readonly format: typeof BUNDLE_FORMAT;
   /** Lower-case words joined by `-`, at most 40 characters. */
   readonly id: string;
-  /** Printed on the cartridge, at most 24 characters. */
+  /** Printed on the cartridge: printable ASCII on one line, at most 24 characters. */
   readonly title: string;
-  /** One sentence, at most 120 characters. */
+  /** One sentence: printable ASCII on one line, at most 120 characters. */
   readonly blurb: string;
   /** How many may join: `min` at least 2, `max` at most 4. */
   readonly players: { readonly min: number; readonly max: number };
@@ -33,7 +34,7 @@ export interface BundleManifest {
   readonly stakes: readonly number[];
   readonly taps: TapNeed;
   readonly verifier: {
-    /** What the AI judge follows, at most 16 KB. */
+    /** What the AI judge follows: printable ASCII and newlines, at most 16 KB, with no long runs of blank space. */
     readonly instructions: string;
   };
 }
@@ -66,6 +67,16 @@ export function nameProblem(name: string): string | null {
   return `${JSON.stringify(name.slice(0, 60))} isn't a name a bundle may hold`;
 }
 
+/**
+ * Whether `text` is all printable ASCII, the stations' own alphabet. The team's review is the only control on what the
+ * judge is told, so what a reader sees must be all there is. This refuses every invisible, bidi and look-alike
+ * character at once: a list of them would never be whole, and would differ with each runtime's Unicode tables.
+ */
+const isPlain = (text: string): boolean => printable(text, text.length) === text;
+
+/** Blank space long enough to push words out of a reader's sight, along the line or down the page. */
+const PADDING = /[ \n]{5}/;
+
 function playersProblem(players: unknown): string | null {
   if (!isRecord(players) || strayKey(players, ["min", "max"]) !== undefined) return "players must be { min, max }";
   const { min, max } = players;
@@ -79,7 +90,9 @@ function verifierProblem(verifier: unknown): string | null {
   if (!isRecord(verifier) || strayKey(verifier, ["instructions"]) !== undefined) return "verifier must be { instructions }";
   const { instructions } = verifier;
   if (typeof instructions !== "string" || instructions.trim() === "") return "verifier.instructions must be a non-empty string";
-  if (new TextEncoder().encode(instructions).length > BUNDLE_LIMITS.instructionsBytes) return `verifier.instructions is over ${BUNDLE_LIMITS.instructionsBytes} bytes`;
+  if (!isPlain(instructions.replaceAll("\n", " "))) return "verifier.instructions must be printable ASCII and newlines";
+  if (PADDING.test(instructions)) return "verifier.instructions has over 4 spaces or newlines in a row";
+  if (instructions.length > BUNDLE_LIMITS.instructionsBytes) return `verifier.instructions is over ${BUNDLE_LIMITS.instructionsBytes} bytes`;
   return null;
 }
 
@@ -92,6 +105,10 @@ export function bundleManifestProblems(value: unknown): string[] {
   if (value.format !== BUNDLE_FORMAT) problems.push(`format must be ${BUNDLE_FORMAT}`);
   // The Box closes the match when this runs out, so it must leave time to play.
   if (typeof value.minutes !== "number" || !(value.minutes >= 1 && value.minutes <= 30)) problems.push("minutes must be 1–30");
+  for (const key of ["title", "blurb"]) {
+    const text = value[key];
+    if (typeof text === "string" && !isPlain(text)) problems.push(`${key} must be printable ASCII on one line`);
+  }
   for (const problem of [playersProblem(value.players), verifierProblem(value.verifier)]) {
     if (problem) problems.push(problem);
   }
