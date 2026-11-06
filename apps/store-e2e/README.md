@@ -16,7 +16,7 @@ and takes about five minutes.
 | The chain | `anvil` as Sepolia: its chain id, Osaka's P-256 precompile and a block a second |
 | The contracts | `StorePot`, Store USDC and a `FakeUSDC`, from forge's build, wired as `DeployStorePot` wires them. The real `GameBoxNames` needs ENS, so a fork, and `StubNames` stands in: `StorePot` still goes through `BoxCheck`, its licence checks and the P-256 precompile |
 | The relayer, the store and the verifier | Their real Workers on `wrangler dev --local`: workerd, Durable Objects, alarms and R2 |
-| The agent | The real container in Docker, started and killed by the verifier as in production. Its one way out is `zg.internal`, through the real outbound handler |
+| The agent | The real container in Docker, started and killed by the verifier as in production. It reaches 0G at `zg.internal`, through the real outbound handler |
 | 0G | The fake (`apps/verifier/test/fake-zg`): the Router, the signature endpoint, the serving contract and Storage. It scripts the agent's turns, so the agent's verdict is what a scenario says |
 | The Box | `apps/box/src/server/main.ts`, its real chain port and `processSigner`, on the fake receiver's stations and a software P-256 key |
 | The kiosk | The built screen in a headless Chromium, with the Pi's flags. Tap Rush's real page runs in its sandboxed frame |
@@ -44,8 +44,8 @@ The ports are 28545 to 28554 (`src/ports.ts`). A run refuses to start if anythin
 3. A changed zip is refused: at the store, at the Box, which seals the game, and at the verifier.
 4. An unlisted hash can't be staked, through the Box or straight on `StorePot`.
 5. The agent's container is killed mid-run, and again on the retry, and each stake goes back to its address.
-6. The agent's shell finds no secret and no way out, Docker holds no secret for its container, and `cannot_judge`
-   refunds.
+6. The agent's shell finds no secret and no way to the internet, Docker holds no secret for its container, and
+   `cannot_judge` refunds.
 7. A forged verdict, one that doesn't add up and one from a wrong key are refused, by the relayer and by `StorePot`.
 8. The agent's own split doesn't add up, and it refunds.
 9. A turn fails the TEE check, and it refunds.
@@ -67,8 +67,11 @@ after an hour away.
 - Real Sepolia, a real `GameBoxNames` and the real deploy script. With no `BoxResults` on anvil, the Box's check of its
   rounds at start can't run, and says so in its log.
 - Real Cloudflare. `wrangler dev` isn't the platform, and its container network isn't either. Its sidecar takes every TCP
-  connection and then drops it, so a bare connect from the agent's shell succeeds here. Scenario 6 needs an answer back to
-  call a way out open.
+  connection to the internet and then drops it, so a bare connect from the agent's shell succeeds here. Scenario 6 needs an
+  answer back to call a way out open.
+- That the container has no way out at all. The sidecar also lets it through to Docker's host, where the fake 0G, the
+  Workers and anvil all answer on Docker Desktop. So scenario 6 shows no way to the internet, and only prints what the host
+  gateway did. Only the deployed Worker can show that the platform has no such route.
 - A killed Worker, unless asked. Scenario 5 kills the container. A run's Durable Object wakes 9 minutes after the Worker
   dies, too long for every run, so `EGB_E2E_SLOW=1` adds the scenario that kills the Worker mid-run, which takes 10 minutes
   more.

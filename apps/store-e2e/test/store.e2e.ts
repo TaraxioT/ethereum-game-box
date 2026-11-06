@@ -21,6 +21,7 @@ import { type RunningBox, ageRounds } from '../src/box.ts';
 import { type Ledger, STATE, ledger, showUsdc, usdc } from '../src/ledger.ts';
 import { BADGES, join, judgedOf, opened, play, sign, stakeAndPlay, toHome } from '../src/match.ts';
 import { outsider } from '../src/outsider.ts';
+import { PORTS } from '../src/ports.ts';
 import { TAP_RUSH, publish, variantOfTapRush } from '../src/publish.ts';
 import { BOX_LABEL, type World, ZG_API_KEY, startWorld } from '../src/world.ts';
 import { RUN_IMAGE_LABEL } from '../src/wrangler.ts';
@@ -40,15 +41,21 @@ const BOX_AGES_MS = 62 * 60_000;
 
 /**
  * What the agent's shell tries, all at once, as a shell call gets 20 seconds. `wrangler dev`'s sidecar takes every TCP
- * connection and then drops it, so a connect proves nothing here: each of these needs an answer. In a plain container with
- * the internet, all four exit 0.
+ * connection to the internet and then drops it, so a connect proves nothing here: each of these needs an answer. In a plain
+ * container with the internet, all four exit 0.
  */
 const WAYS_OUT = [
-  `timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/80; printf "GET / HTTP/1.0\\r\\n\\r\\n" >&3; head -c 1 <&3 | grep -q .'; echo "http 1.1.1.1 exit=$?"`,
+  `timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/80 && printf "GET / HTTP/1.0\\r\\n\\r\\n" >&3 && head -c 1 <&3 | grep -q .'; echo "http 1.1.1.1 exit=$?"`,
   `timeout 8 node -e 'fetch("https://1.1.1.1/").then(() => process.exit(0), () => process.exit(1))'; echo "https 1.1.1.1 exit=$?"`,
   `timeout 5 getent hosts example.com; echo "dns example.com exit=$?"`,
   `timeout 8 node -e 'fetch("https://example.com").then(() => process.exit(0), () => process.exit(1))'; echo "https example.com exit=$?"`,
 ];
+
+/**
+ * The way out this test bed has and the platform shouldn't, so it isn't one of `WAYS_OUT`: the sidecar lets a container
+ * through to Docker's host, where everything on this laptop answers. No run could pass it, so a run reports it.
+ */
+const HOST_PROBE = `timeout 5 bash -c 'exec 3<>/dev/tcp/host.docker.internal/${PORTS.zg} && printf "GET /__fake HTTP/1.0\\r\\n\\r\\n" >&3 && head -c 1 <&3 | grep -q .'; echo "host gateway answered=$?"`;
 
 /** How long the shell stays up after its probes, so a run can read each container from Docker before it goes. */
 const LOOK_SECONDS = 3;
@@ -332,8 +339,8 @@ describe('the game store, end to end', () => {
     expect(record).toMatchObject({ attempts: 2, verdict: { kind: 'failed' } });
   });
 
-  it("gives the agent's shell no secrets and no way out, and refunds when it can't judge", async () => {
-    const probes = WAYS_OUT.map((probe) => `(${probe}) &`).join('\n');
+  it("gives the agent's shell no secrets and no way to the internet, and refunds when it can't judge", async () => {
+    const probes = [...WAYS_OUT, HOST_PROBE].map((probe) => `(${probe}) &`).join('\n');
     await world.zg.script({ shellCommand: `env\n${probes}\nwait\nsleep ${LOOK_SECONDS}` });
     const before = await chain.balances(BADGES);
     const round = await stakeAndPlayFrom();
@@ -353,8 +360,9 @@ describe('the game store, end to end', () => {
     expect(await recordOnStorage(round)).toMatchObject({ attempts: 2, verdict: { kind: 'cannot_judge' } });
 
     const output = String((await world.zg.seen()).shellOutput);
-    say(`from the agent's shell: ${[...output.matchAll(/^.* exit=\d+$/gm)].map(([line]) => line).join('; ')}`);
+    say(`from the agent's shell: ${[...output.matchAll(/^.* (exit|answered)=\d+$/gm)].map(([line]) => line).join('; ')}`);
     expect(allBlocked(output)).toBeNull();
+    expect(output).toMatch(/^host gateway answered=\d+$/m);
     expect(noSecrets(output)).toBeNull();
     const { relayer, verifier, storage } = world.keys;
     const secrets = [relayer.slice(2), verifier.slice(2), storage.slice(2), ZG_API_KEY];
