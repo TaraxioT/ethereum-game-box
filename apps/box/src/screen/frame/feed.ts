@@ -1,6 +1,6 @@
 // What a built game's frame is told, from the Box's state and events. Pure: the view (view.ts) posts what this makes.
 import type { FrameEvent, FrameSeat, GameManifest, ToFrame } from "@egb/sdk";
-import { badgeLabel } from "../../core/badges.ts";
+import { playerLabel } from "../../core/badges.ts";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 
 /** A built game's match as its frame sees it. */
@@ -25,11 +25,11 @@ export const builtMatch: FrameSource = (state) => {
   return manifest ? { id, manifest, state: rules, over: match.outcome !== null } : null;
 };
 
-/** Each seat's badge as the frame names it. */
+/** Each seat's player as the frame names it: its ENS label once read, else the badge's own. */
 export function frameSeats(state: BoxState): readonly [FrameSeat, FrameSeat] {
   const seat = (i: 0 | 1): FrameSeat => {
-    const badge = state.seats[i].badge;
-    return { name: badge ? badgeLabel(badge) : null };
+    const { badge, ens } = state.seats[i];
+    return { name: badge ? playerLabel(badge, ens) : null };
   };
   return [seat(0), seat(1)];
 }

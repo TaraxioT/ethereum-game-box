@@ -3,6 +3,7 @@
 // sent, in a block, confirmed) with its hash and the seconds so far, and a ticker tape crawls along the slab's foot with the
 // chain's own numbers (the block, the gas, the pot). It never shows a stock's numbers: the hands are dealt after.
 // When the stakes are confirmed the opening bell rings, the slab flashes MARKET OPEN and goes.
+import { stakeOf } from "../../core/catalogue.ts";
 import type { BoxState, Tx } from "../../core/types.ts";
 import type { Rect } from "../../screen/shell/layout.ts";
 import { calm, el, place, play, wait } from "../../screen/shell/dom.ts";
@@ -23,8 +24,8 @@ function tapeText(state: BoxState): string {
   const items = [
     `SEPOLIA BLOCK ${block.toLocaleString("en-US")}`,
     `GAS ${gasGwei.toFixed(gasGwei < 10 ? 2 : 1)} GWEI`,
-    `POT ${state.stake * 2} USDC`,
-    `STAKE ${state.stake} USDC × 2`,
+    `POT ${stakeOf(state.playFor, state.stake) * 2} USDC`,
+    `STAKE ${stakeOf(state.playFor, state.stake)} USDC × 2`,
     "OPEN ON THE BELL",
   ];
   return `${items.join("  ▲  ")}  ▲  `;

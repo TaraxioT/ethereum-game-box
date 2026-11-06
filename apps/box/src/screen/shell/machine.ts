@@ -13,6 +13,7 @@ import { drawGrid } from "./grid.ts";
 import { createPackets, type Packets } from "./packets.ts";
 import { LIGHT, type SlotTrace } from "./traces.ts";
 import { el, place } from "./dom.ts";
+import { createEnsTags } from "./ens-tags.ts";
 
 
 export interface MachineView extends Machine {
@@ -80,7 +81,8 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
   stakeChip.className = "stake-chip";
   const txbar = document.createElement("egb-txbar") as EgbTxbar;
   place(txbar, layout.txbar);
-  overlay.append(clock, gauge, stakeChip, txbar);
+  const ensTags = createEnsTags(layout);
+  overlay.append(clock, gauge, stakeChip, txbar, ...ensTags.els);
 
   root.append(grid, dimmer, coreHost, viewLayer, overlay);
 
@@ -164,6 +166,7 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
         if (event.accepted) ports[event.seat].pulse();
         else ports[event.seat].refuse();
       }
+      ensTags.update(state, event, Date.now());
       if (event.type === "tx") {
         onTx(event.tx);
         // Balances move when the money does: the ports show each new read from chain.
@@ -172,7 +175,8 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
       // Written only when it changes: rewriting the same text on every event repainted the chip and the wide tiles
       // under it on each block, gas reading and transaction step.
       const m = state.match;
-      const stake = !m ? "" : m.stake > 0 ? `${m.stake * 2} USDC AT STAKE` : m.playFor === "title" ? "FOR THE TITLE" : m.playFor === "cup" ? "FOR THE CUP" : "FREE PLAY";
+      const mode = m?.playFor === "title" ? " + THE TITLE" : m?.playFor === "cup" ? " + THE CUP" : "";
+      const stake = !m ? "" : m.stake > 0 ? `${m.stake * 2} USDC AT STAKE${mode}` : "FREE PLAY";
       if (stakeChip.textContent !== stake) stakeChip.textContent = stake;
       if (stakeChip.hidden !== !m) stakeChip.hidden = !m;
     },

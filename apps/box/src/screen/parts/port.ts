@@ -10,6 +10,7 @@
 // `set(seat)` draws a seat. A badge arriving rezzes the socket and the name; leaving derezzes the name and drops the
 // socket to 25 %. Changed balance digits flicker in. `pulse()`: the socket's bloom flashes once (a tap). `refuse()`:
 // the module shakes and the socket flashes red (a tap that meant nothing here).
+import { playerName } from "../../core/badges.ts";
 import type { SeatState } from "../../core/types.ts";
 import { blockieLedSvg } from "./blockie.ts";
 import { setDigits } from "./digits.ts";
@@ -143,8 +144,10 @@ export class EgbPort extends HTMLElement {
   set(seat: SeatState): void {
     const address = seat.badge?.address ?? null;
     const first = this.#address === undefined;
-    this.#name.replaceChildren(...nameParts(seat.badge?.name ?? ""));
-    this.#name.title = seat.badge?.name ?? "";
+    // The player's ENS name once read from chain (`nova.gamebox.eth`), else the badge's own label.
+    const name = seat.badge ? playerName(seat.badge, seat.ens) : "";
+    this.#name.replaceChildren(...nameParts(name));
+    this.#name.title = name;
     // A balance not read from chain yet shows as an ellipsis.
     const balance = seat.balance === null ? "…" : seat.balance.toLocaleString("en-US", { maximumFractionDigits: 2 });
     setDigits(this.#num, seat.badge ? balance : "", !first && address === this.#address);

@@ -10,13 +10,14 @@
 //
 // It draws from `state.match.play` and animates the moment each state change brings. The drums follow the clock, so
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.
+import { stakeOf } from "../../core/catalogue.ts";
 import "./stock-duel.css";
 import type { BoxState } from "../../core/types.ts";
 import { shiftPoint, shiftRect, type Layout, type Point, type Rect } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
-import { badgeLabel } from "../../core/badges.ts";
+import { playerLabel, playerName } from "../../core/badges.ts";
 import { el, place } from "../../screen/shell/dom.ts";
 import { SEATS } from "@egb/sdk";
 import { DEAL_MS, frontIndex, frontRemainingMs } from "./rules.ts";
@@ -85,11 +86,12 @@ const PORTRAIT: Geometry = {
   premarket: { x: 130, y: 716, w: 460, h: 300 },
 };
 
-/** Each seat's player as the band shows them: the badge's name, or PLAYER n before a badge sits there. */
+/** Each seat's player as the band shows them: its ENS name (the badge's own until read), or PLAYER n before one sits. */
 function playersOf(state: BoxState): readonly [Player, Player] {
   return SEATS.map((seat): Player => {
     const badge = state.seats[seat]?.badge;
-    return badge ? { name: badge.name, label: badgeLabel(badge) } : { name: `PLAYER ${seat + 1}`, label: `PLAYER ${seat + 1}` };
+    const ens = state.seats[seat]?.ens ?? null;
+    return badge ? { name: playerName(badge, ens), label: playerLabel(badge, ens) } : { name: `PLAYER ${seat + 1}`, label: `PLAYER ${seat + 1}` };
   }) as unknown as readonly [Player, Player];
 }
 
@@ -176,7 +178,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
 
   /** The band's players and stakes, written only when they change. Before the match, the stake being staked. */
   function band(state: BoxState): void {
-    const stake = state.match?.stake ?? (state.phase === "stake" ? state.stake : null);
+    const stake = state.match?.stake ?? (state.phase === "stake" ? stakeOf(state.playFor, state.stake) : null);
     const playFor = state.match?.playFor ?? state.playFor;
     players = playersOf(state);
     const key = `${players[0].name}|${players[1].name}|${stake}|${playFor}`;

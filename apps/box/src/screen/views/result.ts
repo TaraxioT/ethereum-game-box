@@ -11,6 +11,7 @@ import type { EgbPanel } from "../parts/panel.ts";
 import { el, fitFont, place } from "../shell/dom.ts";
 import { rez } from "../shell/rez.ts";
 import { pageLayout } from "./page-layout.ts";
+import { honoursOf } from "../../core/honours.ts";
 import { createSeatPanel } from "./seat-panel.ts";
 
 /** A seat's player name on chain, else its badge's label. */
@@ -64,8 +65,9 @@ export function resultView(ctx: ViewContext): View {
     state.seats.forEach((s, i) => {
       if (m.voided) panels[i]?.set(s, money ? `VOID · ${m.stake} USDC BACK` : "VOID", "done");
       else if (winner === null) panels[i]?.set(s, money ? `DRAW · ${m.stake} USDC BACK` : "DRAW", "done");
-      else if (winner === i) panels[i]?.set(s, money ? `WINNER · +${m.stake * 2} USDC` : m.playFor === "title" ? "WINNER · TAKES THE TITLE" : "WINNER", "win");
+      else if (winner === i) panels[i]?.set(s, money ? `WINNER · +${m.stake * 2} USDC${m.playFor === "title" ? " · TITLE" : ""}` : "WINNER", "win");
       else panels[i]?.set(s, money ? `−${m.stake} USDC` : "LOSE", "lose");
+      panels[i]?.honours(honoursOf(s.ens, state.boards, link.now()));
     });
     const named = winner === null ? null : nameOf(state.seats[winner]);
     bannerText.textContent = m.voided

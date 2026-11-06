@@ -24,6 +24,18 @@ export function badgeLabel(badge: Badge): string {
   return (badge.name.split(".")[0] ?? badge.name).toUpperCase();
 }
 
+/** What the screen and the stations call a player: its ENS label (`NOVA` for `nova.gamebox.eth`) once read from chain,
+ *  else the badge's own label. */
+export function playerLabel(badge: Badge, ens: string | null): string {
+  return ens ? (ens.split(".")[0] ?? ens).toUpperCase() : badgeLabel(badge);
+}
+
+/** A player's name as the screen writes it: the ENS name in full once read (`nova.gamebox.eth`), else the badge's own
+ *  label alone (`nova`), so a `.gamebox.eth` name on screen is always one that resolves. */
+export function playerName(badge: Badge, ens: string | null): string {
+  return ens ?? badgeLabel(badge).toLowerCase();
+}
+
 /** The same badge: both known, with one address. */
 export function sameBadge(a: Badge | null, b: Badge | null): boolean {
   return a !== null && b !== null && a.address === b.address;

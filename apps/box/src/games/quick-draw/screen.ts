@@ -10,6 +10,7 @@
 // stand back to back by the sign, pace ten paces apart as the sign counts them, turn, and each raises a revolver and
 // thumbs its hammer back. A brass wire plate over the sign follows the transaction. The standoff begins when the
 // stakes are confirmed on chain, never before: if that comes before the walk is done, the two hurry to their marks.
+import { stakeOf } from "../../core/catalogue.ts";
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
@@ -202,7 +203,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     if (!open || open.step === "failed") return;
     if (!wireTx || wireTx.id !== open.id) wireSince = Date.now();
     wireTx = open;
-    wireHead.textContent = `${state.stake * 2} USDC GOING INTO THE POT`;
+    wireHead.textContent = `${stakeOf(state.playFor, state.stake) * 2} USDC GOING INTO THE POT`;
     const at = openStepIndex(open);
     stepEls.forEach((item, i) => {
       item.toggleAttribute("done", i <= at);

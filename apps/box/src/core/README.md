@@ -43,18 +43,21 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 
 - **What it's played for** (`playFor`). Play starts every game at its default stake (10 USDC), played for USDC.
   On Stake, `stake` picks 5, 10 or 25 USDC; `play-for` picks the `title` or the `cup` (only while the game's
-  championship is open; one that closes before anyone signs falls back to the title). A title or championship match
-  has no pot and needs no balance: it begins as soon as both sign, and its result alone goes on chain. Every result
+  championship is open; one that closes before anyone signs falls back to the title). The modes stake amounts of
+  their own (`MODE_STAKES`: the title 20 USDC each, the championship 15; `stakeOf`), into the same pot. Every result
   takes the title and scores the open championship, whatever it was played for. The match keeps what it was played
   for (`match.playFor`).
-- **The board** (`board`). The chosen game's title and open championship (in the lobby, the focused game's, or Stock
-  Duel's for a game not on chain), read when Stake, the lobby or the result opens and every `BOARD_MS` (5 s) while it
-  shows; stopped on any other phase.
+- **The boards** (`boards`, and `board`: the chosen game's, in the lobby the focused game's, or Stock Duel's for a
+  game not on chain). Every on-chain game's title and open championship, read together when Stake, the lobby or the
+  result opens and every `BOARD_MS` (5 s) while it shows, and on a tap once the last read is that old.
+- **Names on taps** (`taps`). Each station's last tap by a known badge, with its ENS name: read from chain on the tap
+  if the Box doesn't know it (a `name` event when it lands). `honours.ts` says which titles a name holds and which
+  championships it leads, so the screen shows them with it.
 - **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
   Stake tap whose balance can't cover the stake (or isn't read yet), or with no player name where the port stakes only
   named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
-  badge, with Back returning to Stake. A title or championship match asks only for the name.
-- **Open.** When both seats have signed for USDC, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
+  badge, with Back returning to Stake.
+- **Open.** When both seats have signed, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
   `nextRound`) and the Box waits on Stake until the open is confirmed (the relayer's `done`: a block past the one it is
   in): only then does the match begin. The screen shows the wait in the game's own screen (Quick Draw's walk-out, Stock
   Duel's pre-market), with the open's progress (SIGNED › SENT › IN BLOCK › CONFIRMED, its hash and the seconds so far).
@@ -123,7 +126,7 @@ opens; a result already decided is still sent once its pot lands.
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
-| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `chainLabel`, `gameOfLabel` |
+| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `MODE_STAKES`, `stakeOf`, `chainLabel`, `gameOfLabel` |
 | `txs.ts` | The transactions on screen: signed at once, then each step its chain port reports (sent, in a block, paid, or failed, keeping the hash, block and Etherscan link), `ended` once, then on screen `LINGER_MS` more. | `createTxBook(hooks, clock)` |
 | `demo-chain.ts` | The chain port in memory, for the browser demo and the tests: a head every 12 s, every badge starting with 100 USDC, each transaction sent 0.4 s after it is signed, in the next head, paid 0.9 s later, with no hashes; pots refund after a minute; names, top-ups and a title per game. `sent` lists every request. | `createDemoChain(clock)` |
 | `labels.ts` | The short words badges are named with: the roster's local labels, and the lobby's proposals (a badge's own label first, then `word-NN`), each a valid ENS label. Pure. | `LABELS`, `ownLabel`, `proposeLabel` |

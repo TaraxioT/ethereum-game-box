@@ -159,8 +159,14 @@ on `BoxEvent`s and acts only through `link.send`.
 - `rack.ts`: the rack's entries (`rackOf(games)`: each game's program, then NEW GAME where the Box has the builder)
   and where each stands (`rackSlots`: the layout's slots, each fed by a trace, then on along the row; a row too long
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
+- ENS names: the ports and seat panels print a player's ENS name in full (`nova` bright, `.gamebox.eth` dim) once
+  read, else the badge's label alone, so a `.gamebox.eth` name on screen always resolves; a seat panel adds the title
+  the player holds or the championship they lead, by its own ENS name. `shell/ens-tags.ts`: on Attract and Home a tap
+  shows a card under its port for a few seconds: the ENS name (or `no ENS name yet` and where to claim one) and each
+  title and championship as `champion.stockduel.gamebox.eth → nova.gamebox.eth`. Home's board, the lobby, Stake's plate
+  and Settings write the same mapping.
 - `stake.ts`: what the match is played for, on one row of keys: `BACK`, `5 USDC`, `10 USDC` (lit first), `25 USDC`,
-  `TITLE` and `CUP` (dark while the game has no championship open). The plate under the core says what is on the
+  `TITLE · 20` and `CUP · 15` (dark while the game has no championship open). The plate under the core says what is on the
   line (`play-for.ts`, tested): `WINNER TAKES 20 USDC` and that the win also takes the title and scores the
   championship; `FOR THE STOCK DUEL TITLE` and who holds it; `FOR CUP-1921` with its leader, prize and countdown. It
   follows the board live and counts down every second.

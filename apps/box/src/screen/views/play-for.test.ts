@@ -16,20 +16,18 @@ describe("what Stake's plate says is on the line", () => {
     expect(onTheLine({ stake: 5, playFor: "usdc", board: board({ cup: null }) }, "Stock Duel", NOW).detail).toBe("5 USDC EACH · THE WIN ALSO TAKES THE TITLE");
   });
 
-  it("the title: who holds it, with no USDC", () => {
+  it("the title: its own stake, and the title's ENS name resolving to its holder", () => {
     expect(onTheLine({ stake: 10, playFor: "title", board: board() }, "Stock Duel", NOW)).toEqual({
-      head: "FOR THE STOCK DUEL TITLE",
-      detail: "NOVA HOLDS THE TITLE ×2 · NO USDC STAKED",
+      head: "WINNER TAKES 40 USDC + THE STOCK DUEL TITLE",
+      detail: "20 USDC EACH · champion.stockduel.gamebox.eth → nova.gamebox.eth ×2",
     });
-    expect(onTheLine({ stake: 10, playFor: "title", board: null }, "Stock Duel", NOW).detail).toBe("NOBODY HOLDS THE TITLE YET · NO USDC STAKED");
-    const unnamed = board({ title: { ...title, holder: "0x24aF3b0c0e8D1D0a2bAc7b5d8f1e9a3c6d5e17D4", streak: 1 } });
-    expect(onTheLine({ stake: 10, playFor: "title", board: unnamed }, "Stock Duel", NOW).detail).toBe("0x24aF…17D4 HOLDS THE TITLE · NO USDC STAKED");
+    expect(onTheLine({ stake: 10, playFor: "title", board: null }, "Stock Duel", NOW).detail).toBe("20 USDC EACH · NOBODY HOLDS THE TITLE YET");
   });
 
-  it("the championship: its leader, prize and countdown, until it closes", () => {
+  it("the championship: its own stake, its ENS name resolving to the leader, the prize and countdown, until it closes", () => {
     expect(onTheLine({ stake: 10, playFor: "cup", board: board() }, "Stock Duel", NOW)).toEqual({
-      head: "FOR CUP-1921",
-      detail: "WIN 3 · DRAW 1 · ORBIT LEADS · 6 PTS · 50 USDC PRIZE · 03:12 LEFT",
+      head: "WINNER TAKES 30 USDC + 3 PTS IN CUP-1921",
+      detail: "15 USDC EACH · cup-1921.stockduel.gamebox.eth → orbit.gamebox.eth · 6 PTS · 50 USDC PRIZE · 03:12 LEFT",
     });
     expect(onTheLine({ stake: 10, playFor: "cup", board: board() }, "Stock Duel", cup.ends).head).toBe("THE CHAMPIONSHIP HAS CLOSED");
   });

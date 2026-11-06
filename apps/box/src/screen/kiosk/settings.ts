@@ -242,17 +242,19 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     const t = g.title;
     const term = `TERM ${formatSeconds(g.titleTerm).toUpperCase()}`;
     if (!t.holder) return line("TITLE", "NOBODY YET · WIN A MATCH", term, "none");
-    const who = `${playerWord(t.holderName, t.holder)}${t.streak > 1 ? ` ×${t.streak}` : ""}`;
-    if (t.expiry <= now) return line("TITLE", `${who} · LAPSED, UP FOR GRABS`, term, "none");
-    return line("TITLE", who, `${timeLeft(t.expiry - now)} LEFT`, "live");
+    if (t.expiry <= now) return line("TITLE", `${playerWord(t.holderName, t.holder)} · LAPSED, UP FOR GRABS`, term, "none");
+    // The title's ENS name resolves to its holder's.
+    const map = `${t.name} → ${t.holderName ?? t.holder}${t.streak > 1 ? ` ×${t.streak}` : ""}`;
+    return line("TITLE", map, `${timeLeft(t.expiry - now)} LEFT`, "live");
   }
 
   function cupLine(g: AdminGame, view: AdminView, jobs: readonly AdminJob[], now: number): HTMLElement {
     const job = jobFor(jobs, g.label);
     const c = view.cups.find((cup) => cup.game === g.label && !cup.closed);
     if (!c) return job ? line("CUP", "OPENING…", `${job.steps.length} TX SENT`, "done") : line("CUP", "NONE OPEN", "", "none");
-    const leader = c.leader ? `${playerWord(c.leader.name, c.leader.address)} LEADS · ${c.leader.points} PTS` : "NO RESULTS YET";
-    const what = `${c.label.toUpperCase()} · ${leader}${c.prize === "0" ? "" : ` · ${c.prize} USDC`}`;
+    // The championship's ENS name resolves to its leader's.
+    const leader = c.leader ? `${c.name} → ${c.leader.name ?? c.leader.address} · ${c.leader.points} PTS` : `${c.name} · NO RESULTS YET`;
+    const what = `${leader}${c.prize === "0" ? "" : ` · ${c.prize} USDC`}`;
     if (c.ends > now) return line("CUP", what, `${timeLeft(c.ends - now)} LEFT`, "live");
     if (job) return line("CUP", what, "CLOSING…", "done");
     return line("CUP", what, "ENDED", "done", key("CLOSE & PAY", () => void act(closeCup(c.game)), "set-key set-go"));

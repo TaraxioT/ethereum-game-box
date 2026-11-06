@@ -1,6 +1,6 @@
 // The team games in the Box's rack, in rack order, and the one Home focuses first. Built games join them through
 // the library port.
-import type { GameId, GameInfo, TeamGameId } from "./types.ts";
+import type { GameId, GameInfo, PlayFor, TeamGameId } from "./types.ts";
 import type { LibraryPort } from "./ports.ts";
 
 const team = (info: Omit<GameInfo, "kind" | "icon" | "sealed" | "manifest">): GameInfo => ({ ...info, kind: "team", sealed: null, icon: null, manifest: null });
@@ -35,6 +35,14 @@ export function gameOfLabel(label: string): GameInfo | null {
 /** A game whose rules run in the core. */
 export function isTeamGame(id: GameId): id is TeamGameId {
   return id === "quick-draw" || id === "stock-duel";
+}
+
+/** What a title match and a championship match stake each, in USDC: amounts of their own, apart from the USDC choices. */
+export const MODE_STAKES: Readonly<Record<Exclude<PlayFor, "usdc">, number>> = { title: 20, cup: 15 };
+
+/** What each seat stakes for a match played for `playFor`: the chosen USDC stake, or the mode's own. */
+export function stakeOf(playFor: PlayFor, stake: number): number {
+  return playFor === "usdc" ? stake : MODE_STAKES[playFor];
 }
 
 /** The stake a game offers first: its middle choice. */

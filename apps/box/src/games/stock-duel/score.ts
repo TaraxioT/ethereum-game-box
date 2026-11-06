@@ -76,15 +76,15 @@ export function createStanding(places: StandingPlaces): Standing {
     els: [...plates.map((p) => p.plate), mid, banner],
     players(players, stake, playFor) {
       names = players;
-      const money = playFor === "usdc" && stake !== null;
+      const money = stake !== null && stake > 0;
       plates.forEach((p, seat) => {
         const name = players[seat]?.name ?? "";
         if (p.name.textContent !== name) p.name.textContent = name;
         p.stake.replaceChildren(...(money ? ["STAKE ", el("em", "", `${stake} USDC`)] : []));
       });
       pot.hidden = stake === null;
-      potLabel.textContent = money ? "POT" : "FOR";
-      potText.textContent = stake === null ? "" : money ? `${stake * 2} USDC` : playFor === "cup" ? "THE CUP" : "THE TITLE";
+      potLabel.textContent = playFor === "title" ? "TITLE POT" : playFor === "cup" ? "CUP POT" : "POT";
+      potText.textContent = stake === null ? "" : `${stake * 2} USDC`;
     },
     set(next, round, animate) {
       score = next;

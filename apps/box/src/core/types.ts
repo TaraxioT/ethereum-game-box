@@ -111,9 +111,9 @@ export type MatchPlay =
   | BuiltPlay;
 
 /**
- * What a match is played for. `usdc`: both stake `BoxState.stake` and the winner takes the pot. `title`: no money, the
- * game's title on the line. `cup`: no money, points in the game's open championship. Every result on chain takes the
- * title and scores the open championship whatever it was played for: `title` and `cup` only leave the USDC out.
+ * What a match is played for. `usdc`: both stake `BoxState.stake`. `title` and `cup`: both stake the mode's own amount
+ * (`MODE_STAKES`), the title or the open championship named as what is on the line. The winner takes the pot either
+ * way, and every result on chain takes the title and scores the open championship, whatever it was played for.
  */
 export type PlayFor = "usdc" | "title" | "cup";
 
@@ -139,6 +139,17 @@ export interface Match {
   readonly refunded: readonly [boolean, boolean];
   /** What the result did, read from chain after its receipt ("+20 USDC", the title, the championship); null before. */
   readonly lines: readonly string[] | null;
+}
+
+/** The badge a station read last, and its ENS name: the screen names whoever taps, wherever they tap. */
+export interface TapCard {
+  readonly badge: Badge;
+  /** Its player name on chain (`nova.gamebox.eth`), or null: none, or not read yet. */
+  readonly ens: string | null;
+  /** Whether its name has been read from chain (false: `ens` null means not read yet). */
+  readonly read: boolean;
+  /** When it tapped (Box ms). */
+  readonly at: number;
 }
 
 /** A badge's card in the lobby, read from chain. */
@@ -214,6 +225,11 @@ export interface BoxState {
    * and again every few seconds while one shows; null before the first read, or for a game that isn't on chain.
    */
   readonly board: Board | null;
+  /** Every on-chain game's title and championship, by game, as last read (on those screens and on each badge's tap):
+   *  what a badge holds shows with its name. */
+  readonly boards: Readonly<Record<GameId, Board>>;
+  /** Each station's last tap by a known badge, with its ENS name. */
+  readonly taps: readonly [TapCard | null, TapCard | null];
   readonly match: Match | null;
   /** Transactions still on screen, newest last. */
   readonly txs: readonly Tx[];
@@ -274,6 +290,8 @@ export type BoxEvent =
   | { readonly type: "games" }
   /** The lobby's badge, card or proposal changed. */
   | { readonly type: "lobby" }
+  /** A tapped badge's ENS name was read. */
+  | { readonly type: "name"; readonly address: `0x${string}` }
   /** The game's title or championship was read again. */
   | { readonly type: "board" }
   /** What the next match is played for changed. */
@@ -289,7 +307,7 @@ export type ScreenCommand =
   | { readonly type: "play" } // Play on Home
   /** A USDC stake: the match is played for USDC. */
   | { readonly type: "stake"; readonly amount: number }
-  /** Play for the title or the open championship, with no USDC. */
+  /** Play for the title or the open championship, at the mode's own stake. */
   | { readonly type: "play-for"; readonly target: Exclude<PlayFor, "usdc"> }
   | { readonly type: "back" }
   | { readonly type: "rematch" }

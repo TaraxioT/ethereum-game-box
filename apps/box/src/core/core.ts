@@ -37,6 +37,7 @@ import type {
   ScreenCommand,
   SeatState,
   StationView,
+  TapCard,
   TapMeaning,
   TeamGameId,
   Tx,
@@ -45,7 +46,7 @@ import { rules as quickDraw } from "../games/quick-draw/rules.ts";
 import type { QuickDrawEvent } from "../games/quick-draw/types.ts";
 import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
-import { defaultStake, DEFAULT_FOCUS, isTeamGame } from "./catalogue.ts";
+import { defaultStake, DEFAULT_FOCUS, isTeamGame, stakeOf } from "./catalogue.ts";
 import { transcriptOf } from "./transcript.ts";
 import { createTxBook, type TxOrder } from "./txs.ts";
 import { proposeLabel } from "./labels.ts";
@@ -243,9 +244,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   if (!focused) throw new Error("the library has no games");
   let stake = defaultStake(focused);
   let playFor: PlayFor = "usdc";
-  /** The chosen (else focused) game's title and championship, as last read; null for a game off chain. */
-  let board: Board | null = null;
+  /** Each on-chain game's title and championship, as last read, and when the last read began (Box ms). */
+  let boards: Readonly<Record<GameId, Board>> = {};
+  let boardsAt = Number.NEGATIVE_INFINITY;
   let boardTimer: TimerHandle | null = null;
+  /** Each station's last tap by a known badge. */
+  const lastTaps: [{ badge: Badge; at: number } | null, { badge: Badge; at: number } | null] = [null, null];
   let game: GameId | null = null;
   /** The running built game's rules, through the runner; null for a team game or none. */
   let built: BuiltDriver | null = null;
@@ -318,6 +322,13 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     };
   }
 
+  function tapCard(seat: Seat): TapCard | null {
+    const last = lastTaps[seat];
+    if (!last) return null;
+    const { address } = last.badge;
+    return { badge: last.badge, ens: names.get(address) ?? null, read: names.has(address), at: last.at };
+  }
+
   function snapshot(): BoxState {
     const input: StationInput = {
       phase,
@@ -327,7 +338,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       chain: { block: head.block, blockAt: head.at, blockMs: BLOCK_MS, gasGwei: head.gasGwei },
       stake,
       playFor,
-      board,
+      board: currentBoard(),
+      boards,
+      taps: [tapCard(0), tapCard(1)],
       match,
       txs: book.list(),
       lobby,
@@ -462,6 +475,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           emit({ type: "lobby" });
         }
         for (const seat of SEATS) if (sameBadge(seats[seat].badge, badge)) emit({ type: "seat", seat });
+        if (lastTaps.some((last) => sameBadge(last?.badge ?? null, badge))) emit({ type: "name", address: badge.address });
       },
       // Unread for now: the seat shows no balance, and the next read tries again.
       () => {},
@@ -512,7 +526,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     // sent to the lobby to top up or claim one.
     const balance = balances.get(mine.badge.address);
     const nameless = port.stakeNeedsName && !names.get(mine.badge.address);
-    const short = playFor === "usdc" && (balance === undefined || balance < stake);
+    const short = balance === undefined || balance < stakeOf(playFor, stake);
     if (staked() && (short || nameless)) {
       openLobby(mine.badge, "stake");
       return "refused";
@@ -537,9 +551,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const id = ++matchCount;
     if (!port.onChain(chosen)) return beginMatch(id, chosen, badges, 0, 0);
     const round = port.nextRound();
-    // The title and the championship are played for with no pot: the result alone goes on chain.
-    if (playFor !== "usdc") return beginMatch(id, chosen, badges, round, 0);
-    const amount = stake;
+    const amount = stakeOf(playFor, stake);
     const waiting = epoch;
     let begun = false;
     send(
@@ -739,7 +751,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     }
     const current = match;
     if (port.onChain(current.game) && !current.voided) {
-      // The match began only once its pot was confirmed (or has none), so the result settles a pot that is there.
+      // The match began only once its pot was confirmed, so the result settles a pot that is there.
       settle(current, { round: current.round, game: current.game, badges: addresses(), winner });
     }
     setPhase("result");
@@ -824,7 +836,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return "card";
   }
 
-  // ── The board: the game's title and championship ────────────────────────────────────────────────────────────
+  // ── The boards: each game's title and championship ─────────────────────────────────────────────────────────
 
   /**
    * The game the board is about: on Stake and the result the chosen game, if it is on chain; in the lobby the focused
@@ -835,43 +847,46 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return game !== null && port.onChain(game) ? game : null;
   }
 
-  /** The game's championship is open for scoring now. */
-  function cupOpen(): boolean {
-    return board?.cup != null && board.cup.ends > clock.now();
+  function currentBoard(): Board | null {
+    const about = boardGame();
+    return about === null ? null : (boards[about] ?? null);
   }
 
-  /** Reads the board while Stake, the lobby or the result shows, and every `BOARD_MS` after; stops on any other. */
+  /** The game's championship is open for scoring now. */
+  function cupOpen(): boolean {
+    const cup = currentBoard()?.cup;
+    return cup != null && cup.ends > clock.now();
+  }
+
+  /** Reads the boards while Stake, the lobby or the result shows, and every `BOARD_MS` after; stops on any other. */
   function followBoard(): void {
     timers.cancel(boardTimer);
     boardTimer = null;
     if (phase !== "stake" && phase !== "lobby" && phase !== "result") return;
-    readBoard();
-    boardTimer = timers.every(BOARD_MS, readBoard);
+    readBoards();
+    boardTimer = timers.every(BOARD_MS, readBoards);
   }
 
-  function readBoard(): void {
-    const about = boardGame();
-    if (about === null) {
-      if (board !== null) {
-        board = null;
-        emit({ type: "board" });
+  /** A badge tapped: its titles and championships show with its name, so boards older than `BOARD_MS` are read again. */
+  function freshenBoards(): void {
+    if (clock.now() - boardsAt >= BOARD_MS) readBoards();
+  }
+
+  /** Every on-chain game's title and championship, read together; a game whose read fails keeps its last board. */
+  function readBoards(): void {
+    boardsAt = clock.now();
+    const onChain = games.filter((g) => g.kind === "team" && port.onChain(g.id)).map((g) => g.id);
+    void Promise.allSettled(onChain.map((id) => port.board(id).then((read) => [id, read] as const))).then((results) => {
+      const next = { ...boards };
+      for (const result of results) if (result.status === "fulfilled") next[result.value[0]] = result.value[1];
+      boards = next;
+      // A championship that closed while it was chosen falls back to the title, before anyone signs.
+      if (playFor === "cup" && !cupOpen() && phase === "stake" && nobodySigned()) {
+        playFor = "title";
+        emit({ type: "play-for", target: playFor });
       }
-      return;
-    }
-    const asked = epoch;
-    port.board(about).then(
-      (read) => {
-        if (epoch !== asked || boardGame() !== about) return;
-        board = read;
-        // A championship that closed while it was chosen falls back to the title, before anyone signs.
-        if (playFor === "cup" && !cupOpen() && phase === "stake" && nobodySigned()) {
-          playFor = "title";
-          emit({ type: "play-for", target: playFor });
-        }
-        emit({ type: "board" });
-      },
-      () => {},
-    );
+      emit({ type: "board" });
+    });
   }
 
   function topUp(): void {
@@ -918,6 +933,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   function handleTap(seat: Seat, badge: Badge, at: number, roll: number | null): TapMeaning {
     const seatedHere = sameBadge(seats[seat].badge, badge);
+    // Whoever taps is named on screen: their ENS name, read now if the Box doesn't know it yet.
+    lastTaps[seat] = { badge, at: clock.now() };
+    if (!names.has(badge.address)) read(badge);
+    freshenBoards();
     switch (phase) {
       case "boot":
       case "build":
@@ -1063,7 +1082,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         // A built game's child starts now, at Join, so its first step pays no start-up cost.
         if (info.kind === "built") ports.rules?.prepare(info.id);
         // Every game starts at its default stake, played for USDC.
-        board = null;
         if (stake !== defaultStake(info) || playFor !== "usdc") {
           stake = defaultStake(info);
           playFor = "usdc";

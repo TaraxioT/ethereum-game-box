@@ -13,6 +13,7 @@ import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { clock } from "./refund.ts";
 import { cupLabel, shortName } from "./play-for.ts";
+import { honoursOf } from "../../core/honours.ts";
 
 const ORDINAL = ["1st", "2nd", "3rd", "4th", "5th"];
 
@@ -30,7 +31,8 @@ export function lobbyView(ctx: ViewContext): View {
   const name = el("div", "lobby-name");
   const proposal = el("div", "lobby-proposal");
   const balance = el("div", "lobby-balance");
-  card.append(kicker, name, proposal, balance);
+  const held = el("div", "lobby-honours");
+  card.append(kicker, name, proposal, held, balance);
 
   const board = document.createElement("egb-panel") as EgbPanel;
   board.classList.add("lobby-board");
@@ -80,6 +82,14 @@ export function lobbyView(ctx: ViewContext): View {
       proposal.textContent = c && !c.name && lobby.proposal ? `claim ${lobby.proposal}.gamebox.eth?` : "";
       balance.textContent = c ? usdc(c.balance) : "… USDC";
     }
+    // What this player holds: each title and championship by its own ENS name, resolving to theirs.
+    held.replaceChildren(
+      ...honoursOf(c?.name ?? null, state.boards, link.now()).map((h) => {
+        const row = el("div", `lobby-honour ${h.kind}`);
+        row.append(el("b", "", h.kind === "title" ? `♛ TITLE${h.count > 1 ? ` ×${h.count}` : ""}` : `★ LEADS · ${h.count} PTS`), el("span", "", ` ${h.name} → ${c?.name ?? ""}`));
+        return row;
+      }),
+    );
     const canClaim = Boolean(c && !c.name && lobby.proposal) && !claiming;
     another.toggleAttribute("disabled", !canClaim);
     claim.toggleAttribute("disabled", !canClaim);
@@ -108,7 +118,7 @@ export function lobbyView(ctx: ViewContext): View {
     }
     title.textContent = b.title ? `${shortName(b.title.holder)}${b.title.streak > 1 ? ` ×${b.title.streak}` : ""}` : "UP FOR GRABS";
     title.classList.toggle("none", !b.title);
-    titleName.textContent = b.title ? b.title.name : "win a match to take it";
+    titleName.textContent = b.title ? `${b.title.name} → ${b.title.holder}` : "win a match to take it";
     const c = b.cup;
     const left = c ? c.ends - link.now() : 0;
     if (!c || left <= 0) {
@@ -126,7 +136,7 @@ export function lobbyView(ctx: ViewContext): View {
             const li = el("li");
             li.append(
               el("span", "rank", ORDINAL[i] ?? `${i + 1}th`),
-              el("span", "who", shortName(row.name)),
+              el("span", "who", row.name),
               el("span", "pts", `${row.points} PTS · ${row.wins}-${row.draws}-${row.losses}`),
             );
             return li;

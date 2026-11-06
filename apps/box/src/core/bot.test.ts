@@ -34,6 +34,8 @@ function box(patch: Partial<BoxState>): BoxState {
     stake: 10,
     playFor: "usdc",
     board: null,
+    boards: {},
+    taps: [null, null],
     match: null,
     txs: [],
     lobby: { badge: null, card: null, proposal: null, from: "home" },

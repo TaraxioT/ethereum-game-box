@@ -37,9 +37,9 @@ describe("the board", () => {
 
   it("shows the games this Box plays, each with its title holder, streak and time left", () => {
     const rows = boardGames(board([game("quickdraw", NOVA, NOW + 250, 3), game("stockduel", NOVA, NOW - 5), game("tapwar", null, 0)], []), NOW);
-    expect(rows.map((r) => [r.game, r.title.what, r.title.when])).toEqual([
-      ["QUICK DRAW", "NOVA ×3", "4M 10S"],
-      ["STOCK DUEL", "UP FOR GRABS", ""],
+    expect(rows.map((r) => [r.game, r.title.what, r.title.when, r.title.map])).toEqual([
+      ["QUICK DRAW", "NOVA ×3", "4M 10S", "champion.quickdraw.gamebox.eth → nova.gamebox.eth"],
+      ["STOCK DUEL", "UP FOR GRABS", "", ""],
     ]);
   });
 
@@ -48,17 +48,17 @@ describe("the board", () => {
     const games = [game("quickdraw", null, 0), game("stockduel", null, 0)];
     const live = boardGames(board(games, [cup("4", { leader, prize: "25" })]), NOW);
     expect(live.map((r) => r.cup)).toEqual([
-      { what: "CUP-4 · 25 USDC · NOVA 6 PTS", when: "4M", tone: "live" },
-      { what: "NONE OPEN", when: "", tone: "none" },
+      { what: "CUP-4 · 25 USDC · NOVA 6 PTS", when: "4M", tone: "live", map: "cup-4.quickdraw.gamebox.eth → nova.gamebox.eth" },
+      { what: "NONE OPEN", when: "", tone: "none", map: "" },
     ]);
     const ended = boardGames(board(games, [cup("3", { ends: NOW - 1, leader })]), NOW);
-    expect(ended[0]?.cup).toEqual({ what: "CUP-3 · NOVA WINS", when: "ENDED", tone: "done" });
+    expect(ended[0]?.cup).toEqual({ what: "CUP-3 · NOVA WINS", when: "ENDED", tone: "done", map: "cup-3.quickdraw.gamebox.eth → nova.gamebox.eth" });
   });
 
   it("shows a championship closed in the last hour with its winner, and drops an older one", () => {
     const games = [game("quickdraw", null, 0)];
     const won = cup("2", { closed: true, winner: NOVA, winnerName: "nova.gamebox.eth", ends: NOW - 60 });
-    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "CUP-2", when: "WON BY NOVA", tone: "done" });
+    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "CUP-2", when: "WON BY NOVA", tone: "done", map: "cup-2.quickdraw.gamebox.eth → nova.gamebox.eth" });
     expect(boardGames(board(games, [{ ...won, ends: NOW - 7_200 }]), NOW)[0]?.cup.what).toBe("NONE OPEN");
   });
 });

@@ -9,7 +9,8 @@ import type { StockDuelState } from "../games/stock-duel/types.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { formatStat, STAT_LABEL } from "../games/stock-duel/deck.ts";
-import { badgeLabel } from "./badges.ts";
+import { playerLabel } from "./badges.ts";
+import { stakeOf } from "./catalogue.ts";
 import { tapPlan, type PlanInput } from "./plan.ts";
 
 /** Everything a station view reads: the Box's state without the station views themselves. */
@@ -35,13 +36,16 @@ function wait(ms: number): string {
 const usdc = (amount: number | null): string => (amount === null ? "... USDC" : `${Math.floor(amount)} USDC`);
 
 function seated(state: SeatState): Lines {
-  return state.badge ? lines(badgeLabel(state.badge), usdc(state.balance)) : lines("TAP", "to join");
+  return state.badge ? lines(playerLabel(state.badge, state.ens), usdc(state.balance)) : lines("TAP", "to join");
 }
 
 function staking(input: StationInput, seat: Seat): Lines {
   const mine = input.seats[seat];
   if (!mine.badge) return seated(mine);
-  if (!mine.signed) return lines("SIGN", input.playFor === "usdc" ? `${input.stake} USDC` : input.playFor === "cup" ? "for the cup" : "for the title");
+  if (!mine.signed) {
+    const amount = `${stakeOf(input.playFor, input.stake)} USDC`;
+    return lines("SIGN", input.playFor === "usdc" ? amount : `${amount} ${input.playFor}`);
+  }
   const bothSigned = input.seats[0].signed && input.seats[1].signed;
   return lines("SIGNED", bothSigned ? "opening" : "waiting");
 }
@@ -119,10 +123,10 @@ export function stationView(input: StationInput, seat: Seat, now: number): Stati
   if ((input.phase === "playing" || input.phase === "result") && match?.play.game === "built" && !match.voided) return match.play.stations[seat];
   const { big, small } = idle(input, seat, now);
   if (input.phase === "boot") return fitView("", big, small);
-  const badge = input.seats[seat].badge;
+  const { badge, ens } = input.seats[seat];
   const extra: { done?: string; sign?: string } = {};
-  // The station's own tap feedback names the seated player; a roll is a signature on the chip, so it says so.
-  if (badge) extra.done = `DONE|${badgeLabel(badge)}`;
+  // The station's own tap feedback names the seated player by ENS; a roll is a signature on the chip, so it says so.
+  if (badge) extra.done = `DONE|${playerLabel(badge, ens)}`;
   if (tapPlan(input, seat, now) === "random") extra.sign = "HOLD STILL|rolling";
   return fitView(`P${seat + 1}`, big, small, extra);
 }

@@ -1,6 +1,6 @@
 // The board on Home and Attract: a glass panel right of the core with each game's title and championship, game by
 // game, so a championship is never shown apart from the game that scores it. Under each game: TITLE, who holds it
-// (with the streak) and the time left on it; CUP, the open championship with its leader and countdown (ENDED once
+// (with the streak) and the time left on it, and the title's ENS name resolving to its holder's; CUP, the open championship with its leader and countdown (ENDED once
 // scoring stops, until the admin closes it; a championship closed in the last hour with its winner). Read from the
 // Box's `GET /api/board` every 4 s and at once when a result is paid; the clocks count down every second in between.
 // Where there is no board (the simulator in a browser, or a Box with no RPC) the panel never shows.
@@ -36,6 +36,8 @@ export interface BoardLine {
   readonly when: string;
   /** `live`: held or scoring now. `done`: ended or closed. `none`: nobody holds it, nothing open. */
   readonly tone: "live" | "done" | "none";
+  /** The title's or championship's ENS name and the player's it resolves to (`champion.….eth → nova.gamebox.eth`), or "". */
+  readonly map: string;
 }
 
 export interface BoardGame {
@@ -46,8 +48,13 @@ export interface BoardGame {
 
 function titleLine(g: AdminGame, now: number): BoardLine {
   const t = g.title;
-  if (!t.holder || t.expiry <= now) return { what: "UP FOR GRABS", when: "", tone: "none" };
-  return { what: `${playerWord(t.holderName, t.holder)}${t.streak > 1 ? ` ×${t.streak}` : ""}`, when: timeLeft(t.expiry - now), tone: "live" };
+  if (!t.holder || t.expiry <= now) return { what: "UP FOR GRABS", when: "", tone: "none", map: "" };
+  return {
+    what: `${playerWord(t.holderName, t.holder)}${t.streak > 1 ? ` ×${t.streak}` : ""}`,
+    when: timeLeft(t.expiry - now),
+    tone: "live",
+    map: `${t.name} → ${t.holderName ?? t.holder}`,
+  };
 }
 
 function cupLine(cups: readonly AdminCup[], label: string, now: number): BoardLine {
@@ -56,12 +63,16 @@ function cupLine(cups: readonly AdminCup[], label: string, now: number): BoardLi
   if (open) {
     const leader = open.leader ? playerWord(open.leader.name, open.leader.address) : null;
     const name = `${open.label.toUpperCase()}${open.prize === "0" ? "" : ` · ${open.prize} USDC`}`;
-    if (open.ends > now) return { what: `${name} · ${leader ? `${leader} ${open.leader?.points ?? 0} PTS` : "NO RESULTS YET"}`, when: timeLeft(open.ends - now), tone: "live" };
-    return { what: `${open.label.toUpperCase()} · ${leader ? `${leader} WINS` : "NOBODY PLAYED"}`, when: "ENDED", tone: "done" };
+    const map = open.leader ? `${open.name} → ${open.leader.name ?? open.leader.address}` : "";
+    if (open.ends > now) return { what: `${name} · ${leader ? `${leader} ${open.leader?.points ?? 0} PTS` : "NO RESULTS YET"}`, when: timeLeft(open.ends - now), tone: "live", map };
+    return { what: `${open.label.toUpperCase()} · ${leader ? `${leader} WINS` : "NOBODY PLAYED"}`, when: "ENDED", tone: "done", map };
   }
   const last = mine.find((c) => c.closed && now - c.ends < RECENT_S);
-  if (last) return { what: last.label.toUpperCase(), when: last.winner ? `WON BY ${playerWord(last.winnerName, last.winner)}` : "NOBODY PLAYED", tone: "done" };
-  return { what: "NONE OPEN", when: "", tone: "none" };
+  if (last) {
+    const map = last.winner ? `${last.name} → ${last.winnerName ?? last.winner}` : "";
+    return { what: last.label.toUpperCase(), when: last.winner ? `WON BY ${playerWord(last.winnerName, last.winner)}` : "NOBODY PLAYED", tone: "done", map };
+  }
+  return { what: "NONE OPEN", when: "", tone: "none", map: "" };
 }
 
 /** What the board says at `now` (unix seconds), game by game: the games this Box plays first, in rack order (any other
@@ -79,6 +90,7 @@ function lineEl(kind: string, line: BoardLine): HTMLElement {
   const row = el("div", "home-board-line");
   row.dataset.tone = line.tone;
   row.append(el("span", "home-board-kind", kind), el("span", "home-board-what", line.what), el("span", "home-board-when", line.when));
+  if (line.map) row.append(el("span", "home-board-map", line.map));
   return row;
 }
 

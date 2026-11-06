@@ -1,6 +1,8 @@
-// What a match on Stake is played for, in words: a headline (the pot, the title or the championship) and the line
-// under it (who holds the title, who leads the championship and how long it has left). Pure, so it is tested without
-// a DOM; Stake's plate draws it every second.
+// What a match on Stake is played for, in words: a headline (the pot, and the title or the championship with it) and
+// the line under it (the stake each, and the title's or championship's ENS name with the player it resolves to: its
+// holder, or its leader with the points and countdown). Pure, so it is tested without a DOM; Stake's plate draws it
+// every second.
+import { stakeOf } from "../../core/catalogue.ts";
 import type { Board, BoxState } from "../../core/types.ts";
 import { clock } from "./refund.ts";
 
@@ -21,29 +23,31 @@ export function liveCup(board: Board | null, now: number): Board["cup"] {
   return board?.cup && board.cup.ends > now ? board.cup : null;
 }
 
-function holder(board: Board | null): string {
+/** `champion.stockduel.gamebox.eth → nova.gamebox.eth ×2`, or that nobody holds it yet. */
+function titleMap(board: Board | null): string {
   const t = board?.title;
-  if (!t) return "NOBODY HOLDS THE TITLE YET";
-  return `${shortName(t.holder)} HOLDS THE TITLE${t.streak > 1 ? ` ×${t.streak}` : ""}`;
+  return t ? `${t.name} → ${t.holder}${t.streak > 1 ? ` ×${t.streak}` : ""}` : "NOBODY HOLDS THE TITLE YET";
 }
 
 export function onTheLine(state: Pick<BoxState, "stake" | "playFor" | "board">, game: string, now: number): OnTheLine {
   const { board } = state;
   const cup = liveCup(board, now);
+  const each = stakeOf(state.playFor, state.stake);
+  const pot = `WINNER TAKES ${each * 2} USDC`;
   switch (state.playFor) {
     case "usdc":
       return {
-        head: `WINNER TAKES ${state.stake * 2} USDC`,
-        detail: `${state.stake} USDC EACH · THE WIN ALSO TAKES THE TITLE${cup ? ` AND SCORES ${cupLabel(cup.name)}` : ""}`,
+        head: pot,
+        detail: `${each} USDC EACH · THE WIN ALSO TAKES THE TITLE${cup ? ` AND SCORES ${cupLabel(cup.name)}` : ""}`,
       };
     case "title":
-      return { head: `FOR THE ${game.toUpperCase()} TITLE`, detail: `${holder(board)} · NO USDC STAKED` };
+      return { head: `${pot} + THE ${game.toUpperCase()} TITLE`, detail: `${each} USDC EACH · ${titleMap(board)}` };
     case "cup": {
       if (!cup) return { head: "THE CHAMPIONSHIP HAS CLOSED", detail: "PICK THE TITLE OR A USDC STAKE" };
       const leader = cup.standings[0];
-      const lead = leader ? `${shortName(leader.name)} LEADS · ${leader.points} PTS` : "NO RESULTS YET";
+      const lead = leader ? `${cup.name} → ${leader.name} · ${leader.points} PTS` : `${cup.name} · NO RESULTS YET`;
       const prize = cup.prize > 0 ? ` · ${cup.prize} USDC PRIZE` : "";
-      return { head: `FOR ${cupLabel(cup.name)}`, detail: `WIN 3 · DRAW 1 · ${lead}${prize} · ${clock(cup.ends - now)} LEFT` };
+      return { head: `${pot} + 3 PTS IN ${cupLabel(cup.name)}`, detail: `${each} USDC EACH · ${lead}${prize} · ${clock(cup.ends - now)} LEFT` };
     }
   }
 }

@@ -6,6 +6,7 @@ import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
+import { honoursOf } from "../../core/honours.ts";
 import { createSeatPanel } from "./seat-panel.ts";
 
 export function joinView(ctx: ViewContext): View {
@@ -36,6 +37,7 @@ export function joinView(ctx: ViewContext): View {
   function draw(state: BoxState): void {
     const game = state.games.find((g) => g.id === state.focus);
     state.seats.forEach((s, i) => panels[i]?.set(s, s.badge ? "READY" : "TAP YOUR BADGE", s.badge ? "done" : "ask"));
+    state.seats.forEach((s, i) => panels[i]?.honours(honoursOf(s.ens, state.boards, Date.now())));
     const waiting = state.seats.filter((s) => !s.badge).length;
     plate.textContent = waiting ? `${game?.title ?? ""} · TAP ${waiting === 2 ? "BOTH BADGES" : "A BADGE"} TO JOIN` : "BOTH SEATED";
   }

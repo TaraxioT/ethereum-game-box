@@ -58,3 +58,25 @@
   inset: auto; left: 0; right: 0; height: 2px; pointer-events: none;
   background: var(--sys-hot); box-shadow: 0 0 8px var(--sys-bloom), 0 0 20px var(--sys-bloom); transform: scaleX(0);
 }
+
+/* The ENS card under a port: whoever just tapped, by their ENS name, and the titles and championships whose own ENS
+   names resolve to them. A glass card in the seat's colour, there for a few seconds. */
+.ens-tag {
+  height: auto !important; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; z-index: 5;
+  background: var(--glass); border: 1px solid var(--seat-line, var(--sys)); box-shadow: 0 0 14px var(--seat-bloom, var(--sys-bloom));
+  animation: ens-tag-in 220ms var(--ease-out, ease-out);
+}
+.ens-tag[hidden] { display: none; }
+.ens-tag[data-seat="0"] { --seat-line: var(--p1); --seat-bloom: var(--p1-bloom); }
+.ens-tag[data-seat="1"] { --seat-line: var(--p2); --seat-bloom: var(--p2-bloom); }
+.ens-tag[data-side="right"] { text-align: right; }
+.ens-tag-name { font: 600 22px/1.1 var(--mono); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ens-tag-name b { font-weight: 700; color: var(--sys-hot); text-shadow: var(--glow-text); }
+.ens-tag-name span { color: var(--fg-3); }
+.ens-tag-honour { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 1px solid rgb(207 232 246 / 0.12); }
+.ens-tag-kind { font: 700 13px/1.1 var(--hud-display); letter-spacing: 0.08em; color: var(--brass-hi); }
+.ens-tag-honour[data-kind="cup"] .ens-tag-kind { color: var(--sys); }
+.ens-tag-map { font: 600 13px/1.2 var(--mono); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ens-tag-hint { font: 600 12px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-3); }
+@keyframes ens-tag-in { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .ens-tag { animation: none; } }

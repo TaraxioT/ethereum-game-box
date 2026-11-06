@@ -1,7 +1,10 @@
 // A seat's panel on a page: a chamfered frame in the seat's colour round a socket of two rings in a dial of ticks, holding the badge's
-// LED blockie, the badge's name, its stats (wins, losses and draws in the focused game, and its USDC, read from chain,
+// LED blockie, the player's ENS name (`nova` bright, `.gamebox.eth` dim; the badge's own label until it is read), the
+// title it holds or the championship it leads (by that name's own ENS name, which resolves to the player), its stats (wins, losses and draws in the focused game, and its USDC, read from chain,
 // popping in when the badge taps) and one status line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Lit when the story is
 // about this seat (it is asked to act, or it won); a loss dims it. Touching it taps that seat (Demo mode).
+import { playerName } from "../../core/badges.ts";
+import type { Honour } from "../../core/honours.ts";
 import type { Seat, SeatState } from "../../core/types.ts";
 import { blockieLedSvg } from "../parts/blockie.ts";
 import { chamferClip, fitFrame } from "../parts/frame.ts";
@@ -14,6 +17,8 @@ export type SeatTone = "idle" | "ask" | "done" | "win" | "lose" | "alert";
 export interface SeatPanel {
   readonly el: HTMLElement;
   set(seat: SeatState, status: string, tone?: SeatTone): void;
+  /** The titles the seated player holds and the championships they lead (the first shows). */
+  honours(list: readonly Honour[]): void;
   /** A tap landed on this seat. */
   pulse(): void;
 }
@@ -30,6 +35,7 @@ export function createSeatPanel(seat: Seat): SeatPanel {
   const tile = el("div", "seat-panel-tile");
   socket.append(el("i", "seat-panel-dial"), flash, tile);
   const name = el("div", "seat-panel-name");
+  const honour = el("div", "seat-panel-honour");
   const stats = el("div", "seat-panel-stats");
   const status = el("div", "seat-panel-status");
   const words = el("span", "seat-panel-words");
@@ -38,7 +44,7 @@ export function createSeatPanel(seat: Seat): SeatPanel {
   status.append(words, glow);
   const fill = el("i", "frame-fill");
   fill.style.clipPath = chamferClip(CHAMFER);
-  root.append(fill, outer, label, socket, name, stats, status);
+  root.append(fill, outer, label, socket, name, honour, stats, status);
   fitFrame(root, { chamfer: CHAMFER });
   fitFrame(outer, { chamfer: CHAMFER + 3 });
   let address = "";
@@ -53,8 +59,10 @@ export function createSeatPanel(seat: Seat): SeatPanel {
         address = s.badge?.address ?? "";
         tile.innerHTML = s.badge ? blockieLedSvg(s.badge.address, 72) : "";
       }
-      // The player name on chain once it is read, else the badge's local label.
-      name.textContent = s.badge ? (s.ens ?? s.badge.name).replace(/\.gamebox\.eth$/, "") : "EMPTY";
+      // The player's ENS name once it is read, else the badge's local label.
+      const full = s.badge ? playerName(s.badge, s.ens) : "EMPTY";
+      const dot = full.indexOf(".");
+      if (name.textContent !== full) name.replaceChildren(...(dot < 0 ? [full] : [full.slice(0, dot), el("span", "seat-panel-suffix", full.slice(dot))]));
       words.textContent = text;
       glow.textContent = text;
       const next = s.badge ? statsKey(s) : "";
@@ -64,6 +72,12 @@ export function createSeatPanel(seat: Seat): SeatPanel {
         drawStats(stats, s);
         if (appeared) motion(stats, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "ease-out" });
       }
+    },
+    honours(list) {
+      const first = list[0];
+      honour.dataset.kind = first?.kind ?? "";
+      honour.textContent = first ? `${first.kind === "title" ? "♛" : "★"} ${first.name}` : "";
+      honour.title = first ? `${first.name} resolves to this player` : "";
     },
     pulse() {
       motion(flash, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], { duration: 260, easing: "ease-out" });

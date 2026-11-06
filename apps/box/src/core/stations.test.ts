@@ -21,6 +21,8 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     stake: 10,
     playFor: "usdc",
     board: null,
+    boards: {},
+    taps: [null, null],
     match,
     txs: [],
     lobby: { badge: null, card: null, proposal: null, from: "home" },

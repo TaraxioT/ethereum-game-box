@@ -771,7 +771,7 @@ describe("the lobby", () => {
       await flush();
       r.core.send({ type: "back" });
     }
-    expect(r.chain.boards).toEqual(["quick-draw", "stock-duel"]);
+    expect(new Set(r.chain.boards)).toEqual(new Set(["quick-draw", "stock-duel"]));
     r.core.send({ type: "lobby" });
     await flush();
     expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
@@ -916,19 +916,21 @@ describe("what a match is played for", () => {
     expect(r.core.state()).toMatchObject({ stake: 10, playFor: "usdc" });
   });
 
-  it("plays for the title with no pot: no balance needed, and the result alone goes on chain", async () => {
-    const r = rigOn(recordingPort);
-    r.chain.balances.set(KITE.address, 0);
+  it("stakes the title's and the championship's own amounts, apart from the USDC choices", async () => {
+    const r = rigOn(withCup(START + 600_000));
+    r.chain.balances.set(KITE.address, 18);
     await toStake(r);
     r.core.send({ type: "play-for", target: "title" });
+    expect(r.core.state().stations[0].big).toBe("SIGN");
+    instantTap(r.core, 0, NOVA, 1);
+    // 18 USDC covers the cup's 15 but not the title's 20: KITE is sent to top up.
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.core.state()).toMatchObject({ phase: "lobby", lobby: { badge: KITE, from: "stake" } });
+    r.core.send({ type: "back" });
+    r.core.send({ type: "play-for", target: "cup" });
     instantTap(r.core, 0, NOVA, 1);
     instantTap(r.core, 1, KITE, 1);
-    expect(r.core.state().phase).toBe("playing");
-    expect(r.chain.sent).toEqual([]);
-    expect(r.core.state().match).toMatchObject({ playFor: "title", stake: 0, round: 41 });
-    await quickWin(r, 1);
-    expect(r.chain.sent.map((sent) => [sent.kind, sent.order])).toEqual([["settle", { round: 41, game: "quick-draw", badges: [NOVA.address, KITE.address], winner: 1 }]]);
-    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 0 });
+    expect(r.chain.sent.map((sent) => [sent.kind, (sent.order as StakeOrder).amount])).toEqual([["open", 15]]);
   });
 
   it("offers the championship only while one is open, and falls back to the title once it closes", async () => {
@@ -949,11 +951,27 @@ describe("what a match is played for", () => {
     const r = rigOn(recordingPort);
     await toStake(r);
     expect(r.core.state().board?.title?.holder).toBe("kite.gamebox.eth");
+    // Every on-chain game is read together: what a tapped badge holds shows in any of them.
+    const games = TEAM_GAMES.filter((g) => chainLabel(g.id) !== null).length;
     const reads = r.chain.boards.length;
     r.clock.advance(BOARD_MS);
-    expect(r.chain.boards.length).toBe(reads + 1);
+    expect(r.chain.boards.length).toBe(reads + games);
     r.core.send({ type: "back" });
     r.clock.advance(BOARD_MS * 3);
-    expect(r.chain.boards.length).toBe(reads + 1);
+    expect(r.chain.boards.length).toBe(reads + games);
+  });
+});
+
+describe("naming whoever taps", () => {
+  it("keeps each station's last tap with its ENS name, read from chain if the Box didn't know it", async () => {
+    const r = rigOn(recordingPort);
+    r.chain.names.set(NOVA.address, "nova.gamebox.eth");
+    r.core.send({ type: "booted" });
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state().taps[0]).toMatchObject({ badge: NOVA, read: false, ens: null });
+    await flush();
+    expect(r.core.state().taps[0]).toMatchObject({ badge: NOVA, read: true, ens: "nova.gamebox.eth" });
+    expect(r.events).toContainEqual({ type: "name", address: NOVA.address });
+    expect(r.core.state().taps[1]).toBeNull();
   });
 });

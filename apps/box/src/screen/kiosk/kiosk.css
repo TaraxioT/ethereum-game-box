@@ -84,7 +84,7 @@
 .set-game-ens { font: 600 12px/1 var(--mono); color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set-line { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 34px; }
 .set-kind { font: 600 12px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
-.set-what { font: 600 15px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-what { font: 600 14px/1.25 var(--mono); text-transform: none; letter-spacing: 0; color: var(--sys-hot); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set-line .set-when { font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
 .set-line[data-tone="done"] :is(.set-what, .set-when) { color: var(--fg-2); }
 .set-line[data-tone="none"] :is(.set-what, .set-when) { color: var(--fg-3); }

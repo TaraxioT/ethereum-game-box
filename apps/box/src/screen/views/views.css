@@ -42,6 +42,9 @@
 .seat-panel[data-tone="win"] .seat-panel-outer { opacity: 1; }
 .seat-panel[data-tone="lose"] { opacity: 0.4; }
 
+.seat-panel-suffix { font-size: 0.55em; color: var(--fg-3); text-shadow: none; letter-spacing: 0; }
+.seat-panel-honour { min-height: 1.2em; font: 600 12px/1.2 var(--mono); color: var(--brass-hi); text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.seat-panel-honour[data-kind="cup"] { color: var(--sys); }
 .seat-panel-label { font: 600 16px/1 var(--hud-body); letter-spacing: 0.22em; color: var(--seat); }
 
 /* The socket: two rings in the seat's colour, faint until a badge is seated, holding the LED blockie. */
@@ -145,6 +148,10 @@
 .lobby-name { font: 700 28px/1.15 var(--hud-display); color: var(--fg); text-transform: none; overflow-wrap: anywhere; }
 .lobby-name.none { color: var(--fg-3); }
 .lobby-proposal { font: 600 17px/1.3 var(--mono); color: var(--sys); text-transform: none; overflow-wrap: anywhere; min-height: 1.3em; }
+.lobby-honours { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.lobby-honour { font: 600 13px/1.3 var(--mono); color: var(--fg-2); text-transform: none; overflow-wrap: anywhere; }
+.lobby-honour b { font: 700 13px/1.3 var(--hud-display); letter-spacing: 0.06em; color: var(--brass-hi); }
+.lobby-honour.cup b { color: var(--sys); }
 .lobby-balance { margin-top: 18px; font: 700 34px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); }
 .lobby-game { font: 700 15px/1.2 var(--hud-display); letter-spacing: 0.14em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); margin-bottom: 4px; }
 .lobby-board .lobby-kicker { margin-top: 12px; }
@@ -180,6 +187,7 @@
 .home-board-kind { font: 600 12px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
 .home-board-what { font: 600 17px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-board-when { font: 600 15px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
+.home-board-map { grid-column: 2 / -1; font: 600 12px/1.2 var(--mono); color: var(--fg-3); text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-board-line[data-tone="done"] :is(.home-board-what, .home-board-when) { color: var(--fg-2); }
 .home-board-line[data-tone="none"] :is(.home-board-what, .home-board-when) { color: var(--fg-3); }
 @media (prefers-reduced-motion: reduce) { .home-board-live::before { animation: none; } }
