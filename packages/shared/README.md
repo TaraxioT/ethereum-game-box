@@ -24,6 +24,14 @@
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
 | `deployments.ts` | `ensAddress(name)` and `contractAddress(name)` from `deployments/sepolia.json` |
 
+### P-256 signatures (`Execute`, `Result`)
+
+The Box signs the raw 32-byte EIP-712 digest with ECDSA P-256 and no prehash: the contracts pass the digest itself to
+the EIP-7951 precompile as `h`, never its SHA-256. That is what the HYP2003 does with `CKM_ECDSA`, and what
+`@noble/curves` does with `prehash: false`. The signature must have a low `s` (at most n/2), or the contracts refuse
+it. A software Box key (`DEMO_BOX_P256_KEY`) is a `0x`-prefixed 32-byte hex scalar. On chain the public key is
+`qx`, `qy` (`BoxAccount.publicKey()`), and a Box name's `boxKey` record is `0x04` + x + y.
+
 ## Rules
 
 Every digest here has a test that checks it against the contract's own computation. A mismatch here is a wasted

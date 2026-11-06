@@ -8,7 +8,8 @@ import {IERC5267} from "@openzeppelin/contracts/interfaces/IERC5267.sol";
 ///         demo Box). It runs calls the key signed. Anyone may submit them; the relayer does, and pays the gas.
 /// @dev The signed message is EIP-712 `Execute(address target,uint256 value,bytes32 dataHash,uint256 nonce,
 ///      uint256 deadline)`, domain `Game Box`, version `1`, chain id and this account. `dataHash` is
-///      `keccak256(data)`. Signatures must have a low `s` (at most n/2 of P-256).
+///      `keccak256(data)`. The key signs the raw 32-byte digest (ECDSA P-256 with no prehash; the precompile gets
+///      the digest itself as `h`, not its SHA-256), and the signature must have a low `s` (at most n/2 of P-256).
 interface IBoxAccount is IERC5267 {
     /// @notice A signed call ran.
     /// @param nonce The nonce it used.

@@ -10,8 +10,9 @@ import {IPlayerStats} from "./IPlayerStats.sol";
 /// @notice The referee for now: it takes a match result signed by a Box's P-256 key, as registered in `GameBoxNames`,
 ///         then crowns the winner and records both players' stats. A draw records stats only.
 /// @dev The signed message is EIP-712 `Result(string box,string game,uint256 round,address winner,address loser,
-///      bool draw,uint256 deadline)`, domain `Game Box Results`, version `1`, chain id and this contract. Signatures
-///      must have a low `s`. Anyone may submit a signed result; the relayer does.
+///      bool draw,uint256 deadline)`, domain `Game Box Results`, version `1`, chain id and this contract. The Box
+///      signs the raw 32-byte digest (ECDSA P-256 with no prehash: the precompile gets the digest itself as `h`), and
+///      the signature must have a low `s`. Anyone may submit a signed result; the relayer does.
 interface IBoxResults is IERC5267 {
     /// @notice A finished match, as the Box signs it.
     /// @param box The Box's label (`mumbai-01`, not the full name).

@@ -106,6 +106,8 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     error BadgeHasName(address badge, string label);
     /// @notice No Box was ever registered under the label.
     error UnknownBox(string label);
+    /// @notice The label belongs (or belonged) to a Box licence, so no player may claim it.
+    error LabelHeldByBox(string label);
     /// @notice The account holds no player name.
     error NotAPlayer(address account);
     /// @notice No game is registered under the label.

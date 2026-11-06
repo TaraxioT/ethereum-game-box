@@ -9,11 +9,11 @@ const target = fileURLToPath(new URL('../src/names/abis.ts', import.meta.url));
 
 // export name -> [source file, contract name] in contracts/out
 const sources: Record<string, [string, string]> = {
-  gameBoxNamesAbi: ['IGameBoxNames.sol', 'IGameBoxNames'],
-  playerStatsAbi: ['IPlayerStats.sol', 'IPlayerStats'],
-  boxResultsAbi: ['IBoxResults.sol', 'IBoxResults'],
-  demoLicencesAbi: ['IDemoLicences.sol', 'IDemoLicences'],
-  boxAccountAbi: ['IBoxAccount.sol', 'IBoxAccount'],
+  gameBoxNamesAbi: ['GameBoxNames.sol', 'GameBoxNames'],
+  playerStatsAbi: ['PlayerStats.sol', 'PlayerStats'],
+  boxResultsAbi: ['BoxResults.sol', 'BoxResults'],
+  demoLicencesAbi: ['DemoLicences.sol', 'DemoLicences'],
+  boxAccountAbi: ['BoxAccount.sol', 'BoxAccount'],
   permissionedRegistryAbi: ['IENSv2.sol', 'IPermissionedRegistry'],
   permissionedResolverAbi: ['IENSv2.sol', 'IPermissionedResolver'],
   verifiableFactoryAbi: ['IENSv2.sol', 'IVerifiableFactory'],

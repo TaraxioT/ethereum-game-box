@@ -245,6 +245,12 @@ interface IVerifiableFactory {
     function verifyContract(address proxy) external view returns (address implementation);
 }
 
+/// @notice `access-control/interfaces/IEACGrantInitializable.sol`: how a `UserRegistry` proxy is set up.
+interface IEACGrantInitializable {
+    /// @notice Grants each of `grants` on the root resource. Reverts if nobody ends up with a root role.
+    function initialize(Grant[] calldata grants) external;
+}
+
 /// @notice `ens-contracts/contracts/universalResolver/IUniversalResolver.sol` (what viem calls).
 interface IUniversalResolver {
     error ResolverNotFound(bytes name);

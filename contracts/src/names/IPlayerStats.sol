@@ -34,6 +34,8 @@ interface IPlayerStats {
     error NotAPlayer(address account);
     /// @notice The winner and the loser are the same account.
     error SamePlayer(address account);
+    /// @notice Too little gas is left to give a `stats` write its full allowance, so a skip could be forced.
+    error InsufficientGas();
 
     /// @notice Counts a result and writes both players' `stats`. Needs `GameBoxNames`' `REFEREE_ROLE`.
     /// @param game The game's label.
