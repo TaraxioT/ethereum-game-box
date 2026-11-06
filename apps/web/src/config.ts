@@ -9,13 +9,13 @@ export const RPC_URLS: readonly string[] = env.VITE_RPC_URLS
   : ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.gateway.tenderly.co"];
 
 /** The relayer Worker: pays the gas for signed requests. Its CORS allows only the live site, so the dev server
- * passes `/relayer` through to it (vite.config.ts). */
+ * passes `/_relayer` through to it (vite.config.ts). */
 export const RELAYER_URL: string =
-  env.VITE_RELAYER_URL ?? (env.DEV ? "/relayer" : "https://gamebox-relayer.mathew.workers.dev");
+  env.VITE_RELAYER_URL ?? (env.DEV ? "/_relayer" : "https://gamebox-relayer.mathew.workers.dev");
 
 /** The demo Box Worker: a Box with a software P-256 key. */
 export const DEMO_BOX_URL: string =
-  env.VITE_DEMO_BOX_URL ?? (env.DEV ? "/demo-box" : "https://gamebox-demo-box.mathew.workers.dev");
+  env.VITE_DEMO_BOX_URL ?? (env.DEV ? "/_demo-box" : "https://gamebox-demo-box.mathew.workers.dev");
 
 export const ETHERSCAN = "https://sepolia.etherscan.io";
 

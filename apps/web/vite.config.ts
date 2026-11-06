@@ -15,6 +15,6 @@ export default defineConfig({
   root: "src",
   envDir: "..",
   build: { outDir: "../dist", emptyOutDir: true, target: "es2023" },
-  server: { proxy: { "/relayer": through(RELAYER, "/relayer"), "/demo-box": through(DEMO_BOX, "/demo-box") } },
+  server: { proxy: { "/_relayer": through(RELAYER, "/_relayer"), "/_demo-box": through(DEMO_BOX, "/_demo-box") } },
   test: { root: ".", include: ["src/**/*.test.ts"], environment: "node" },
 });
