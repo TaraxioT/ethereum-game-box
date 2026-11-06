@@ -16,7 +16,7 @@ const styles = sheet(`
   color: var(--fg-2);
 }
 .box { position: absolute; inset: 0; pointer-events: none; }
-.frame-fill { position: absolute; inset: 0; background: rgb(1 4 9 / 0.88); clip-path: ${chamferClip(CHAMFER)}; }
+.frame-fill { position: absolute; inset: 0; background: var(--glass); clip-path: ${chamferClip(CHAMFER)}; }
 .frame-line { opacity: var(--panel-line, 0.45); }
 .frame-bloom { opacity: 0; }
 .content { position: relative; display: block; }

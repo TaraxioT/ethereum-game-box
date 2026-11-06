@@ -6,7 +6,7 @@
   font: 600 15px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg);
 }
 .demo-tag :is(.demo-head, .demo-panel) { position: relative; }
-.demo-tag .frame-fill { position: absolute; inset: 0; background: rgb(1 4 9 / 0.9); }
+.demo-tag .frame-fill { position: absolute; inset: 0; background: var(--glass); }
 .demo-tag .frame-line { opacity: 0.45; }
 .demo-tag .frame-bloom { opacity: 0; }
 .demo-head {
@@ -55,7 +55,7 @@
 .demo-intro-kicker { font: 600 15px/1 var(--hud-body); letter-spacing: 0.32em; color: var(--fg-3); }
 .demo-intro-title {
   margin: 12px 0 18px; font: 700 28px/1.15 var(--hud-display); letter-spacing: 0.02em; color: var(--fg);
-  text-shadow: 0 0 4px rgb(234 247 255 / 0.9), 0 0 14px rgb(234 247 255 / 0.4);
+  text-shadow: var(--glow-text);
 }
 .demo-intro-line { margin: 0 0 10px; font: 600 16px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); }
 .demo-intro-rule { display: block; height: 1px; margin: 18px 0 16px; background: rgb(207 232 246 / 0.25); }

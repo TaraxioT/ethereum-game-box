@@ -5,12 +5,19 @@
 :root {
   /* The Grid */
   --void: #010409;
-  --void-2: #030a12;
-  --deep: #061522;
   --sys: #cfe8f6;
   --sys-hot: #ffffff;
-  --sys-bloom: rgb(150 200 230 / 0.42);
+  --sys-bloom: rgb(74 168 232 / 0.5);
+  /* The system's white light blooms blue, as a lit tube does. */
+  --sys-glow: #4aa8e8;
   --alert: #ff2d3d;
+
+  /* Glass: the fill of every panel, key and tag. Lit faintly from above, a sheen along its top, dark at its foot. */
+  --glass:
+    linear-gradient(180deg, rgb(120 190 240 / 0.1), rgb(120 190 240 / 0) 38%),
+    linear-gradient(180deg, rgb(10 30 46 / 0.94), rgb(3 10 18 / 0.95) 55%, rgb(1 4 9 / 0.97));
+  /* Display text glows like the lines do: a hot edge, a blue bloom round it. */
+  --glow-text: 0 0 2px rgb(255 255 255 / 0.85), 0 0 9px rgb(74 168 232 / 0.75), 0 0 22px rgb(74 168 232 / 0.35);
 
   /* Seats (shared with the games) */
   --p1: #ff9b3d;

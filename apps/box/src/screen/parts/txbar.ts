@@ -37,7 +37,7 @@ const styles = sheet(`
   visibility: hidden; white-space: nowrap;
 }
 .bar.on { visibility: visible; }
-.frame-fill { position: absolute; inset: 0; background: var(--void-2); clip-path: ${chamferClip(CHAMFER)}; }
+.frame-fill { position: absolute; inset: 0; background: var(--glass); clip-path: ${chamferClip(CHAMFER)}; }
 .frame-line { opacity: 0.45; }
 .frame-bloom { opacity: 0; }
 .row { position: relative; display: flex; align-items: baseline; gap: 5px; overflow: hidden; }
@@ -45,7 +45,7 @@ const styles = sheet(`
 .kind { font: 600 16px / 1 var(--hud-body); letter-spacing: 0.08em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
 .hash { font: 500 14px / 1 var(--mono); color: var(--fg-3); }
 .step, .arrow { font: 600 14px / 1 var(--hud-body); letter-spacing: 0.02em; font-style: normal; color: var(--sys); opacity: 0.22; }
-.reached { opacity: 1; text-shadow: 0 0 4px rgb(207 232 246 / 0.9), 0 0 14px rgb(207 232 246 / 0.4); }
+.reached { opacity: 1; text-shadow: var(--glow-text); }
 .n { font-family: var(--mono); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 `);
 

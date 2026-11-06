@@ -21,7 +21,7 @@ const CHAMFER = 8;
 const styles = sheet(`
 :host { display: inline-flex; vertical-align: top; height: 44px; }
 .tag { position: relative; display: flex; align-items: center; gap: 10px; height: 100%; padding: 0 16px 0 13px; }
-.frame-fill { position: absolute; inset: 0; background: var(--void-2); clip-path: ${chamferClip(CHAMFER)}; }
+.frame-fill { position: absolute; inset: 0; background: var(--glass); clip-path: ${chamferClip(CHAMFER)}; }
 .frame-line { opacity: 0.3; }
 .frame-bloom { opacity: 0; }
 .icon { position: relative; width: 18px; height: 18px; flex: none; }

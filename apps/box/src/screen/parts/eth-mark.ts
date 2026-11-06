@@ -20,6 +20,6 @@ export function ethMarkSvg(): string {
     `<path d="${EDGES}" fill="none" stroke="${colour}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 272 433" aria-hidden="true">
   ${FACETS.map(([points, fill]) => `<polygon points="${points}" fill="${fill}"/>`).join("")}
-  ${stroke("rgb(150 200 230 / 0.42)", 4)}${stroke("#ffffff", 1.5)}
+  ${stroke("rgb(74 168 232 / 0.55)", 4)}${stroke("#ffffff", 1.5)}
 </svg>`;
 }

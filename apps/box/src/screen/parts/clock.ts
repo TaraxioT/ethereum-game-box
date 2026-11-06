@@ -21,7 +21,7 @@ const styles = sheet(`
 .key { font: 600 max(14px, calc(15 * var(--p))) / 1 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); }
 .num {
   font: 700 calc(30 * var(--p)) / 1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg);
-  text-shadow: 0 0 4px rgb(234 247 255 / 0.9), 0 0 14px rgb(234 247 255 / 0.4);
+  text-shadow: var(--glow-text);
 }
 .chain {
   position: absolute; left: 0; right: 0; bottom: calc(6 * var(--p)); text-align: center;

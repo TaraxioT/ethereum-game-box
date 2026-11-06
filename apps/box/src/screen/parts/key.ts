@@ -22,13 +22,13 @@ button {
 }
 .shape { position: absolute; inset: 0; display: grid; place-items: center; transition: transform var(--t-press) var(--ease-out); }
 .shape > i { position: absolute; inset: 0; clip-path: ${chamferClip(CHAMFER)}; }
-.frame-fill { background: var(--void-2); }
+.frame-fill { background: var(--glass); }
 .tint { background: var(--frame-tone, var(--sys)); opacity: 0.08; }
 .flash { background: var(--sys-hot); opacity: 0; }
 .label {
   position: relative; padding: 0 0.7em; white-space: nowrap; text-transform: uppercase;
   font: 700 36cqh / 1 var(--hud-display); letter-spacing: 0.04em; color: var(--fg);
-  text-shadow: 0 0 4px rgb(234 247 255 / 0.9), 0 0 14px rgb(234 247 255 / 0.4);
+  text-shadow: var(--glow-text);
 }
 .frame-bloom { opacity: 1; }
 button:active .shape { transform: scale(0.97); }
