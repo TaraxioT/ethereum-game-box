@@ -73,7 +73,7 @@ Taps on a station no seat uses are ignored, though the station's status shows th
 | `commands.ts` | `formatCommand(cmd)`: the exact command text. `parseCommand(line)`: back again, for the fake receiver. |
 | `scanner.ts` | `LineScanner`: splits Buffers on `\n`, copying only a line cut across chunks; drops a line over 4 KB. |
 | `receiver.ts` | `Receiver`: owns the port, parses and hands over every event synchronously (taps first), writes without waiting, sends `state` after opening (again if unanswered), reports the close at once and reopens with backoff (250 ms to 4 s). Counts bytes, lines, drops and the parse time. |
-| `serial.ts` | `serialOpener(path)`: a /dev/serial/by-id path, or `auto` (the receiver's by-id entry, by its USB serial `7C:DF:A1:D5:04:CC`), opened with no DTR/RTS toggling. `serialport` is loaded only here. |
+| `serial.ts` | `serialOpener(path)`: a /dev/serial/by-id path, or `auto` (the receiver's by-id entry, by its USB serial `7C:DF:A1:D5:04:CC`), read through Node's own tty handle in the event loop (raw mode, no DTR/RTS toggling) and written with non-blocking writes on a second descriptor. No native addon. |
 | `receiver-clock.ts` | `ReceiverClock`: `at_us` onto Pi ms, and the touch time of a tap line. |
 | `stations.ts` | `Stations`: seats ↔ station ids, each station's link, signal, ping, reader and chip; the 2 s link grace (`lost`), `whenUp(st)`; ping and press-report samples. |
 | `samples.ts` | `Samples`: a fixed ring of the latest numbers. |
