@@ -1,5 +1,4 @@
-// The fake 0G on its port, in its own process, driven through its `/__fake` route as the README says. It is the one thing
-// in a run, with the badges, that isn't real.
+// The fake 0G on its port, in its own process, driven through its `/__fake` route as the README says.
 
 import path from 'node:path';
 

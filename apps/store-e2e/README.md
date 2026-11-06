@@ -1,8 +1,8 @@
 # apps/store-e2e
 
 `@egb/store-e2e`: the store's end-to-end run. `pnpm store:e2e` publishes a game, plays staked matches on a real Box and
-checks what the chain did, on one laptop, with everything real but 0G and the badges. The plan is
-[`plan/game-store.md`](../../plan/game-store.md).
+checks what the chain did, on one laptop. Anvil stands in for Sepolia, and 0G, `GameBoxNames`, the Box's hardware key and
+the badges are fakes. The rest is real. The plan is [`plan/game-store.md`](../../plan/game-store.md).
 
 It deploys nothing, holds no real key and calls no real chain or 0G. A run's keys are made up as it starts. It leaves no
 process or container behind, even when a signal interrupts it. `kill -9` can't be caught, so the next run clears up after
@@ -72,7 +72,7 @@ after an hour away.
 - A killed Worker, unless asked. Scenario 5 kills the container. A run's Durable Object wakes 9 minutes after the Worker
   dies, too long for every run, so `EGB_E2E_SLOW=1` adds the scenario that kills the Worker mid-run, which takes 10 minutes
   more.
-- The badges and the Pi. Taps come from the fake receiver.
+- The badges, the HYP2003 key and the Pi. Taps come from the fake receiver, and the Box signs with a software key.
 - More than two seats: the Box seats two for now.
 
 ## Run

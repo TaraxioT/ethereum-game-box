@@ -1,6 +1,7 @@
 // `pnpm store:e2e`: the plan's "done when", as far as a laptop reaches, on real contracts, the real Workers, a real
-// container and the real Box in a real browser. Only 0G and the badges are fakes. A scenario believes the chain: its
-// balances and events. The scenarios share one world and run in order, and the last one stops the verifier.
+// container and the real Box in a real browser. 0G, `GameBoxNames`, the Box's hardware key and the badges are fakes. A
+// scenario believes the chain: its balances and events. The scenarios share one world and run in order, and the last one
+// stops the verifier.
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
