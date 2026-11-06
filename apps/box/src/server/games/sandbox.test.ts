@@ -319,12 +319,29 @@ const leaves = (url: string) => page(inline(`window.addEventListener("load", () 
 /** What a page that landed in the frame would want to say. */
 const LANDED = `parent.postMessage({ t: "ready" }, "*"); parent.postMessage({ t: "event", name: "after", data: null }, "*"); parent.postMessage({ t: "end" }, "*");`;
 
-const LEAVERS = ["for the outside", "by a meta refresh", "for a data page", "for the API", "for its second page", "by reloading", "for its second page before it has loaded"].map((how) => `leaves ${how}`);
+/** A page that says ready by hand on its first line, as if it had loaded, and then does this. */
+const vouches = (then: string) => page(inline(`parent.postMessage({ t: "ready" }, "*"); ${then}`));
+/** The URL of a page that answers the kiosk as the host would, as a JavaScript expression. The kiosk's CSP keeps it out. */
+const ANSWERS = `"data:text/html,<script>addEventListener('message', () => { " + ${JSON.stringify(LANDED)} + " });<" + "/script>"`;
+
+const VOUCHERS: Readonly<Record<string, string>> = {
+  "says ready, then leaves for its second page": `location.href = "second.html";`,
+  "says ready, then leaves for the API": `location.href = "/api/state";`,
+  "says ready, then leaves for a blank page": `location.href = "about:blank";`,
+  "says ready, then leaves for a blob": `location.href = URL.createObjectURL(new Blob(["<p>here</p>"], { type: "text/html" }));`,
+  "says ready, stops its own load, then leaves": `window.stop(); setTimeout(() => { location.href = "second.html"; }, 2000);`,
+  "says ready, then reloads for ever": `location.reload();`,
+};
+
+const LEAVERS = [
+  ...["for the outside", "by a meta refresh", "for a data page", "for the API", "for its second page", "by reloading", "for its second page before it has loaded", "for a page that answers, before it has loaded"].map((how) => `leaves ${how}`),
+  ...Object.keys(VOUCHERS),
+];
 
 describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
   const servers: http.Server[] = [];
   const bundles = new Map<string, { dir: string; files: ReadonlySet<string> }>();
-  const scenarios: { id: string; hash: string }[] = [];
+  const scenarios: { id: string; hash: string; waits: boolean }[] = [];
   const reports = new Map<string, Report>();
   const outsideRequests: string[] = [];
   let outsideConnections = 0;
@@ -348,7 +365,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
 
   beforeAll(async () => {
     const root = tempDir("egb-sandbox-");
-    const bundle = (id: string, files: Record<string, string | Buffer>) => {
+    const bundle = (id: string, files: Record<string, string | Buffer>, waits = false) => {
       const hash = `0x${createHash("sha256").update(id).digest("hex")}`;
       const dir = path.join(root, hash);
       for (const [name, content] of Object.entries(files)) {
@@ -356,7 +373,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
         writeFileSync(path.join(dir, name), content);
       }
       bundles.set(hash, { dir, files: new Set(Object.keys(files)) });
-      scenarios.push({ id, hash });
+      scenarios.push({ id, hash, waits });
       return dir;
     };
 
@@ -406,7 +423,10 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
       "index.html": page(inline(`if (window.name === "again") setInterval(() => { ${LANDED} }, 100); else window.addEventListener("load", () => { window.name = "again"; setTimeout(() => location.reload()); });`)),
     });
     // The frame's first `load` is then the landing page's, so the channel can't count it. A 404 never says ready.
-    bundle("leaves for its second page before it has loaded", { "index.html": page(inline(`location.href = "second.html";`)), "second.html": page(inline(LANDED)) });
+    bundle("leaves for its second page before it has loaded", { "index.html": page(inline(`location.href = "second.html";`)), "second.html": page(inline(LANDED)) }, true);
+    bundle("leaves for a page that answers, before it has loaded", { "index.html": page(inline(`location.href = ${ANSWERS};`)) }, true);
+    // A `ready` said ahead of the frame's first `load` proves nothing: that load may be another page's, or never come.
+    for (const [id, then] of Object.entries(VOUCHERS)) bundle(id, { "index.html": vouches(then), "second.html": page(inline(LANDED)) }, true);
 
     const screenDir = path.join(root, "screen");
     mkdirSync(screenDir);

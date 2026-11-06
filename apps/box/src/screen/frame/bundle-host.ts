@@ -13,4 +13,3 @@ window.addEventListener("message", (event) => {
 });
 window.addEventListener("error", (event) => runtime.fail(event.error ?? event.message));
 window.addEventListener("unhandledrejection", (event) => runtime.fail(event.reason));
-window.addEventListener("load", () => runtime.ready());

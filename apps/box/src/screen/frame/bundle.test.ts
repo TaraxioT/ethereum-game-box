@@ -253,6 +253,14 @@ describe("window.egb", () => {
     expect(players).toEqual([{ name: "nova.eth" }, { name: "ORION" }]);
   });
 
+  it("says ready only when the kiosk asks, with the players already up to date", () => {
+    const { runtime, posted } = page();
+    expect(posted).toEqual([]);
+    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth" }] });
+    expect(posted).toEqual([{ t: "ready" }]);
+    expect(runtime.egb.players).toEqual([{ name: "nova.eth" }]);
+  });
+
   it("starts with no players when the frame's name isn't theirs", () => {
     expect(page("").runtime.egb.players).toEqual([]);
     expect(page("{}").runtime.egb.players).toEqual([]);
@@ -266,8 +274,7 @@ describe("window.egb", () => {
     station(1, "GO");
     buzz(0);
     end();
-    runtime.ready();
-    expect(posted).toEqual([{ t: "event", name: "score", data: { n: 1 } }, { t: "event", name: "start", data: null }, { t: "station", seat: 1, text: "GO" }, { t: "buzz", seat: 0 }, { t: "end" }, { t: "ready" }]);
+    expect(posted).toEqual([{ t: "event", name: "score", data: { n: 1 } }, { t: "event", name: "start", data: null }, { t: "station", seat: 1, text: "GO" }, { t: "buzz", seat: 0 }, { t: "end" }]);
   });
 
   it("hands each tap to every listener, with only its seat, time and roll", () => {
@@ -342,7 +349,11 @@ describe("the kiosk's view of a store match", () => {
     const powers: BundlePowers = { event: vi.fn(), station: vi.fn(), buzz: vi.fn(), end: vi.fn() };
     const fullSource: BundleSource = { match: () => ({ hash: HASH, title: "Tap Rush", players: PLAYERS }), tap: () => ({ seat: 1, at: 7, roll: null }), ...source };
     const ctx = { layout: LAYOUT, link: { state: () => state } } as unknown as ViewContext;
-    return { ...s, powers, view: bundleFrameView(fullSource, () => powers)(ctx) };
+    const up = () => {
+      s.load();
+      s.say({ t: "ready" });
+    };
+    return { ...s, powers, up, view: bundleFrameView(fullSource, () => powers)(ctx) };
   }
 
   beforeEach(() => {
@@ -357,28 +368,48 @@ describe("the kiosk's view of a store match", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads the bundle's page sandboxed, sends bundle-init on ready, and then each tap", () => {
+  it("loads the bundle's page sandboxed, asks it for ready once it has loaded, and then sends each tap", () => {
     const m = play();
     expect(m.attributes).toMatchObject({ sandbox: "allow-scripts", src: `/store/${HASH}/index.html` });
-    m.view.update(state, TAP); // before ready: the page can't hear it yet
+    m.view.update(state, TAP); // before it has loaded: the page can't hear it yet
     expect(FRAME_WINDOW.postMessage).not.toHaveBeenCalled();
-    m.say({ t: "ready" });
+    m.load();
     expect(FRAME_WINDOW.postMessage).toHaveBeenCalledWith({ t: "bundle-init", players: PLAYERS }, "*");
+    m.view.update(state, TAP); // asked, and not yet answered
+    expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(1);
+    m.say({ t: "ready" });
     m.view.update(state, TAP);
     expect(FRAME_WINDOW.postMessage).toHaveBeenLastCalledWith({ t: "tap", seat: 1, at: 7, roll: null }, "*");
     expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(2);
   });
 
+  it("tells the page the players as the Box knows them when it has loaded", () => {
+    const seen = [{ name: "nova.eth" }];
+    let match = { hash: HASH, title: "Tap Rush", players: PLAYERS };
+    const m = play({ match: () => match });
+    match = { ...match, players: seen };
+    m.load();
+    expect(FRAME_WINDOW.postMessage).toHaveBeenCalledWith({ t: "bundle-init", players: seen }, "*");
+  });
+
+  it("keeps the match going past the timeout once the page has answered", () => {
+    const m = play();
+    m.up();
+    vi.advanceTimersByTime(READY_TIMEOUT_MS);
+    expect(m.powers.end).not.toHaveBeenCalled();
+    expect(m.frame.remove).not.toHaveBeenCalled();
+  });
+
   it("tells the page nothing for the Box's other moments", () => {
     const m = play({ tap: () => null });
-    m.say({ t: "ready" });
+    m.up();
     m.view.update(state, { type: "gas", gwei: 2 });
     expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it("passes on only what the gate lets through", () => {
     const m = play();
-    m.say({ t: "ready" });
+    m.up();
     m.say({ t: "event", name: "score", data: { n: 1 } });
     m.say({ t: "station", seat: 2, text: "GO" });
     m.say({ t: "buzz", seat: 1 });
@@ -392,12 +423,11 @@ describe("the kiosk's view of a store match", () => {
 
   it("ends the match once when the game says so", () => {
     const m = play();
-    m.say({ t: "ready" });
+    m.up();
     m.say({ t: "end" });
     m.say({ t: "end" });
     expect(m.powers.end).toHaveBeenCalledTimes(1);
     expect(m.powers.end).toHaveBeenCalledWith("game");
-    m.load();
     m.load(); // the game left after its end: the frame goes, but the match already ended
     expect(m.powers.end).toHaveBeenCalledTimes(1);
     expect(m.frame.remove).toHaveBeenCalled();
@@ -405,7 +435,7 @@ describe("the kiosk's view of a store match", () => {
 
   it("plays on past a stray error: the plate shows, the taps still count", () => {
     const m = play();
-    m.say({ t: "ready" });
+    m.up();
     m.say({ t: "error", message: "TypeError: x" });
     expect(m.box.append).toHaveBeenCalledTimes(2); // the frame, then the plate
     expect(m.powers.end).not.toHaveBeenCalled();
@@ -424,10 +454,40 @@ describe("the kiosk's view of a store match", () => {
     expect(FRAME_WINDOW.postMessage).not.toHaveBeenCalled();
   });
 
-  it("loses a page that navigates: the second load closes the channel for good", () => {
+  it("loses a page that says ready by hand and leaves before it has loaded: the load that comes is another page's", () => {
     const m = play();
+    m.say({ t: "ready" });
+    m.load();
+    vi.advanceTimersByTime(READY_TIMEOUT_MS - 1);
+    expect(m.powers.end).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(m.powers.end).toHaveBeenCalledWith("lost");
+    expect(m.frame.remove).toHaveBeenCalled();
+  });
+
+  it("loses a page that says ready and never loads: one that stops its own load, or reloads for ever", () => {
+    const m = play();
+    m.say({ t: "ready" });
+    m.view.update(state, TAP);
+    vi.advanceTimersByTime(READY_TIMEOUT_MS);
+    expect(m.powers.end).toHaveBeenCalledWith("lost");
+    expect(FRAME_WINDOW.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("spends a ready said before the kiosk asks, so the page that lands can't say it again", () => {
+    const m = play();
+    m.say({ t: "ready" });
     m.load();
     m.say({ t: "ready" });
+    m.view.update(state, TAP);
+    expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(1); // the kiosk asked, and no tap went
+    vi.advanceTimersByTime(READY_TIMEOUT_MS);
+    expect(m.powers.end).toHaveBeenCalledWith("lost");
+  });
+
+  it("loses a page that navigates: the second load closes the channel for good", () => {
+    const m = play();
+    m.up();
     m.load();
     expect(m.powers.end).toHaveBeenCalledWith("lost");
     expect(m.frame.remove).toHaveBeenCalled();
@@ -439,8 +499,7 @@ describe("the kiosk's view of a store match", () => {
 
   it("loses a page that keeps sending what it may not, and reads nothing more of it", () => {
     const m = play();
-    m.load();
-    m.say({ t: "ready" });
+    m.up();
     for (let i = 1; i < FRAME_LIMITS.oversized; i++) m.say(new Uint8Array(1));
     expect(m.powers.end).not.toHaveBeenCalled();
     m.say(new Uint8Array(1));

@@ -1,6 +1,11 @@
-// The kiosk's view of a store match: the bundle's page in <iframe sandbox="allow-scripts">, behind the kiosk's gate. The
-// page says `ready` once it has loaded; the view sends `bundle-init`, then each tap. What the gate lets through goes on
-// to the Box through `powers`, and the Box writes the log.
+// The kiosk's view of a store match: the bundle's page in <iframe sandbox="allow-scripts">, behind the kiosk's gate. Once
+// the frame has loaded the view sends `bundle-init`, the page answers `ready`, and each tap follows. What the gate lets
+// through goes on to the Box through `powers`, and the Box writes the log.
+//
+// The view speaks first because a `ready` can't be believed by itself: a page can say it by hand before it has loaded
+// and then leave, and the kiosk would see the same `ready` and `load` as from a page that stayed. Only an answer to
+// something sent after the load proves the page that loaded is listening. One said sooner is spent (the gate takes one),
+// so a page can't vouch for whatever lands in the frame, and one that never loads is never asked.
 //
 // Unlike a built game, the page holds the game. A stray error gets the quiet plate and the taps still count, but a page
 // that never loads, leaves its page or floods the gate is lost: the frame goes, and the Box hears it, so a broken game
@@ -47,6 +52,7 @@ export function bundleFrameView(source: BundleSource, powers: (ctx: ViewContext)
     if (!match) return { el: root, update: () => {} };
 
     const out = powers(ctx);
+    let asked = false;
     let ready = false;
     let ended = false;
     const end = (why: BundleEnd) => {
@@ -68,14 +74,17 @@ export function bundleFrameView(source: BundleSource, powers: (ctx: ViewContext)
     );
 
     const channel = openFrameChannel(window, frame, gate, {
+      loaded() {
+        asked = true;
+        const { players } = source.match(ctx.link.state()) ?? match;
+        channel.post({ t: "bundle-init", players });
+      },
       message(message) {
         switch (message.t) {
-          case "ready": {
+          case "ready":
+            if (!asked) return;
             ready = true;
-            clearTimeout(timeout);
-            const { players } = source.match(ctx.link.state()) ?? match;
-            return channel.post({ t: "bundle-init", players });
-          }
+            return clearTimeout(timeout);
           case "error":
             return showFault(message.message);
           case "event":

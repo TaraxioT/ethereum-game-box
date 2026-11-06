@@ -1,9 +1,9 @@
 // The frame side of a store bundle's page: the `window.egb` that /bundle-host.js gives it. A convenience and no wall: a
 // game can post what it likes by hand, and the kiosk's gate (bundle-gate.ts) decides everything.
 //
-// The page says `ready` when the host calls `ready()`, once the page has loaded, so a game's own scripts have run and its
-// tap listeners are on before the kiosk sends the first tap. `players` is there sooner than that, from the frame's name,
-// so a game can read it on its first line; `bundle-init` then brings them up to date in the same array.
+// The kiosk sends `bundle-init` once the frame has loaded, so a game's own scripts have run and its tap listeners are on,
+// and the page answers `ready` (bundle-view.ts says why it waits to be asked). `players` is there sooner than that, from
+// the frame's name, so a game can read it on its first line; `bundle-init` then brings them up to date in the same array.
 //
 // Platform-free (no window, no parent): bundle-host.ts wires it to the page, and the tests drive it directly.
 import type { BundleApi, BundleTap, FrameSeat, FromBundle, ToFrame } from "@egb/sdk";
@@ -18,8 +18,6 @@ export interface BundleRuntimeOptions {
 
 export interface BundleRuntime {
   readonly egb: BundleApi;
-  /** The page has loaded: tells the kiosk. */
-  ready(): void;
   /** A message from the kiosk: anything that isn't for a bundle's page is ignored. */
   receive(data: unknown): void;
   /** Reports an error from anywhere in the page (window `error`, unhandled rejections). */
@@ -67,12 +65,12 @@ export function createBundleRuntime(options: BundleRuntimeOptions): BundleRuntim
       buzz: (seat) => post({ t: "buzz", seat }),
       end: () => post({ t: "end" }),
     },
-    ready: () => post({ t: "ready" }),
     receive(data) {
       const message = toBundle(data);
       if (!message) return;
       if (message.t === "bundle-init") {
         players.splice(0, players.length, ...message.players);
+        post({ t: "ready" });
         return;
       }
       const { seat, at, roll } = message;

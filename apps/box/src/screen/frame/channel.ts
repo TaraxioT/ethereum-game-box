@@ -54,6 +54,8 @@ export interface FrameElement {
 
 export interface FrameChannelEvents<M> {
   message(message: M): void;
+  /** The frame's first `load`: its page has loaded, or the page it left for has. */
+  loaded?(): void;
   /** The frame navigated away from its page: the channel has closed. */
   left(): void;
 }
@@ -74,7 +76,8 @@ export function openFrameChannel<M>(host: MessageHost, frame: FrameElement, read
   };
   const onLoad = () => {
     loads++;
-    if (loads < 2 || closed) return;
+    if (closed) return;
+    if (loads === 1) return events.loaded?.();
     dispose();
     events.left();
   };

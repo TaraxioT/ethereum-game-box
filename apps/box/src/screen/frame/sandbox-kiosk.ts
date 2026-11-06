@@ -9,6 +9,8 @@ import { bundleFrameView } from "./bundle-view.ts";
 interface Scenario {
   readonly id: string;
   readonly hash: string;
+  /** It waits out the view's timeout, so it plays beside the others that do. */
+  readonly waits: boolean;
 }
 
 const PLAYERS = [{ name: "NOVA" }, { name: "ORION" }, { name: null }];
@@ -20,6 +22,8 @@ const SETTLE_MS = 400;
 /** Past the view's own ready timeout, so a scenario always ends. */
 const GIVE_UP_MS = 12_000;
 const BEAT_MS = 20;
+/** Past the kiosk asking a page that has loaded and hearing it answer: a tap before that is dropped, as on the Box. */
+const TAP_AFTER_MS = 200;
 
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
@@ -55,7 +59,7 @@ async function play(scenario: Scenario): Promise<unknown> {
     () => ({
       event(name, data) {
         said.push({ event: name, data });
-        if (name === "want-tap") view.update(STATE, TAP);
+        if (name === "want-tap") setTimeout(() => view.update(STATE, TAP), TAP_AFTER_MS);
       },
       station: (seat, text) => said.push({ station: seat, text }),
       buzz: (seat) => said.push({ buzz: seat }),
@@ -70,9 +74,9 @@ async function play(scenario: Scenario): Promise<unknown> {
   return { id: scenario.id, end: why, said, stall: stall() };
 }
 
+const report = (body: unknown) => fetch("/api/report", { method: "POST", body: JSON.stringify(body) });
+
 const scenarios = (await (await fetch("/api/scenarios")).json()) as readonly Scenario[];
-for (const scenario of scenarios) {
-  const report = await play(scenario);
-  await fetch("/api/report", { method: "POST", body: JSON.stringify(report) });
-}
-await fetch("/api/report", { method: "POST", body: JSON.stringify({ done: true }) });
+await Promise.all(scenarios.filter((scenario) => scenario.waits).map(async (scenario) => report(await play(scenario))));
+for (const scenario of scenarios.filter((s) => !s.waits)) await report(await play(scenario));
+await report({ done: true });

@@ -45,9 +45,9 @@ at `/store/<hash>/index.html` under its own CSP (`server/games/`), with `/bundle
 | `end()` | The game is over. That closes the match and nothing else: a game has no say over money. |
 
 **How it starts.** A page's first script runs before any message could reach it, and games read `players` on their
-first line. So the iframe's `name` carries the players as JSON, and the host reads them from there. The host posts `ready`
-on the window's `load`, when the game's scripts have run and its listeners are on; the kiosk answers `bundle-init`, with
-the players' latest names in the same array, then sends each tap.
+first line. So the iframe's `name` carries the players as JSON, and the host reads them from there. The kiosk speaks
+first: on the frame's first `load`, when the game's scripts have run and its listeners are on, it sends `bundle-init` with
+the players' latest names, which go in the same array. The host answers `ready`, and the taps begin.
 
 **The gate** (`bundle-gate.ts`). The host is a convenience, not a wall: a game can post anything by hand. So everything
 is decided on the kiosk's side, before a message goes further:
@@ -55,7 +55,8 @@ is decided on the kiosk's side, before a message goes further:
 - A message is weighed before anything else: at most 4096 characters and parts of plain JSON (`FRAME_LIMITS.messageWeight`,
   four times an event's data). The walk stops at that weight, however large the message. One past it, or holding what JSON
   can't say (a buffer, a `Date`, a `Map`), is dropped, and the third such message loses the page: the kiosk's timers, screen
-  and link to the Box share one thread, and a browser clones anything a page posts.
+  and link to the Box share one thread. The browser's own clone is the one cost the gate can't stop, as it comes before
+  the gate: millions of small parts held the thread about 5 s a message on a Mac, which is why so few of them lose the page.
 - A message must be exactly a `FromBundle`. A page has no word for a tap, a badge, the network or money, so nothing it
   posts can become one. The seat must be the match's.
 - `FRAME_LIMITS` holds the rates: 20 events a second (40 at once), 4 station lines and 2 buzzes a second a seat. Whatever
@@ -64,9 +65,12 @@ is decided on the kiosk's side, before a message goes further:
 - One `ready`, at most 10 errors, and nothing at all after `end`.
 
 **The second-load rule stays:** a frame that navigates loses its channel for good. A page that leaves before its own
-`load` gets past the count, since the landing page's `load` is then the first. So the Box shows no other page of a
-bundle in a frame: a navigation to one is a 404, and it never says `ready`, so the view's timeout loses the page. The
-Box's other pages have nothing of the game's in them, and a landing page is under the gate like any other.
+`load` gets past the count, since the landing page's `load` is then the first, and a page that calls `window.stop()` has no
+`load` at all. So `ready` only counts as an answer: one a page says before the kiosk asks is spent. A page that stops its
+load or reloads for ever is never asked, and a landing page has nothing to answer with: the Box shows no other page of a
+bundle in a frame (a navigation to one is a 404), the kiosk's `frame-src 'self'` keeps out `data:` and `blob:` pages, and
+the Box's other pages have nothing of the game's in them. Either way the view's timeout loses the page. A page it can't
+tell from the real one would be `index.html` again, which is the game.
 
 **Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
 that never says ready, leaves, or keeps sending what the gate can't weigh is lost: the frame goes, and
@@ -82,7 +86,7 @@ with `--host-resolver-rules` and `--webrtc-ip-handling-policy`, and `server/game
 |---|---|---|
 | `view.ts` | The kiosk's view of a built match, and the glass every frame view stands on. | `frameView(source): ViewFactory`, `frameGlass(layout, attributes)`, `READY_TIMEOUT_MS` |
 | `feed.ts` | What the frame is told, from BoxState and BoxEvents. Pure. | `builtMatch` (the router's source: the built play and its game.json from the library), `FrameMatch`, `FrameSource`, `frameSeats`, `frameInit`, `frameEvent`, `frameUpdate` |
-| `channel.ts` | The kiosk's end of the channel and the iframes' attributes. | `openFrameChannel(host, frame, read, { message, left })`, `parseFromFrame`, `frameAttributes(id, title)`, `bundleFrameAttributes(hash, title, players)` |
+| `channel.ts` | The kiosk's end of the channel and the iframes' attributes. | `openFrameChannel(host, frame, read, { message, loaded?, left })`, `parseFromFrame`, `frameAttributes(id, title)`, `bundleFrameAttributes(hash, title, players)` |
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `errorText`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
 | `bundle-view.ts` | The kiosk's view of a store match. | `bundleFrameView(source, powers): ViewFactory`, `BundleMatch`, `BundleSource`, `BundlePowers`, `BundleEnd` |

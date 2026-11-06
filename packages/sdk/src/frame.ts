@@ -42,7 +42,7 @@ export type ToFrame =
       readonly calm: boolean;
     }
   | { readonly t: "update"; readonly state: unknown; readonly event: FrameEvent; readonly now: number }
-  /** A bundle's page, once it says ready: the match's players in seat order, as the Box knows them by then. */
+  /** A bundle's page, once its frame has loaded: the match's players in seat order, as the Box knows them by then. It answers `ready`. */
   | { readonly t: "bundle-init"; readonly players: readonly FrameSeat[] }
   | ({ readonly t: "tap" } & BundleTap);
 
