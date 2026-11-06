@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -225,6 +225,40 @@ describe("the hall", () => {
     r.core.send({ type: "hall" });
     r.clock.advance(IDLE_MS);
     expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("players who walk away", () => {
+  async function toStake(r: Rig<Recording>): Promise<void> {
+    await seated(r);
+    r.core.send({ type: "focus", game: "quick-draw" });
+    r.core.send({ type: "play" });
+    await flush();
+    expect(r.core.state().phase).toBe("stake");
+  }
+
+  it("leave Stake for Home after SEATED_IDLE_MS, and a sign tap holds it there", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    r.clock.advance(SEATED_IDLE_MS - 1);
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state().seats[0].signed).toBe(true);
+    r.clock.advance(SEATED_IDLE_MS - 1);
+    expect(r.core.state().phase).toBe("stake");
+    r.clock.advance(1);
+    expect(r.core.state().phase).toBe("home");
+    expect(r.core.state().seats.map((seat) => seat.signed)).toEqual([false, false]);
+  });
+
+  it("stay on Stake while both have signed and the pot is opening", async () => {
+    const r = rigOn(recordingPort);
+    await toStake(r);
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    r.clock.advance(SEATED_IDLE_MS * 3);
+    expect(r.core.state().phase).toBe("stake");
+    await potConfirmed(r);
+    expect(r.core.state().phase).toBe("playing");
   });
 });
 

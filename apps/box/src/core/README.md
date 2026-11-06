@@ -11,7 +11,7 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 
 | Port | What the core does with it |
 |---|---|
-| `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, Home's idle). |
+| `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, the idles). |
 | `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap. |
 | `chain` | The chain behind the money (`ChainPort`): `balance`, `player` (balance and player name) and `board` (the title and the open championship) are reads; `open` (both stakes into the pot), `settle` (the result), `refund`, `topup` and `claim` are sends that never wait, each step coming back through its watch; `outcome` reads what a paid result did; `watchHead` drives the block clock; `nextRound` (kept on disk on the Box, never repeated) and `refundAfterMs`; `onChain(game)`: a built game isn't, and plays for nothing. The Box runs Sepolia through the relayer (`src/chain/`); the demo and the tests run `demo-chain.ts`. |
 | `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). A `GameInfo` carries its checked game.json (`manifest`) and, for a game that should play but can't, why (`sealed`). |
@@ -56,7 +56,9 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 - **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
   Stake tap whose balance can't cover the stake (or isn't read yet), or with no player name where the port stakes only
   named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
-  badge, with Back returning to Stake.
+  badge, with Back returning to Stake. Join and Stake go Home after `SEATED_IDLE_MS` (2 minutes) with no tap or touch,
+  dropping a lone signature, so seats left by players who walked away don't greet the next ones (or a restarted
+  screen) and don't keep the updater waiting; not while both have signed and the pot is opening.
 - **Open.** When both seats have signed, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
   `nextRound`) and the Box waits on Stake until the open is confirmed (the relayer's `done`: a block past the one it is
   in): only then does the match begin. The screen shows the wait in the game's own screen (Quick Draw's walk-out, Stock

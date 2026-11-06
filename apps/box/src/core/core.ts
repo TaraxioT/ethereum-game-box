@@ -65,6 +65,12 @@ export const IDLE_MS = 60_000;
  * player works (and as a build streams in), so only a builder left alone times out; a running build carries on.
  */
 export const BUILD_IDLE_MS = 5 * 60_000;
+/**
+ * Join or Stake goes back to Home after this long with no tap or touch: players who walk away don't leave their seats
+ * on screen for whoever comes next (or for a screen that restarts), and the updater can switch releases. Not while both
+ * have signed, since their stakes are moving on chain.
+ */
+export const SEATED_IDLE_MS = 2 * 60_000;
 /** How often a running game is stepped. */
 export const TICK_MS = 50;
 /** A finished game stays on screen this long (the winner, the reaction times, the last seal) before it settles. */
@@ -382,7 +388,13 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (phase === "home") idleTimer = timers.after(IDLE_MS, () => setPhase("attract"));
     else if (phase === "lobby" || phase === "hall") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
     else if (phase === "build") idleTimer = timers.after(BUILD_IDLE_MS, () => setPhase("home"));
+    else if (phase === "join" || phase === "stake") idleTimer = timers.after(SEATED_IDLE_MS, leaveSeats);
     else idleTimer = null;
+  }
+
+  /** Seated players walked away: Home, unless both have signed and their stakes are moving. */
+  function leaveSeats(): void {
+    if (phase === "join" || (phase === "stake" && !(seats[0].signed && seats[1].signed))) setPhase("home");
   }
 
   function setPhase(to: Phase): void {
@@ -988,6 +1000,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         resetIdle();
         return takeSeat(seat, badge);
       case "stake":
+        resetIdle();
         return seatedHere ? sign(seat) : "ignored";
       case "playing":
         return seatedHere ? gameTap({ kind: "tap", seat, at, roll }) : "ignored";
