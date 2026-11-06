@@ -54,7 +54,7 @@ async function inject(tb: TestBox, seat: Seat, badge: Address): Promise<void> {
 }
 
 describe("a match with its stakes on Sepolia", () => {
-  it("opens at once, waits for the pot before the result, and reads the result's lines from the chain", async () => {
+  it("waits on Stake until the pot is in a block, sends the result once it is done, and reads its lines from the chain", async () => {
     const { tb, relayer, reads } = await rig();
     const core = tb.box.core;
     core.send({ type: "booted" });
@@ -66,14 +66,18 @@ describe("a match with its stakes on Sepolia", () => {
     core.send({ type: "play" });
     await inject(tb, 0, NOVA);
     await inject(tb, 1, KITE);
-    // The match is playing before anything is mined: only the open is out.
-    expect(core.state().phase).toBe("playing");
+    // Both signed: the Box waits on Stake with only the open out, until the open is in a block.
+    expect(core.state().phase).toBe("stake");
     expect(relayer.posted.map((p) => p.path)).toEqual(["/duel/open"]);
     const stake = relayer.posted[0]!.body.stake as Record<string, string>;
     expect(stake).toMatchObject({ box: "mumbai-01", game: "quickdraw", round: "1", a: NOVA, b: KITE, amount: "10000000" });
     expect(core.state().txs.map((t) => [t.kind, t.step, t.amount])).toEqual([["open", "sent", 20]]);
+    const [open] = relayer.ids();
+    relayer.advance(open!, "in-block");
+    await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
+    expect(core.state().txs[0]?.step).toBe("in-block");
 
-    // Player 2 wins the draw; the game ends and holds, but the result waits for the pot.
+    // Player 2 wins the draw; the game ends and holds, but the result waits for the pot to be done.
     await tb.settle(() => {
       const play = core.state().match?.play;
       return play?.game === "quick-draw" && play.state.phase === "draw";
@@ -85,10 +89,6 @@ describe("a match with its stakes on Sepolia", () => {
     expect(core.state().phase).toBe("result");
     expect(relayer.posted.map((p) => p.path)).toEqual(["/duel/open"]);
 
-    const [open] = relayer.ids();
-    relayer.advance(open!, "in-block");
-    await tb.settle(() => core.state().txs[0]?.step === "in-block", POLL_MS * 2, 100);
-    expect(relayer.posted).toHaveLength(1);
     relayer.advance(open!, "done");
     reads.balances.set(NOVA, 90).set(KITE, 90);
     await tb.settle(() => relayer.posted.length === 2, POLL_MS * 2, 100);

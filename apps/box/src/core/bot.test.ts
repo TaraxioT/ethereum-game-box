@@ -22,7 +22,7 @@ import {
 
 const NOW = 9_000_000;
 const NOVA = DEMO_BADGES[0] ?? BOT_BADGE;
-const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0 };
+const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0, record: null };
 
 function box(patch: Partial<BoxState>): BoxState {
   return {
@@ -40,8 +40,8 @@ function box(patch: Partial<BoxState>): BoxState {
   };
 }
 
-const human = (signed = false): SeatState => ({ badge: NOVA, ens: null, balance: 100, signed, pending: 0 });
-const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, ens: null, balance: 100, signed, pending: 0 });
+const human = (signed = false): SeatState => ({ badge: NOVA, ens: null, balance: 100, signed, pending: 0, record: null });
+const bot = (signed = false): SeatState => ({ badge: BOT_BADGE, ens: null, balance: 100, signed, pending: 0, record: null });
 
 function delays(intent: BotIntent, runs = 4_000): (number | null)[] {
   const out: (number | null)[] = [];
@@ -71,7 +71,7 @@ describe("bot intents", () => {
   });
 
   it("sits out while somebody else holds Player 2's seat", () => {
-    const kite: SeatState = { badge: DEMO_BADGES[1] ?? NOVA, ens: null, balance: 100, signed: false, pending: 0 };
+    const kite: SeatState = { badge: DEMO_BADGES[1] ?? NOVA, ens: null, balance: 100, signed: false, pending: 0, record: null };
     expect(botIntent(box({ phase: "stake", seats: [human(true), kite] }), NOW, BOT_BADGE)).toBeNull();
   });
 

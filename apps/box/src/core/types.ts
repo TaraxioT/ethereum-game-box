@@ -49,6 +49,16 @@ export interface SeatState {
   readonly pending: number;
   /** This seat has signed the entry for the match being staked. */
   readonly signed: boolean;
+  /** The badge's record in the focused game, read from chain; null until read, or for a game not on chain. */
+  readonly record: PlayerRecord | null;
+}
+
+/** A badge's wins, losses and draws in one game, as `PlayerStats` holds them. */
+export interface PlayerRecord {
+  readonly game: GameId;
+  readonly wins: number;
+  readonly losses: number;
+  readonly draws: number;
 }
 
 /** Sepolia's head, as the Box last read it (block 0 before the first read). */
@@ -130,6 +140,8 @@ export interface PlayerCard {
   readonly name: string | null;
   /** USDC. */
   readonly balance: number;
+  /** Its record in the game it was read for, or null for a game not on chain. */
+  readonly record: PlayerRecord | null;
 }
 
 /** One row of a championship's standings. */

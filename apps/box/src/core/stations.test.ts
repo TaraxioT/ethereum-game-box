@@ -9,7 +9,7 @@ import { stationView, type StationInput } from "./stations.ts";
 
 const NOW = 5_000_000;
 const [NOVA, KITE] = DEMO_BADGES as [(typeof DEMO_BADGES)[0], (typeof DEMO_BADGES)[0]];
-const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0 };
+const EMPTY: SeatState = { badge: null, ens: null, balance: null, signed: false, pending: 0, record: null };
 
 function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EMPTY], match: Match | null = null): StationInput {
   return {
@@ -26,7 +26,7 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
 }
 
 function seat(badge: typeof NOVA, signed = false, balance: number | null = 100): SeatState {
-  return { badge, ens: null, balance, signed, pending: 0 };
+  return { badge, ens: null, balance, signed, pending: 0, record: null };
 }
 
 function matchOf(play: MatchPlay, extra: Partial<Match> = {}): Match {

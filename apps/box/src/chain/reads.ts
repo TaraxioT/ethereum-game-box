@@ -11,6 +11,7 @@ import {
   duelPotAbi,
   ensAddress,
   fakeUsdcAbi,
+  playerStatsAbi,
   formatUsdc,
   gameBoxNamesAbi,
   parseStandings,
@@ -38,6 +39,8 @@ export interface Reads {
   balance(address: Address): Promise<number>;
   /** `<label>.gamebox.eth`, or null. */
   nameOf(address: Address, block?: bigint): Promise<string | null>;
+  /** A badge's wins, losses and draws in a game (its chain label), from `PlayerStats`. */
+  record(address: Address, game: string): Promise<{ readonly wins: number; readonly losses: number; readonly draws: number }>;
   /** BoxResults has seen this round, or DuelPot holds a pot for it (open, settled or refunded). */
   roundTaken(box: string, round: number): Promise<boolean>;
   /** The pot is still open (neither settled nor refunded). */
@@ -73,6 +76,7 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
   const pot = { address: contractAddress("DuelPot"), abi: duelPotAbi } as const;
   const results = { address: contractAddress("BoxResults"), abi: boxResultsAbi } as const;
   const cups = { address: contractAddress("Championships"), abi: championshipsAbi } as const;
+  const stats = { address: contractAddress("PlayerStats"), abi: playerStatsAbi } as const;
 
   /** A text record through the Universal Resolver; a name that doesn't resolve is null. */
   async function text(name: string, key: string, blockNumber?: bigint): Promise<string | null> {
@@ -125,6 +129,11 @@ export function sepoliaReads(rpcUrl: string, client: PublicClient = sepoliaClien
     balance: (badge) =>
       safely("a USDC balance", async () => Number(formatUsdc(await client.readContract({ ...usdc, functionName: "balanceOf", args: [badge] })))),
     nameOf: (badge, block) => safely("a player name", () => nameOf(badge, block)),
+    record: (badge, game) =>
+      safely("a player's record", async () => {
+        const r = await client.readContract({ ...stats, functionName: "statsOf", args: [badge, game] });
+        return { wins: Number(r.wins), losses: Number(r.losses), draws: Number(r.draws) };
+      }),
     roundTaken: (box, round) =>
       safely("a round", async () => {
         const used = await client.readContract({ ...results, functionName: "roundUsed", args: [box, BigInt(round)] });
