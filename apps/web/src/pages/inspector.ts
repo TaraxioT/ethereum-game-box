@@ -4,7 +4,7 @@
 import { type Address, getAddress } from "viem";
 import { BOX_KEYS, PARENT_NAME } from "@egb/shared/names";
 
-import { type Account, type RoleRow, type TryCell, readRoleTable, tryAll } from "../access.ts";
+import { type Account, type RoleRow, readRoleTable } from "../access.ts";
 import { revokeStats, setPrimaryName, tryTransfer } from "../actions.ts";
 import { readAnswer } from "../answer.ts";
 import { type Route, dir, render, setFocus, state } from "../app.ts";
@@ -15,7 +15,7 @@ import { readAddress, readPrimaryName, readText } from "../ens.ts";
 import { type NameKind, accountsFor, keysFor, kindOf } from "../model.ts";
 import { FOREVER, type Location, locate } from "../registry.ts";
 import { TxFailed } from "../txs.ts";
-import { type TryMemory, roleTable, tryGrid, tryLegend } from "../ui/access-view.ts";
+import { roleTable, tryBlock } from "../ui/access-view.ts";
 import { answerView } from "../ui/answer-view.ts";
 import { addressLink, append, h, key, short } from "../ui/dom.ts";
 import { qrCode } from "../ui/qr.ts";
@@ -31,6 +31,7 @@ const LEDE: Record<NameKind, string> = {
   agent: "The practice opponent's name. The agent holds every role on its own resolver and keeps its ENSIP-26 records there; the game may write its stats and nothing else.",
   game: "A game name, with its own title registry. Only GameBoxNames writes it.",
   title: "A champion title. It moves to each new winner (the old token is unregistered and a new one minted), lapses a term after the last win, and can't be transferred.",
+  cup: "A championship. While it runs, Championships rewrites its standings, leader and addr after every result. At close it is registered to the winner with no expiry, and Championships gives up every role on its resolver: the records are frozen, and nobody can write them again.",
   other: "A name under gamebox.eth.",
 };
 
@@ -42,11 +43,9 @@ const BRIEF: Record<NameKind, string> = {
   agent: "Agents as namespaces",
   game: "Deploy your own subname registry: one per game",
   title: "Non-transferable names",
+  cup: "Live records, then frozen: no account can change them",
   other: "Resolve subnames off a parent's resolver (wildcard)",
 };
-
-/** Each name's Try answers from its last draw, so a cell that changed shows it. */
-const memories = new Map<string, TryMemory>();
 
 function fact(label: string, value: Node | string, small?: Node | string, yes = false): HTMLElement {
   return h(yes ? "div.yes" : "div", {}, h("dt", {}, label), h("dd", {}, value, small ? h("small", {}, small) : null));
@@ -151,16 +150,7 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
     .catch(() => roles.replaceChildren(h("p.failed", {}, "Couldn't read the roles.")));
 
   // Try.
-  const memory = memories.get(name) ?? new Map();
-  memories.set(name, memory);
-  const gridBox = h("div", { "data-focus": "try" }, tryGrid(accounts, keys, null, new Map()));
-  const legend = h("div", {}, tryLegend(null));
-  const runTry = async () => {
-    gridBox.replaceChildren(tryGrid(accounts, keys, null, new Map()));
-    const cells: TryCell[][] = await tryAll(client, name, resolver, accounts, keys);
-    gridBox.replaceChildren(tryGrid(accounts, keys, cells, memory));
-    legend.replaceChildren(tryLegend(cells));
-  };
+  const tried = tryBlock(name, resolver, accounts, keys);
   append(
     page,
     h("h2", {}, "TRY IT"),
@@ -172,15 +162,12 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
       " from that account. Nothing is sent and no gas is spent; the chain answers each one. ",
       h("span.sys", {}, "◆ Enhanced Access Control: edit only certain text records."),
     ),
-    gridBox,
-    legend,
-    h("div.actions", {}, key("Try again", () => void runTry())),
+    tried.el,
   );
-  void runTry();
 
   // The badge that owns this name may take `stats` away from the game.
   if (kind === "player" && state.badge && address && getAddress(address) === getAddress(state.badge.address)) {
-    append(page, revokePanel(name, runTry));
+    append(page, revokePanel(name, tried.run));
   }
   if (kind === "title") append(page, await transferPanel(name, accounts));
   return page;

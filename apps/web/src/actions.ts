@@ -1,5 +1,6 @@
-// The site's writes, each through the transaction strip: claim a name, make it the badge's primary name, revoke PlayerStats' `stats` role (after a
-// drip, for a test badge), open a pop-up Box and report a match. Pages and the Story both call these.
+// The site's writes, each through the transaction strip: claim a name, make it the badge's primary name, revoke
+// PlayerStats' `stats` role (after a drip, for a test badge), open a pop-up Box, top up a player's test USDC, report a
+// match and close a championship that has ended. Pages and the Story both call these.
 import { type Address, type Hex, encodeFunctionData, parseEther, zeroAddress } from "viem";
 import {
   DEFAULT_KEYS,
@@ -140,6 +141,16 @@ export async function revokeStats(badge: Badge, label: string): Promise<void> {
 /** Opens `popup-<label>.gamebox.eth` for 10 minutes. */
 export async function openPopup(label: string): Promise<void> {
   await relayed("POP-UP", fullName(popupLabel(label)), () => relayer.popup({ label }));
+}
+
+/** 100 test USDC to `player` (a name or an address), which the relayer resolves; it refuses a balance of 25 or more. */
+export async function topUp(player: string): Promise<void> {
+  await relayed("TOP UP", `100 USDC → ${player}`, () => relayer.topUp({ player }));
+}
+
+/** Closes `game`'s open championship once its `ends` has passed: anyone may. The demo Box's alarm does it too. */
+export async function closeCup(game: string, name: string): Promise<void> {
+  await relayed("CLOSE", name, () => relayer.closeCup({ game }));
 }
 
 /** The demo Box (a software key) signs a result and sends it through the relayer. */

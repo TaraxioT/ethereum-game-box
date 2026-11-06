@@ -29,8 +29,8 @@ export interface Location {
   emancipated: boolean;
 }
 
-/** Locates `name` (e.g. `nova.gamebox.eth`). */
-export async function locate(client: PublicClient, name: string): Promise<Location> {
+/** Locates `name` (e.g. `nova.gamebox.eth`), at `blockNumber` if given. */
+export async function locate(client: PublicClient, name: string, blockNumber?: bigint): Promise<Location> {
   const labels = name.split(".");
   const leaf = labels[0] ?? "";
   let registry: Address | null = ensAddress("RootRegistry");
@@ -40,6 +40,7 @@ export async function locate(client: PublicClient, name: string): Promise<Locati
       abi: permissionedRegistryAbi,
       functionName: "getSubregistry",
       args: [label],
+      blockNumber,
     });
     if (sub === zeroAddress) {
       registry = null;
@@ -50,7 +51,7 @@ export async function locate(client: PublicClient, name: string): Promise<Locati
   if (registry === null) {
     return { name, registry, label: leaf, resolver: null, status: "available", expiry: 0n, owner: null, tokenId: 0n, emancipated: false };
   }
-  const at = { address: registry, abi: permissionedRegistryAbi } as const;
+  const at = { address: registry, abi: permissionedRegistryAbi, blockNumber } as const;
   const [resolver, state, emancipated] = await Promise.all([
     client.readContract({ ...at, functionName: "getResolver", args: [leaf] }),
     client.readContract({ ...at, functionName: "getState", args: [labelId(leaf)] }),

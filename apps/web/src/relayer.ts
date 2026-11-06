@@ -3,12 +3,14 @@ import type { Address } from "viem";
 import type {
   ApiError,
   ClaimRequest,
+  CupCloseRequest,
   DemoBoxView,
   DripRequest,
   PopupRequest,
   RelayerHealth,
   ReportRequest,
   ReportResponse,
+  TopupRequest,
   TxView,
 } from "@egb/shared/names";
 
@@ -39,6 +41,8 @@ export const relayer = {
   claim: (body: ClaimRequest) => request<TxView>(RELAYER_URL, "/names/claim", body),
   popup: (body: PopupRequest) => request<TxView>(RELAYER_URL, "/box/popup", body),
   drip: (body: DripRequest) => request<TxView>(RELAYER_URL, "/names/drip", body),
+  topUp: (body: TopupRequest) => request<TxView>(RELAYER_URL, "/usdc/topup", body),
+  closeCup: (body: CupCloseRequest) => request<TxView>(RELAYER_URL, "/cup/close", body),
   tx: (id: string) => request<TxView>(RELAYER_URL, `/tx/${encodeURIComponent(id)}`),
   health: () => request<RelayerHealth>(RELAYER_URL, "/health"),
 };

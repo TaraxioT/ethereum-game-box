@@ -7,7 +7,7 @@ import { fullName } from "@egb/shared/names";
 import { reportWin } from "../actions.ts";
 import { dir, render } from "../app.ts";
 import { client } from "../chain.ts";
-import { AGENT_LABEL, DEMO_BOX_LABEL, GAMES } from "../config.ts";
+import { AGENT_LABEL, DEMO_BOX_LABEL, GAMES, STORY_GAME } from "../config.ts";
 import type { Directory } from "../directory.ts";
 import { type TitleView, boxLicensed, readTitle } from "../model.ts";
 import { when } from "../time.ts";
@@ -64,7 +64,7 @@ function titleCard(d: Directory, t: TitleView): HTMLElement {
 function reportPanel(d: Directory, licensed: boolean): HTMLElement {
   const players = [...d.players.values()].filter((p) => p.label !== AGENT_LABEL).sort((a, b) => Number(b.block - a.block));
   const options = () => players.map((p) => h("option", { value: p.label }, fullName(p.label)));
-  const game = h("select", { "aria-label": "game" }, ...GAMES.map((g) => h("option", { value: g, selected: g === "quickdraw" }, g)));
+  const game = h("select", { "aria-label": "game" }, ...GAMES.map((g) => h("option", { value: g, selected: g === STORY_GAME }, g)));
   const winner = h("select", { "aria-label": "winner" }, ...options());
   const loser = h("select", { "aria-label": "loser" }, ...options());
   if (players[1]) loser.value = players[1].label;
@@ -98,7 +98,7 @@ function reportPanel(d: Directory, licensed: boolean): HTMLElement {
       "p.labelled",
       {},
       h("b", {}, "The demo Box reports this result. "),
-      "It is a Box with a software P-256 key, signing for mumbai-01. At the event, the Box signs only after a real match on its table.",
+      `It is a Box Worker with a software P-256 key, licensed as ${fullName(DEMO_BOX_LABEL)}. At the event, the Box signs only after a real match on its table. A result in a game with an open championship scores it too.`,
     ),
     h("div.field", {}, h("label", {}, "game"), game),
     h("div.field", {}, h("label", {}, "winner"), winner, h("label", { style: "min-width:0" }, "beat"), loser),
@@ -108,7 +108,7 @@ function reportPanel(d: Directory, licensed: boolean): HTMLElement {
 
 /** Why a match can't be reported yet, or null. */
 function reportBlocked(d: Directory, licensed: boolean): string | null {
-  if (!licensed) return `BoxResults takes results only from a Box with a live licence, and ${fullName(DEMO_BOX_LABEL)} isn't licensed yet. Reporting opens once its operator registers it.`;
+  if (!licensed) return `BoxResults takes results only from a Box with a live licence, and ${fullName(DEMO_BOX_LABEL)} isn't licensed yet. Reporting opens once it is.`;
   if ([...d.players.values()].filter((p) => p.label !== AGENT_LABEL).length < 2) return "A match needs two player names: claim one on the Players page first.";
   return null;
 }

@@ -4,7 +4,7 @@
 import { fullName } from "@egb/shared/names";
 
 import { recordIdOf } from "../answer.ts";
-import { dir, state } from "../app.ts";
+import { dir } from "../app.ts";
 import { client, onHead } from "../chain.ts";
 import { OPERATOR_SITE_URL } from "../config.ts";
 import { readText } from "../ens.ts";
@@ -18,15 +18,15 @@ export function operatorSiteKey(text = "Open the operator site ↗"): HTMLAnchor
   return h("a.btn.out", { href: OPERATOR_SITE_URL, target: "_blank", rel: "noopener" }, text);
 }
 
-/** The names to watch: the Box, its live pop-ups, and the story's pop-up even once it has lapsed. */
+/** The names to watch: the Box and its live pop-ups. */
 async function watchedNames(box: string, boxState: string | null): Promise<{ name: string; state: string | null }[]> {
   const d = await dir();
   const now = BigInt(nowSeconds());
   const popups = [...d.popups.values()]
-    .filter((p) => p.ofBox === box && (p.expiry > now || p.label === state.story.popup))
+    .filter((p) => p.ofBox === box && p.expiry > now)
     .sort((a, b) => Number(b.block - a.block))
     .slice(0, 4)
-    .map((p) => ({ name: fullName(p.label), state: p.expiry <= now ? "lapsed: gamebox.eth's default" : null }));
+    .map((p) => ({ name: fullName(p.label), state: null }));
   return [{ name: fullName(box), state: boxState }, ...popups];
 }
 

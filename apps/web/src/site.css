@@ -267,6 +267,23 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
 .qrlink { display: block; line-height: 0; }
 .qr { display: block; box-shadow: 0 0 0 1px #fff, 0 0 16px rgb(74 168 232 / 0.55); }
 
+/* ---- Lobby balances and championship standings ---- */
+.ledger { max-width: 760px; }
+.ledger td.num, .ledger th:nth-child(n + 3) { text-align: right; font-family: var(--mono); }
+.ledger td.num:first-child { text-align: left; color: var(--fg-3); width: 2.5em; }
+.ledger a.nm { color: var(--fg); text-decoration: none; font: 700 14.5px/1.3 var(--mono); overflow-wrap: anywhere; }
+.ledger a.nm:hover { text-shadow: var(--glow-text); }
+.ledger tr.on td { background: rgb(74 168 232 / 0.08); }
+.ledger tr.on a.nm, .ledger tr.on td.num { color: #fff; text-shadow: var(--glow-text); }
+.panel.cup { max-width: 900px; }
+.panel.cup .kind { font: 600 10.5px/1 var(--hud-body); letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.panel.cup .cn { display: block; font: 700 21px/1.3 var(--mono); color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+.panel.cup .big { display: block; margin-top: 10px; font: 700 34px/1 var(--mono); color: var(--fg); text-shadow: var(--glow-text); }
+.panel.cup .big gb-countdown[data-state="expired"] { color: #ff8a94; text-shadow: none; }
+.panel.cup .dl { margin: 18px 0 16px; }
+.panel.cup.frozen { border-color: rgb(255 155 61 / 0.45); }
+.panel.cup.lit-focus { border-color: var(--sys); box-shadow: inset 0 0 14px rgb(74 168 232 / 0.25); }
+
 /* ---- Transaction strip ---- */
 .txs { position: sticky; bottom: 0; z-index: 5; padding: 0 0 16px; background: linear-gradient(180deg, transparent, var(--void) 22px); }
 .txs:empty { display: none; }
@@ -318,9 +335,11 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
   .d3 .what { padding-left: 40px; }
   .d1 .nm::before, .d2 .nm::before { left: 6px; } .d3 .nm::before { left: 22px; }
   .d1 .nm { padding-left: 24px; }
-  .note { padding-left: 24px; border-left: 0; position: relative; }
+  .note { padding-left: 24px; border-left: 0; position: relative; right: auto; }
   .note::before { display: block; content: "◆"; position: absolute; left: 8px; top: 0; border: 0; width: auto; font-size: 10px; color: var(--sys-glow); }
   .dl { grid-template-columns: 1fr 1fr; }
+  .panel.cup .dl { grid-template-columns: 1fr; }
+  .panel.cup .big { font-size: 28px; }
   .try { min-width: 0; }
   .tx { flex-wrap: wrap; gap: 8px 12px; }
   .tx .st { margin-left: 0; }

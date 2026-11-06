@@ -16,7 +16,7 @@ import { sepolia } from "viem/chains";
 import { universalResolverAbi } from "@egb/shared/names";
 import { describe, expect, it } from "vitest";
 
-import { readAddress, readText, readTexts } from "./ens.ts";
+import { playerName, readAddress, readText, readTexts } from "./ens.ts";
 
 const BADGE = getAddress("0x8e4f000000000000000000000000000000012ab0");
 const RESOLVER = "0x91b2000000000000000000000000000000077c40";
@@ -97,5 +97,13 @@ describe("ENS reads", () => {
       url: null,
       stats: '{"quickdraw":{"wins":1,"losses":0,"draws":0}}',
     });
+  });
+});
+
+describe("a typed name", () => {
+  it("is a Game Box player name when bare, and any ENS name as it is, lower-cased", () => {
+    expect(playerName(" Nova ")).toBe("nova.gamebox.eth");
+    expect(playerName("nova.gamebox.eth")).toBe("nova.gamebox.eth");
+    expect(playerName("Vitalik.eth")).toBe("vitalik.eth");
   });
 });

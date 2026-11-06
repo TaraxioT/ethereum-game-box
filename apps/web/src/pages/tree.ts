@@ -1,12 +1,13 @@
-// Home: the tree. gamebox.eth, then its own registry, then every Box (with its pop-ups), player, game and title name
-// with its resolver.
+// Home: the tree. gamebox.eth, then its own registry, then every Box (with its pop-ups), player, game, title and
+// championship name with its resolver.
 // Each part of the ENS brief sits in the margin next to the row that shows it.
 import { type Address, zeroAddress } from "viem";
 import { PARENT_NAME, contractAddress, fullName, gameBoxNamesAbi, permissionedRegistryAbi, titleName } from "@egb/shared/names";
 
 import { dir, go, state } from "../app.ts";
 import { client } from "../chain.ts";
-import { AGENT_LABEL, DEMO_BOX_LABEL, GAMES } from "../config.ts";
+import { AGENT_LABEL, POPUP_BOX_LABEL, GAMES } from "../config.ts";
+import { hasWinner } from "../directory.ts";
 import { locate } from "../registry.ts";
 import { addressLink, h, key, nameParts, note, short } from "../ui/dom.ts";
 import { countdownEl } from "../ui/live.ts";
@@ -87,7 +88,7 @@ export async function treePage(): Promise<HTMLElement> {
         expiry: dead ? h("span.expired-note", {}, "expired") : expiryCell(where.expiry),
         dead,
         note: firstBox ? "Revocable names: the registrar alone writes status" : undefined,
-        focus: box.label === DEMO_BOX_LABEL ? "box mumbai" : "box",
+        focus: box.label === POPUP_BOX_LABEL ? "box mumbai" : "box",
       }),
     );
     firstBox = false;
@@ -108,7 +109,7 @@ export async function treePage(): Promise<HTMLElement> {
           expiry: lapsed ? h("span.expired-note", {}, "expired") : expiryCell(popup.expiry),
           dead: lapsed,
           note: !lapsed && firstLive ? "Record aliasing at the resolver level · Expiring names" : lapsed && firstLapsed ? "Resolve subnames off a parent's resolver (wildcard)" : undefined,
-          focus: `popup${popup.label === state.story.popup ? " story-popup" : ""}`,
+          focus: "popup",
         }),
       );
       if (lapsed) firstLapsed = false;
@@ -116,11 +117,11 @@ export async function treePage(): Promise<HTMLElement> {
     }
   }
 
-  if (!d.boxes.has(DEMO_BOX_LABEL)) {
+  if (!d.boxes.has(POPUP_BOX_LABEL)) {
     rows.push(
       row({
         depth: 2,
-        name: fullName(DEMO_BOX_LABEL),
+        name: fullName(POPUP_BOX_LABEL),
         what: h("span.expired-note", {}, "Box · not licensed yet: its operator registers it on the operator site"),
         resolver: null,
         expiry: "—",
@@ -167,6 +168,29 @@ export async function treePage(): Promise<HTMLElement> {
         dead: !holder,
       }),
     );
+    // Its championships, newest first: live records while open, then frozen for good under the winner.
+    const cups = [...d.cups.values()].filter((cup) => cup.game === game).reverse().slice(0, 3);
+    for (const cup of cups) {
+      const where = await locate(client, cup.name);
+      const gone = cup.closed !== null && !hasWinner(cup);
+      const winner = cup.closed && !gone ? (d.labelOf.get(cup.closed.winner.toLowerCase()) ?? short(cup.closed.winner)) : null;
+      rows.push(
+        row({
+          depth: 3,
+          name: cup.name,
+          what: !cup.closed
+            ? "championship · live records: standings, leader and addr move with every result"
+            : winner
+              ? h("span", {}, "championship · records frozen · held by ", h("span.p1t", {}, winner), " for good")
+              : h("span.expired-note", {}, "championship · nobody played: unregistered"),
+          resolver: gone ? null : cup.resolver,
+          expiry: gone ? "—" : expiryCell(where.expiry),
+          note: cup === cups[0] ? "Live records, then frozen" : undefined,
+          focus: "cup",
+          dead: gone,
+        }),
+      );
+    }
   }
 
   // The agent.
@@ -183,7 +207,7 @@ export async function treePage(): Promise<HTMLElement> {
     h(
       "p.intro",
       {},
-      "Game Box is a console you play by tapping a badge. Each Box, player, game and champion title is an ENSv2 name in ",
+      "Game Box is a console you play by tapping a badge. Each Box, player, game, champion title and championship is an ENSv2 name in ",
       h("b", {}, "a registry we deployed"),
       ", and each one has ",
       h("b", {}, "its own resolver"),
@@ -195,7 +219,7 @@ export async function treePage(): Promise<HTMLElement> {
       "div.wide",
       {},
       h("div.tree", {}, ...rows),
-      h("div.actions", {}, key("Claim a name", () => void go("#/players")), key("Open a pop-up Box", () => void go("#/boxes")), key("Report a match", () => void go("#/champions"))),
+      h("div.actions", {}, key("Claim a name", () => void go("#/players")), key("Top up in the lobby", () => void go("#/lobby")), key("Report a match", () => void go("#/champions")), key("Championships", () => void go("#/championships"))),
     ),
   );
 }

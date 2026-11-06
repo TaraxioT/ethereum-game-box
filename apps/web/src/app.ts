@@ -9,9 +9,9 @@ import { failed, reading } from "./ui/dom.ts";
 export type Page = (route: Route) => Promise<HTMLElement>;
 
 export interface Route {
-  /** The first path part: `""`, `boxes`, `players`, `champions`, `agent`, `name`. */
+  /** The first path part: `""`, `lobby`, `players`, `champions`, `championships`, `boxes`, `agent`, `name`. */
   page: string;
-  /** The rest: a name for the inspector. */
+  /** The rest: a name for the inspector or the lobby. */
   arg: string;
 }
 
@@ -24,8 +24,8 @@ export function parseRoute(hash: string): Route {
 export const state = {
   /** The badge the visitor claims and revokes with. */
   badge: storedTestBadge() as Badge | null,
-  /** What the walkthrough made this run: its player label and its pop-up label. */
-  story: { label: null as string | null, popup: null as string | null, opponent: null as string | null },
+  /** What the walkthrough made this run: its player label. */
+  story: { label: null as string | null },
   /** The part of the page the current step points at (`data-focus` on elements). */
   focus: null as string | null,
 };

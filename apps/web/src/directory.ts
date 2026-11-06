@@ -1,7 +1,8 @@
-// Every name under gamebox.eth (Boxes, pop-ups, players, games, crownings), listed from `GameBoxNames`' events: read from its deploy block in chunks, then
-// topped up from where the last read stopped. There is no index server; the chain is the list.
-import { type Address, type Hex, type Log, type PublicClient, getAbiItem, getAddress } from "viem";
-import { contractAddress, gameBoxNamesAbi, ourContract } from "@egb/shared/names";
+// Every name under gamebox.eth (Boxes, pop-ups, players, games, crownings, championships), listed from the events of
+// `GameBoxNames` and `Championships`: read from `GameBoxNames`' deploy block in chunks, then topped up from where the
+// last read stopped. There is no index server; the chain is the list.
+import { type Address, type Hex, type Log, type PublicClient, getAbiItem, getAddress, zeroAddress } from "viem";
+import { championshipName, championshipsAbi, contractAddress, gameBoxNamesAbi, ourContract } from "@egb/shared/names";
 
 import { LOG_CHUNK } from "./config.ts";
 
@@ -51,6 +52,26 @@ export interface Crowning {
   hash: Hex;
 }
 
+/** A championship, from `CupOpened`, and `CupClosed` once it closed. */
+export interface CupEntry {
+  id: bigint;
+  game: string;
+  label: string;
+  /** `<label>.<game>.gamebox.eth`. */
+  name: string;
+  /** The name's own resolver. */
+  resolver: Address;
+  /** When scoring stops (unix seconds). */
+  ends: bigint;
+  /** USDC base units. */
+  prize: bigint;
+  opener: Address;
+  block: bigint;
+  hash: Hex;
+  /** Set once it closed. `winner` is zero if nobody played (the prize went back, the name was unregistered). */
+  closed: { winner: Address; prize: bigint; block: bigint; hash: Hex } | null;
+}
+
 export interface Directory {
   boxes: Map<string, BoxEntry>;
   popups: Map<string, PopupEntry>;
@@ -60,6 +81,8 @@ export interface Directory {
   games: Map<string, GameEntry>;
   /** Every crowning, oldest first. */
   crowns: Crowning[];
+  /** Every championship, by id (oldest first). */
+  cups: Map<bigint, CupEntry>;
   /** The last block read. */
   through: bigint;
 }
@@ -71,10 +94,12 @@ const EVENTS = [
   getAbiItem({ abi: gameBoxNamesAbi, name: "PlayerClaimed" }),
   getAbiItem({ abi: gameBoxNamesAbi, name: "GameAdded" }),
   getAbiItem({ abi: gameBoxNamesAbi, name: "Crowned" }),
+  getAbiItem({ abi: championshipsAbi, name: "CupOpened" }),
+  getAbiItem({ abi: championshipsAbi, name: "CupClosed" }),
 ];
 
 export function emptyDirectory(from: bigint): Directory {
-  return { boxes: new Map(), popups: new Map(), players: new Map(), labelOf: new Map(), games: new Map(), crowns: [], through: from - 1n };
+  return { boxes: new Map(), popups: new Map(), players: new Map(), labelOf: new Map(), games: new Map(), crowns: [], cups: new Map(), through: from - 1n };
 }
 
 type NamesLog = Log<bigint, number, false, (typeof EVENTS)[number], true>;
@@ -114,12 +139,24 @@ export function apply(dir: Directory, log: NamesLog): void {
       dir.crowns.push({ game, winner, previous, round, streak, expiry, block, hash: log.transactionHash ?? "0x" });
       break;
     }
+    case "CupOpened": {
+      const { id, game, label, resolver, ends, prize, opener } = log.args;
+      const name = championshipName(label, game);
+      dir.cups.set(id, { id, game, label, name, resolver, ends, prize, opener, block, hash: log.transactionHash ?? "0x", closed: null });
+      break;
+    }
+    case "CupClosed": {
+      const cup = dir.cups.get(log.args.id);
+      if (cup) cup.closed = { winner: log.args.winner, prize: log.args.prize, block, hash: log.transactionHash ?? "0x" };
+      break;
+    }
   }
 }
 
 /** Reads every event after `dir.through` up to `head`, in chunks of `LOG_CHUNK` blocks. */
 export async function catchUp(client: PublicClient, dir: Directory, head: bigint): Promise<void> {
-  const address = contractAddress("GameBoxNames");
+  const cups = ourContract("Championships");
+  const address = cups ? [contractAddress("GameBoxNames"), cups.address] : contractAddress("GameBoxNames");
   for (let from = dir.through + 1n; from <= head; from += LOG_CHUNK + 1n) {
     const to = from + LOG_CHUNK > head ? head : from + LOG_CHUNK;
     const logs = (await client.getLogs({ address, events: EVENTS, fromBlock: from, toBlock: to, strict: true })) as NamesLog[];
@@ -145,6 +182,21 @@ export function directory(client: PublicClient, head: bigint): Promise<Directory
       pending = null;
     });
   return pending;
+}
+
+/** Every open championship (not closed yet, even if its `ends` has passed): at most one per game. */
+export function openCups(dir: Directory): CupEntry[] {
+  return [...dir.cups.values()].filter((cup) => !cup.closed);
+}
+
+/** Every closed championship, the latest close first. */
+export function closedCups(dir: Directory): CupEntry[] {
+  return [...dir.cups.values()].filter((cup) => cup.closed).sort((a, b) => Number(b.closed!.block - a.closed!.block));
+}
+
+/** Whether a closed championship has a winner holding its name (nobody played: no name, no winner). */
+export function hasWinner(cup: CupEntry): boolean {
+  return cup.closed !== null && cup.closed.winner !== zeroAddress;
 }
 
 /** The player label a badge holds, if the directory has seen it. */
