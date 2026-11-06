@@ -8,7 +8,7 @@ import type { Catalog } from './catalog.ts';
 import { type Bucket, claimId, shelve } from './shelf.ts';
 import { bearerMatches } from './token.ts';
 
-export interface UploadDeps {
+export interface Deps {
   bucket: Bucket;
   token: string | undefined;
   catalog: Catalog;
@@ -28,7 +28,7 @@ async function listingFor(zip: Uint8Array): Promise<StoreListing | string> {
   }
 }
 
-export async function upload(request: Request, { bucket, token, catalog }: UploadDeps): Promise<Response> {
+export async function upload(request: Request, { bucket, token, catalog }: Deps): Promise<Response> {
   if (!token) return refuse(503, 'uploads are off: STORE_PUBLISH_TOKEN is not set');
   if (!(await bearerMatches(request.headers.get('authorization'), token))) return refuse(401, 'a bad publish token');
   if (Number(request.headers.get('content-length')) > BUNDLE_LIMITS.zipBytes) return tooBig();

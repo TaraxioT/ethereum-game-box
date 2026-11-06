@@ -3,7 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { hashOf, store, zipOf } from './harness.ts';
+import { store } from './harness.ts';
+import { hashOf, zipOf } from './zips.ts';
 
 describe('uploading what is already there', () => {
   it('answers 200 with the same listing and writes nothing', async () => {

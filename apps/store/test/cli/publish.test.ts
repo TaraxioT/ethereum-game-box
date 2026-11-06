@@ -5,8 +5,17 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { describe as describeError, rpc } from '@egb/relayer/chain';
 import { type StoreListing, listingOf, readBundle } from '@egb/sdk/bundle';
-import { type Address, type Hex, custom, decodeFunctionData, encodeAbiParameters, parseAbi, parseTransaction } from 'viem';
+import {
+  type Address,
+  type Hex,
+  custom,
+  decodeFunctionData,
+  encodeAbiParameters,
+  parseAbi,
+  parseTransaction,
+} from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readFolder } from '../../scripts/folder.ts';
@@ -34,7 +43,7 @@ function fakeNode(node: FakeNode) {
     eth_maxPriorityFeePerGas: () => '0x1',
     eth_gasPrice: () => '0x1',
     eth_blockNumber: () => '0x10',
-    eth_getBlockByNumber: () => ({ number: '0x10', baseFeePerGas: '0x1', hash: HASH, timestamp: '0x1', transactions: [] }),
+    eth_getBlockByNumber: () => ({ number: '0x10', baseFeePerGas: '0x1', hash: HASH, transactions: [] }),
     eth_call: () => encodeAbiParameters([{ type: 'bool' }], [node.listed]),
     eth_getTransactionByHash: () => null,
     eth_getTransactionReceipt: () => ({
@@ -241,6 +250,15 @@ describe('listing on chain', () => {
     await expect(listOnChain(fakeNode(newNode({ status: '0x0' })), LISTER_KEY, POT, HASH)).rejects.toThrow(
       'the listing reverted',
     );
+  });
+
+  it('can print a dead node\'s failure without the RPC URL or the key', async () => {
+    const dead = rpc('http://127.0.0.1:9/a-made-up-node-key');
+    const error: unknown = await listOnChain(dead, LISTER_KEY, POT, HASH).catch((reason: unknown) => reason);
+    const printed = describeError(error);
+    expect(printed).not.toBe('');
+    expect(printed).not.toContain('a-made-up-node-key');
+    expect(printed).not.toContain(LISTER_KEY.slice(2));
   });
 
   it('refuses a malformed key without quoting it', async () => {

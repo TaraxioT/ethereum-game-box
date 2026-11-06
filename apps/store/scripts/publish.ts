@@ -1,5 +1,5 @@
-// `pnpm store:publish <folder>`. Takes its settings from `.env`. The RPC URL carries a key and so does the environment,
-// so a failure prints only `describe`'s one redacted line.
+// `pnpm store:publish <folder>`. Takes its settings from `.env`. The RPC URL carries its node's key, so a failure
+// prints only `describe`'s one redacted line.
 
 import { describe, rpc } from '@egb/relayer/chain';
 import { ourContract } from '@egb/shared/names';

@@ -3,7 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { INDEX_SECONDS } from '../src/catalog.ts';
-import { hashOf, store, zipOf } from './harness.ts';
+import { store } from './harness.ts';
+import { hashOf, zipOf } from './zips.ts';
 
 describe('/index.json', () => {
   it('is empty before anything is published', async () => {

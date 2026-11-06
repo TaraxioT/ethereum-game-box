@@ -3,7 +3,8 @@
 import { BUNDLE_LIMITS } from '@egb/sdk/bundle';
 import { describe, expect, it } from 'vitest';
 
-import { TOKEN, countedBody, hashOf, store, zipOf } from './harness.ts';
+import { TOKEN, countedBody, store } from './harness.ts';
+import { hashOf, zipOf } from './zips.ts';
 
 const LISTING_FIELDS = ['blurb', 'hash', 'icon', 'id', 'players', 'size', 'stakes', 'title'];
 

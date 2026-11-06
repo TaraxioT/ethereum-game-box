@@ -1,5 +1,5 @@
 // An upload's body, read to a limit. `Content-Length` is only a claim, and a chunked body has none, so the bytes are
-// counted as they arrive. One buffer holds them: a Worker has 128 MB, and the reader needs most of that for a big zip.
+// counted as they arrive. One buffer holds them: a Worker's memory is small, and the reader makes copies of its own.
 
 /** The stream's bytes, or null the moment there are more than `limit`, with the rest left unread. */
 export async function readCapped(body: ReadableStream<Uint8Array> | null, limit: number): Promise<Uint8Array | null> {

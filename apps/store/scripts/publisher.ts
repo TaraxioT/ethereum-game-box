@@ -27,12 +27,18 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+interface Sent {
+  listing: StoreListing;
+  /** False if the store already had this bundle. */
+  isNew: boolean;
+}
+
 /** Sends the zip, and returns the store's listing. */
-async function send(storeUrl: string, token: string, zip: Uint8Array): Promise<{ listing: StoreListing; isNew: boolean }> {
+async function send(storeUrl: string, token: string, zip: Uint8Array): Promise<Sent> {
   const response = await fetch(new URL('/bundles', storeUrl), {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/zip' },
-    body: new Uint8Array(zip),
+    body: zip,
   });
   const answer = (await response.json().catch(() => ({}))) as StoreListing & { error?: string };
   if (!response.ok) throw new Error(`the store refused it (${response.status}): ${answer.error ?? 'no reason given'}`);
@@ -41,8 +47,8 @@ async function send(storeUrl: string, token: string, zip: Uint8Array): Promise<{
 
 /** The key, checked for its shape here so that no library's error can quote it. */
 function checkedKey(key: string): Hex {
-  if (!isHex(key, { strict: true }) || size(key) !== 32) throw new Error('STORE_LISTER_KEY must be 0x and 64 hex digits');
-  return key;
+  if (isHex(key, { strict: true }) && size(key) === 32) return key;
+  throw new Error('STORE_LISTER_KEY must be 0x and 64 hex digits');
 }
 
 async function list({ pot, listerKey, transport, print }: PublishOptions, hash: Hex): Promise<void> {
@@ -51,7 +57,8 @@ async function list({ pot, listerKey, transport, print }: PublishOptions, hash: 
     print(tx ? `listed on StorePot: ${tx}` : 'already listed on StorePot');
     return;
   }
-  print(pot ? 'not listed yet: STORE_LISTER_KEY or SEPOLIA_RPC_URL is not set. To list it:' : "not listed yet: StorePot isn't deployed. Once it is:");
+  const missing = 'STORE_LISTER_KEY or SEPOLIA_RPC_URL is not set. To list it:';
+  print(`not listed yet: ${pot ? missing : "StorePot isn't deployed. Once it is:"}`);
   print(`  ${listCommand(pot, hash)}`);
 }
 

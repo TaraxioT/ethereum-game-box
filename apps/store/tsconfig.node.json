@@ -6,5 +6,5 @@
     "resolveJsonModule": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["scripts", "test/cli", "test/live", "test/setup.ts", "vitest.config.ts"]
+  "include": ["scripts", "test/cli", "test/live", "test/setup.ts", "test/zips.ts", "vitest.config.ts"]
 }
