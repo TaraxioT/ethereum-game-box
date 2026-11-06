@@ -58,7 +58,7 @@ describe("the board", () => {
   it("shows a championship closed in the last hour with its winner, and drops an older one", () => {
     const games = [game("quickdraw", null, 0)];
     const won = cup("2", { closed: true, winner: NOVA, winnerName: "nova.gamebox.eth", ends: NOW - 60 });
-    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "CUP-2 · WON BY NOVA", when: "CLOSED", tone: "done" });
+    expect(boardGames(board(games, [won]), NOW)[0]?.cup).toEqual({ what: "CUP-2 · CLOSED", when: "WON BY NOVA", tone: "done" });
     expect(boardGames(board(games, [{ ...won, ends: NOW - 7_200 }]), NOW)[0]?.cup.what).toBe("NONE OPEN");
   });
 });
