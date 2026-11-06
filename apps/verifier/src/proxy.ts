@@ -6,7 +6,7 @@ import type { AgentTurn } from '@egb/shared/store';
 
 import { type Failure, failed } from './failure.ts';
 import { isRecord, parsed, utf8Bytes } from './json.ts';
-import { LIMITS } from './limits.ts';
+import { LIMITS, estimateTokens } from './limits.ts';
 import type { Scrub } from './safe.ts';
 import type { TeeCheck } from './tee.ts';
 
@@ -22,7 +22,7 @@ export interface ProxyOptions {
 }
 
 export type TurnResult =
-  | { readonly ok: true; readonly turn: AgentTurn; readonly reply: string }
+  | { readonly ok: true; readonly turn: AgentTurn; readonly reply: string; readonly tokens: number }
   | { readonly ok: false; readonly turn: AgentTurn | null; readonly failure: Failure };
 
 /** What goes to 0G: the fields a chat needs from `text`, or null if it isn't a chat. `model`, `verify_tee` and the
@@ -35,9 +35,15 @@ function chatBody(text: string, model: string): Record<string, unknown> | null {
   return { model, messages, tools, tool_choice, chat_template_kwargs, max_tokens: tokens, verify_tee: true };
 }
 
+/** What a turn spent: 0G's own count, or an estimate if a reply gives none, as the container counts it. */
+function tokensOf(reply: unknown, request: string, replyText: string): number {
+  const usage = isRecord(reply) ? reply.usage : undefined;
+  const total = isRecord(usage) ? usage.total_tokens : undefined;
+  return typeof total === 'number' && total >= 0 ? total : estimateTokens(utf8Bytes(request)) + estimateTokens(utf8Bytes(replyText));
+}
+
 /** Sends one turn to 0G and proves its reply. Never throws: whatever goes wrong comes back as a `Failure`. */
 export async function proxyTurn(options: ProxyOptions, text: string): Promise<TurnResult> {
-  if (utf8Bytes(text) > LIMITS.turnBytes) return { ok: false, turn: null, failure: failed('container', 'a model call is too large') };
   const body = chatBody(text, options.model);
   if (!body) return { ok: false, turn: null, failure: failed('container', 'a model call is not a chat') };
 
@@ -96,5 +102,5 @@ export async function proxyTurn(options: ProxyOptions, text: string): Promise<Tu
     request: body,
     response: { reply, proof: checked.proof },
   };
-  return { ok: true, turn, reply: replyText };
+  return { ok: true, turn, reply: replyText, tokens: tokensOf(reply, text, replyText) };
 }

@@ -22,6 +22,8 @@ export interface FakeZgSettings {
   chat: ChatFault;
   /** What `submit_verdict` says: a split, or `cannot_judge` while null. */
   payouts: string[] | null;
+  /** What each reply says it cost, or no `usage` at all while null. */
+  usageTokens: number | null;
   /** Shell calls the agent makes before its verdict. */
   shellTurns: number;
   /** What it runs in them. Their output comes back in `GET /__fake`, so a harness can probe the container from inside. */
@@ -75,6 +77,7 @@ export class FakeZg {
   readonly settings: FakeZgSettings = {
     chat: 'none',
     payouts: null,
+    usageTokens: 100,
     shellTurns: 1,
     shellCommand: 'jq .header log.json',
     verifiability: 'TeeML',
@@ -126,7 +129,7 @@ export class FakeZg {
   }
 
   private async chat(request: Request): Promise<Response> {
-    const { chat, payouts, shellTurns } = this.settings;
+    const { chat, payouts, usageTokens, shellTurns } = this.settings;
     const body = (await request.json()) as Record<string, unknown>;
     const seen = {
       authorization: request.headers.get('authorization'),
@@ -161,7 +164,7 @@ export class FakeZg {
             message: { role: 'assistant', content: null, tool_calls: [{ id: `call-${id}`, type: 'function', function: call }] },
           },
         ],
-        usage: { total_tokens: 100 },
+        ...(usageTokens !== null && { usage: { total_tokens: usageTokens } }),
         x_0g_trace: { billing: { total: '10' }, request_id: id, ...(chat !== 'no-provider' && { provider: this.provider }) },
       },
       { headers },

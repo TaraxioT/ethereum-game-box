@@ -3,7 +3,7 @@ import { recoverTypedDataAddress } from 'viem';
 import { describe, expect, it, vi } from 'vitest';
 
 import { failed } from '../src/failure.ts';
-import { ANOTHER_LOG, type Judge, type JudgeJob } from '../src/judge.ts';
+import { ANOTHER_LOG, type Judge, type JudgeJob, type RunResult, type Ticket } from '../src/judge.ts';
 import { LIMITS } from '../src/limits.ts';
 import { POT_STATE } from '../src/pot.ts';
 import { AMOUNT, BOX, Crash, INSTRUCTIONS, POT, RPC_SECRET, ROUND, type World, ZG_API_KEY, stakedWorld } from './world.ts';
@@ -219,6 +219,65 @@ describe('a run that wanders', () => {
     const reply = await judge.modelTurn(1, JSON.stringify({ messages: [] }));
     expect(reply.status).toBe(409);
     expect(world.zg.chats).toHaveLength(before);
+  });
+});
+
+/** A shell calling `zg.internal` itself, past the agent's own limits, with prompts of `bytes` each. */
+const flood = (world: World, bytes: number, calls: number = LIMITS.turns) =>
+  async ({ attempt }: Ticket): Promise<RunResult> => {
+    const text = JSON.stringify({ messages: [{ role: 'user', content: ' '.repeat(bytes) }] });
+    for (let call = 0; call < calls; call++) await world.current().modelTurn(attempt, text);
+    return { failure: failed('container', 'the container answered 500') };
+  };
+
+describe('a shell that calls the proxy itself', () => {
+  it("never sends a prompt too big for the run's tokens", async () => {
+    const { world, judge } = await begun();
+    world.runner.scripts.push(...twice(flood(world, 800 * 1024)));
+    await world.settle(judge);
+    expect(world.zg.chats).toHaveLength(0);
+    expect(await judge.status()).toMatchObject({ state: 'refunded', reason: 'the run passed its token limit; the run passed its token limit' });
+  });
+
+  it('is stopped at the run limit by what 0G says it cost', async () => {
+    const { world, judge } = await begun();
+    world.zg.settings.usageTokens = 120_000;
+    world.runner.scripts.push(...twice(flood(world, 1000)));
+    await world.settle(judge);
+    expect(world.zg.chats).toHaveLength(2 * 2);
+    expect((await judge.status())?.reason).toContain('the run passed its token limit');
+  });
+
+  it('is counted at the estimate when a reply gives no usage', async () => {
+    const { world, judge } = await begun();
+    world.zg.settings.usageTokens = null;
+    world.runner.scripts.push(...twice(flood(world, 300_000)));
+    await world.settle(judge);
+    expect(world.zg.chats).toHaveLength(2 * 1);
+  });
+
+  it("can't pass the pot's size limit across its two runs", async () => {
+    const { world, judge } = await begun();
+    const each = Math.floor((LIMITS.turnsBytes * 0.75) / LIMITS.turns);
+    world.zg.settings.usageTokens = 1;
+    world.runner.scripts.push(...twice(flood(world, each)));
+    await world.settle(judge);
+    const size = new TextEncoder().encode(JSON.stringify(recordOf(world).turns)).length;
+    expect(size).toBeLessThanOrEqual(LIMITS.turnsBytes);
+    expect((await judge.status())?.reason).toContain('the pot passed its size limit');
+  });
+
+  it('pays for nothing once the pot is past its size limit', async () => {
+    const { world, judge } = await begun();
+    const each = Math.floor(LIMITS.turnsBytes / LIMITS.turns);
+    world.zg.settings.usageTokens = 1;
+    world.runner.scripts.push(flood(world, each), flood(world, each));
+    await world.settle(judge);
+    const sent = world.zg.chats.length;
+    expect(sent).toBeLessThan(LIMITS.turns);
+    expect(await judge.status()).toMatchObject({ state: 'refunded' });
+    expect(world.runner.runs).toHaveLength(2);
+    expect(sent).toBe(recordOf(world).turns.length);
   });
 });
 

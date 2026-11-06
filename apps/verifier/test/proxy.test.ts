@@ -50,6 +50,30 @@ describe('a proven turn', () => {
   });
 });
 
+describe("a turn's cost", () => {
+  const tokensOf = async (zg: FakeZg, text: string) => {
+    const result = await proxyTurn(options(zg), text);
+    return result.ok ? result.tokens : null;
+  };
+
+  it('is what 0G says', async () => {
+    const zg = new FakeZg();
+    zg.settings.usageTokens = 1234;
+    expect(await tokensOf(zg, chat())).toBe(1234);
+  });
+
+  it.each([
+    ['no usage', null],
+    ['a usage below zero', -5],
+  ])('is estimated from the bytes with %s', async (_name, usageTokens) => {
+    const zg = new FakeZg();
+    zg.settings.usageTokens = usageTokens;
+    const tokens = await tokensOf(zg, chat({ pad: 'x'.repeat(30_000) }));
+    expect(tokens).toBeGreaterThan(10_000);
+    expect(tokens).toBeLessThan(11_000);
+  });
+});
+
 describe('a turn that fails', () => {
   it('is not proven when the check says so, and its reply stays here', async () => {
     const result = await proxyTurn(options(new FakeZg(), { check: async () => ({ problem: 'no' }) }), chat());
@@ -97,7 +121,6 @@ describe('a turn that fails', () => {
   it.each([
     ['not JSON', 'nope'],
     ['not a chat', '{"prompt":"hi"}'],
-    ['over the limit', chat({ pad: 'x'.repeat(LIMITS.turnBytes) })],
   ])('never reaches 0G when the request is %s', async (_name, text) => {
     const zg = new FakeZg();
     expect(await proxyTurn(options(zg), text)).toMatchObject({ ok: false, turn: null, failure: { kind: 'container' } });

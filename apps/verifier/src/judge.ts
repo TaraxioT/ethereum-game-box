@@ -14,7 +14,7 @@ import { sealRecord } from './audit.ts';
 import type { AuditStore } from './audit-store.ts';
 import { type Failure, failed } from './failure.ts';
 import { utf8Bytes } from './json.ts';
-import { LIMITS, backoff } from './limits.ts';
+import { LIMITS, backoff, estimateTokens } from './limits.ts';
 import { POT_STATE } from './pot.ts';
 import { type ProxyOptions, proxyTurn } from './proxy.ts';
 import type { Scrub } from './safe.ts';
@@ -125,6 +125,9 @@ interface Hearing extends Omit<JudgeJob, 'log' | 'instructions'> {
 /** One run's model calls: written only by `turn`, which runs while `advance` waits on the container. */
 interface RunLog {
   turns: number;
+  /** What this run has spent at 0G. */
+  tokens: number;
+  /** The size of the pot's turns so far: this run's and the one's before it. */
   bytes: number;
   failure: Failure | null;
 }
@@ -140,6 +143,13 @@ const LOST = failed('lost', 'the run was lost');
 const OVER: TurnReply = { status: 409, body: JSON.stringify({ error: 'this run is over' }) };
 
 const refused = (why: string): TurnReply => ({ status: 502, body: JSON.stringify({ error: why }) });
+
+/** The limit `run` has passed, or would pass with this much more. */
+function limitPassed({ tokens, bytes }: RunLog, moreTokens = 0, moreBytes = 0): string | null {
+  if (tokens + moreTokens > LIMITS.tokens) return 'the run passed its token limit';
+  if (bytes + moreBytes > LIMITS.turnsBytes) return 'the pot passed its size limit';
+  return null;
+}
 
 /** The Durable Object's name for a pot. */
 export const judgementName = (box: string, round: string) => `${box}:${round}`;
@@ -228,12 +238,15 @@ export class Judge {
   private async turn(attempt: number, text: string): Promise<TurnReply> {
     const { store, proxy } = this.deps;
     if (!(await this.isLive(attempt))) return OVER;
-    const run = (await store.get<RunLog>(runKey(attempt))) ?? { turns: 0, bytes: 0, failure: null };
+    const run = await this.runLog(attempt);
     if (run.failure) return refused(run.failure.why);
-    if (run.turns >= LIMITS.turns) {
-      run.failure = failed('container', 'the run passed its turn limit');
+    // Before sending: what a call would cost is checked here, as a shell's call is checked by nothing else.
+    const bytes = utf8Bytes(text);
+    const passed = run.turns >= LIMITS.turns ? 'the run passed its turn limit' : limitPassed(run, estimateTokens(bytes), bytes);
+    if (passed) {
+      run.failure = failed('container', passed);
       await store.put(runKey(attempt), run);
-      return refused(run.failure.why);
+      return refused(passed);
     }
     const result = await proxyTurn(proxy, text);
     // The run may have ended while 0G answered, and a run that ended keeps what it had.
@@ -244,10 +257,21 @@ export class Judge {
       run.turns += 1;
       run.bytes += utf8Bytes(turn);
     }
-    if (!result.ok) run.failure = result.failure;
-    else if (run.bytes > LIMITS.turnsBytes) run.failure = failed('container', 'the run passed its size limit');
+    if (result.ok) run.tokens += result.tokens;
+    else run.failure = result.failure;
+    const spent = limitPassed(run);
+    if (spent) run.failure ??= failed('container', spent);
     await store.put(runKey(attempt), run);
     return !result.ok || run.failure ? refused((run.failure as Failure).why) : { status: 200, body: result.reply };
+  }
+
+  /** The run's log. A new run starts with the size its pot has reached, as the limit on that is the pot's. */
+  private async runLog(attempt: number): Promise<RunLog> {
+    const { store } = this.deps;
+    const run = await store.get<RunLog>(runKey(attempt));
+    if (run) return run;
+    const before = await store.get<RunLog>(runKey(attempt - 1));
+    return { turns: 0, tokens: 0, bytes: before?.bytes ?? 0, failure: null };
   }
 
   private async isLive(attempt: number): Promise<boolean> {

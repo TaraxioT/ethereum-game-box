@@ -13,14 +13,18 @@ export const LIMITS = {
   leaseMs: 9 * MINUTE,
   /** Model turns in a run, as the container's limit: a shell can call `zg.internal` itself, so the proxy counts too. */
   turns: 16,
+  /** Tokens in a run, as the container's limit and for the same reason, counting each turn's whole prompt. */
+  tokens: 200_000,
   /** One model call, as the container's own limit. */
   modelMs: MINUTE,
   /** The most a turn may ask of the model, as the container's limit. */
   replyTokens: 2048,
   /** A turn's request, and a turn's reply. */
   turnBytes: MIB,
-  /** Every turn of a pot, together: what its audit record can grow to. */
-  turnsBytes: 16 * MIB,
+  /** Every turn of a pot, across both its runs. Sealing a record holds it a few times over at once, which came to about
+   *  70 MB at this size, and past a Durable Object's 128 MB it would die with no Void signed. A run's tokens hold an honest
+   *  one to about 1 MiB. */
+  turnsBytes: 4 * MIB,
   /** A verdict's reason. */
   whyChars: 2000,
   /** How long a signed `Verdict` or `Void` stays good, in seconds. */
@@ -40,6 +44,9 @@ export const LIMITS = {
   uploadRetryMs: MINUTE,
   uploadRetryMaxMs: 60 * MINUTE,
 } as const;
+
+/** What `bytes` of text will cost, at the container's pessimistic three bytes a token. */
+export const estimateTokens = (bytes: number): number => Math.ceil(bytes / 3);
 
 /** The wait before try `tries + 1`: `first`, doubling up to `max`. */
 export function backoff(tries: number, first: number, max: number): number {

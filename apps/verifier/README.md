@@ -68,8 +68,16 @@ The handler counts a call's bytes as they arrive and stops at 1 MiB, so a shell 
 memory. `POST /judge` reads its body the same way, with a limit of 3 MiB.
 
 `src/proxy.ts` is the model's only caller. It keeps the fields a chat needs, sets `model`, `max_tokens`, `verify_tee: true`
-and the header `X-0G-Provider-Trust-Mode: private` itself, and records each turn as an `AgentTurn`. It counts turns too,
-since an agent's shell can reach `zg.internal` as well as the agent's loop can.
+and the header `X-0G-Provider-Trust-Mode: private` itself, and records each turn as an `AgentTurn`.
+
+An agent's shell can reach `zg.internal` as well as its loop can, so these limits hold here too, whatever the container
+does. Each is checked before a call goes out, and passing one fails the run:
+
+| Limit | Value | Counted |
+|---|---|---|
+| Turns | 16 a run | Each call to 0G |
+| Tokens | 200,000 a run | Each reply's `usage.total_tokens`, and each prompt at three bytes a token before it goes |
+| Size | 4 MiB a pot, over both runs | Each recorded turn. Sealing a record holds it a few times over at once, so this stays far under a Durable Object's 128 MB |
 
 ## The TEE check
 
