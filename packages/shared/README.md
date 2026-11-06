@@ -22,7 +22,14 @@
 | `messages.ts` | The three EIP-712 messages (`ClaimName`, `Execute`, `Result`): the typed data a wallet signs and the digest the contract checks |
 | `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, and `GameBoxNames`' own roles |
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
-| `deployments.ts` | `ensAddress(name)` and `contractAddress(name)` from `deployments/sepolia.json` |
+| `vectors.json` | Written by `contracts/test/names/Vectors.t.sol`; `vectors.test.ts` checks `messages.ts`, `primaryName.ts` and `roles.ts` against it |
+| `primaryName.ts` | A badge's primary name: the ERC-191 message it signs for ENS's `DefaultReverseRegistrar`, so `getEnsName(badge)` returns its player name |
+| `api.ts` | The relayer's and the demo Box's HTTP request and response types |
+| `deployments.ts` | `ensAddress(name)`, `contractAddress(name)` and `namesProxies()` from `deployments/sepolia.json` |
+| `vectors.ts` | Fixed inputs with the digests and signatures the contracts produced (`vectors.json`, written by the forge test `Vectors.t.sol`); every key in it is a throwaway test key |
+
+`scripts/abis.ts` writes `abis.ts` (`pnpm names:abis`). `scripts/names/verify.ts` and `scripts/names/check.ts` are
+`pnpm names:verify` and `pnpm names:check`, which verify and check the live deployment (see `contracts/README.md`).
 
 ### P-256 signatures (`Execute`, `Result`)
 

@@ -228,12 +228,10 @@ interface IPermissionedResolver is IEnhancedAccessControl {
         external
         pure
         returns (bytes memory arg, uint256 resource, uint256 roleBitmap);
-    /// @notice ENSIP-5 text record.
-    function text(bytes32 node, string calldata key) external view returns (string memory);
-    /// @notice ENSIP-1 address.
-    function addr(bytes32 node) external view returns (address payable);
-    /// @notice ENSIP-9 address for `coinType`.
-    function addr(bytes32 node, uint256 coinType) external view returns (bytes memory);
+    /// @notice ENSIP-10: the only way to read a record. `data` is a profile call such as `text(node, key)` or
+    ///         `addr(node)` (its `node` is ignored; `name` picks the record), and the answer is that call's ABI-encoded
+    ///         return value. The profile functions themselves are not callable on this resolver.
+    function resolve(bytes calldata name, bytes calldata data) external view returns (bytes memory);
 }
 
 /// @notice `verifiable-factory/src/IVerifiableFactory.sol`.

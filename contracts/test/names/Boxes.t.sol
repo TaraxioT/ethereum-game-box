@@ -172,6 +172,15 @@ contract BoxesTest is NamesFork {
         assertEq(resolveText(BOX_NAME, "lastSeen"), "1762400000");
     }
 
+    /// @dev A resolver is read through ENSIP-10 `resolve`; it has no direct `text` function.
+    function test_recordsAreReadThroughResolve() public {
+        IPermissionedResolver resolver = IPermissionedResolver(registerBox(BOX, 30 days));
+        bytes memory call = abi.encodeWithSignature("text(bytes32,string)", namehash(BOX_NAME), "status");
+        assertEq(abi.decode(resolver.resolve(NameLib.dnsName(BOX), call), (string)), "active");
+        (bool ok,) = address(resolver).staticcall(call);
+        assertFalse(ok);
+    }
+
     function test_labelAlreadyRegistered() public {
         registerBox(BOX, 30 days);
         (bytes32 qx, bytes32 qy) = p256Public(boxKey);
