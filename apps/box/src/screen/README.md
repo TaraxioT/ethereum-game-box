@@ -185,8 +185,9 @@ on `BoxEvent`s and acts only through `link.send`.
   and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
   rules failed.
 - `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
-  shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
-  `CLAIM`; its `STATS` from its name's `stats` record (streak, wins, losses, played, best and its rank on the
+  shows its card from chain: its player name, or `NO NAME YET` with a name field holding the proposed label (type over
+  it on the Pi's touch keyboard or a keyboard: lower case, a-z, 0-9 and -, checked as it is typed), `.gamebox.eth`
+  after it, `ANOTHER` and `CLAIM` (Enter claims too); its `STATS` from its name's `stats` record (streak, wins, losses, played, best and its rank on the
   leaderboard); its USDC and `TOP UP 100 USDC`. Beside it the game's name, its title (the holder, big, and the title's
   name), its open cup (the prize, a countdown to the close, the top five with points and W-D-L) and the leaderboard
   over every game (`gamebox.eth`'s `leaderboard` record, the top five), from the Box's board, read every 5 s. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.

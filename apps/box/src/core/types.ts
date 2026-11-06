@@ -331,9 +331,9 @@ export type ScreenCommand =
   | { readonly type: "lobby" }
   /** The lobby's Top up 100 USDC, for the badge on show. */
   | { readonly type: "topup" }
-  /** The lobby: another label to claim, or claim the one proposed. */
+  /** The lobby: another label to claim, or claim one: the label typed on the screen, else the one proposed. */
   | { readonly type: "propose" }
-  | { readonly type: "claim" };
+  | { readonly type: "claim"; readonly label?: string };
 
 export interface BoxLink {
   state(): BoxState;

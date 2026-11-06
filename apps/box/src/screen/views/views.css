@@ -147,7 +147,14 @@
 .lobby-kicker { font: 600 13px/1.2 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); margin-top: 6px; }
 .lobby-name { font: 700 28px/1.15 var(--hud-display); color: var(--fg); text-transform: none; overflow-wrap: anywhere; }
 .lobby-name.none { color: var(--fg-3); }
-.lobby-proposal { font: 600 17px/1.3 var(--mono); color: var(--sys); text-transform: none; overflow-wrap: anywhere; min-height: 1.3em; }
+.lobby-claim { display: flex; align-items: baseline; gap: 2px; margin-top: 6px; font: 600 18px/1.3 var(--mono); color: var(--fg-3); text-transform: none; }
+.lobby-input { flex: 1 1 auto; min-width: 0; padding: 6px 8px; font: inherit; color: var(--sys-hot); background: transparent; border: 1px solid var(--sys); outline: none; text-transform: none; caret-color: var(--sys-hot); }
+.lobby-input:focus { box-shadow: 0 0 0 1px var(--sys), 0 0 10px var(--sys-bloom); }
+.lobby-input:disabled { opacity: 0.5; }
+.lobby-suffix { flex: none; }
+.lobby-claim[hidden], .lobby-hint[hidden] { display: none; }
+.lobby-hint { font: 600 12px/1.3 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); margin-top: 3px; }
+.lobby-hint.bad { color: var(--alert, #ff5a5a); }
 .lobby-honours { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .lobby-honour { font: 600 13px/1.3 var(--mono); color: var(--fg-2); text-transform: none; overflow-wrap: anywhere; }
 .lobby-honour b { font: 700 13px/1.3 var(--hud-display); letter-spacing: 0.06em; color: var(--brass-hi); }

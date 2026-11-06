@@ -1,5 +1,7 @@
 // The lobby: a badge tapped on either station shows its card, read from chain: its player name, or (with none yet) a
-// proposed name with ANOTHER and CLAIM (the Box vouches for the badge with its own key: a badge can't sign a claim);
+// name field holding the proposed label, which the player may type over (the Pi's touch keyboard or a keyboard; the
+// label rule is checked as they type), with ANOTHER and CLAIM (Enter claims too). The Box vouches for the badge with its
+// own key: a badge can't sign a claim;
 // its stats over every game, from its name's `stats` record (the win streak, wins, losses, played, the best streak and
 // its place on the leaderboard); its USDC and TOP UP 100 USDC. Beside it, the game's title
 // (`champion.<game>.gamebox.eth`, its holder and streak), its open cup (the standings, the prize and a countdown to the
@@ -11,6 +13,7 @@ import { DEFAULT_FOCUS } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
+import { labelProblem } from "@egb/shared/names";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { clock } from "./refund.ts";
@@ -33,13 +36,21 @@ export function lobbyView(ctx: ViewContext): View {
   place(card, page.seats[0]);
   const kicker = el("div", "lobby-kicker", "PLAYER");
   const name = el("div", "lobby-name");
-  const proposal = el("div", "lobby-proposal");
+  // The name to claim, typed over the proposal. Keys typed here are the field's alone.
+  const field = document.createElement("input");
+  Object.assign(field, { type: "text", className: "lobby-input", maxLength: 32, autocomplete: "off", spellcheck: false, placeholder: "your-name" });
+  field.setAttribute("autocapitalize", "off");
+  field.setAttribute("enterkeyhint", "done");
+  field.setAttribute("aria-label", "the name to claim");
+  const proposal = el("label", "lobby-claim");
+  proposal.append(field, el("span", "lobby-suffix", ".gamebox.eth"));
+  const fieldHint = el("div", "lobby-hint");
   const balance = el("div", "lobby-balance");
   const held = el("div", "lobby-honours");
   const statsHead = el("div", "lobby-kicker", "STATS");
   const stats = el("div", "lobby-stats");
   const statsNote = el("div", "lobby-ens");
-  card.append(kicker, name, proposal, held, statsHead, stats, statsNote, balance);
+  card.append(kicker, name, proposal, fieldHint, held, statsHead, stats, statsNote, balance);
 
   const board = document.createElement("egb-panel") as EgbPanel;
   board.classList.add("lobby-board");
@@ -74,7 +85,7 @@ export function lobbyView(ctx: ViewContext): View {
     k.textContent = text;
     k.addEventListener("click", () => {
       sound.play(command === "back" ? "ui-back" : "ui-select");
-      link.send({ type: command });
+      link.send(command === "claim" ? { type: "claim", label: field.value } : { type: command });
     });
     return k;
   };
@@ -85,21 +96,46 @@ export function lobbyView(ctx: ViewContext): View {
   keys.append(back, another, claim, topup);
   root.append(card, board, plate, keys);
 
+  /** The badge and proposal the field was last filled for: a new one refills it, typing keeps it. */
+  let filledFor = "";
+  field.addEventListener("input", () => {
+    const clean = field.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (clean !== field.value) field.value = clean;
+    drawCard(link.state().lobby, link.state());
+  });
+  field.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter" && !claim.hasAttribute("disabled")) {
+      field.blur();
+      claim.click();
+    }
+  });
+
   function drawCard(lobby: Lobby, state: BoxState): void {
     const claiming = state.txs.some((tx) => tx.kind === "claim" && tx.step !== "paid" && tx.step !== "failed");
     const topping = state.txs.some((tx) => tx.kind === "topup" && tx.step !== "paid" && tx.step !== "failed");
     const c = lobby.card;
     card.toggleAttribute("lit", lobby.badge !== null);
+    const naming = Boolean(lobby.badge && c && !c.name);
     if (!lobby.badge) {
       name.textContent = "—";
-      proposal.textContent = "";
       balance.textContent = "";
     } else {
       name.textContent = c === null ? "reading…" : (c.name ?? "NO NAME YET");
       name.classList.toggle("none", c !== null && c.name === null);
-      proposal.textContent = c && !c.name && lobby.proposal ? `claim ${lobby.proposal}.gamebox.eth?` : "";
       balance.textContent = c ? usdc(c.balance) : "… USDC";
     }
+    proposal.hidden = !naming;
+    fieldHint.hidden = !naming;
+    const fillFor = naming ? `${lobby.badge?.address}|${lobby.proposal ?? ""}` : "";
+    if (fillFor !== filledFor) {
+      filledFor = fillFor;
+      field.value = naming ? (lobby.proposal ?? "") : "";
+    }
+    field.disabled = claiming;
+    const problem = labelProblem(field.value);
+    fieldHint.textContent = problem ? `a name needs ${problem}` : "type a name, or keep this one · ENTER OR CLAIM";
+    fieldHint.classList.toggle("bad", problem !== null && field.value !== "");
     // What this player holds: each title and championship by its own ENS name, resolving to theirs.
     held.replaceChildren(
       ...honoursOf(c?.name ?? null, state.boards, link.now()).map((h) => {
@@ -109,9 +145,8 @@ export function lobbyView(ctx: ViewContext): View {
       }),
     );
     drawStats(c?.name ?? null, c?.record ?? null, state.board?.leaders ?? []);
-    const canClaim = Boolean(c && !c.name && lobby.proposal) && !claiming;
-    another.toggleAttribute("disabled", !canClaim);
-    claim.toggleAttribute("disabled", !canClaim);
+    another.toggleAttribute("disabled", !naming || claiming);
+    claim.toggleAttribute("disabled", !naming || claiming || problem !== null);
     topup.toggleAttribute("disabled", !lobby.badge || topping);
     plate.textContent = !lobby.badge
       ? "TAP YOUR BADGE ON EITHER STATION"

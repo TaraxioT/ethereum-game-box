@@ -18,13 +18,15 @@ ExecStartPre=-/usr/bin/wlopm --on *
 # Flags as the Pi's working kiosk runs them. The window flags cover a fresh profile, where kiosk mode alone opened a
 # 1050x700 window. --autoplay-policy lets sounds play with no click on the page; --use-fake-ui-for-media-stream grants
 # the microphone with no prompt for push-to-talk. Neither touches the Pi's audio devices or volume.
+# --enable-wayland-ime with text-input v3 lets a focused text field (the lobby's name) bring up the Pi's touch keyboard
+# (squeekboard).
 ExecStart=/usr/bin/chromium --kiosk --app=http://127.0.0.1:8790/ \
   --start-fullscreen --window-position=0,0 --window-size=1280,720 \
   --user-data-dir=%h/.config/egb-chromium --password-store=basic \
   --no-first-run --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
   --disable-pinch --overscroll-history-navigation=0 --disable-features=Translate \
   --autoplay-policy=no-user-gesture-required --use-fake-ui-for-media-stream \
-  --ozone-platform=wayland
+  --ozone-platform=wayland --enable-wayland-ime --wayland-text-input-version=3
 Restart=always
 RestartSec=3
 TimeoutStartSec=300

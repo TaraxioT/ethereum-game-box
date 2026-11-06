@@ -897,12 +897,14 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     );
   }
 
-  function claimName(): void {
+  /** Claims `typed` (a label typed on the screen), else the label proposed, for the badge on show. */
+  function claimName(typed: string | undefined): void {
     const { badge, proposal, card } = lobby;
-    if (!badge || !proposal || card?.name) return;
+    const label = typed ?? proposal;
+    if (!badge || !label || card?.name) return;
     send(
       { kind: "claim", seat: null, direction: "out", amount: 0 },
-      (watch) => port.claim(proposal, badge.address, watch),
+      (watch) => port.claim(label, badge.address, watch),
       () => read(badge),
     );
   }
@@ -1126,7 +1128,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (phase === "lobby") proposeAnother();
         return;
       case "claim":
-        if (phase === "lobby") claimName();
+        if (phase === "lobby") claimName(cmd.label);
         return;
     }
   }

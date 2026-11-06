@@ -733,6 +733,18 @@ describe("the lobby", () => {
     expect(r.chain.sent).toHaveLength(1);
   });
 
+  it("claims a label typed on the screen instead of the one proposed", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    instantTap(r.core, 0, NOVA, 1);
+    await flush();
+    r.core.send({ type: "claim", label: "alice" });
+    await until(r, (state) => state.lobby.card?.name !== null);
+    expect(r.chain.sent).toEqual(["claim alice"]);
+    expect(r.core.state().lobby.card?.name).toBe("alice.gamebox.eth");
+  });
+
   it("claims the badge's own label: NOVA becomes nova.gamebox.eth, and a seat shows it", async () => {
     const r = rig();
     r.core.send({ type: "booted" });
