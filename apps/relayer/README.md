@@ -21,6 +21,17 @@ refusal is a 4xx `{ error, revert? }`, where `revert` names the contract error, 
 malformed field, label or deadline; `401` a bad signature (including a high `s`); `403` outside the allowlist or not
 a known Box; `409` taken, replayed or already pending; `422` the `eth_call` reverts; `429` a rate limit.
 
+## Measured gas (Sepolia)
+
+| Request | Call | Gas used | Limit sent |
+|---|---|---|---|
+| claim | `GameBoxNames.claimPlayer` (a new resolver) | 2,117,302 | 2^24 + 4M |
+| claim's primary name | `DefaultReverseRegistrar.setNameForAddrWithSignature` | 139,348 | estimate + 50% |
+| pop-up | `DemoLicences.openPopup` (a new resolver) | 4,773,300 | 2^24 + 4M |
+| result | `BoxResults.submit` (the title moves, both players' stats) | 3,071,973 | estimate + 50% |
+| heartbeat | `BoxAccount.execute` → `setText(lastSeen)` | 182,050 (280,013 on a name's first) | estimate + 50% |
+| heartbeat | `BoxAccount.execute` → `setText(game)` | 171,985 (279,929 on a name's first) | estimate + 50% |
+
 ## What goes here
 
 | Path | Holds |
@@ -42,7 +53,8 @@ a known Box; `409` taken, replayed or already pending; `422` the `eth_call` reve
 
 - **Gas** is spent only after every check passes. A forged or replayed request costs nothing.
 - **Gas limits**: a call that creates a resolver (`claimPlayer`, `openPopup`) is sent with `2^24 + 4M`; the rest with
-  `eth_estimateGas` plus 50%. The tip is `TIP_GWEI` (default 2), the fee cap twice the base fee plus the tip.
+  `eth_estimateGas` plus 50%. The tip is `TIP_GWEI` (1 in `wrangler.jsonc`; 2 if unset), the fee cap twice the base fee
+  plus the tip.
 - **One nonce queue**: requests are sent one at a time from the Durable Object. On a nonce error it reads the nonce
   from the chain and retries once.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one

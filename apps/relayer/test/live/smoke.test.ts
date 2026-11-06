@@ -27,6 +27,7 @@ import {
   permissionedResolverAbi,
   popupLabel,
   primaryNameMessage,
+  resolverProfilesAbi,
   titleName,
 } from '@egb/shared/names';
 import {
@@ -135,7 +136,7 @@ beforeAll(async () => {
 afterAll(() => {
   for (const worker of workers) worker.kill();
   if (secrets) rmSync(secrets, { recursive: true, force: true });
-  console.log(`\nSmoke test against ${urls.relayer} and ${urls.demoBox}\n${report.join('\n')}\n`);
+  process.stdout.write(`\nSmoke test against ${urls.relayer} and ${urls.demoBox}\n${report.join('\n')}\n`);
 });
 
 describe('the Game Box names, live on Sepolia', () => {
@@ -158,7 +159,7 @@ describe('the Game Box names, live on Sepolia', () => {
 
   /** A text record read straight from a name's own resolver (ENSIP-10 `resolve`), at `blockNumber`. */
   async function record(resolver: Address, name: string, key: string, blockNumber: bigint): Promise<string> {
-    const data = encodeFunctionData({ abi: permissionedResolverAbi, functionName: 'text', args: [namehash(name), key] });
+    const data = encodeFunctionData({ abi: resolverProfilesAbi, functionName: 'text', args: [namehash(name), key] });
     const answer = await client.readContract({
       address: resolver,
       abi: permissionedResolverAbi,
@@ -166,7 +167,7 @@ describe('the Game Box names, live on Sepolia', () => {
       args: [toHex(packetToBytes(name)), data],
       blockNumber,
     });
-    return decodeFunctionResult({ abi: permissionedResolverAbi, functionName: 'text', data: answer });
+    return decodeFunctionResult({ abi: resolverProfilesAbi, functionName: 'text', data: answer });
   }
 
   beforeAll(async () => {
@@ -225,6 +226,14 @@ describe('the Game Box names, live on Sepolia', () => {
       const primaryBlock = BigInt(tx.primaryName!.block!);
       expect(await client.getEnsName({ address: badge.address, blockNumber: primaryBlock })).toBe(name);
     }
+  });
+
+  it('drips the new player a little ETH, once', async () => {
+    const res = await call<TxView>(urls.relayer, '/names/drip', { badge: badge.address });
+    expect(res.status, JSON.stringify(res.body)).toBe(202);
+    const tx = await done(res.body.id, 'drip');
+    expect(await client.getBalance({ address: badge.address, blockNumber: BigInt(tx.block!) })).toBe(parseEther('0.0003'));
+    expect((await call(urls.relayer, '/names/drip', { badge: badge.address })).status).toBe(409);
   });
 
   it('sends a heartbeat for mumbai-01', async () => {
