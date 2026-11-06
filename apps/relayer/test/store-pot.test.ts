@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { deployedAddresses } from '../src/request.ts';
 import { BUNDLE, highSignature, newBadge, storeStakeBody, verdictBody, voidBody } from './bodies.ts';
+import { Revert, nodeRevert } from './fake-chain.ts';
 import { BOX, NOW, STORE_POT, STORE_USDC, type StorePotEntry, World, addresses, boxKey } from './world.ts';
 
 /** A world with `count` players holding 100 Store USDC each, `BUNDLE` listed, and a key with `VERIFIER_ROLE`. */
@@ -540,6 +541,36 @@ describe('POST /store/refund', () => {
       'TooEarly',
     ],
   ]);
+});
+
+describe('a revert only the gas estimate sees', () => {
+  // A direct `refund` mined between the `eth_call` and the estimate: the pot's end is a final answer, not a node's fault.
+  const ended = () => nodeRevert(new Revert(storePotAbi as Abi, 'PotNotOpen', [BOX, 1n]));
+  const requests: [string, (m: Match) => unknown][] = [
+    ['/store/settle', (m) => verdictBody(m.verifier, ZERO_SPLIT)],
+    ['/store/void', (m) => voidBody(m.verifier)],
+    ['/store/refund', () => ({ box: BOX, round: 1 })],
+  ];
+
+  for (const [path, body] of requests) {
+    it(`is a named 422 from ${path}, with no transaction`, async () => {
+      const m = match();
+      withPot(m, { opened: BigInt(NOW - 3600) });
+      m.world.chain.estimateError = ended();
+      const res = await m.world.post(path, await body(m));
+      expect(res).toEqual({ status: 422, body: { error: 'the call reverts with PotNotOpen', revert: 'PotNotOpen' } });
+      expect(m.world.chain.sent).toHaveLength(0);
+    });
+  }
+
+  it('leaves a node that fails a 502', async () => {
+    const m = match();
+    withPot(m);
+    m.world.chain.estimateError = Object.assign(new Error('upstream gone'), { code: -32000 });
+    const res = await m.world.post('/store/settle', await verdictBody(m.verifier, ZERO_SPLIT));
+    expect(res.status).toBe(502);
+    expect(m.world.chain.sent).toHaveLength(0);
+  });
 });
 
 describe('one transaction in flight per round', () => {

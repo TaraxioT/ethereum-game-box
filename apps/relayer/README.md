@@ -35,7 +35,7 @@ passkey challenge or type, or no user verification); `403` outside the allowlist
 live and active Box, not a player, an unlisted bundle or a signer without `VERIFIER_ROLE`; `404` an ENS name that
 doesn't resolve, or a store route before its contract is deployed; `409` taken, replayed, a used nonce, a pot that exists
 or isn't open, payouts that don't fit the pot, too early, too little USDC, or already pending; `422` the `eth_call`
-reverts; `429` a rate limit.
+or the gas estimate reverts; `429` a rate limit.
 
 The store routes answer `404` until `deployments/sepolia.json` holds `StorePot` (and Store USDC, for `/store/open` and
 `/store/topup`). A round has one transaction in flight: its pot's lock is held by `/store/open`, `/store/settle`,

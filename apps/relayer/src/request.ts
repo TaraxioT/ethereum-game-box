@@ -94,10 +94,10 @@ export interface Prepared extends Call {
 /** The limit for a call that creates a resolver or a registry (shared with every other sender). */
 export { CREATES_STORAGE_GAS };
 
-/** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
-export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {
+/** `run()`, with a revert as a 422 named by its contract error. */
+async function refusingReverts<T>(run: () => Promise<T>): Promise<T> {
   try {
-    await ctx.client.call({ account: ctx.relayer, ...call });
+    return await run();
   } catch (error) {
     if (!isRevert(error)) throw error;
     const name = revertName(error);
@@ -105,9 +105,14 @@ export async function simulate(ctx: Context, call: { to: Address; data: Hex; val
   }
 }
 
-/** `eth_estimateGas` plus 50%. */
+/** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
+export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {
+  await refusingReverts(() => ctx.client.call({ account: ctx.relayer, ...call }));
+}
+
+/** `eth_estimateGas` plus 50%. The chain can move on after the `eth_call`, so a revert here is a 422 too. */
 export async function estimatedGas(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<bigint> {
-  const gas = await ctx.client.estimateGas({ account: ctx.relayer, ...call });
+  const gas = await refusingReverts(() => ctx.client.estimateGas({ account: ctx.relayer, ...call }));
   return gas + gas / 2n;
 }
 
