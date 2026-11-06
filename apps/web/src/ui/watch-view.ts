@@ -19,15 +19,15 @@ export function operatorSiteKey(text = "Open the operator site ↗"): HTMLAnchor
 }
 
 /** The names to watch: the Box, its live pop-ups, and the story's pop-up even once it has lapsed. */
-async function watchedNames(box: string, boxLapsed: boolean): Promise<{ name: string; lapsed: boolean }[]> {
+async function watchedNames(box: string, boxState: string | null): Promise<{ name: string; state: string | null }[]> {
   const d = await dir();
   const now = BigInt(nowSeconds());
   const popups = [...d.popups.values()]
     .filter((p) => p.ofBox === box && (p.expiry > now || p.label === state.story.popup))
     .sort((a, b) => Number(b.block - a.block))
     .slice(0, 4)
-    .map((p) => ({ name: fullName(p.label), lapsed: p.expiry <= now }));
-  return [{ name: fullName(box), lapsed: boxLapsed }, ...popups];
+    .map((p) => ({ name: fullName(p.label), state: p.expiry <= now ? "lapsed: gamebox.eth's default" : null }));
+  return [{ name: fullName(box), state: boxState }, ...popups];
 }
 
 export function recordWatch(box: string, key: string): HTMLElement {
@@ -66,22 +66,24 @@ export function recordWatch(box: string, key: string): HTMLElement {
 
   async function refresh(block: bigint): Promise<void> {
     const view = await readBox(client, box);
-    const watched = await watchedNames(box, view.resolves === null);
+    // A Box that was never licensed has expiry 0; one whose licence ran out has a past expiry.
+    const boxState = view.resolves !== null ? null : view.expiry === 0n ? "not licensed yet: gamebox.eth's default" : "lapsed: gamebox.eth's default";
+    const watched = await watchedNames(box, boxState);
     const [values, records] = await Promise.all([
       Promise.all(watched.map(({ name }) => readText(client, name, key).catch(() => null))),
       Promise.all(watched.map(({ name }) => recordIdOf(client, view.resolver, name))),
     ]);
     seen = track(seen, new Map(watched.map(({ name }, i) => [name, values[i] ?? null])), block);
     rows.replaceChildren(
-      ...watched.map(({ name, lapsed }, i) => {
+      ...watched.map(({ name, state: note }, i) => {
         const w = seen.get(name)!;
         const record = records[i] ?? 0n;
         return h(
-          `div.wr${w.changedAt !== null ? ".changed" : ""}${lapsed ? ".lapsed" : ""}` as "div",
+          `div.wr${w.changedAt !== null ? ".changed" : ""}${note ? ".lapsed" : ""}` as "div",
           {},
           nameLink(name),
           h("span.wv", {}, w.value ?? h("span.bad", {}, "—")),
-          h("span.wid", {}, lapsed ? "lapsed: gamebox.eth's default" : record === 0n ? "no record yet" : `record #${record}`),
+          h("span.wid", {}, note ?? (record === 0n ? "no record yet" : `record #${record}`)),
           h("span.wc", {}, w.changedAt !== null ? `changed at block ${w.changedAt}` : ""),
         );
       }),

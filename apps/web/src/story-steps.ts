@@ -8,6 +8,7 @@ import { dir, go, render, setFocus, state } from "./app.ts";
 import { newTestBadge } from "./badge.ts";
 import { client } from "./chain.ts";
 import { AGENT_LABEL, DEMO_BOX_LABEL, LIVE_TITLE_GAME } from "./config.ts";
+import { boxLicensed } from "./model.ts";
 import { locate } from "./registry.ts";
 import type { Step } from "./story.ts";
 
@@ -25,6 +26,9 @@ async function ensureStoryPopup(): Promise<string> {
   if (current) {
     const where = await locate(client, fullName(current));
     if (where.status === "registered") return current;
+  }
+  if (!(await boxLicensed(client, DEMO_BOX_LABEL))) {
+    throw new Error(`${fullName(DEMO_BOX_LABEL)} isn't licensed yet, so no pop-up can link to its record. This step runs once it is.`);
   }
   const label = freshLabel("demo").replace("demo-", "story");
   await openPopup(label);
@@ -106,6 +110,9 @@ export const STEPS: Step[] = [
     show: () => show(`#/name/${titleName(LIVE_TITLE_GAME)}`, "transfer"),
     async act() {
       const { label } = needClaim();
+      if (!(await boxLicensed(client, DEMO_BOX_LABEL))) {
+        throw new Error(`${fullName(DEMO_BOX_LABEL)} isn't licensed yet, and BoxResults takes results only from a licensed Box. This step runs once it is.`);
+      }
       let d = await dir();
       let opponent = [...d.players.values()].reverse().find((p) => p.label !== label && p.label !== AGENT_LABEL);
       if (!opponent) {

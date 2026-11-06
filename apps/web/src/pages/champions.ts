@@ -7,9 +7,9 @@ import { fullName } from "@egb/shared/names";
 import { reportWin } from "../actions.ts";
 import { dir, render } from "../app.ts";
 import { client } from "../chain.ts";
-import { AGENT_LABEL, GAMES } from "../config.ts";
+import { AGENT_LABEL, DEMO_BOX_LABEL, GAMES } from "../config.ts";
 import type { Directory } from "../directory.ts";
-import { type TitleView, readTitle } from "../model.ts";
+import { type TitleView, boxLicensed, readTitle } from "../model.ts";
 import { when } from "../time.ts";
 import { TxFailed } from "../txs.ts";
 import { addressLink, h, key, nameParts, short, tag, txLink } from "../ui/dom.ts";
@@ -61,15 +61,17 @@ function titleCard(d: Directory, t: TitleView): HTMLElement {
   );
 }
 
-function reportPanel(d: Directory): HTMLElement {
+function reportPanel(d: Directory, licensed: boolean): HTMLElement {
   const players = [...d.players.values()].filter((p) => p.label !== AGENT_LABEL).sort((a, b) => Number(b.block - a.block));
   const options = () => players.map((p) => h("option", { value: p.label }, fullName(p.label)));
   const game = h("select", { "aria-label": "game" }, ...GAMES.map((g) => h("option", { value: g, selected: g === "quickdraw" }, g)));
   const winner = h("select", { "aria-label": "winner" }, ...options());
   const loser = h("select", { "aria-label": "loser" }, ...options());
   if (players[1]) loser.value = players[1].label;
-  const hint = h("span.hint.wait", {}, "");
+  const blocked = reportBlocked(d, licensed);
+  const hint = h(blocked ? "span.hint.bad" : "span.hint.wait", {}, blocked ?? "");
   const button = key("Report the match", () => void send(), true);
+  button.disabled = blocked !== null;
   const send = async () => {
     const w = d.players.get(winner.value);
     const l = d.players.get(loser.value);
@@ -104,9 +106,16 @@ function reportPanel(d: Directory): HTMLElement {
   );
 }
 
+/** Why a match can't be reported yet, or null. */
+function reportBlocked(d: Directory, licensed: boolean): string | null {
+  if (!licensed) return `BoxResults takes results only from a Box with a live licence, and ${fullName(DEMO_BOX_LABEL)} isn't licensed yet. Reporting opens once its operator registers it.`;
+  if ([...d.players.values()].filter((p) => p.label !== AGENT_LABEL).length < 2) return "A match needs two player names: claim one on the Players page first.";
+  return null;
+}
+
 export async function championsPage(): Promise<HTMLElement> {
   const d = await dir();
-  const titles = await Promise.all(GAMES.map((game) => readTitle(client, d, game)));
+  const [titles, licensed] = await Promise.all([Promise.all(GAMES.map((game) => readTitle(client, d, game))), boxLicensed(client, DEMO_BOX_LABEL)]);
   return h(
     "div",
     {},
@@ -114,6 +123,6 @@ export async function championsPage(): Promise<HTMLElement> {
     h("h1", {}, "Champions"),
     h("p.intro", {}, "Each game has its own title registry with one name in it. A win by someone else moves the title: the old token is unregistered and a new one is registered to the winner. Nobody can transfer it, and it lapses a term after the holder's last win."),
     h("div.cards", {}, ...titles.map((t) => titleCard(d, t))),
-    reportPanel(d),
+    reportPanel(d, licensed),
   );
 }

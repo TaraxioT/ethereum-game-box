@@ -235,6 +235,8 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
 .answer .af { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 12px; font: 500 14px/1.4 var(--mono); color: var(--fg); }
 .answer .af em { font: 600 10.5px/1 var(--hud-body); font-style: normal; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-4); margin-right: 4px; }
 .answer .af a.nm { color: var(--sys); text-decoration: none; }
+.answer .af > span { min-width: 0; overflow-wrap: anywhere; }
+.answer .af a.ext { white-space: normal; overflow-wrap: anywhere; }
 .already:empty { display: none; }
 .already .answer { margin-top: 14px; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--fg-2); margin: 4px 0 0; cursor: pointer; }

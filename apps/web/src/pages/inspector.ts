@@ -54,7 +54,8 @@ function fact(label: string, value: Node | string, small?: Node | string, yes = 
 
 function expiryFact(where: Location): HTMLElement {
   if (where.expiry >= FOREVER) return fact("expiry", "never", "2^64 − 1", true);
-  if (where.status !== "registered") return fact("expiry", h("span.bad", {}, "expired"), "no longer resolves");
+  if (where.status !== "registered" && where.expiry === 0n) return fact("expiry", "not registered", "free to claim, or not licensed yet");
+  if (where.status !== "registered") return fact("expiry", h("span.bad", {}, "expired"), "no address of its own any more");
   return fact("expiry", countdownEl(where.expiry), when(where.expiry));
 }
 
@@ -88,7 +89,7 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
     fact("addr", address ? addressLink(address) : h("span.bad", {}, "null"), address ? (state.badge && getAddress(address) === getAddress(state.badge.address) ? `your ${state.badge.kind === "test" ? "test badge" : "wallet"}` : undefined) : "getEnsAddress: does not resolve"),
     expiryFact(where),
     fact("registry emancipated", where.emancipated ? "yes" : "no", where.emancipated ? "the parent holds no role in it" : "the parent can still act on it", where.emancipated),
-    fact("token", where.owner ? addressLink(where.owner, short(where.owner)) : "—", where.tokenId ? `id ${short(where.tokenId.toString(16))}` : undefined),
+    fact("token", where.owner ? addressLink(where.owner, short(where.owner)) : "—", where.owner && where.tokenId ? `id ${short(where.tokenId.toString(16))}` : undefined),
   );
   if (kind === "box" || kind === "popup") {
     const [status, lastSeen, game] = await Promise.all(["status", "lastSeen", "game"].map((k) => readText(client, name, k)));

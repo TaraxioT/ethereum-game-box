@@ -116,6 +116,20 @@ export async function treePage(): Promise<HTMLElement> {
     }
   }
 
+  if (!d.boxes.has(DEMO_BOX_LABEL)) {
+    rows.push(
+      row({
+        depth: 2,
+        name: fullName(DEMO_BOX_LABEL),
+        what: h("span.expired-note", {}, "Box · not licensed yet: its operator registers it on the operator site"),
+        resolver: null,
+        expiry: "—",
+        dead: true,
+        focus: "box mumbai",
+      }),
+    );
+  }
+
   // Players (the agent has its own row below), newest first.
   const players = [...d.players.values()].filter((p) => p.label !== AGENT_LABEL).sort((a, b) => Number(b.block - a.block)).slice(0, 10);
   players.forEach((p, i) => {

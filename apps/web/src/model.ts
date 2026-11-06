@@ -223,11 +223,18 @@ export function keysFor(kind: NameKind): string[] {
   }
 }
 
+/** Whether a Box holds a live licence now: registered, and not expired. Pop-ups link to a licensed Box only. */
+export async function boxLicensed(client: PublicClient, label: string): Promise<boolean> {
+  const box = await client.readContract({ address: contractAddress("GameBoxNames"), abi: gameBoxNamesAbi, functionName: "getBox", args: [label] });
+  return box.status !== 0 && BigInt(box.expiry) > BigInt(Math.floor(Date.now() / 1000));
+}
+
 /** The demo Box (`DemoLicences.BOX()`, the Box every pop-up links to) and its `P256Account`. */
 export async function demoBox(client: PublicClient): Promise<{ label: string; account: Address }> {
   const label = await client.readContract({ address: contractAddress("DemoLicences"), abi: demoLicencesAbi, functionName: "BOX" });
   const box = await client.readContract({ address: contractAddress("GameBoxNames"), abi: gameBoxNamesAbi, functionName: "getBox", args: [label] });
-  return { label, account: box.account };
+  // Before the Box is licensed, its account is the one deployed for it (`DemoBoxAccount`).
+  return { label, account: box.account === zeroAddress ? contractAddress("DemoBoxAccount") : box.account };
 }
 
 /** The accounts a name's role table and Try grid show: everyone with a stake in it, and a stranger or two. */

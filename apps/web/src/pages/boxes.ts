@@ -9,11 +9,11 @@ import { freshLabel, openPopup, popupAvailability } from "../actions.ts";
 import { dir, render, state } from "../app.ts";
 import { client } from "../chain.ts";
 import { DEMO_BOX_LABEL } from "../config.ts";
-import { type BoxView, readBox } from "../model.ts";
+import { type BoxView, boxLicensed, readBox } from "../model.ts";
 import { TxFailed } from "../txs.ts";
 import { addressLink, h, key, nameParts, tag } from "../ui/dom.ts";
 import { agoEl, countdownEl } from "../ui/live.ts";
-import { recordWatch } from "../ui/watch-view.ts";
+import { operatorSiteKey, recordWatch } from "../ui/watch-view.ts";
 
 function statusTag(status: string | null): HTMLElement {
   return status === "active" ? tag("active", "ok") : status ? tag(status, "bad") : tag("none", "warn");
@@ -70,7 +70,23 @@ export function boxCard(box: BoxView): HTMLElement {
   );
 }
 
-function popupPanel(): HTMLElement {
+function popupPanel(licensed: boolean): HTMLElement {
+  if (!licensed) {
+    return h(
+      "div.panel",
+      { "data-focus": "popup" },
+      h("h3", {}, "OPEN A POP-UP BOX"),
+      h(
+        "p",
+        {},
+        h("b", {}, fullName(DEMO_BOX_LABEL)),
+        " isn't licensed yet: its operator registers it from the operator site with a passkey. A pop-up links to its record, so pop-ups open once it is. Until then, the name answers with ",
+        h("b", {}, "gamebox.eth"),
+        "'s default record, like any free name.",
+      ),
+      h("div.actions", {}, operatorSiteKey()),
+    );
+  }
   const input = h("input", { type: "text", value: freshLabel("demo").replace("demo-", ""), maxlength: 26, "aria-label": "pop-up label", spellcheck: "false", autocomplete: "off" });
   const hint = h("span.hint.wait", {}, "");
   const check = async () => {
@@ -121,7 +137,10 @@ function popupPanel(): HTMLElement {
 export async function boxesPage(): Promise<HTMLElement> {
   const d = await dir();
   const entries = [...d.boxes.values(), ...d.popups.values()].sort((a, b) => Number(b.block - a.block));
-  const boxes = await Promise.all(entries.slice(0, 12).map((entry) => readBox(client, entry.label)));
+  const [boxes, licensed] = await Promise.all([
+    Promise.all(entries.slice(0, 12).map((entry) => readBox(client, entry.label))),
+    boxLicensed(client, DEMO_BOX_LABEL),
+  ]);
   // Live licences first, then the lapsed, each newest first.
   boxes.sort((a, b) => Number(a.resolves === null) - Number(b.resolves === null));
   return h(
@@ -140,7 +159,7 @@ export async function boxesPage(): Promise<HTMLElement> {
       h("code", {}, "game"),
       " are written by the Box's own account; the operator writes its four keys on the operator site. A pop-up Box borrows its Box's record for 10 minutes.",
     ),
-    popupPanel(),
+    popupPanel(licensed),
     recordWatch(DEMO_BOX_LABEL, BOX_KEYS.location),
     h("h2", {}, "EVERY LICENCE"),
     boxes.length ? h("div.cards", {}, ...boxes.map(boxCard)) : h("p", {}, "No Box licences yet."),

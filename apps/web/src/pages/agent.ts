@@ -27,7 +27,13 @@ export async function agentPage(): Promise<HTMLElement> {
   const roles = h("div", {}, h("p.reading", {}, "Reading roles…"));
   if (where.resolver) {
     const accounts = (await accountsFor(client, d, name, "agent")).slice(0, 3);
-    void readRoleTable(client, where.resolver, accounts, keysFor("agent")).then((rows) => roles.replaceChildren(roleTable(rows)));
+    void readRoleTable(client, where.resolver, accounts, keysFor("agent"))
+      .then((rows) => roles.replaceChildren(roleTable(rows)))
+      .catch(() => roles.replaceChildren(h("p.failed", {}, "Couldn't read the roles.")));
+  } else {
+    roles.replaceChildren(
+      h("p", {}, h("b", {}, `${name} isn't claimed yet. `), "The agent claims it with its own P256Account's signature (ERC-1271), and the relayer sends it. Until then the name answers with gamebox.eth's default record, like any free name."),
+    );
   }
   return h(
     "div",
