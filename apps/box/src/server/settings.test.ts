@@ -12,7 +12,7 @@ describe("settings", () => {
       dataDir: "/home/pi/.local/share/egb",
       screenDir: "/opt/egb/apps/box/dist/screen",
       receiver: { kind: "auto" },
-      stations: ["e4ba70", "df3d88"],
+      stations: ["df3b9c", "df3d88"],
     });
   });
 
