@@ -31,12 +31,24 @@ library NameLib {
 
     /// @notice `champion.<game>.gamebox.eth`, DNS-encoded.
     function dnsTitleName(string memory game) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(bytes(TITLE_LABEL).length), TITLE_LABEL, dnsName(game));
+        return dnsGameName(TITLE_LABEL, game);
+    }
+
+    /// @notice `<label>.<game>.gamebox.eth`, a name in a game's registry (its title or a championship), DNS-encoded.
+    function dnsGameName(string memory label, string memory game) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(bytes(label).length), label, dnsName(game));
     }
 
     /// @notice `<label>.gamebox.eth`.
     function fullName(string memory label) internal pure returns (string memory) {
         return string.concat(label, ".gamebox.eth");
+    }
+
+    /// @notice The namehash of `<label>.gamebox.eth`, the node a resolver keys its records by.
+    function node(string memory label) internal pure returns (bytes32) {
+        bytes32 eth = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        bytes32 gamebox = keccak256(abi.encodePacked(eth, keccak256("gamebox")));
+        return keccak256(abi.encodePacked(gamebox, keccak256(bytes(label))));
     }
 
     /// @notice The labelhash, which a registry takes as `anyId`.

@@ -1,0 +1,26 @@
+// The demo Box Worker and its agent. Secrets (`DEMO_BOX_P256_KEY`, `AGENT_P256_KEY`, `SEPOLIA_RPC_URL`) are set with
+// `wrangler secret put`, and for `wrangler dev` in `.dev.vars` (see `.dev.vars.example`); never here.
+{
+  "name": "gamebox-demo-box",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-29",
+  "durable_objects": {
+    "bindings": [{ "name": "DEMO_BOX", "class_name": "DemoBox" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoBox"] }],
+  // The relayer, called through a service binding: a Worker can't fetch another workers.dev Worker on its account.
+  "services": [{ "binding": "RELAYER", "service": "gamebox-relayer" }],
+  // Restarts the heartbeat alarm (which also closes ended championships) if it ever stops.
+  "triggers": { "crons": ["0 * * * *"] },
+  "vars": {
+    "RELAYER_URL": "https://gamebox-relayer.mathew.workers.dev",
+    "PUBLIC_URL": "https://gamebox-demo-box.mathew.workers.dev",
+    "BOX_LABEL": "demo-01",
+    "DEFAULT_GAME": "stockduel",
+    "CUP_GAMES": "stockduel,quickdraw",
+    "AGENT_LABEL": "bot",
+    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
+  },
+  "observability": { "enabled": true }
+}

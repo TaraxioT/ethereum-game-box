@@ -22,7 +22,7 @@ export interface Draft {
   readonly settled: Readonly<Partial<Record<Field, Settler>>>;
 }
 
-/** Fields an answer sets. Strings are checked and tidied; stakes are EGB a seat. */
+/** Fields an answer sets. Strings are checked and tidied; stakes are USDC a seat. */
 export interface BriefPatch {
   readonly template?: string;
   readonly mechanic?: string;
@@ -37,7 +37,7 @@ export const MAX_LINE = 160;
 export const MAX_TITLE = MANIFEST_LIMITS.title;
 /** game.json allows 1 to 4 stake amounts. */
 export const MAX_STAKES = 4;
-/** No single stake above this many EGB. */
+/** No single stake above this many USDC. */
 export const MAX_STAKE = 1000;
 
 export function emptyDraft(shelf: readonly ShelfTemplate[]): Draft {
@@ -105,7 +105,7 @@ export function readBack(draft: Draft, shelf: readonly ShelfTemplate[]): string 
   const where = b.theme ? ` set in ${lower(strip(b.theme))}` : "";
   const twist = b.twist && b.twist !== NO_TWIST ? `, and ${lower(strip(b.twist))}` : "";
   const how = b.mechanic ? ` ${optionLabel(MECHANICS, b.mechanic) ?? strip(b.mechanic)}.` : "";
-  const stakes = b.stakes ? `${list(b.stakes.map(String))} EGB a seat` : "No stakes yet";
+  const stakes = b.stakes ? `${list(b.stakes.map(String))} USDC a seat` : "No stakes yet";
   const voice = b.voice ? `, called by ${lower(strip(b.voice))}` : "";
   return `“${b.title ?? tpl}”: ${tpl}${where}${twist}.${how} ${stakes}${voice}. Shall I build it?`;
 }
@@ -122,7 +122,7 @@ export function question(step: DesignerStep, draft: Draft, shelf: readonly Shelf
     case "twist":
       return "What's the twist?";
     case "stakes":
-      return "What can players stake, in EGB a seat?";
+      return "What can players stake, in USDC a seat?";
     case "voice":
       return "Who calls the game?";
     case "title":
@@ -201,7 +201,7 @@ export function cleanLine(v: unknown, max: number): string | null {
   return s ? s.slice(0, max).trim() : null;
 }
 
-/** Whole EGB, ascending, no repeats, 1 to 4 of them; null when that can't be made of it. */
+/** Whole USDC, ascending, no repeats, 1 to 4 of them; null when that can't be made of it. */
 export function cleanStakes(v: unknown): number[] | null {
   if (!Array.isArray(v)) return null;
   const set = [...new Set(v)].filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n > 0 && n <= MAX_STAKE);
@@ -263,7 +263,7 @@ export function applyPatch(draft: Draft, patch: BriefPatch, shelf: readonly Shel
   if (patch.stakes !== undefined) {
     const stakes = cleanStakes(patch.stakes);
     if (stakes) set("stakes", stakes);
-    else errors.push(`stakes are 1 to ${MAX_STAKES} whole amounts of EGB`);
+    else errors.push(`stakes are 1 to ${MAX_STAKES} whole amounts of USDC`);
   }
   if (patch.voice !== undefined) {
     const line = keyed(VOICES, patch.voice);

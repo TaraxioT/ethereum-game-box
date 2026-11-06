@@ -122,7 +122,7 @@ export class EgbPort extends HTMLElement {
       styles,
       `<div class="port">
         <div class="socket"><i class="dial"></i><i class="ring"></i><i class="glow"></i><i class="flash"></i><i class="alarm"></i><div class="face"></div></div>
-        <div class="info"><div class="name"></div><div class="tap">TAP BADGE</div><div class="bal"><span class="num"></span><span class="unit">EGB</span></div></div>
+        <div class="info"><div class="name"></div><div class="tap">TAP BADGE</div><div class="bal"><span class="num"></span><span class="unit">USDC</span></div></div>
         <i class="underline"></i><span class="hint" aria-hidden="true"></span><span class="bot">BOT</span>
       </div>`,
     );
@@ -145,8 +145,10 @@ export class EgbPort extends HTMLElement {
     const first = this.#address === undefined;
     this.#name.replaceChildren(...nameParts(seat.badge?.name ?? ""));
     this.#name.title = seat.badge?.name ?? "";
-    setDigits(this.#num, seat.badge ? seat.balance.toLocaleString("en-US") : "", !first && address === this.#address);
-    this.setAttribute("aria-label", seat.badge ? `${seat.badge.name}, ${seat.balance} EGB` : "empty seat, tap a badge");
+    // A balance not read from chain yet shows as an ellipsis.
+    const balance = seat.balance === null ? "…" : seat.balance.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    setDigits(this.#num, seat.badge ? balance : "", !first && address === this.#address);
+    this.setAttribute("aria-label", seat.badge ? `${seat.ens ?? seat.badge.name}, ${balance} USDC` : "empty seat, tap a badge");
     if (address === this.#address) return;
     this.#address = address;
     if (address) {

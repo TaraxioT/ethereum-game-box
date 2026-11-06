@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+RELAYER_PRIVATE_KEY=
+SEPOLIA_RPC_URL=
+ALLOWED_ORIGINS=https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev,http://localhost:*

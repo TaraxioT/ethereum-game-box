@@ -1,7 +1,8 @@
 # The Box server
 
 The Game Box's own server on the Raspberry Pi: it runs the core on Node's ports, owns the receiver's serial port
-through the taps library, keeps the ledger and the session log, serves the built screen and the test page, and talks
+through the taps library, runs the chain port (stakes on Sepolia through the relayer, signed by the Box's HYP2003 key),
+keeps the session log, serves the built screen and the test page, and talks
 to the kiosk's screen over a WebSocket. `node apps/box/src/server/main.ts` (or `pnpm --filter @egb/box start`) runs
 it: Node runs the TypeScript as it is, so it is written in erasable syntax only, with `.ts` imports, and checked by
 `tsconfig.server.json` (Node types, no DOM).
@@ -16,17 +17,23 @@ named.
 |---|---|---|
 | `EGB_PORT` | `8790` | The port for HTTP and the link. |
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
-| `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games) and `forge/`. |
+| `EGB_DATA` | `~/.local/share/egb` | The data folder: `rounds.json` (the next round and the pots still open), `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games), `forge/` and `logs/` (the Box's log, `YYYY-MM-DD.log`). |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
-| `EGB_STATIONS` | `e4ba70,df3d88` | The station ids at Player 1's and Player 2's seats. |
+| `EGB_STATIONS` | `df3b9c,df3d88` | The station ids at Player 1's and Player 2's seats. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
+| `P256_SIGNER_CMD` | | The Box key's signer daemon, run with no shell (`deploy/p256-signer/`): `python3 /home/pi/egb/current/deploy/p256-signer/hyp2003_signer.py --serve`. |
+| `RELAYER_URL` | | The relayer that sends the Box's signed requests and pays the gas: `https://gamebox-relayer.mathew.workers.dev`. |
+| `SEPOLIA_RPC_URL` | | A Sepolia RPC for the reads (balances, names, the title, the championship, receipts). It carries the node's key: no error or log line ever shows it. |
+| `EGB_BOX` | `mumbai-01` | The Box's label under `gamebox.eth`, registered with the token's key. |
 | `EGB_FORGE_PROVIDER` | `claude` | Who builds games: `claude` (the Pi's Claude login) or `sim` (a recorded build replayed, shown SIMULATED). Anything else stops the start. |
 
 The game builder reads its own settings from the same environment (`src/builder/README.md`): `EGB_MODEL` (`off`:
 keywords read every answer), `ANTHROPIC_API_KEY`, `FORGE_MODEL`, `FORGE_TIMEOUT_MS`, `EGB_VOICE` (`mock` or
 `elevenlabs`), `ELEVENLABS_API_KEY`, `EGB_VOICE_ID`, `EGB_VOICE_TTS_MAX_CHARS`, `EGB_VOICE_STT_MAX_MIN`.
 
-Relative paths are from the repo root; `~` is the home folder.
+Relative paths are from the repo root; `~` is the home folder. The three chain settings go together: with all three the
+stakes go on Sepolia (`src/chain/`); with none, only the simulator (`EGB_RECEIVER=fake` or `none`) runs, on the demo chain
+in memory (`core/demo-chain.ts`); any other mix stops the start.
 
 ## HTTP
 
@@ -129,7 +136,7 @@ free-result rules, `core/transcript.ts`).
 On connect, a screen gets `{ t: "state", now, state }`; then `{ t: "event", now, state, event }` for every event, in
 order and never coalesced. The one change with no event (the stations' views moving with the clock) goes out as a
 whole `state` at most every 100 ms; an event cancels a pending one, since it carries the whole state too. The screen
-sends `{ t: "command", command }`, checked strictly before it reaches the core (`build` opens the game builder from
+sends `{ t: "command", command }`, checked strictly before it reaches the core (`lobby`, `topup`, `propose` and `claim` drive the lobby; `build` opens the game builder from
 Home). A socket that stops reading (1 MB
 unread) or stops answering pings (15 s) is dropped; the screen reconnects and starts from the whole state.
 
@@ -137,10 +144,10 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 
 | Module | What it is | API |
 |---|---|---|
-| `main.ts` | The entry: env files, settings, the Box, signals. Uncaught errors are logged and never fatal; SIGTERM and SIGINT stop it within 10 s (the taps closed, the ledger and the log on disk). | |
+| `main.ts` | The entry: env files, settings, the Box, signals. Uncaught errors are logged and never fatal; SIGTERM and SIGINT stop it within 10 s (the taps closed, the signer stopped, the logs on disk). | |
 | `env.ts` | `.env`-style files, never overriding a set key. | `parseEnv`, `loadEnvFile`, `envFiles`, `loadEnv` |
 | `settings.ts` | The typed, checked settings. | `readSettings(env, home, repoRoot)`, `SettingsError` |
-| `box.ts` | The Box put together: the core on Node's ports (the library and the rules host among them) and the monotonic clock (`core/system-clock.ts`), the taps, the library's scan, the session log's read-back and the game builder (after it listens), the routes and the built games' routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, builder? }): Box` (`core`, `library`, `rules`, `taps()`, `builder()`) |
+| `box.ts` | The Box put together: the core on Node's ports (the chain port the settings name, the library and the rules host among them; after the listen the rounds are checked against the chain and pots past their refund delay are swept every 5 minutes) and the monotonic clock (`core/system-clock.ts`), the taps, the library's scan, the session log's read-back and the game builder (after it listens), the routes and the built games' routes, the link, one port. | `startBox({ settings, repoRoot, clock?, fake?, log?, chain?, builder? }): Box` (`core`, `library`, `rules`, `taps()`, `builder()`) |
 | `library/` | The game library (its own README). | `createLibrary` |
 | `rules/` | The rules runner host and the sandbox's proof (its own README). | `createRulesHost` |
 | `games/` | Built games over HTTP: cartridges, frames, the frames' shared assets (its own README). | `createGameRoutes`, `createFrameAssets` |
@@ -159,12 +166,12 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `link.ts` | The screen's WebSocket on the HTTP server (`ws`, `noServer`); its upgrade takes the same Host and origin rules as a POST. | `attachLink(server, box, log)`, `parseCommand` |
 | `coalesce.ts` | At most one run per window, always a trailing run. | `coalesce(run, everyMs)` |
 | `inject.ts` | Injected taps: a badge by roster label or address. | `parseInjection`, `resolveBadge`, `injectTap` |
-| `ledger-file.ts` | The ledger in `$EGB_DATA/ledger.json` (balances, and each stake in escrow under its badge): loaded once, written atomically off the tap path after every change. A file that isn't a ledger is moved aside. | `createLedgerFile(file, log)` |
-| `files.ts` | Atomic writes: a temp file, fsync, rename, then the folder fsynced. The ledger, the roster, the Forge's job records and the voice's clips and totals all write through it. | `writeFileAtomic` |
+| `files.ts` | Atomic writes: a temp file, fsync, rename, then the folder fsynced. The roster, the Forge's job records and the voice's clips and totals all write through it. | `writeFileAtomic` |
+| `log-file.ts` | The Box's log: every line the server logs (each tap's plan, end and cause; each phase; each tap the core took or didn't) also goes to `$EGB_DATA/logs/YYYY-MM-DD.log`, appended in order off the tap path, because the Pi keeps no user journal. | `createLogFile(dataDir, echo)` |
 | `release.ts` | The running commit. | `readCommit(repoRoot)` |
 | `testing.ts` | For tests: a whole Box on a free port with its core (and taps) on a fake clock, a recording screen. | `startTestBox`, `openScreen`, `post`, `flush` |
 
-Tests: `env`, `settings`, `files` (atomic writes and the ledger file), `http` (the loopback Host on every request and
+Tests: `env`, `settings` (the chain's three settings, all or none, never echoed), `files` (atomic writes), `http` (the loopback Host on every request and
 upgrade, the same origin port and all, CSP, the token, the body cap, the guard), `builder-frames` (the stream's
 reader), `link` (state first, events in order, coalescing, commands), `match` (a whole Quick Draw and Stock
 Duel over the link with injected taps), `live-link` (the screen's `LiveLink` against a real server), `sessions` (the
@@ -177,4 +184,8 @@ a confirm that builds (the design locked, `/api/state` busy) with the event stre
 and `?job=` replaying a finished one. `builder-session`: a whole design by mock voice over the HTTP API, its spoken "yes"
 building a game with the sim provider, installed, every step on the stream. `built-match`: a game the Forge's sim provider builds and installs reaches the rack as
 a `games` event with its art and frame served, plays a whole match by injected taps with its rules in the sandboxed
-child to a paid result and its transcript, and a game whose rules hang is voided at its budget with both stakes back.
+child to its result and transcript, for nothing (a built game isn't on chain), and a game whose rules hang is voided at its budget. `chain-match`: a
+whole Quick Draw on the Sepolia chain port over a mocked relayer, its key a software one: the match opens with only the
+open sent, the result goes once the open is done with the same round and badges, the lines come from the chain's
+reads, the balances are read again; and a seat short of the stake sent to the lobby, which tops it up and claims its
+name. `match` and `fake-box` play on the demo chain.

@@ -18,7 +18,7 @@ describe("the brief", () => {
     expect(briefProblem(brief({ title: "  " }), shelf)).toMatch(/title/);
     expect(briefProblem(brief({ stakes: [] }), shelf)).toMatch(/1–4 amounts/);
     expect(briefProblem(brief({ stakes: [5, 1] }), shelf)).toMatch(/ascending/);
-    expect(briefProblem(brief({ stakes: [1.5] }), shelf)).toMatch(/whole EGB/);
+    expect(briefProblem(brief({ stakes: [1.5] }), shelf)).toMatch(/whole USDC/);
   });
 
   it("renders into the agent's first turn: the design, what the Box fixes, how to finish", () => {
@@ -30,7 +30,7 @@ describe("the brief", () => {
       /How a tap scores: “first to three taps”/,
       /Theme: “a pirate ship”/,
       /Twist: none/,
-      /Stakes: 2, 4 EGB a seat/,
+      /Stakes: 2, 4 USDC a seat/,
       /Voice of its words \(screen and stations\): “a pirate”/,
       /plank-dash-k2x9/,
       /Never call it verified, provable, provably fair or proven/,

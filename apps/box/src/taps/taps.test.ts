@@ -191,6 +191,46 @@ describe("the tap state machine", () => {
     expectWhole(t.events);
   });
 
+  it("carries a roll on when the station counts a still badge gone and reads it again at once", async () => {
+    // On the Box, a HaLo with SAK 28 resting on the reader flaps `gone` then `tap` within a few ms; every roll it
+    // interrupted failed `lifted`, so Stock Duel's picks failed with the badge held still.
+    const t = await boot({ timeScale: 1 });
+    t.fake.place("ada", P1);
+    await t.step(200);
+    t.fake.lift("ada");
+    await t.step(100);
+    t.env.plan = "random";
+    t.fake.place("ada", P1);
+    await t.step(300);
+    t.fake.lift("ada");
+    await t.step(60);
+    t.fake.place("ada", P1);
+    await t.step(2500);
+    expectWhole(t.events);
+    expect(t.events.filter((e) => e.phase === "touch")).toHaveLength(2);
+    const roll = t.events.at(-1)!;
+    expect(roll).toMatchObject({ phase: "done", tap: t.events[2]!.tap });
+    expect(roll.phase === "done" && roll.roll !== null).toBe(true);
+  });
+
+  it("still fails `lifted` when the chip comes back too late", async () => {
+    const t = await boot({ timeScale: 1 });
+    t.fake.place("ada", P1);
+    await t.step(200);
+    t.fake.lift("ada");
+    await t.step(100);
+    t.env.plan = "random";
+    t.fake.place("ada", P1);
+    await t.step(300);
+    t.fake.lift("ada");
+    await t.step(1500);
+    t.fake.place("ada", P1);
+    await t.step(2500);
+    expectWhole(t.events);
+    expect(t.events[3]).toMatchObject({ phase: "fail", error: { code: "lifted" } });
+    expect(t.events.filter((e) => e.phase === "touch")).toHaveLength(3);
+  });
+
   it("fails every open tap at once when the receiver drops, then reopens", async () => {
     const t = await boot({ timeScale: 1 });
     t.env.plan = "random";

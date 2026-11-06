@@ -452,7 +452,7 @@ contract BoxStakingTest is NamesFork {
         _stake(alice, MIN);
         (bytes32 qx, bytes32 qy) = p256Public(p256Key("egb-test-new-box"));
         vm.prank(admin);
-        names.setBoxKey(BOX, account("new-box"), qx, qy);
+        names.setBoxKey(BOX, qx, qy, account("new-box"));
         assertTrue(staking.isBonded(BOX));
         assertEq(_position(alice).stake, MIN);
     }

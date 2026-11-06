@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
-import type { Clock } from "../core/ports.ts";
+import type { ChainPort, Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
 import { monotonicClock } from "../core/system-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
@@ -17,7 +17,13 @@ import type { Settings } from "./settings.ts";
 import { apiRoutes } from "./api.ts";
 import { builderRoutes } from "./builder-api.ts";
 import { forgeProvider, startBuilder, type Builder, type BuilderOptions } from "./builder-host.ts";
-import { createLedgerFile } from "./ledger-file.ts";
+import { createDemoChain } from "../core/demo-chain.ts";
+import { sepoliaReads } from "../chain/reads.ts";
+import { relayerAt } from "../chain/relayer.ts";
+import { roundsFile } from "../chain/rounds.ts";
+import { createSepoliaChain, SWEEP_MS, type SepoliaChain } from "../chain/port.ts";
+import { processSigner } from "../signer/hyp2003.ts";
+import { createLogFile } from "./log-file.ts";
 import { attachLink } from "./link.ts";
 import { readCommit } from "./release.ts";
 import { createHandler } from "./routes.ts";
@@ -37,6 +43,9 @@ export interface BoxOptions {
   /** The fake receiver's timing, with EGB_RECEIVER=fake (tests: `timeScale: 0`). */
   readonly fake?: FakeOptions;
   readonly log?: (text: string) => void;
+  /** Makes the chain port on the Box's clock, instead of the one the settings name (tests: the Sepolia port on a mocked
+   * relayer). */
+  readonly chain?: (clock: Clock) => ChainPort & { stop?(): void };
   /** The game builder's settings: its environment (default: process.env), its shelf's folders, the sim's pace. */
   readonly builder?: Partial<Pick<BuilderOptions, "env" | "gameRoots" | "simSpeed">>;
 }
@@ -59,7 +68,7 @@ export interface Box {
   builder(): Builder | null;
   /** This boot's launcher token. */
   readonly token: string;
-  /** Stops the link, the core, the taps and the server, and waits for the ledger and the log to reach the disk. */
+  /** Stops the link, the core, the taps, the chain port and the server, and waits for the logs to reach the disk. */
   stop(): Promise<void>;
 }
 
@@ -70,15 +79,29 @@ function urlHost(host: string): string {
 
 export async function startBox(options: BoxOptions): Promise<Box> {
   const { settings } = options;
-  const log = options.log ?? ((text: string) => console.log(text));
+  await mkdir(settings.dataDir, { recursive: true });
+  // The Pi keeps no user journal: the Box's lines also go to $EGB_DATA/logs/ (tests pass their own log).
+  const logFile = options.log ? null : createLogFile(settings.dataDir, (text) => console.log(text));
+  const log = options.log ?? ((text: string) => logFile?.log(text));
   // Monotonic: a clock step (NTP after boot) must not move touch times against the game's own timers.
   const clock = options.clock ?? monotonicClock();
   const started = performance.now();
   const builderEnv = options.builder?.env ?? process.env;
   // A bad EGB_FORGE_PROVIDER stops the start before anything listens.
   forgeProvider(builderEnv);
-  await mkdir(settings.dataDir, { recursive: true });
-  const ledger = createLedgerFile(join(settings.dataDir, "ledger.json"), log);
+  const sepolia: SepoliaChain | null =
+    options.chain || settings.chain.kind !== "sepolia"
+      ? null
+      : createSepoliaChain({
+          box: settings.chain.box,
+          signer: processSigner(settings.chain.signerCmd, log),
+          relayer: relayerAt(settings.chain.relayerUrl),
+          reads: sepoliaReads(settings.chain.rpcUrl),
+          rounds: roundsFile(join(settings.dataDir, "rounds.json")),
+          clock,
+          log,
+        });
+  const chain: ChainPort & { stop?(): void } = options.chain?.(clock) ?? sepolia ?? createDemoChain(clock);
   const sessions = createSessionLog(settings.dataDir, log);
   // The library answers with the catalogue until its first scan, which runs after the listen.
   const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log });
@@ -96,12 +119,18 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       show: (seat, view) => taps?.show(seat, view),
       buzz: (seat, kind) => taps?.buzz(seat, kind),
     },
-    ledger,
+    chain,
     library,
     rules,
     log: sessions,
     random: () => randomInt(2 ** 32),
   }, { builder: true });
+  // What the core made of each tap, and every phase it entered: with the taps' own lines, a match can be followed in
+  // the log after the fact.
+  core.subscribe((_, event) => {
+    if (event.type === "phase") log(`core: ${event.from} -> ${event.to}`);
+    else if (event.type === "tap") log(`core: seat ${event.seat} tap ${event.accepted ? "accepted" : "not taken"}`);
+  });
   const token = createLauncherToken();
   let commit: string | null = null;
   let builder: Builder | null = null;
@@ -137,6 +166,16 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   });
   server.on("error", (error) => log(`http: ${error.message}`));
 
+  let sweeping: ReturnType<Clock["every"]> | null = null;
+  if (sepolia) {
+    // Rounds the chain has seen are skipped (a lost rounds file); pots left open are refunded once their delay runs.
+    void sepolia.checkKey().catch((error: unknown) => log(`chain: the key wasn't checked: ${error instanceof Error ? error.message : String(error)}`));
+    void sepolia.syncRounds().catch((error: unknown) => log(`chain: rounds not checked: ${error instanceof Error ? error.message : String(error)}`));
+    const sweep = () => void sepolia.sweep().catch((error: unknown) => log(`chain: sweep: ${error instanceof Error ? error.message : String(error)}`));
+    sweep();
+    sweeping = clock.every(SWEEP_MS, sweep);
+  }
+  log(`chain: ${settings.chain.kind === "sepolia" && !options.chain ? `Sepolia as ${settings.chain.box}, through the relayer` : "the demo chain (simulator)"}`);
   // The match log is read back now, not before the listen: it only grows.
   void sessions.load();
   void library.rescan();
@@ -189,7 +228,9 @@ export async function startBox(options: BoxOptions): Promise<Box> {
         core.stop();
         server.closeAllConnections();
         await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close(), builder?.stop()]);
-        await Promise.all([ledger.flush(), sessions.flush()]);
+        clock.cancel(sweeping);
+        chain.stop?.();
+        await Promise.all([sessions.flush(), logFile?.flush()]);
       })();
       return stopping;
     },

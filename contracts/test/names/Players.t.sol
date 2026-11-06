@@ -5,6 +5,7 @@ import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import {P256Account} from "../../src/box/P256Account.sol";
 import {GameBoxNames} from "../../src/names/GameBoxNames.sol";
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
 import {
@@ -62,7 +63,8 @@ contract PlayersTest is NamesFork {
         claim("egbt-alice");
         assertTrue(registry.isEmancipated());
         assertEq(
-            registry.roles(0, address(names)), RegistryRoles.REGISTRAR | RegistryRoles.RENEW | RegistryRoles.SET_PARENT
+            registry.roles(0, address(names)),
+            RegistryRoles.REGISTRAR | RegistryRoles.REGISTRAR_ADMIN | RegistryRoles.RENEW | RegistryRoles.RENEW_ADMIN
         );
         (IPermissionedRegistry parent, string memory label) = _parent();
         assertEq(address(parent), address(ethRegistry));
@@ -164,6 +166,46 @@ contract PlayersTest is NamesFork {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, fresh.claimDigest("egbt-alice", badge, deadline));
         vm.expectRevert(IGameBoxNames.StatsWriterNotSet.selector);
         fresh.claimPlayer("egbt-alice", badge, deadline, abi.encodePacked(r, s, v));
+    }
+
+    uint256 internal agentKey = p256Key("egb-test-agent");
+
+    /// @dev An agent's `P256Account` claims `egbt-bot` with a raw P-256 signature of the claim digest (ERC-1271).
+    function _claimAgent() internal returns (P256Account agent) {
+        (bytes32 qx, bytes32 qy) = p256Public(agentKey);
+        agent = P256Account(payable(accounts.deploy(qx, qy)));
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = rawSign(agentKey, names.claimDigest("egbt-bot", address(agent), deadline));
+        names.claimPlayer("egbt-bot", address(agent), deadline, sig);
+    }
+
+    function test_aP256AccountClaims() public {
+        P256Account agent = _claimAgent();
+        assertEq(names.nameOf(address(agent)), "egbt-bot.gamebox.eth");
+        assertEq(resolveAddr("egbt-bot.gamebox.eth"), address(agent));
+        assertEq(registry.balanceOf(address(agent), registry.getTokenId(NameLib.id("egbt-bot"))), 1);
+    }
+
+    function test_aP256AccountClaimNeedsItsKey() public {
+        (bytes32 qx, bytes32 qy) = p256Public(agentKey);
+        address agent = accounts.deploy(qx, qy);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory wrong = rawSign(p256Key("egb-test-not-agent"), names.claimDigest("egbt-bot", agent, deadline));
+        vm.expectRevert(IGameBoxNames.InvalidClaimSignature.selector);
+        names.claimPlayer("egbt-bot", agent, deadline, wrong);
+    }
+
+    /// @dev The account holds every role on its resolver, and writes its records through `execute`.
+    function test_aP256AccountWritesItsRecords() public {
+        P256Account agent = _claimAgent();
+        address resolver = registry.getResolver("egbt-bot");
+        bytes memory data =
+            abi.encodeCall(IPermissionedResolver.setText, (NameLib.dnsName("egbt-bot"), "agent-context", "# bot"));
+        uint256 deadline = block.timestamp + 1 hours;
+        agent.execute(
+            resolver, 0, data, 1, deadline, rawSign(agentKey, agent.executeDigest(resolver, 0, data, 1, deadline))
+        );
+        assertEq(resolveText("egbt-bot.gamebox.eth", "agent-context"), "# bot");
     }
 
     function test_erc1271WalletClaims() public {

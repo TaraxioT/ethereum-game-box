@@ -17,7 +17,7 @@ receiver port ─bytes─▶ scanner ─lines─▶ events (parse) ─▶ taps f
 ```ts
 const taps = createTaps({
   receiver: "auto",                // a /dev/serial/by-id path, auto, or fake (EGB_RECEIVER)
-  stations: ["e4ba70", "df3d88"],  // P1's station, P2's (EGB_STATIONS)
+  stations: ["df3b9c", "df3d88"],  // P1's station, P2's (EGB_STATIONS)
   dataDir,                         // $EGB_DATA: badges.json (badges.fake.json for the fake)
   clock,                           // the core's Clock
   plan: (seat) => core.plan(seat), // asked after each touch
@@ -49,7 +49,16 @@ null) and `probe` (one measurement each, for the bench). `runBench(taps, { count
    link to the chip, or the station's reader stopped), `not-halo`, `refused` (the chip said no), `verify` (its answer
    didn't check out), `link` (the station's link stayed down past its 2 s grace, or the receiver dropped).
 
+6. **The same chip read again is the same tap.** A HaLo with SAK 28 resting on the reader answers the station's
+   presence check only now and then, so the station counts a badge held still `gone` and sends a new `tap` for it a
+   few ms later. While a tap is running, a `tap` line for its own UID on its station, with no `gone` before it or one
+   at most `REJOIN_MS` (500 ms) earlier, carries that tap on: no new touch, and a request the flap broke is retried
+   after a reselect. A roll (~0.5 to 1.6 s on the hardware) used to fail `lifted` at every flap, which is why Stock
+   Duel's picks failed on the Box with the badge held still. A chip gone for longer fails the tap `lifted`, as before.
+
 Every `touch` ends in `done` or `fail`: when the port closes or the receiver reboots, every open tap fails at once.
+Every tap logs its station, seat, badge and plan at the touch, then its end and the real cause of a failure (the
+server keeps these lines in `$EGB_DATA/logs/`).
 Taps on a station no seat uses are ignored, though the station's status shows the chip.
 
 ## Timing that matters
@@ -115,7 +124,7 @@ example event line parses and every example command round-trips verbatim. The re
 mapping (the wrap, drift, a reboot), resent ids (`fresh-ids`), the tty writer (a full buffer, the give-up and its
 drop, a cancelled retry), screens (change, relink, the 5 s resend with `ttl=15`, failures), NFC queueing and errors,
 chip ops against simulated badges (a verified roll; one signed by another key fails; an answer after the chip left
-is dropped), the tap machine on its own (a tap that ended records nothing), the roster file, and the whole library
+is dropped; a roll carried on through a station's gone-and-back flap, and failed when the chip stays away), the tap machine on its own (a tap that ended records nothing), the roster file, and the whole library
 against the fake receiver on a fake clock: touch then done or fail, unknown chips read whatever the plan, a known
 chip's identify with no chip command, the SELECT answered from the station's kept answer, the AID memory, a lift
 mid-roll, a resent older tap, a tap after `ready` in one chunk, the receiver dropping and coming back, and the link

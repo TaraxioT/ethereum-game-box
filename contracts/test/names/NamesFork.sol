@@ -3,8 +3,13 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
-import {BoxAccount} from "../../src/box/BoxAccount.sol";
+import {P256Account} from "../../src/box/P256Account.sol";
+import {P256AccountFactory} from "../../src/box/P256AccountFactory.sol";
+import {DuelPot} from "../../src/game/DuelPot.sol";
 import {BoxResults} from "../../src/names/BoxResults.sol";
+import {BoxSeats} from "../../src/names/BoxSeats.sol";
+import {Championships} from "../../src/names/Championships.sol";
+import {DefaultRecord} from "../../src/names/DefaultRecord.sol";
 import {DemoLicences} from "../../src/names/DemoLicences.sol";
 import {GameBoxNames} from "../../src/names/GameBoxNames.sol";
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
@@ -16,10 +21,13 @@ import {
     IVerifiableFactory
 } from "../../src/names/IENSv2.sol";
 import {PlayerStats} from "../../src/names/PlayerStats.sol";
+import {FakeUSDC} from "../../src/token/FakeUSDC.sol";
 import {P256Keys} from "../box/P256Keys.sol";
 
 /// @notice A fork of Sepolia at a pinned block with the live ENSv2 contracts, and the Game Box names deployed on it
-///         the way `script/` deploys them: `gamebox.eth` pointed at our registry, both games added, the roles granted.
+///         the way `script/` deploys them: the account factory and the demo Box's account, the test USDC, the pots,
+///         the championships and the Box seats, `gamebox.eth` pointed at our registry and at its own resolver with the
+///         default record, both games added, the roles granted.
 abstract contract NamesFork is Test, P256Keys {
     /// @dev After `gamebox.eth` moved to the deployer.
     uint256 internal constant FORK_BLOCK = 12_075_200;
@@ -29,13 +37,22 @@ abstract contract NamesFork is Test, P256Keys {
 
     IPermissionedRegistry internal ethRegistry;
     IUniversalResolver internal universalResolver;
+    IVerifiableFactory internal ensFactory;
+    address internal resolverImpl;
 
     GameBoxNames internal names;
     PlayerStats internal stats;
     BoxResults internal results;
     DemoLicences internal licences;
-    BoxAccount internal demoBox;
+    FakeUSDC internal fakeUsdc;
+    DuelPot internal pot;
+    Championships internal cups;
+    BoxSeats internal seats;
+    P256AccountFactory internal accounts;
+    P256Account internal demoBox;
     IPermissionedRegistry internal registry;
+    /// @notice `gamebox.eth`'s own resolver, with the default record.
+    address internal gameboxResolver;
 
     uint256 internal boxKey = p256Key("egb-test-box");
     address internal admin = account("admin");
@@ -47,28 +64,40 @@ abstract contract NamesFork is Test, P256Keys {
         ethRegistry = IPermissionedRegistry(vm.parseJsonAddress(json, ".ens.ETHRegistry.address"));
         universalResolver = IUniversalResolver(vm.parseJsonAddress(json, ".ens.UniversalResolver.address"));
 
+        ensFactory = IVerifiableFactory(vm.parseJsonAddress(json, ".ens.VerifiableFactory.address"));
+        resolverImpl = vm.parseJsonAddress(json, ".ens.PermissionedResolverImpl.address");
+
         vm.startPrank(admin);
+        accounts = new P256AccountFactory();
         names = new GameBoxNames(
-            IVerifiableFactory(vm.parseJsonAddress(json, ".ens.VerifiableFactory.address")),
-            vm.parseJsonAddress(json, ".ens.UserRegistryImpl.address"),
-            vm.parseJsonAddress(json, ".ens.PermissionedResolverImpl.address"),
-            ethRegistry,
-            admin
+            ensFactory, vm.parseJsonAddress(json, ".ens.UserRegistryImpl.address"), resolverImpl, ethRegistry, admin
         );
         stats = new PlayerStats(names);
-        results = new BoxResults(names, stats);
-        (bytes32 qx, bytes32 qy) = p256Public(boxKey);
-        demoBox = new BoxAccount(qx, qy);
-        licences = new DemoLicences(names, operator, address(demoBox));
+        fakeUsdc = new FakeUSDC(admin, admin);
+        pot = new DuelPot(names, fakeUsdc);
+        cups = new Championships(names, fakeUsdc, ensFactory, resolverImpl, admin);
+        results = new BoxResults(names, stats, pot, cups);
+        licences = new DemoLicences(names);
+        seats = new BoxSeats(names);
         names.grantRole(names.LICENSOR_ROLE(), admin);
         names.grantRole(names.LICENSOR_ROLE(), address(licences));
         names.grantRole(names.REFEREE_ROLE(), address(results));
+        names.grantRole(names.SEATER_ROLE(), address(seats));
         names.setStatsWriter(address(stats));
+        names.setChampionships(address(cups));
+        fakeUsdc.setGameSpender(address(pot));
+        (bytes32 qx, bytes32 qy) = p256Public(boxKey);
+        demoBox = P256Account(payable(accounts.deploy(qx, qy)));
         vm.stopPrank();
 
         registry = names.REGISTRY();
-        vm.prank(ENS_DEPLOYER);
+        vm.startPrank(ENS_DEPLOYER);
         ethRegistry.setSubregistry(uint256(keccak256("gamebox")), IRegistry(address(registry)));
+        gameboxResolver = ensFactory.deployProxy(
+            resolverImpl, uint256(keccak256("gamebox.eth resolver")), DefaultRecord.initData(ENS_DEPLOYER)
+        );
+        ethRegistry.setResolver(uint256(keccak256("gamebox")), gameboxResolver);
+        vm.stopPrank();
 
         vm.startPrank(admin);
         names.addGame("stockduel", 7 days);
@@ -109,6 +138,12 @@ abstract contract NamesFork is Test, P256Keys {
         (badge, key) = accountWithKey(string.concat("badge-", label));
         uint256 deadline = block.timestamp + 1 hours;
         names.claimPlayer(label, badge, deadline, claimSignature(label, badge, key, deadline));
+    }
+
+    /// @dev A raw P-256 signature (`r ‖ s`, low `s`) of `digest`.
+    function rawSign(uint256 key, bytes32 digest) internal pure returns (bytes memory) {
+        (bytes32 r, bytes32 s) = p256Sign(key, digest);
+        return abi.encodePacked(r, s);
     }
 
     function registerBox(string memory label, uint64 term) internal returns (address resolver) {
@@ -184,6 +219,16 @@ abstract contract NamesFork is Test, P256Keys {
         if (!ok) return "";
         (bytes memory answer,) = abi.decode(ret, (bytes, address));
         return abi.decode(answer, (string));
+    }
+
+    /// @dev The resolver the Universal Resolver answered `name`'s address from, or zero if none did.
+    function resolveResolver(string memory fullName) internal view returns (address) {
+        bytes memory call = abi.encodeWithSignature("addr(bytes32)", namehash(fullName));
+        (bool ok, bytes memory ret) =
+            address(universalResolver).staticcall(abi.encodeCall(IUniversalResolver.resolve, (dns(fullName), call)));
+        if (!ok) return address(0);
+        (, address resolver) = abi.decode(ret, (bytes, address));
+        return resolver;
     }
 
     /// @dev The Universal Resolver's revert for `name`'s address, or empty if it resolves.

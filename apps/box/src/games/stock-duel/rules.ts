@@ -21,7 +21,8 @@ export const DWELL_MS: readonly number[] = [2400, 2100, 1800];
 export const HOLD_MAX_MS = 6000;
 
 const HAND_SIZE = 4;
-const ROUNDS_TO_WIN = 2;
+/** The rounds a seat must take to win the match (the screen shows a pip for each). */
+export const ROUNDS_TO_WIN = 2;
 
 type Pair<T> = readonly [T, T];
 

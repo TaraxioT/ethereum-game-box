@@ -19,7 +19,7 @@ export interface GameInfo {
   readonly players: number;
   /** A typical match, in minutes. */
   readonly minutes: number;
-  /** The stakes the Box offers, in EGB. */
+  /** The stakes the Box offers, in whole USDC. A game that isn't on chain (a built game) plays them for nothing. */
   readonly stakes: readonly number[];
   readonly tier: "refereed" | "verified";
   /** false: sealed on Home with a SOON plate; Play stays dark. */
@@ -41,14 +41,17 @@ export interface Badge {
 
 export interface SeatState {
   readonly badge: Badge | null;
-  /** EGB, whole tokens. */
-  readonly balance: number;
-  /** EGB on its way to this badge: a faucet, payout or refund not yet in a block. */
+  /** The badge's player name on chain (`nova.gamebox.eth`), or null: none, or not read yet. */
+  readonly ens: string | null;
+  /** USDC, read from chain; null until the first read comes back. */
+  readonly balance: number | null;
+  /** USDC on its way to this badge: a top-up, payout or refund not yet done. */
   readonly pending: number;
   /** This seat has signed the entry for the match being staked. */
   readonly signed: boolean;
 }
 
+/** Sepolia's head, as the Box last read it (block 0 before the first read). */
 export interface ChainState {
   readonly block: number;
   /** When `block` was sealed (ms since the epoch). */
@@ -58,8 +61,11 @@ export interface ChainState {
   readonly gasGwei: number;
 }
 
-export type TxKind = "faucet" | "open" | "settle" | "refund";
-export type TxStep = "signed" | "sent" | "in-block" | "paid";
+/** `topup`: 100 USDC from the lobby. `claim`: a player name. `open`: both stakes into the pot. `settle`: the result,
+ * which pays the pot. `refund`: an unsettled pot back to both. */
+export type TxKind = "topup" | "claim" | "open" | "settle" | "refund";
+/** The relayer's steps: signed by the Box, sent, mined, then confirmed (`paid`), or `failed` at any point. */
+export type TxStep = "signed" | "sent" | "in-block" | "paid" | "failed";
 
 export interface Tx {
   readonly id: number;
@@ -67,13 +73,16 @@ export interface Tx {
   /** The port the money moves from (`in`, into the core) or to (`out`); null for both seats at once. */
   readonly seat: Seat | null;
   readonly direction: "in" | "out";
-  /** EGB moved. */
+  /** USDC moved (0 for a claim, or a result whose pot never opened). */
   readonly amount: number;
   readonly step: TxStep;
   /** Set from `in-block` on. */
   readonly block: number | null;
-  /** null for a simulated transaction: the screen shows SIMULATED where the hash would be. */
+  /** The transaction's hash once the relayer has sent it, and its Etherscan page. */
   readonly hash: `0x${string}` | null;
+  readonly etherscan: string | null;
+  /** Why it failed, when it did. */
+  readonly error: string | null;
   /** When it reached its current step (ms since the epoch). */
   readonly stepAt: number;
 }
@@ -94,11 +103,13 @@ export type MatchPlay =
 export interface Match {
   readonly id: number;
   readonly game: GameId;
-  /** EGB per seat. */
+  /** The Box's round: the `Stake` and the `Result` of this match carry it. */
+  readonly round: number;
+  /** USDC per seat; 0 for a game that isn't on chain. */
   readonly stake: number;
-  /** The block the match opened in, and the block after which either seat may take its stake back. */
+  /** The head when the match opened, and when its pot may be refunded (ms since the epoch). */
   readonly openedBlock: number;
-  readonly refundBlock: number;
+  readonly refundAt: number;
   readonly play: MatchPlay;
   /** Set when the game ends. `winner` null is a draw. */
   readonly outcome: { readonly winner: Seat | null } | null;
@@ -108,6 +119,53 @@ export interface Match {
   readonly endedAt: number | null;
   /** Each seat has taken its stake back (Refund). */
   readonly refunded: readonly [boolean, boolean];
+  /** What the result did, read from chain after its receipt ("+20 USDC", the title, the championship); null before. */
+  readonly lines: readonly string[] | null;
+}
+
+/** A badge's card in the lobby, read from chain. */
+export interface PlayerCard {
+  readonly address: `0x${string}`;
+  /** Its player name (`nova.gamebox.eth`), or null: it has none yet. */
+  readonly name: string | null;
+  /** USDC. */
+  readonly balance: number;
+}
+
+/** One row of a championship's standings. */
+export interface Standing {
+  readonly name: string;
+  readonly points: number;
+  readonly wins: number;
+  readonly draws: number;
+  readonly losses: number;
+}
+
+/** A game's title and its open championship, read through the Universal Resolver. */
+export interface Board {
+  /** `champion.<game>.gamebox.eth`: its holder's name and streak, or null while nobody holds it. */
+  readonly title: { readonly name: string; readonly holder: string; readonly streak: number } | null;
+  /** The open championship (`mumbai-cup.<game>.gamebox.eth`), or null when none is open. */
+  readonly cup: {
+    readonly name: string;
+    /** When scoring stops (ms since the epoch). */
+    readonly ends: number;
+    /** USDC. */
+    readonly prize: number;
+    readonly standings: readonly Standing[];
+  } | null;
+}
+
+/** The lobby: whoever tapped last, their card, a label to claim, and the game's title and championship. */
+export interface Lobby {
+  readonly badge: Badge | null;
+  /** null while it is read. */
+  readonly card: PlayerCard | null;
+  /** A label the badge may claim, when it has no name. */
+  readonly proposal: string | null;
+  readonly board: Board | null;
+  /** Where Back goes: Home, or the Stake screen a short balance came from. */
+  readonly from: "home" | "stake";
 }
 
 export type Phase =
@@ -119,6 +177,7 @@ export type Phase =
   | "playing" // a game runs
   | "result" // the winner is paid
   | "refund" // the Box missed its settle: each seat takes its stake back
+  | "lobby" // a badge's name, balance and top-up; the title and the championship
   | "build"; // the game builder: the Designer and the Build screen (the Box's own screen only, never the demo)
 
 export interface BoxState {
@@ -127,11 +186,12 @@ export interface BoxState {
   readonly focus: GameId;
   readonly seats: readonly [SeatState, SeatState];
   readonly chain: ChainState;
-  /** The stake chosen on the Stake screen, in EGB. */
+  /** The stake chosen on the Stake screen, in USDC. */
   readonly stake: number;
   readonly match: Match | null;
   /** Transactions still on screen, newest last. */
   readonly txs: readonly Tx[];
+  readonly lobby: Lobby;
   /** What each tap station's OLED shows (`@egb/sdk`'s model: tag, big, small and the tap overrides). */
   readonly stations: readonly [StationView, StationView];
 }
@@ -155,6 +215,8 @@ export type BoxEvent =
   | { readonly type: "stations" }
   /** The library changed: a game was installed or removed. */
   | { readonly type: "games" }
+  /** The lobby's badge, card, proposal or board changed. */
+  | { readonly type: "lobby" }
   | { readonly type: "buzz"; readonly seat: Seat }
   | { readonly type: "cue"; readonly cue: Cue };
 
@@ -171,7 +233,14 @@ export type ScreenCommand =
   /** Refund: once the stakes unlock, send every refund still owed (each goes to its own badge, whoever asks). */
   | { readonly type: "refund" }
   /** Home's NEW GAME cartridge: opens the game builder. Sent again while building, it says a player is still there. */
-  | { readonly type: "build" };
+  | { readonly type: "build" }
+  /** Home's LOBBY: a badge's name, balance and top-up. */
+  | { readonly type: "lobby" }
+  /** The lobby's Top up 100 USDC, for the badge on show. */
+  | { readonly type: "topup" }
+  /** The lobby: another label to claim, or claim the one proposed. */
+  | { readonly type: "propose" }
+  | { readonly type: "claim" };
 
 export interface BoxLink {
   state(): BoxState;

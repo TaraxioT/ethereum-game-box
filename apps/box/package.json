@@ -2,6 +2,10 @@
   "name": "@egb/box",
   "private": true,
   "type": "module",
+  "exports": {
+    "./tokens.css": "./src/screen/tokens.css",
+    "./fonts.css": "./src/screen/fonts.css"
+  },
   "scripts": {
     "dev": "vite",
     "dev:box": "VITE_EGB_MODE=box vite",
@@ -23,6 +27,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.318",
     "@arx-research/libhalo": "1.21.0",
     "@egb/sdk": "workspace:*",
+    "@egb/shared": "workspace:*",
     "@fontsource-variable/bricolage-grotesque": "5.3.0",
     "@fontsource-variable/oxanium": "5.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
@@ -31,6 +36,7 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "esbuild": "0.28.2",
+    "viem": "2.57.8",
     "ws": "8.22.1"
   }
 }

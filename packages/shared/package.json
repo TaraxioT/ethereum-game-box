@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./names": "./src/names/index.ts",
+    "./web": "./src/web/index.ts",
     "./swap": "./src/swap/index.ts"
   },
   "scripts": {
@@ -12,10 +13,10 @@
     "abis": "node scripts/abis.ts"
   },
   "dependencies": {
-    "viem": "2.57.8"
+    "viem": "2.57.8",
+    "@noble/curves": "2.4.0"
   },
   "devDependencies": {
-    "@noble/curves": "2.4.0",
     "@types/node": "26.6.6",
     "typescript": "7.0.2",
     "vitest": "5.1.0"

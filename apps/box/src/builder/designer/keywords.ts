@@ -1,6 +1,6 @@
 // The keyword reader: typed or spoken words → brief fields, with no model and no network. It answers whenever the
 // model is off, slow (past 5 s), wrong or has nothing to add. Template names, the keys' own words, stakes ("5, 10 and
-// 25", "ten EGB", "low"), "call it …", and on the confirm step "yes, build it" or "change the title". On an open
+// 25", "ten USDC", "low"), "call it …", and on the confirm step "yes, build it" or "change the title". On an open
 // question (mechanic, theme, twist, voice, title) the words themselves are the answer.
 import type { DesignerStep } from "../types.ts";
 import { MECHANICS, STAKE_SETS, THEMES, TWISTS, VOICES, type Option } from "./options.ts";
@@ -73,8 +73,8 @@ const optionIn = (options: readonly Option[], n: string): Option | null => {
   return hits.length === 1 ? hits[0]! : null;
 };
 
-/** "for 5 or 10 EGB", "at 25 EGB a seat": the stakes said inside another answer, which the stakes field takes. */
-const STAKES_PHRASE = /,?\s*(?:for |at )?\d+(?:\s*(?:,|or|and)\s*\d+)*\s*egb\b(?: a seat| each)?/gi;
+/** "for 5 or 10 USDC", "at 25 USDC a seat": the stakes said inside another answer, which the stakes field takes. */
+const STAKES_PHRASE = /,?\s*(?:for |at )?\d+(?:\s*(?:,|or|and)\s*\d+)*\s*usdc\b(?: a seat| each)?/gi;
 
 /** The words of an open answer, without the fillers people say first ("um, I think it's …"). */
 export function openAnswer(text: string): string {
@@ -92,7 +92,7 @@ const CHANGE: [RegExp, Field][] = [
   [/\b(mechanic|scoring|score|rules?)\b/, "mechanic"],
   [/\b(theme|setting|world|place)\b/, "theme"],
   [/\b(twist)\b/, "twist"],
-  [/\b(stakes?|money|egb|price)\b/, "stakes"],
+  [/\b(stakes?|money|usdc|price)\b/, "stakes"],
   [/\b(voice|caller|commentator)\b/, "voice"],
   [/\b(title|name)\b/, "title"],
 ];
@@ -122,7 +122,7 @@ export function keywordAnswer(text: string, draft: Draft, shelf: readonly ShelfT
   if (template && (step === "template" || /\b(start from|based on|template)\b/.test(n))) patch.template = template;
 
   const stakes = stakesIn(n);
-  if (stakes && (step === "stakes" || /\b(egb|stakes?|a seat|each)\b/.test(n))) patch.stakes = stakes;
+  if (stakes && (step === "stakes" || /\b(usdc|stakes?|a seat|each)\b/.test(n))) patch.stakes = stakes;
 
   const voice = optionIn(VOICES, n);
   if (voice && /\b(voice|called by|calls it|commentary)\b/.test(n)) patch.voice = voice.value;

@@ -19,6 +19,7 @@ switching to it (and back), the updater, a push from a laptop, and the systemd u
 | `units/egb-update.service`, `units/egb-update.timer` | The updater and its 30 s timer |
 | `egb-receiver.rules` | udev: `/dev/egb-receiver` for the receiver, and USB hub access for `uhubctl` |
 | `env.example` | Every setting, with empty secrets; copied to `~/.config/egb/env` on the Pi, never committed with values |
+| `../p256-signer/` | The Box's HYP2003 P-256 signer, which the server starts from `P256_SIGNER_CMD` (its own README) |
 
 Every script passes `shellcheck -x`.
 
@@ -54,7 +55,10 @@ ssh pi 'bash ~/egb-setup/deploy/pi/setup.sh --boot'
 The script needs `sudo` for apt, udev, the limits file and linger. It prints the deploy key's public half at the end.
 
 It is safe to rerun: Node is downloaded only when the major differs, apt installs only missing packages (nothing is
-upgraded), and `~/.config/egb/env` is never overwritten. Then fill the keys in on the Pi:
+upgraded), and `~/.config/egb/env` is never overwritten. Then fill the keys in on the Pi, among them the chain's three
+settings (`P256_SIGNER_CMD`, `RELAYER_URL`, `SEPOLIA_RPC_URL`): without them the server refuses to start on real
+hardware. The HYP2003 signer's own one-time setup (pcscd, libccid, the patched OpenSC, the PIN file) is in
+[`../p256-signer/README.md`](../p256-signer/README.md).
 
 ```sh
 ssh pi 'nano ~/.config/egb/env'
@@ -77,7 +81,8 @@ back if the server doesn't come up. A pushed commit stays live until the updater
 
 `release.sh` copies the tree, runs `pnpm install --frozen-lockfile` and `pnpm --filter @egb/box build:box` at low
 priority (so a build during a match doesn't slow the taps), then starts the release's own server on a free port with
-`EGB_RECEIVER=fake` and an empty data folder. It must answer `/api/health` with `ok: true` and serve HTML at `/`, while
+`EGB_RECEIVER=fake`, an empty data folder and no env file (`EGB_ENV_FILE=/dev/null`), so it runs as the simulator on the
+demo chain: it never starts the Box's signer or sends anything on chain. It must answer `/api/health` with `ok: true` and serve HTML at `/`, while
 its own process is alive. Any failure removes the release and exits non-zero.
 
 `activate.sh` waits until `GET /api/state` says `busy: false`, for at most `EGB_IDLE_WAIT` seconds (900; `--force`

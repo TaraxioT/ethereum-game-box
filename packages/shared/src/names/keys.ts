@@ -4,13 +4,15 @@
 /** ENSIP-9 coin type of the `addr` record (Ethereum). */
 export const COIN_TYPE_ETH = 60n;
 
-/** Box names (`<box>.gamebox.eth`). `addr` is the Box's `BoxAccount`. */
+/** Box names (`<box>.gamebox.eth`). `addr` is the Box's `P256Account`. A pop-up (`popup-<x>.gamebox.eth`) is linked
+ *  to its Box's record, so it has the same keys and values. */
 export const BOX_KEYS = {
   /** Written by `GameBoxNames`. The Box's P-256 key, uncompressed: `0x04` + x + y (65 bytes, hex). */
   boxKey: 'boxKey',
   /** Written by `GameBoxNames`. One of `BOX_STATUS`. */
   status: 'status',
-  /** Written by the operator. The operator's commission, in basis points. */
+  /** Written by the operator. The operator's commission, in basis points, from `COMMISSION_MIN_BPS` to
+   *  `COMMISSION_MAX_BPS`. */
   commission: 'commission',
   /** Written by the operator. Where the Box stands. */
   location: 'location',
@@ -31,11 +33,24 @@ export const BOX_OPERATOR_KEYS = [
   BOX_KEYS.description,
   BOX_KEYS.games,
 ] as const;
+/** The operator's commission bounds, in basis points of the Box's half: 10% to 90% (`plan/README.md`). */
+export const COMMISSION_MIN_BPS = 1_000;
+export const COMMISSION_MAX_BPS = 9_000;
+
 export const BOX_DEVICE_KEYS = [BOX_KEYS.lastSeen, BOX_KEYS.game] as const;
 
 /** The values of a Box's `status`. */
 export const BOX_STATUS = ['active', 'suspended', 'revoked'] as const;
 export type BoxStatus = (typeof BOX_STATUS)[number];
+
+/** The default record on `gamebox.eth`'s own resolver, which every unregistered or expired `*.gamebox.eth` name
+ *  resolves to (wildcard). It has no `addr`. Written by `gamebox.eth`'s owner. */
+export const DEFAULT_KEYS = {
+  /** Where the name can be claimed. */
+  url: 'url',
+  /** `This Game Box name is free.` */
+  description: 'description',
+} as const;
 
 /** Player names (`<player>.gamebox.eth`). `addr` is the badge, which may write every key. */
 export const PLAYER_KEYS = {
@@ -62,6 +77,65 @@ export const TITLE_KEYS = {
   /** The round of the holder's last win. */
   round: 'round',
 } as const;
+
+/** Championships (`<label>.<game>.gamebox.eth`, such as `mumbai-cup.stockduel.gamebox.eth`), written by
+ *  `Championships` only, on the name's own resolver. `addr` is the leader's badge while it runs, then the winner's.
+ *  Once closed, nobody holds a role on that resolver: the records are frozen for good. */
+export const CUP_KEYS = {
+  /** Unix seconds when scoring stops and the championship can be closed. */
+  ends: 'ends',
+  /** The prize, in USDC base units (6 decimals). */
+  prize: 'prize',
+  /** The top 5, in rank order: JSON, an array of `Standing` (`parseStandings`). `[]` until the first result. */
+  standings: 'standings',
+  /** The leader's player name, `<player>.gamebox.eth`, while it runs. */
+  leader: 'leader',
+  /** The winner's player name, written at close. */
+  winner: 'winner',
+} as const;
+
+/** One row of a championship's `standings` record. Rank is the row's position: most points, then most wins, then who
+ *  reached that score first. */
+export interface Standing {
+  /** The player's name, `<player>.gamebox.eth` (empty if the badge no longer holds one). */
+  name: string;
+  /** The player's badge, checksummed. */
+  addr: `0x${string}`;
+  /** Win 3, draw 1, loss 0. */
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+/** How many players `standings` lists. */
+export const STANDINGS_SIZE = 5;
+
+/** Reads a `standings` record. Throws on anything that isn't the shape `Championships` writes. */
+export function parseStandings(text: string): Standing[] {
+  const rows: unknown = JSON.parse(text);
+  if (!Array.isArray(rows)) throw new Error('standings is not an array');
+  return rows.map((row: unknown) => {
+    const r = row as Record<string, unknown>;
+    const counts = ['points', 'wins', 'draws', 'losses'] as const;
+    if (
+      typeof r.name !== 'string' ||
+      typeof r.addr !== 'string' ||
+      !/^0x[0-9a-fA-F]{40}$/.test(r.addr) ||
+      counts.some((k) => typeof r[k] !== 'number')
+    ) {
+      throw new Error(`standings row is malformed: ${JSON.stringify(row)}`);
+    }
+    return {
+      name: r.name,
+      addr: r.addr as `0x${string}`,
+      points: r.points as number,
+      wins: r.wins as number,
+      draws: r.draws as number,
+      losses: r.losses as number,
+    };
+  });
+}
 
 /** ENSIP-26 agent text records, used by `bot.gamebox.eth` and written by the agent itself. */
 export const AGENT_KEYS = {

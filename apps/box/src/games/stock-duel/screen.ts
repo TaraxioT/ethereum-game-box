@@ -1,80 +1,89 @@
-// Stock Duel's screen: a painted study that comes alive. Each player's hand turns on a Rolodex on their side of the
-// desk (Player 1 left in warm lamplight, Player 2 right in cyan); a tap plays the front card, which slides face down
-// onto the blotter. Once both cards are down the brass astrolabe picks the stat, the cards turn over together, and
-// wax seals finalize the winner and slash the loser. First to two rounds; the final reveal stays under a brass banner.
+// Stock Duel's screen, in the Slab look: a dark room with each player's colour pooling up from their side. Each
+// player's hand turns on a Rolodex on their side (Player 1 left, Player 2 right); a tap plays the front card, which
+// flies face down into its well on the tray in the middle. Once both cards are down the stat wheel spins to the stat,
+// the cards turn over together, the winner's card lifts and the loser's sinks. First to two rounds; the final reveal
+// stays under a slab naming the winner. The game draws the top band itself (the route's "full" pose): the players,
+// their stakes and pips, the round and the pot.
 //
 // It draws from `state.match.play` and animates the moment each state change brings. The drums follow the clock, so
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.
 import "./stock-duel.css";
-import type { Layout, Point, Rect } from "../../screen/shell/layout.ts";
+import type { BoxState } from "../../core/types.ts";
+import type { Point } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
+import { badgeLabel } from "../../core/badges.ts";
 import { el, place } from "../../screen/shell/dom.ts";
 import { SEATS } from "@egb/sdk";
 import { DEAL_MS, frontIndex, frontRemainingMs } from "./rules.ts";
 import { createScene, type ScenePlaces } from "./scene.ts";
-import { createRolodex, type Placement } from "./rolodex.ts";
+import { createRolodex, type NoteTone, type Placement } from "./rolodex.ts";
 import { createDial } from "./dial.ts";
-import { createReveal } from "./reveal.ts";
-import { createStanding, type StandingPlaces } from "./score.ts";
+import { createReveal, type RevealPlaces } from "./reveal.ts";
+import { createStanding, type Player, type StandingPlaces } from "./score.ts";
 
 interface Geometry {
   readonly scene: ScenePlaces;
   readonly rolodex: readonly [Placement, Placement];
   readonly dial: { readonly centre: Point; readonly radius: number };
-  /** Where each seat's played card lies on the blotter. */
-  readonly rests: readonly [Rect, Rect];
+  readonly reveal: RevealPlaces;
   readonly standing: StandingPlaces;
 }
 
-// Landscape: the Rolodexes stand at the two ends of the desk, the astrolabe hangs on the wall between them, and the
-// played cards lie on the blotter under it. The top 130 px stay clear for the Box's overlay.
+// Landscape: the players and the round across the top band, a Rolodex down each side, and the tray between them with
+// the stat wheel over the two wells.
 const LANDSCAPE: Geometry = {
   scene: {
     width: 1280,
     height: 800,
-    desk: 452,
-    blotter: { x: 372, y: 440, w: 536, h: 340 },
-    lamps: [{ x: 78, y: 182 }, { x: 1202, y: 182 }],
-    pools: [
-      { centre: { x: 210, y: 560 }, rx: 330, ry: 250 },
-      { centre: { x: 1070, y: 560 }, rx: 330, ry: 250 },
-    ],
+    tray: { x: 424, y: 128, w: 432, h: 652 },
+    glows: [{ x: 170, y: 640 }, { x: 1110, y: 640 }],
+    reach: { rx: 520, ry: 460 },
   },
-  rolodex: [{ x: 25, y: 255, scale: 1.2 }, { x: 895, y: 255, scale: 1.2 }],
-  dial: { centre: { x: 640, y: 285 }, radius: 128 },
-  rests: [{ x: 403, y: 458, w: 230, h: 290 }, { x: 647, y: 458, w: 230, h: 290 }],
+  rolodex: [{ x: 22, y: 128, scale: 1 }, { x: 874, y: 128, scale: 1 }],
+  dial: { centre: { x: 640, y: 224 }, radius: 74 },
+  reveal: {
+    rests: [{ x: 436, y: 352, w: 200, h: 292 }, { x: 644, y: 352, w: 200, h: 292 }],
+    call: { x: 452, y: 674, w: 376, h: 68 },
+  },
   standing: {
-    tallies: [{ x: 55, y: 712, w: 300, h: 46 }, { x: 925, y: 712, w: 300, h: 46 }],
-    round: { x: 555, y: 418, w: 170, h: 32 },
-    banner: { x: 290, y: 222, w: 700, h: 124 },
+    plates: [{ x: 24, y: 20, w: 392, h: 84 }, { x: 864, y: 20, w: 392, h: 84 }],
+    mid: { x: 440, y: 20, w: 400, h: 84 },
+    banner: { x: 444, y: 140, w: 392, h: 166 },
   },
 };
 
-// Portrait: the two Rolodexes side by side at the top, the astrolabe in the middle with the tallies either side, and
-// the played cards along the bottom. The top 150 px stay clear for the Box's overlay.
+// Portrait: the players across the top, the two Rolodexes side by side under them, and the tray along the bottom
+// with the wheel over the wells.
 const PORTRAIT: Geometry = {
   scene: {
     width: 720,
     height: 1080,
-    desk: 540,
-    blotter: { x: 96, y: 772, w: 528, h: 330 },
-    lamps: [{ x: 50, y: 158 }, { x: 670, y: 158 }],
-    pools: [
-      { centre: { x: 180, y: 460 }, rx: 250, ry: 300 },
-      { centre: { x: 540, y: 460 }, rx: 250, ry: 300 },
-    ],
+    tray: { x: 110, y: 584, w: 500, h: 486 },
+    glows: [{ x: 120, y: 640 }, { x: 600, y: 640 }],
+    reach: { rx: 420, ry: 420 },
   },
-  rolodex: [{ x: 30, y: 188, scale: 1 }, { x: 390, y: 188, scale: 1 }],
-  dial: { centre: { x: 360, y: 650 }, radius: 96 },
-  rests: [{ x: 124, y: 786, w: 230, h: 290 }, { x: 366, y: 786, w: 230, h: 290 }],
+  rolodex: [{ x: 46, y: 146, scale: 0.72 }, { x: 398, y: 146, scale: 0.72 }],
+  dial: { centre: { x: 360, y: 640 }, radius: 48 },
+  reveal: {
+    rests: [{ x: 152, y: 744, w: 200, h: 292 }, { x: 368, y: 744, w: 200, h: 292 }],
+    call: { x: 130, y: 1038, w: 460, h: 40 },
+  },
   standing: {
-    tallies: [{ x: 20, y: 628, w: 226, h: 46 }, { x: 474, y: 628, w: 226, h: 46 }],
-    round: { x: 288, y: 752, w: 144, h: 30 },
-    banner: { x: 30, y: 586, w: 660, h: 124 },
+    plates: [{ x: 16, y: 16, w: 336, h: 72 }, { x: 368, y: 16, w: 336, h: 72 }],
+    mid: { x: 110, y: 96, w: 500, h: 44 },
+    banner: { x: 130, y: 590, w: 460, h: 112 },
   },
 };
+
+/** Each seat's player as the band shows them: the badge's name, or PLAYER n before a badge sits there. */
+function playersOf(state: BoxState): readonly [Player, Player] {
+  return SEATS.map((seat): Player => {
+    const badge = state.seats[seat]?.badge;
+    return badge ? { name: badge.name, label: badgeLabel(badge) } : { name: `PLAYER ${seat + 1}`, label: `PLAYER ${seat + 1}` };
+  }) as unknown as readonly [Player, Player];
+}
 
 /** The deal drops one card on each drum in turn, the two drums half a beat apart. */
 function dealDelays(seat: Seat, cards: number, elapsedMs: number): number[] {
@@ -82,7 +91,7 @@ function dealDelays(seat: Seat, cards: number, elapsedMs: number): number[] {
   return Array.from({ length: cards }, (_, k) => k * beat + seat * (beat / 2) - elapsedMs);
 }
 
-/** How long a lamp stays bright: a quick flare for a play, a longer one for a won round. */
+/** How long a player's glow stays bright: a quick flare for a play, a longer one for a won round. */
 const FLARE_PLAY_MS = 300;
 const FLARE_WIN_MS = 1400;
 
@@ -95,10 +104,12 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   const scene = createScene(geo.scene);
   const dial = createDial(geo.dial.centre, geo.dial.radius);
   const drums = [createRolodex(0, geo.rolodex[0], ctx.sound), createRolodex(1, geo.rolodex[1], ctx.sound)] as const;
-  const reveal = createReveal(geo.rests);
+  let players: readonly [Player, Player] = playersOf(ctx.link.state());
+  const reveal = createReveal(geo.reveal, (seat: Seat) => players[seat].label);
   const standing = createStanding(geo.standing);
   root.append(scene.el, dial.el, reveal.el, drums[0].el, drums[1].el, ...standing.els);
 
+  let shownPlayers = "";
   let last: StockDuelState | null = null;
   let matchId: number | null = null;
   let frame = 0;
@@ -120,13 +131,28 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     if (!frame && alive) frame = requestAnimationFrame(tick);
   }
 
-  /** What each plinth says: the waiting seat is told to tap, and warned once its partner has played. */
+  /** What each plinth says: the waiting seat is told to tap and warned once its partner has played (its well says so
+   * too); a seat whose card is down is told so until the reveal. */
   function notes(s: StockDuelState): void {
     for (const seat of SEATS) {
       const picking = s.phase === "pick" && s.played[seat] === null;
-      const text = picking ? (s.deadline !== null ? "LAST TURN" : "TAP TO PLAY") : "";
-      drums[seat].note(text, picking && s.deadline !== null);
+      const down = (s.phase === "pick" || s.phase === "dial") && s.played[seat] !== null;
+      const last = picking && s.deadline !== null;
+      const text = picking ? (last ? "LAST TURN" : "TAP TO PLAY") : down ? "CARD DOWN" : "";
+      const tone: NoteTone = picking ? (last ? "hot" : "tap") : "quiet";
+      drums[seat].note(text, tone);
+      reveal.waiting(seat, last);
     }
+  }
+
+  /** The band's players and stakes, written only when they change. */
+  function band(state: BoxState): void {
+    const stake = state.match?.stake ?? null;
+    players = playersOf(state);
+    const key = `${players[0].name}|${players[1].name}|${stake}`;
+    if (key === shownPlayers) return;
+    shownPlayers = key;
+    standing.players(players, stake);
   }
 
   /** Draws a state as it stands, for a screen joining mid-match. Moments already under way carry on from now. */
@@ -142,6 +168,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     const record = s.history[s.history.length - 1];
     if (s.phase === "pick" || s.phase === "dial") {
       for (const seat of SEATS) if (s.played[seat] !== null) reveal.place(seat, s.auto[seat], null);
+      reveal.recall(record ?? null, s.history.length);
     }
     if (s.phase === "dial" && s.stat !== null) void dial.spin(s.stat, now - s.phaseAt);
     else if ((s.phase === "reveal" || s.phase === "over") && record) {
@@ -173,6 +200,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       case "pick":
         if (prev.phase !== "deal") {
           reveal.clear(true);
+          reveal.recall(s.history[s.history.length - 1] ?? null, s.history.length);
           dial.rest();
           for (const seat of SEATS) drums[seat].show(s.hands[seat], frontIndex(s, seat, now), true, null);
         }
@@ -203,9 +231,11 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
 
   return {
     el: root,
-    update(state) {
+    update(state, event) {
       const match = state.match;
       if (!match || match.play.game !== "stock-duel") return;
+      band(state);
+      if (event.type === "tap") standing.tap(event.seat, event.accepted);
       const s = match.play.state;
       if (s === last) return;
       const prev = last;

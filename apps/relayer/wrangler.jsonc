@@ -1,0 +1,18 @@
+// The relayer Worker. Secrets (`RELAYER_PRIVATE_KEY`, `SEPOLIA_RPC_URL`) are set with `wrangler secret put`, and for
+// `wrangler dev` in `.dev.vars` (see `.dev.vars.example`); never here.
+{
+  "name": "gamebox-relayer",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-29",
+  "durable_objects": {
+    "bindings": [{ "name": "SENDER", "class_name": "Sender" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sender"] }],
+  "vars": {
+    "TIP_GWEI": "1",
+    "DRIP_ETH": "0.0003",
+    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
+  },
+  "observability": { "enabled": true }
+}

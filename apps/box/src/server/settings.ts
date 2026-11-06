@@ -1,6 +1,7 @@
 // The server's settings, read once from the environment, typed and checked. A bad value stops the start with every
 // problem named, rather than a Box that half works.
 import { isAbsolute, join, resolve } from "node:path";
+import { labelProblem } from "@egb/shared/names";
 
 /** Where the receiver's serial port is: a path, found by its USB id (`auto`), the fake receiver, or none. */
 export type ReceiverSetting =
@@ -8,6 +9,14 @@ export type ReceiverSetting =
   | { readonly kind: "auto" }
   | { readonly kind: "fake" }
   | { readonly kind: "none" };
+
+/**
+ * Where stakes go. `sepolia`: the relayer, signed by the Box's key through its signer daemon, read from Sepolia (the
+ * Box). `demo`: the chain in memory, for the simulator (a fake or no receiver, with none of the chain settings).
+ */
+export type ChainSetting =
+  | { readonly kind: "sepolia"; readonly signerCmd: string; readonly relayerUrl: string; readonly rpcUrl: string; readonly box: string }
+  | { readonly kind: "demo" };
 
 export interface Settings {
   readonly host: string;
@@ -19,14 +28,28 @@ export interface Settings {
   readonly receiver: ReceiverSetting;
   /** The station ids at Player 1's and Player 2's seats: the last three bytes of each MAC, lower-case hex. */
   readonly stations: readonly [string, string];
+  readonly chain: ChainSetting;
 }
 
 export const DEFAULTS = {
   port: 8790,
   host: "127.0.0.1",
   receiver: "auto",
-  stations: "e4ba70,df3d88",
+  stations: "df3b9c,df3d88",
+  box: "mumbai-01",
 } as const;
+
+/** The chain settings, all three or none (none only for the simulator). */
+const CHAIN_KEYS = ["P256_SIGNER_CMD", "RELAYER_URL", "SEPOLIA_RPC_URL"] as const;
+
+const isHttpUrl = (text: string): boolean => {
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
 
 export class SettingsError extends Error {
   readonly problems: readonly string[];
@@ -65,7 +88,23 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
   const stationIds = (get("EGB_STATIONS") ?? DEFAULTS.stations).split(",").map((id) => id.trim().toLowerCase());
   const [one = "", two = ""] = stationIds;
   if (stationIds.length !== 2 || !STATION.test(one) || !STATION.test(two) || one === two) {
-    problems.push("EGB_STATIONS must be two different station ids, P1 then P2 (six hex digits each: e4ba70,df3d88)");
+    problems.push("EGB_STATIONS must be two different station ids, P1 then P2 (six hex digits each: df3b9c,df3d88)");
+  }
+
+  // Never put a chain setting's value in a problem: the RPC URL holds the node's key.
+  const box = get("EGB_BOX") ?? DEFAULTS.box;
+  const boxProblem = labelProblem(box);
+  if (boxProblem) problems.push(`EGB_BOX must be the Box's label (${boxProblem})`);
+  const chainValues = CHAIN_KEYS.map((key) => get(key));
+  const missing = CHAIN_KEYS.filter((_, i) => chainValues[i] === undefined);
+  const [signerCmd, relayerUrl, rpcUrl] = chainValues;
+  let chain: ChainSetting = { kind: "demo" };
+  if (signerCmd !== undefined && relayerUrl !== undefined && rpcUrl !== undefined) {
+    if (!isHttpUrl(relayerUrl)) problems.push("RELAYER_URL must be an http(s) URL");
+    if (!isHttpUrl(rpcUrl)) problems.push("SEPOLIA_RPC_URL must be an http(s) URL");
+    chain = { kind: "sepolia", signerCmd, relayerUrl, rpcUrl, box };
+  } else if (missing.length < CHAIN_KEYS.length || (receiver.kind !== "fake" && receiver.kind !== "none")) {
+    problems.push(`stakes go on Sepolia: set ${missing.join(", ")} (only the simulator, EGB_RECEIVER=fake or none, runs without them)`);
   }
 
   if (problems.length > 0) throw new SettingsError(problems);
@@ -76,5 +115,6 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     screenDir: place(get("EGB_SCREEN_DIR") ?? "apps/box/dist/screen", home, repoRoot),
     receiver,
     stations: [one, two],
+    chain,
   };
 }

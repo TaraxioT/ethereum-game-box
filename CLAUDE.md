@@ -9,10 +9,13 @@ The project plan is [`plan/index.html`](plan/index.html).
 A pnpm monorepo. Each folder's README says what goes in it; read it before adding to that folder.
 
 - `apps/box/`: the Box: core, Pi server, taps, game builder, screen and games (`@egb/box`).
-- `apps/relayer/`: the Cloudflare Worker that sends the Box's signed requests (`@egb/relayer`).
+- `apps/relayer/`: the Cloudflare Worker that pays the gas for signed requests (`@egb/relayer`).
+- `apps/demo-box/`: a Box with no hardware, a Worker with a software P-256 key (`@egb/demo-box`).
 - `apps/web/`: the public site (`@egb/web`).
 - `packages/sdk/`: the contract between the Box and its games (`@egb/sdk`).
-- `packages/shared/`: message digests, the badge entry, ABIs and the deployments loader (`@egb/shared`).
+- `packages/shared/`: message digests, the badge entry, ABIs and the deployments loader (`@egb/shared`), and the
+  sites' browser code (`@egb/shared/web`).
+- `packages/ui/`: the sites' look, element builder, Sepolia tag and transaction strip (`@egb/ui`).
 - `contracts/`: Foundry. Every contract, its forge tests and deploy scripts.
 - `deployments/`: `sepolia.json`, every deployed address.
 - `firmware/tap-station/`: the ESP32 tap stations and their receiver.

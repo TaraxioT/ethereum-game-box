@@ -1,9 +1,9 @@
-// One player's hand as a classic Rolodex: a black-and-brass drum on a stand with the cards standing on its rail.
+// One player's hand as a Rolodex: the cards stand upright on a graphite drum with the seat's colour in its end caps.
 // Every card has an index tab sticking up from its top edge, each tab at its own place across the card, so all the
-// hand's tickers show at once. The front card is upright and face up: the stock's colour band, its ticker and name,
-// a draining ring for the time it has left at the front, and a big "?" where the stats go (hand cards never show a
-// number). The drum indexes one card at a time: the front card turns back over the top and lands upright at the
-// back, and the next card is at the front. A played card lifts off the rail toward the desk.
+// hand's tickers show at once. The front card is face up: the stock's colour along its top, its ticker and name, four
+// hidden stats and a "?" that the draining ring runs round (hand cards never show a number). The drum indexes one card
+// at a time: the front card turns back over the top and lands upright at the back, and the next card is at the front.
+// A played card lifts off the drum toward the tray.
 import type { Rect } from "../../screen/shell/layout.ts";
 import type { Sound } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
@@ -12,24 +12,33 @@ import { SHOW_LAG_MS } from "./rules.ts";
 import { calm, el } from "../../screen/shell/dom.ts";
 
 /** The Rolodex's drawn size, before it is scaled onto the stage. */
-export const ROLODEX_W = 300;
-export const ROLODEX_H = 366;
+export const ROLODEX_W = 384;
+export const ROLODEX_H = 600;
 
-const CARDS_X = 35;
-const CARD_TOP = 60;
-const CARD_W = 230;
-const CARD_H = 220;
+const CARDS_X = 42;
+const CARD_TOP = 168;
+const CARD_W = 300;
+const CARD_H = 250;
 /** How far each card behind the front stands above the one in front of it, so its top edge and tab show. */
-const STEP = 13;
+const STEP = 30;
+/** Each card further back is drawn this much smaller, for depth. */
+const SHRINK = 0.035;
 /** Tabs sit at four places across a card, one per card of a full hand. */
 const TAB_SLOTS = 4;
 const TAB_W = CARD_W / TAB_SLOTS;
 /** How much darker each card further back is. */
-const SHADE_PER_CARD = 0.2;
+const SHADE_PER_CARD = 0.24;
+const SHADE_MAX = 0.5;
+/** The ticker's widest run across the card, and its largest size. */
+const TICKER_W = 252;
+const TICKER_MAX = 50;
 /** A drum step: the old front card tips over the top for half of it, the new one is in front at SHOW_LAG_MS. */
 const TURN_MS = SHOW_LAG_MS * 2;
 const DROP_MS = 420;
 const LIFT_MS = 320;
+
+/** What the plinth says: a call to tap, the last turn (lit), or a quiet line once the card is down. */
+export type NoteTone = "tap" | "hot" | "quiet";
 
 export interface Placement {
   /** The Rolodex's top-left corner on the stage, and its scale from the drawn size. */
@@ -50,8 +59,8 @@ export interface Rolodex {
   deal(hand: readonly Stock[], front: number, delays: readonly number[]): void;
   /** The played card lifts off the rail. Returns where it stood, in stage pixels, for its flight to the desk. */
   lift(card: Stock): Rect;
-  /** The plinth's line: what this seat can do now. `hot` lights it. */
-  note(text: string, hot: boolean): void;
+  /** The plinth's line: what this seat can do now. "tap" and "hot" also light the front card's rim. */
+  note(text: string, tone: NoteTone): void;
   dispose(): void;
 }
 
@@ -68,15 +77,14 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
   root.style.height = `${ROLODEX_H}px`;
   root.style.transform = `scale(${at.scale})`;
 
-  const stand = el("div", "sd-rx-stand");
-  stand.append(el("i", "sd-rx-leg l"), el("i", "sd-rx-leg r"), el("i", "sd-rx-base"));
   const cardsBox = el("div", "sd-rx-cards");
   const drum = el("div", "sd-rx-drum");
-  drum.append(el("i", "sd-rx-band"), el("i", "sd-rx-knob l"), el("i", "sd-rx-knob r"));
+  drum.append(el("i", "sd-rx-axle"));
   const ring = createRing();
-  const noteEl = el("div", "sd-rx-note");
-  stand.append(noteEl);
-  root.append(stand, cardsBox, drum, ring.el);
+  const noteBox = el("div", "sd-rx-note");
+  const noteEl = el("span");
+  noteBox.append(noteEl);
+  root.append(cardsBox, el("i", "sd-rx-rim"), ring.el, el("i", "sd-rx-foot"), drum, noteBox);
 
   const cards = new Map<string, Card>();
   /** Each card's tab place, fixed from the first time the card is seen, so a tab never jumps. */
@@ -114,9 +122,11 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
     tab.style.left = `${(slotFor(stock) % TAB_SLOTS) * TAB_W + 2}px`;
     tab.style.width = `${TAB_W - 4}px`;
     const body = el("div", "sd-card-body");
-    const ask = el("div", "sd-card-ask");
-    ask.append(el("span", "sd-card-q", "?"));
-    body.append(el("i", "sd-card-band"), el("b", "sd-card-ticker", stock.ticker), el("span", "sd-card-name", stock.name), ask);
+    const ticker = el("b", "sd-card-ticker", stock.ticker);
+    ticker.style.fontSize = `${tickerSize(stock.ticker)}px`;
+    const bars = el("div", "sd-card-bars");
+    bars.append(el("i"), el("i"), el("i"), el("i"));
+    body.append(ticker, el("span", "sd-card-name", stock.name), bars, el("i", "sd-card-ask"));
     const shade = el("i", "sd-card-shade");
     card.append(tab, body, shade);
     cardsBox.append(card);
@@ -125,15 +135,19 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
     return made;
   }
 
+  /** How far back a card stands. The played card has left the drum: the cards behind it close up. */
   function depthOf(index: number): number {
     const n = hand.length;
-    return n === 0 ? 0 : (index - front + n) % n;
+    if (n === 0) return 0;
+    const depth = (index - front + n) % n;
+    const gone = onDesk === null ? -1 : hand.findIndex((s) => s.ticker === onDesk);
+    return gone >= 0 && depth > (gone - front + n) % n ? depth - 1 : depth;
   }
 
   function setDepth(card: Card, depth: number): void {
-    card.el.style.transform = `translate3d(0, ${-depth * STEP}px, 0)`;
+    card.el.style.transform = standing(depth);
     card.el.style.zIndex = String(10 - depth);
-    card.shade.style.opacity = String(Math.min(0.75, depth * SHADE_PER_CARD));
+    card.shade.style.opacity = String(Math.min(SHADE_MAX, depth * SHADE_PER_CARD));
   }
 
   function layout(animate: boolean): void {
@@ -174,12 +188,13 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
       // The old front card rises and tips back over the top of the drum, edge-on at the midpoint, then stands up
       // again at the back. It stays above the others until it is edge-on, then drops behind them.
       const back = -(n - 1) * STEP;
+      const shrink = 1 - (n - 1) * SHRINK;
       card.el.style.zIndex = "20";
       card.el.animate(
         [
-          { transform: "translate3d(0, 0, 0) rotateX(0deg)", easing: "cubic-bezier(0.5, 0, 0.9, 0.6)" },
-          { transform: `translate3d(0, ${back - 36}px, 0) rotateX(82deg)`, offset: 0.5, easing: "cubic-bezier(0.1, 0.4, 0.3, 1)" },
-          { transform: `translate3d(0, ${back}px, 0) rotateX(0deg)` },
+          { transform: "translate3d(0, 0, 0) scale(1) rotateX(0deg)", easing: "cubic-bezier(0.5, 0, 0.9, 0.6)" },
+          { transform: `translate3d(0, ${back - 36}px, 0) scale(${(1 + shrink) / 2}) rotateX(82deg)`, offset: 0.5, easing: "cubic-bezier(0.1, 0.4, 0.3, 1)" },
+          { transform: `translate3d(0, ${back}px, 0) scale(${shrink}) rotateX(0deg)` },
         ],
         { duration: TURN_MS },
       );
@@ -200,12 +215,12 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
         if (!stock || delay + DROP_MS <= 0 || calm()) continue;
         const card = cardFor(stock);
         const depth = n - 1 - k;
-        const rest = `translate3d(0, ${-depth * STEP}px, 0)`;
+        const shrink = 1 - depth * SHRINK;
         const drop = card.el.animate(
           [
-            { transform: `translate3d(0, ${-depth * STEP - 150}px, 0)`, opacity: 0 },
-            { transform: `translate3d(0, ${-depth * STEP + 6}px, 0)`, opacity: 1, offset: 0.75 },
-            { transform: rest, opacity: 1 },
+            { transform: `translate3d(0, ${-depth * STEP - 150}px, 0) scale(${shrink})`, opacity: 0 },
+            { transform: `translate3d(0, ${-depth * STEP + 6}px, 0) scale(${shrink})`, opacity: 1, offset: 0.75 },
+            { transform: standing(depth), opacity: 1 },
           ],
           { duration: DROP_MS, delay: Math.max(0, delay), fill: "backwards", easing: "cubic-bezier(0.4, 0, 0.6, 1)" },
         );
@@ -228,9 +243,10 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
             duration: LIFT_MS,
             easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
           })
-          .finished.then(() => lifted.el.classList.toggle("gone", onDesk === card.ticker), () => undefined);
+          // Once it has left, the cards behind it step forward.
+          .finished.then(() => layout(true), () => undefined);
       } else {
-        lifted?.el.classList.add("gone");
+        layout(false);
       }
       return {
         x: at.x + CARDS_X * at.scale,
@@ -239,9 +255,10 @@ export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex 
         h: CARD_H * at.scale,
       };
     },
-    note(text, hot) {
+    note(text, tone) {
       if (noteEl.textContent !== text) noteEl.textContent = text;
-      noteEl.classList.toggle("hot", hot);
+      if (noteEl.className !== tone) noteEl.className = tone;
+      root.classList.toggle("picking", text !== "" && tone !== "quiet");
     },
     dispose() {
       timers.forEach(clearTimeout);
@@ -267,7 +284,7 @@ function createRing(): Ring {
   const leftArc = el("i", "sd-ring-arc");
   right.append(rightArc);
   left.append(leftArc);
-  ring.append(el("i", "sd-ring-track"), right, left, el("i", "sd-ring-hub"));
+  ring.append(right, left, el("b", "sd-ring-q", "?"));
   let shown = -1;
   return {
     el: ring,
@@ -283,11 +300,21 @@ function createRing(): Ring {
   };
 }
 
-/** Dark ink on a light brand colour, cream on a dark one, for the tab's ticker. */
-function inkOn(hex: string): string {
+/** Where a card stands `depth` places behind the front: higher up the drum and a little smaller. */
+function standing(depth: number): string {
+  return `translate3d(0, ${-depth * STEP}px, 0) scale(${1 - depth * SHRINK})`;
+}
+
+/** The ticker's size: as large as fits across the card (Unbounded runs about 1.22 em a capital). */
+function tickerSize(ticker: string): number {
+  return Math.min(TICKER_MAX, Math.floor(TICKER_W / (ticker.length * 1.22)));
+}
+
+/** Near-black on a light brand colour, white on a dark one, for the tab's ticker and the face's header. */
+export function inkOn(hex: string): string {
   const n = Number.parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 255;
   const g = (n >> 8) & 255;
   const b = n & 255;
-  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1c1308" : "#fff6e6";
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#14110c" : "#ffffff";
 }
