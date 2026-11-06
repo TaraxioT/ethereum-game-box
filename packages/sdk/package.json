@@ -11,9 +11,6 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "fflate": "0.8.3"
-  },
   "devDependencies": {
     "@types/node": "26.6.6",
     "happy-dom": "20.14.6",

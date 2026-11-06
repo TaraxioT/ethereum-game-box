@@ -4,7 +4,7 @@
 makes both write against it, and the Box's core, server and screen read it. Pure TypeScript with no DOM and no Node:
 a built game's rules run in a locked-down Node child and its screen in a sandboxed frame, so nothing here may reach
 for either platform. The one browser-only piece, the screen contract, is its own entry. So is the game bundle format,
-`@egb/sdk/bundle`, which needs WebCrypto and DecompressionStream, and a built game has no use for.
+`@egb/sdk/bundle`, which needs WebCrypto, and a built game has no use for.
 
 ## What goes here
 
@@ -18,8 +18,8 @@ for either platform. The one browser-only piece, the screen contract, is its own
 | `runner.ts` | The rules-runner protocol: JSON lines over a built game's child's stdio (`start`, `step`; `ready`, `state`, `error`), and `MAX_MESSAGE` |
 | `frame.ts` | The frame channel: what the kiosk posts a built game's screen (`init`, `update`) and the only things it may post back (`ready`, `error`) |
 | `transcript.ts` | `Transcript`: one line per match in the session log, from which records are rebuilt |
-| `match-log.ts` | `MatchLog`, what the verifier judges, `LOG_LIMITS`, and `logProblems()` to check one from an untrusted Box. Tested in `match-log.test.ts` |
-| `check.ts` | `isRecord` and `strayKey`, for parsed, untrusted JSON |
+| `match-log.ts` | `MatchLog`, what the verifier judges, `LOG_LIMITS`, `logProblems()` to check one from an untrusted Box, and `logTextProblems()` to check its exact text, which is what the verifier gets. Tested in `match-log.test.ts` |
+| `check.ts` | `isRecord` and `strayKey`, for parsed, untrusted JSON, and `hasOneReading`, for its text |
 | `bundle/` | `@egb/sdk/bundle`: the game bundle format, its one reader and its one packer. Its own README says more |
 | `screen.ts` | `@egb/sdk/screen`: `GameScreen`, what a built game's `screen.ts` exports by default (browser only) |
 

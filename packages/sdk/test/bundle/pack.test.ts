@@ -20,7 +20,7 @@ describe("packBundle", () => {
   });
 
   it("writes the bytes it always has: a change here changes every game's identity", () => {
-    expect(sha256(packBundle(goodFiles()))).toBe("0x8c219265e532d5d8311de432c7f173d5facd1322ba1af0c20515146b6e1d746b");
+    expect(sha256(packBundle(goodFiles()))).toBe("0x2b475e30b43105f4cb187e2e10c3528ce6cf167678353bbec0439cf26117344e");
   });
 
   it("comes back whole through the reader", async () => {
@@ -29,6 +29,7 @@ describe("packBundle", () => {
     expect(opened.files).toEqual(goodFiles());
     expect(opened.manifest).toEqual(JSON.parse(new TextDecoder().decode(goodFiles().get("manifest.json"))));
     expect(opened.hash).toBe(sha256(zip));
+    expect(packBundle(opened.files)).toEqual(zip);
   });
 
   it("gives a changed file a new hash", async () => {
@@ -41,10 +42,11 @@ describe("packBundle", () => {
     expect((await readBundle(Buffer.from(zip))).hash).toBe(sha256(zip));
   });
 
-  it("deflates text and stores what is compressed already", () => {
-    const body = Uint8Array.from({ length: 2000 }, () => 7);
-    const zip = (name: string) => packBundle(goodFiles().set(name, body)).length;
-    expect(zip("extra.mp3") - zip("extra.js")).toBeGreaterThan(1900);
+  it("stores every kind of file as it is, so its bytes are in the zip in the open", () => {
+    const body = text("window.egb.end();\n".repeat(50));
+    for (const name of ["extra.js", "extra.html", "extra.css", "extra.svg", "extra.mp3"]) {
+      expect(Buffer.from(packBundle(goodFiles().set(name, body))).includes(body)).toBe(true);
+    }
   });
 
   it("keeps the packed manifest's text, layout included", async () => {
@@ -75,20 +77,12 @@ describe("packBundle", () => {
     expect(() => packBundle(goodFiles().set("big.mp3", new Uint8Array(BUNDLE_LIMITS.zipBytes - overhead + 1)))).toThrow(/the zip is/);
   });
 
-  it("takes files that inflate to exactly the limit, and refuses a byte more", async () => {
-    const used = [...goodFiles().values()].reduce((sum, body) => sum + body.length, 0);
-    const fits = goodFiles().set("big.js", new Uint8Array(BUNDLE_LIMITS.totalBytes - used));
-    expect((await readBundle(packBundle(fits))).files.size).toBe(fits.size);
-    expect(() => packBundle(goodFiles().set("big.js", new Uint8Array(BUNDLE_LIMITS.totalBytes - used + 1)))).toThrow(/at most 33554432/);
-  });
-
   it.each<[string, Map<string, Uint8Array>, RegExp]>([
     ["no page", (() => { const f = goodFiles(); f.delete("index.html"); return f; })(), /no index.html/],
     ["no manifest", (() => { const f = goodFiles(); f.delete("manifest.json"); return f; })(), /no manifest.json/],
     ["a stray .DS_Store", goodFiles().set(".DS_Store", text("x")), /isn't a name/],
     ["a bad manifest", goodFiles().set("manifest.json", manifestBytes({ players: { min: 1, max: 4 } })), /players must be/],
     ["too many files", new Map([...goodFiles(), ...Array.from({ length: 60 }, (_, i): [string, Uint8Array] => [`f${i}.js`, text("x")])]), /65 files/],
-    ["too much in all", goodFiles().set("big.js", new Uint8Array(BUNDLE_LIMITS.totalBytes + 1)), /at most 33554432/],
     ["a zip over its limit", goodFiles().set("big.mp3", new Uint8Array(BUNDLE_LIMITS.zipBytes)), /the zip is/],
   ])("refuses %s", (_, files, why) => {
     expect(() => packBundle(files)).toThrow(BundleRefused);

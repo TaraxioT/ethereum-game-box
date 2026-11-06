@@ -1,6 +1,6 @@
 // A store game's match log: what the verifier judges. The Box writes every entry. `src: "box"` is what the Box itself
 // saw; `src: "game"` is what the game's own page claimed, which a rigged game can make up.
-import { isRecord, strayKey } from "./check.ts";
+import { hasOneReading, isRecord, strayKey } from "./check.ts";
 import { isGameId, PLAYER_LIMITS } from "./manifest.ts";
 
 export interface LogHeader {
@@ -132,7 +132,8 @@ function entryProblem(entry: unknown, seats: number): string | null {
 /**
  * Problems with a parsed match log, in plain words; empty when it is good. For the verifier, on input it can't trust:
  * nothing in a problem quotes the log, and it stops at the first bad entry. A good log closes with its one `end`.
- * `logBytes` is checked on the value, which is as short as its text can be: measure the text before parsing it.
+ * `logBytes` is checked on the value, which is as short as its text can be. A log that arrives as text goes through
+ * `logTextProblems`, which sees what parsing throws away.
  */
 export function logProblems(value: unknown): string[] {
   if (!isRecord(value)) return ["the log is not an object"];
@@ -155,4 +156,21 @@ export function logProblems(value: unknown): string[] {
     if ((entry as LogEntry).t !== "end" && last) return ["the log has no end"];
   }
   return [];
+}
+
+/**
+ * Problems with a log's exact JSON text, in plain words; empty when it is good. For the verifier, on the text the Box
+ * signed. The agent and the audit record get that text, not the parsed value, so a repeated key would read one way to
+ * them and another to `logProblems`, and a signed record could be read two ways.
+ */
+export function logTextProblems(text: string): string[] {
+  if (utf8Bytes(text) > LOG_LIMITS.logBytes) return [`the log is over ${LOG_LIMITS.logBytes} bytes`];
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+    if (!hasOneReading(text, value)) return ["the log repeats a key, or spells a value oddly"];
+  } catch {
+    return ["the log is not JSON"];
+  }
+  return logProblems(value);
 }

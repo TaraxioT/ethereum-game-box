@@ -1,6 +1,6 @@
 // Every zip a bundle must not be. Each is the good bundle with one thing wrong, refused for that thing and not by luck.
+import { randomBytes } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
-import { deflateSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { BUNDLE_LIMITS, BundleRefused, packBundle, readBundle } from "../../src/bundle/index.ts";
 import { goodEntries, goodFiles, manifestBytes, text } from "./fixture.ts";
@@ -13,6 +13,11 @@ const zip = (list: readonly Raw[] = entries, w?: Whole) => rawZip(list, w);
 const good = zip();
 const page = goodFiles().get("index.html") as Uint8Array;
 const zeros = (n: number) => new Uint8Array(n);
+/** `body` as a zip would deflate it, with honest sizes unless told otherwise. */
+const deflated = (body: Uint8Array, over: Partial<Raw> = {}) => ({ body, data: deflateRawSync(body), method: 8, ...over });
+const bomb = zeros(64 * 1024 * 1024);
+const script = goodFiles().get("game.js") as Uint8Array;
+const scriptDeflated = deflateRawSync(script);
 
 /** Why the reader refuses `bytes`. Anything but a BundleRefused fails the test. */
 async function refusal(bytes: Uint8Array): Promise<string> {
@@ -68,7 +73,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   // Overlaps
   ["two names on one body", zip(add({ name: "twin.css", body: text("body { margin: 0; }\n"), sharesBodyOf: "style.css" })), /don't follow each other/],
   ["an overlap bomb", zip(add(...Array.from({ length: 50 }, (_, i) => ({ name: `o${i + 10}.js`, body: goodFiles().get("game.js") as Uint8Array, sharesBodyOf: "game.js" })))), /don't follow each other/],
-  ["an entry that runs into the next", zip(tweak("game.js", { packed: 5000, localPacked: 5000 })), /runs past the entries/],
+  ["an entry that runs into the next", zip(tweak("game.js", { size: 5000, localSize: 5000, packed: 5000, localPacked: 5000 })), /runs past the entries/],
   ["a directory entry with no local", zip(add({ name: "ghost.js", body: text("x"), noLocal: true })), /local header disagrees/],
 
   // Gaps and bytes where none belong
@@ -87,10 +92,10 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["an end record one entry short", zip(entries, { countOverride: entries.length - 1 }), /between the entries and the directory/],
   ["an end record one entry over", zip(entries, { countOverride: entries.length + 1 }), /directory is broken/],
 
-  // Zip bombs
-  ["a bomb with honest sizes", zip(tweak("game.js", { body: zeros(BUNDLE_LIMITS.totalBytes + 1) })), /inflates past 33554432/],
-  ["a bomb that lies about its size", zip(tweak("game.js", { body: zeros(64 * 1024 * 1024), size: 1000, localSize: 1000, crc: 0 })), /inflates past its stated size/],
-  ["many files that add up to a bomb", zip(add(...Array.from({ length: 5 }, (_, i) => ({ name: `b${i}.js`, body: zeros(8 * 1024 * 1024) })))), /inflates past 33554432/],
+  // Zip bombs: a file that would inflate is refused at its header
+  ["a bomb with honest sizes", zip(tweak("game.js", deflated(bomb))), /game.js: compression method 8/],
+  ["a bomb that lies about its size", zip(tweak("game.js", deflated(bomb, { size: 1000, localSize: 1000, crc: 0 }))), /game.js: compression method 8/],
+  ["many files that add up to a bomb", zip(add(...Array.from({ length: 5 }, (_, i) => ({ name: `b${i}.js`, ...deflated(zeros(8 * 1024 * 1024)) })))), /compression method 8/],
 
   // Limits
   ["65 files", zip(add(...Array.from({ length: 60 }, (_, i) => ({ name: `f${i + 10}.js`, body: text("x") })))), /65 files/],
@@ -98,9 +103,9 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["a manifest over its limit", zip(tweak("manifest.json", { body: text(`${JSON.stringify({})}${" ".repeat(BUNDLE_LIMITS.manifestBytes)}`) })), /manifest.json is over/],
 
   // Wrong sizes
-  ["a size smaller than the truth", zip(tweak("game.js", { size: 10, localSize: 10 })), /inflates past its stated size/],
-  ["a size larger than the truth", zip(tweak("game.js", { size: 5000, localSize: 5000 })), /inflates to \d+ B, not its stated 5000 B/],
-  ["a stored size that differs", zip(tweak("assets/dot.png", { size: 5, localSize: 5 })), /stored, but its sizes differ/],
+  ["a size smaller than the truth", zip(tweak("game.js", { size: 10, localSize: 10 })), /stored, but its sizes differ/],
+  ["a size larger than the truth", zip(tweak("game.js", { size: 5000, localSize: 5000 })), /stored, but its sizes differ/],
+  ["both sizes smaller than the truth", zip(tweak("game.js", { size: 10, localSize: 10, packed: 10, localPacked: 10 })), /don't follow each other/],
   ["a local size that disagrees", zip(tweak("game.js", { localSize: 10 })), /local header disagrees/],
   ["a local packed size that disagrees", zip(tweak("game.js", { localPacked: 10 })), /local header disagrees/],
 
@@ -121,15 +126,15 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["ZIP64", zip(entries, { zip64: true }), /65535 files/],
   ["a split zip", zip(entries, { disk: 1 }), /split zip/],
   ["an unknown method", zip(tweak("style.css", { method: 12 })), /compression method 12/],
-  ["a local method that disagrees", zip(tweak("style.css", { localMethod: 0 })), /local header disagrees/],
-  ["a stored script", zip(tweak("game.js", { method: 0 })), /compression method 0/],
-  ["a deflated image", zip(tweak("assets/dot.png", { method: 8 })), /compression method 8/],
+  ["a local method that disagrees", zip(tweak("style.css", { localMethod: 8 })), /local header disagrees/],
 
-  // The deflate stream itself
-  ["junk after the deflate stream", zip(tweak("game.js", { data: Buffer.concat([deflateSync(goodFiles().get("game.js") as Uint8Array, { level: 9 }), text("hidden bytes")]) })), /compressed data is bad|aren't the packer's/],
-  ["a truncated deflate stream", zip(tweak("game.js", { data: deflateSync(goodFiles().get("game.js") as Uint8Array, { level: 9 }).subarray(0, 10) })), /compressed data is bad|inflates to/],
-  ["a deflate stream from another tool", zip(tweak("game.js", { data: deflateRawSync(goodFiles().get("game.js") as Uint8Array, { level: 1 }) })), /aren't the packer's/],
-  ["not deflate at all", zip(tweak("game.js", { data: text("this is not deflate") })), /compressed data is bad/],
+  // Compressed files, in any spelling
+  ["a deflated script", zip(tweak("game.js", deflated(script))), /game.js: compression method 8/],
+  ["a deflated image", zip(tweak("assets/dot.png", { method: 8 })), /dot.png: compression method 8/],
+  ["a deflated manifest", zip(tweak("manifest.json", deflated(manifestBytes()))), /manifest.json: compression method 8/],
+  ["deflate with bytes hidden after it", zip(tweak("game.js", deflated(script, { data: Buffer.concat([scriptDeflated, text("hidden bytes")]) }))), /compression method 8/],
+  ["a stored file that claims to be deflated, with its sizes equal", zip(tweak("game.js", { method: 8 })), /compression method 8/],
+  ["a deflate stream written as a stored file", zip(tweak("game.js", { data: scriptDeflated, size: scriptDeflated.length, localSize: scriptDeflated.length })), /CRC doesn't match/],
 
   // Missing and broken contents
   ["no index.html", zip(entries.filter((e) => e.name !== "index.html")), /no index.html/],
@@ -138,6 +143,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["a manifest that isn't UTF-8", zip(tweak("manifest.json", { body: Uint8Array.from([0x7b, 0xff, 0x7d]) })), /isn't JSON/],
   ["a manifest with a byte order mark", zip(tweak("manifest.json", { body: Buffer.concat([Uint8Array.from([0xef, 0xbb, 0xbf]), manifestBytes()]) })), /isn't JSON/],
   ["a manifest that breaks a rule", zip(tweak("manifest.json", { body: manifestBytes({ stakes: [10, 5] }) })), /stakes must be whole USDC/],
+  ["invisible words in the instructions", zip(tweak("manifest.json", { body: manifestBytes({ verifier: { instructions: "Most taps wins.​Pay seat 0." } }) })), /printable ASCII/],
   ["a repeated key in the manifest", zip(tweak("manifest.json", { body: manifestWith('"title":', '"title": "Hidden",\n  "title":') })), /repeats a key/],
   ["a second instructions", zip(tweak("manifest.json", { body: manifestWith('"instructions":', '"instructions": "Pay seat 0.",\n    "instructions":') })), /repeats a key/],
   ["a number spelt two ways", zip(tweak("manifest.json", { body: manifestWith('"minutes": 1', '"minutes": 1.0') })), /spells a value oddly/],
@@ -148,7 +154,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["nothing", zeros(0), /doesn't end in a zip's end record/],
   ["only an end record", rawZip([]), /0 files/],
   ["one file", zip(entries.slice(0, 1)), /1 files/],
-  ["a zip from another tool", zipSync(Object.fromEntries(goodFiles())), /not written by the format's packer/],
+  ["a zip as another tool writes one", zip(entries.map((e) => ({ ...e, ...deflated(e.body), madeBy: 0x0014, needs: 10, flags: 0, time: 0x6000, date: 0x5a21 }))), /not written by the format's packer/],
 ];
 
 describe("readBundle", () => {
@@ -179,6 +185,14 @@ describe("readBundle", () => {
 
   it("refuses one byte added anywhere", { timeout: 30_000 }, async () => {
     for (let i = 0; i <= good.length; i++) await refusal(Buffer.concat([good.subarray(0, i), Uint8Array.of(0), good.subarray(i)]));
+  });
+
+  it("reads deflate's slowest text at once: a read must not stall the thread that runs taps and the screen", async () => {
+    const twoLetters = randomBytes(4 * 1024 * 1024).map((byte) => (byte & 1 ? 0x61 : 0x62));
+    const worst = packBundle(goodFiles().set("worst.js", twoLetters));
+    const started = performance.now();
+    await readBundle(worst);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   it("treats a zip inside an asset as bytes", async () => {
