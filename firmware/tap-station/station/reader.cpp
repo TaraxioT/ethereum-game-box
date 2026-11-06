@@ -65,7 +65,6 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   held.chip = c;
   held.deaf = false;
   held.detectedUs = startUs;
-  held.lastApduMs = 0;
   egb::Tap t;
   egb::head(t, egb::K_TAP, 0);
   t.id = ++held.tapId;
@@ -73,7 +72,10 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   t.chip = c;
   t.readUs = micros() - startUs;
   link::sendReliable(&t, sizeof t);
-  feedback.detectedMs = millis();
+  uint32_t now = millis();
+  feedback.detectedMs = now;
+  feedback.activeMs = now;
+  feedback.goodMs = 0;
   feedback.phase = PH_DETECTED;
   feedback.tooSoon = false;
   feedback.chipOn = true;
@@ -86,9 +88,11 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   // leaving it to the Pi, it's as fast to the applet as the first and as fast to the tap as the second.
   if (poll && c.isoDep()) {
     uint32_t us, waitUs;
-    if (select(us, waitUs) == 0x9000) {  // a good read, as the Pi's own select was: DONE follows if nothing more comes
+    bool good = select(us, waitUs) == 0x9000;
+    feedback.activeMs = millis();
+    if (good) {  // a good read, as the Pi's own select was: DONE follows if nothing more comes (feedback.h)
+      feedback.goodMs = feedback.activeMs.load();
       feedback.phase = PH_READING;
-      held.lastApduMs = millis();
     }
   }
   return true;
@@ -210,12 +214,6 @@ static void run(void *) {
     }
     if (there) {
       held.misses = 0;
-      Snapshot s = feedback.snap();
-      if (s.phase == PH_READING && held.lastApduMs && egb::sinceMs(millis(), held.lastApduMs) >= (int32_t)DONE_IDLE_MS) {
-        feedback.phase = PH_DONE;
-        led::show();
-        oled::poke();
-      }
     } else if (on && ++held.misses >= GONE_MISSES) {
       lost();
     }

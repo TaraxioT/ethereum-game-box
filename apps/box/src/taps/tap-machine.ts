@@ -4,8 +4,9 @@
 //
 // - An unknown chip is read (get_pkeys) whatever the plan, so a stranger's chip can never pass as a seated player.
 // - A known chip's identify or none tap costs no chip command: it is done the moment its line arrives.
-// - After such a tap the applet is selected anyway, off the tap's clock, so the station's presence check sees the chip
-//   stay instead of a flicker of new taps. Its errors are dropped: the tap is already done.
+// - After such a tap the applet is selected anyway, off the tap's clock: the station selects it itself right after
+//   the tap and answers this SELECT from its kept answer (~3 ms), and if the station's own select failed this one
+//   leaves the chip selected for the next tap's commands. Its errors are dropped: the tap is already done.
 // - A roll is key 2's sign_random, verified against the roster's key-2 identity.
 import { HaloLogicError, HaloTagError } from "@arx-research/libhalo/api/common";
 import type { Seat } from "@egb/sdk";

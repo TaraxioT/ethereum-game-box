@@ -19,7 +19,6 @@ struct Held {
   uint32_t tapId;
   uint32_t detectedUs;  // when the detection that found it started
   uint32_t servedMs;    // the last request the chip answered
-  uint32_t lastApduMs;  // the last good APDU (0: none since the last failure)
   uint8_t misses;       // presence checks in a row without it
   bool talked;          // a block was exchanged since it was activated: it answers the R(NAK) presence check now
   bool pristine;        // nothing but the station's own applet select since it was activated

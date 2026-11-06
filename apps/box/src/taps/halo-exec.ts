@@ -88,9 +88,9 @@ export class ChipSession {
   };
 
   /**
-   * Selects the HaLo applet, unless the station already did. One try, no recovery: after a tap that needed nothing
-   * from the chip this is what lets the station's presence check (an ISO-DEP R(NAK), which a HaLo only answers once
-   * it has exchanged a block) see the chip stay, instead of a new tap every ~200 ms.
+   * Selects the HaLo applet, unless the station already did. One try, no recovery. The station's presence check (an
+   * ISO-DEP R(NAK)) needs no prior exchange, and the station selects the applet itself right after each tap and keeps
+   * the chip's answer, so a SELECT with the same bytes is answered at once, without the chip.
    */
   async select(): Promise<void> {
     if (this.selected) return;

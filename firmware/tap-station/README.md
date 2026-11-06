@@ -140,17 +140,19 @@ The OLED words are the defaults; the Pi may reword each (`hold`, `sign`, `done`,
 
 | LED | OLED | Buzz | When |
 |---|---|---|---|
-| blue, blinking (200 ms) | inverted, slow sweep: `HOLD` / `reading` | one 80 ms | a chip landed, or the app is reading it |
+| blue, blinking (200 ms) | inverted, slow sweep: `HOLD` / `reading` | one 80 ms | a chip landed, or the app is reading it: until 500 ms after its last request |
 | blue, blinking fast (80 ms) | inverted, fast sweep: `HOLD STILL` / `signing` | | a sign request runs, and for 0.6 s after a failed one (the Pi retries at once) |
-| green | check mark, `DONE` | | no request for 500 ms after a good read (the station's own applet select counts) |
+| green | check mark, `DONE` | | the read ended well: 500 ms after its last good request (the station's own applet select counts), or at the lift |
 | green | check mark, `DONE` | two 60 ms | the signature is back |
 | red for a second | cross, `AGAIN` / `tap again` | | the sign failed and the Pi didn't retry within 0.6 s |
 | red for a second | cross, `TOO SOON` / `tap again` | | the chip left mid-sign |
-| white or off | the Pi's idle text, or `TAP` | | no chip; the receiver's BOOT toggles the white |
+| white or off | the Pi's screen (`big`, `small`), or `TAP` | | anything else, a chip resting on the reader included; the receiver's BOOT toggles the white |
 
-The result stays 1.5 s after the lift. A reader in trouble wins over everything: `NO READER` / `check wiring`, or
-`REPLUG` / `reader hung`; a radio that didn't start shows `NO RADIO` / `esp-now failed`. The screen has a big line in
-the largest font that fits (28 px tall for three letters, down to 8 px for ten) and a small line under it; in the top
+A result (`DONE`, `AGAIN`, `TOO SOON`) shows for 1.5 s, or until the Pi sends a different screen, whichever comes
+first. Then the Pi's screen is back even while the chip stays on the reader: players leave badges on the readers, and
+the station follows the game (a resend of the same screen doesn't cut a result short). A reader in trouble wins over
+everything: `NO READER` / `check wiring`, or `REPLUG` / `reader hung`; a radio that didn't start shows `NO RADIO` /
+`esp-now failed`. The screen has a big line in the largest font that fits (28 px tall for three letters, down to 8 px for ten) and a small line under it; in the top
 corners the Pi's `tag` (left), the link dot (filled = linked) and a square while the LED is on (right). Screens from
 the Pi: `protocol.md`, "Screens".
 
@@ -183,7 +185,7 @@ pnpm firmware:flash   # [receiver|p1|p2|all]: copies the merged bins to the Pi a
   `esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashFreq=40,FlashMode=dio`.
 - **The C3 needs `FlashFreq=40`:** at the default 80 MHz its flash reads back garbage once the bootloader speeds it up.
 - **Apple Silicon:** Arduino's bundled ctags is Intel-only; `brew install universal-ctags`, and the build adds
-  `--build-property tools.ctags.path=/opt/homebrew/bin` (safe: the `.ino` stubs leave no prototypes to generate).
+  `--build-property tools.ctags.path=/opt/homebrew/bin` (safe: the `.ino` stubs declare nothing for it to index).
 - **Flashing** runs `~/.local/bin/esptool` on the Pi by `/dev/serial/by-id` path (`EGB_PI` names the ssh host,
   default `pi`), and refuses a board whose port something holds (`fuser`): stop the Box server first.
 - **After flashing a station its PN532 usually hangs** (`nfc:false`, `REPLUG`). On the Pi 5 the USB ports' power is

@@ -36,8 +36,9 @@ null) and `probe` (one measurement each, for the bench). `runBench(taps, { count
    at once, with the badge if the roster knows the UID.
 2. The core's plan for that seat is asked: `identify`, `random` or `none`.
 3. A known chip with `identify` or `none` is `done` there and then: no chip command. The applet is selected
-   afterwards, off the tap's clock, unless the station already did (the tap's `sel` is `9000`): a HaLo answers the
-   station's presence check only once it has exchanged a block, and without one the station sees it flicker.
+   afterwards, off the tap's clock, unless the tap's `sel` says the station already did. The station selects it
+   itself right after every tap and answers the same SELECT from its kept answer in ~3 ms, so this costs nothing and
+   leaves the chip selected even when the station's own try failed.
 4. An unknown chip is read with `get_pkeys` whatever the plan, and the roster records it. A `random` tap then asks
    key 2 for `sign_random`, and the roll is verified against the roster's key-2 identity before `done` carries it.
 5. Anything else ends in `fail` with a code: `lifted` (the chip left: a `gone` line, or a newer tap), `radio` (a weak
