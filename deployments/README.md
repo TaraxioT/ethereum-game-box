@@ -29,9 +29,10 @@ hard-codes an address. Only `sepolia.json` exists, because every contract is on 
 - `contracts` includes the Boxes' `P256Account`s, which `P256AccountFactory` created (their block and transaction are
   the factory's `deploy` call): `MumbaiBoxAccount` (`mumbai-01`, on the Pi's HYP2003 key) and `DemoBoxAccount`
   (`demo-01`, on the demo-box Worker's key).
-- `contracts.FakeUSDC` is the demo's test USDC (6 decimals) that players stake through `DuelPot`, and the only USDC
-  the project uses: `BoxStaking`'s fees and the GBX/USDC pool are in it too. A zero address is a placeholder for a contract not deployed yet
-  (`ourContract` returns `undefined` for it).
+- `contracts.FakeUSDC` is the demo's test USDC (6 decimals) that players stake through `DuelPot`: `BoxStaking`'s fees
+  and the GBX/USDC pool are in it too. `contracts.StoreUSDC` is a second deployment of the same contract, staked through
+  `contracts.StorePot`. A zero address is a placeholder for a contract not deployed yet (`ourContract` returns
+  `undefined` for it).
 - Championship names (`<label>.<game>.gamebox.eth`) and their resolvers are not listed: they are found from
   `Championships`' `CupOpened` events, like Box and player resolvers from `GameBoxNames`'.
 - `names`: the proxies we created through ENS's `VerifiableFactory` that never move: `gamebox.eth`'s registry, the
