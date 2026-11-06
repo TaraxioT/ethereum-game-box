@@ -1,7 +1,8 @@
 // The live smoke test, against Sepolia (LIVE=1). It runs against the deployed Workers, or, with LIVE_DEV=1, against
-// both Workers under `wrangler dev`. It claims a fresh test name, waits for a heartbeat, opens a pop-up and reports a
-// result, checks each through the Universal Resolver with stock viem at the receipt's block, and prints the
-// Etherscan links. It spends real Sepolia ETH from the relayer (about 0.02 ETH at a 2 gwei tip).
+// both Workers under `wrangler dev`. It claims a fresh test name with its primary name, waits for a heartbeat, opens
+// a pop-up and reports a result. It checks each at the receipt's block, straight from the registry and each name's
+// own resolver, and, once `gamebox.eth` points at our registry, through the Universal Resolver with stock viem. It
+// prints the Etherscan links and the gas, and spends real Sepolia ETH from the relayer (about 0.02 ETH at 2 gwei).
 //
 // Needs SEPOLIA_RPC_URL (and for LIVE_DEV, DEMO_BOX_P256_KEY and the `sepolia-relayer` keystore).
 
@@ -13,18 +14,37 @@ import { fileURLToPath } from 'node:url';
 
 import {
   type DemoBoxView,
+  PARENT_NAME,
   type RelayerHealth,
   type ReportResponse,
   type TxView,
   claimNameTypedData,
   contractAddress,
+  ensAddress,
   fullName,
+  gameBoxNamesAbi,
+  permissionedRegistryAbi,
+  permissionedResolverAbi,
   popupLabel,
+  primaryNameMessage,
   titleName,
 } from '@egb/shared/names';
-import { type Address, createPublicClient, formatEther, http, isAddressEqual, parseEther } from 'viem';
+import {
+  type Address,
+  createPublicClient,
+  decodeFunctionResult,
+  encodeFunctionData,
+  formatEther,
+  http,
+  isAddressEqual,
+  labelhash,
+  namehash,
+  parseEther,
+  toHex,
+} from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { packetToBytes } from 'viem/ens';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const DEPLOYED = {
@@ -43,7 +63,7 @@ let secrets: string | undefined;
 const report: string[] = [];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-/** Errors from fetch can carry the URL; ours are public, but keep the RPC out of anything printed. */
+/** Keep the RPC URL out of anything printed. */
 const redact = (text: string) => text.split(rpcUrl).join('<rpc>');
 
 async function call<T>(base: string, path: string, body?: unknown): Promise<{ status: number; body: T }> {
@@ -55,13 +75,18 @@ async function call<T>(base: string, path: string, body?: unknown): Promise<{ st
   return { status: response.status, body: (await response.json()) as T };
 }
 
+const line = (what: string, gas: string | undefined, link: string | undefined) =>
+  `${what.padEnd(30)} gas ${String(gas).padStart(9)}  ${link}`;
+
 /** Polls `GET /tx/:id` until the request is `done` (or fails the test). */
 async function done(id: string, what: string): Promise<TxView> {
   for (let i = 0; i < 90; i++) {
     const { body } = await call<TxView>(urls.relayer, `/tx/${id}`);
     if (body.status === 'failed') throw new Error(`${what} failed: ${body.error}`);
     if (body.status === 'done') {
-      report.push(`${what.padEnd(22)} gas ${String(body.gasUsed).padStart(9)}  ${body.etherscan}`);
+      report.push(line(what, body.gasUsed, body.etherscan));
+      const step = body.primaryName;
+      if (step) report.push(line(`${what}: primary name`, step.gasUsed, step.etherscan ?? step.error));
       return body;
     }
     await sleep(4000);
@@ -117,19 +142,55 @@ describe('the Game Box names, live on Sepolia', () => {
   const badge = privateKeyToAccount(generatePrivateKey());
   const label = `smoke-${Date.now().toString(36)}`;
   const start = Math.floor(Date.now() / 1000);
+  const names = { address: contractAddress('GameBoxNames'), abi: gameBoxNamesAbi } as const;
+  let registry: Address;
+  /** Whether `gamebox.eth` points at our registry, so its names resolve through the Universal Resolver. */
+  let resolvable = false;
+
+  const registryRead = <F extends 'getOwner' | 'getResolver'>(functionName: F, arg: string, blockNumber?: bigint) =>
+    client.readContract({
+      address: registry,
+      abi: permissionedRegistryAbi,
+      functionName,
+      args: [functionName === 'getOwner' ? BigInt(labelhash(arg)) : arg],
+      blockNumber,
+    } as never) as Promise<Address>;
+
+  /** A text record read straight from a name's own resolver (ENSIP-10 `resolve`), at `blockNumber`. */
+  async function record(resolver: Address, name: string, key: string, blockNumber: bigint): Promise<string> {
+    const data = encodeFunctionData({ abi: permissionedResolverAbi, functionName: 'text', args: [namehash(name), key] });
+    const answer = await client.readContract({
+      address: resolver,
+      abi: permissionedResolverAbi,
+      functionName: 'resolve',
+      args: [toHex(packetToBytes(name)), data],
+      blockNumber,
+    });
+    return decodeFunctionResult({ abi: permissionedResolverAbi, functionName: 'text', data: answer });
+  }
+
+  beforeAll(async () => {
+    registry = await client.readContract({ ...names, functionName: 'REGISTRY' });
+    const current = await client.readContract({
+      address: ensAddress('ETHRegistry'),
+      abi: permissionedRegistryAbi,
+      functionName: 'getSubregistry',
+      args: [PARENT_NAME.split('.')[0]!],
+    });
+    resolvable = isAddressEqual(current, registry);
+    report.push(`${PARENT_NAME} ${resolvable ? 'points at' : 'does not yet point at'} our registry ${registry}`);
+  });
 
   it('has a funded relayer', async () => {
     const { body } = await call<RelayerHealth>(urls.relayer, '/health');
-    report.push(`relayer ${body.address} holds ${formatEther(BigInt(body.balance))} ETH, head ${body.block}`);
+    report.push(`relayer ${body.address} holds ${formatEther(BigInt(body.balance))} ETH at block ${body.block}`);
     expect(BigInt(body.balance), 'the relayer needs funding before the live test').toBeGreaterThanOrEqual(MIN_BALANCE);
   });
 
   it('refuses a forged claim with no gas spent', async () => {
     const deadline = BigInt(start + 600);
     const forger = privateKeyToAccount(generatePrivateKey());
-    const signature = await forger.signTypedData(
-      claimNameTypedData({ label, badge: badge.address, deadline }, contractAddress('GameBoxNames')),
-    );
+    const signature = await forger.signTypedData(claimNameTypedData({ label, badge: badge.address, deadline }, names.address));
     const res = await call<{ error: string }>(urls.relayer, '/names/claim', {
       label,
       badge: badge.address,
@@ -139,21 +200,31 @@ describe('the Game Box names, live on Sepolia', () => {
     expect(res.status).toBe(401);
   });
 
-  it('claims a fresh player name', async () => {
+  it("claims a fresh player name, and sets it as the badge's primary name", async () => {
     const deadline = BigInt(start + 600);
-    const signature = await badge.signTypedData(
-      claimNameTypedData({ label, badge: badge.address, deadline }, contractAddress('GameBoxNames')),
-    );
+    const expiry = BigInt(start + 1800);
+    const name = fullName(label);
+    const raw = primaryNameMessage({ badge: badge.address, name, expiry }, ensAddress('DefaultReverseRegistrar'));
     const res = await call<TxView>(urls.relayer, '/names/claim', {
       label,
       badge: badge.address,
       deadline: String(deadline),
-      signature,
+      signature: await badge.signTypedData(claimNameTypedData({ label, badge: badge.address, deadline }, names.address)),
+      primaryName: { expiry: String(expiry), signature: await badge.signMessage({ message: { raw } }) },
     });
     expect(res.status, redact(JSON.stringify(res.body))).toBe(202);
     const tx = await done(res.body.id, `claim ${label}`);
-    const address = await client.getEnsAddress({ name: fullName(label), blockNumber: BigInt(tx.block!) });
-    expect(address).toBe(badge.address);
+    expect(tx.primaryName?.status).toBe('done');
+    const blockNumber = BigInt(tx.block!);
+    expect(await client.readContract({ ...names, functionName: 'labelOf', args: [badge.address], blockNumber })).toBe(label);
+    expect(await registryRead('getOwner', label, blockNumber)).toBe(badge.address);
+    const resolver = await registryRead('getResolver', label, blockNumber);
+    expect(await record(resolver, name, 'stats', blockNumber)).toBe('');
+    if (resolvable) {
+      expect(await client.getEnsAddress({ name, blockNumber })).toBe(badge.address);
+      const primaryBlock = BigInt(tx.primaryName!.block!);
+      expect(await client.getEnsName({ address: badge.address, blockNumber: primaryBlock })).toBe(name);
+    }
   });
 
   it('sends a heartbeat for mumbai-01', async () => {
@@ -164,9 +235,13 @@ describe('the Game Box names, live on Sepolia', () => {
     }
     expect(view?.lastSeen, 'no heartbeat within 6.5 minutes').toBeGreaterThanOrEqual(start);
     const txs = await Promise.all(view!.heartbeat.map((id, i) => done(id, `heartbeat write ${i + 1}`)));
-    const block = BigInt(Math.max(...txs.map((tx) => tx.block!)));
-    const lastSeen = await client.getEnsText({ name: fullName(view!.label), key: 'lastSeen', blockNumber: block });
-    expect(Number(lastSeen)).toBeGreaterThanOrEqual(view!.lastSeen!);
+    const blockNumber = BigInt(Math.max(...txs.map((tx) => tx.block!)));
+    const name = fullName(view!.label);
+    const box = await client.readContract({ ...names, functionName: 'getBox', args: [view!.label], blockNumber });
+    expect(Number(await record(box.resolver, name, 'lastSeen', blockNumber))).toBeGreaterThanOrEqual(view!.lastSeen!);
+    if (resolvable) {
+      expect(Number(await client.getEnsText({ name, key: 'lastSeen', blockNumber }))).toBeGreaterThanOrEqual(view!.lastSeen!);
+    }
   });
 
   it('opens a pop-up Box', async () => {
@@ -174,16 +249,22 @@ describe('the Game Box names, live on Sepolia', () => {
     const res = await call<TxView>(urls.relayer, '/box/popup', { label: popup });
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     const tx = await done(res.body.id, `pop-up ${popup}`);
-    const name = fullName(popupLabel(popup));
+    const boxLabel = popupLabel(popup);
+    const name = fullName(boxLabel);
     const blockNumber = BigInt(tx.block!);
-    const account = await client.getEnsAddress({ name, blockNumber });
-    expect(isAddressEqual(account!, contractAddress('DemoBoxAccount'))).toBe(true);
-    expect(await client.getEnsText({ name, key: 'status', blockNumber })).toBe('active');
+    const box = await client.readContract({ ...names, functionName: 'getBox', args: [boxLabel], blockNumber });
+    expect(isAddressEqual(box.account, contractAddress('DemoBoxAccount'))).toBe(true);
+    expect(Number(box.expiry) - start).toBeLessThanOrEqual(15 * 60);
+    expect(await record(box.resolver, name, 'status', blockNumber)).toBe('active');
+    if (resolvable) {
+      expect(isAddressEqual((await client.getEnsAddress({ name, blockNumber }))!, box.account)).toBe(true);
+      expect(await client.getEnsText({ name, key: 'status', blockNumber })).toBe('active');
+    }
   });
 
   it('reports a result: the stats and the title move', async () => {
-    const loser = (await client.getEnsAddress({ name: fullName('bot') })) as Address;
-    expect(loser, 'bot.gamebox.eth must resolve').toBeTruthy();
+    const loser = await registryRead('getOwner', 'bot');
+    expect(await client.readContract({ ...names, functionName: 'labelOf', args: [loser] }), 'bot holds its name').toBe('bot');
     const res = await call<ReportResponse>(urls.demoBox, '/result', {
       box: 'mumbai-01',
       game: 'quickdraw',
@@ -194,9 +275,14 @@ describe('the Game Box names, live on Sepolia', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     const tx = await done(res.body.id, `result round ${res.body.round}`);
     const blockNumber = BigInt(tx.block!);
-    const stats = await client.getEnsText({ name: fullName(label), key: 'stats', blockNumber });
-    expect(JSON.parse(stats!)).toMatchObject({ quickdraw: { wins: 1, losses: 0 } });
-    const champion = await client.getEnsAddress({ name: titleName('quickdraw'), blockNumber });
-    expect(champion).toBe(badge.address);
+    const resolver = await registryRead('getResolver', label, blockNumber);
+    const stats = await record(resolver, fullName(label), 'stats', blockNumber);
+    expect(JSON.parse(stats)).toMatchObject({ quickdraw: { wins: 1, losses: 0 } });
+    const title = await client.readContract({ ...names, functionName: 'getTitle', args: ['quickdraw'], blockNumber });
+    expect(title.holder).toBe(badge.address);
+    if (resolvable) {
+      expect(await client.getEnsText({ name: fullName(label), key: 'stats', blockNumber })).toBe(stats);
+      expect(await client.getEnsAddress({ name: titleName('quickdraw'), blockNumber })).toBe(badge.address);
+    }
   });
 });

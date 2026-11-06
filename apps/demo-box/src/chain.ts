@@ -1,8 +1,26 @@
-// What the demo Box reads from Sepolia: its Boxes, recent pop-ups, and the rounds already settled.
+// What the demo Box reads from Sepolia: its Boxes, their `game` record, recent pop-ups, and the rounds already settled.
 
-import { boxResultsAbi, demoLicencesAbi, gameBoxNamesAbi } from '@egb/shared/names';
-import { type Address, type PublicClient, createPublicClient, http } from 'viem';
+import {
+  BOX_KEYS,
+  boxResultsAbi,
+  demoLicencesAbi,
+  fullName,
+  gameBoxNamesAbi,
+  permissionedResolverAbi,
+  resolverProfilesAbi,
+} from '@egb/shared/names';
+import {
+  type Address,
+  type PublicClient,
+  createPublicClient,
+  decodeFunctionResult,
+  encodeFunctionData,
+  http,
+  namehash,
+  toHex,
+} from 'viem';
 import { sepolia } from 'viem/chains';
+import { packetToBytes } from 'viem/ens';
 
 export interface BoxInfo {
   account: Address;
@@ -15,6 +33,8 @@ export interface BoxInfo {
 
 export interface BoxChain {
   box(label: string): Promise<BoxInfo>;
+  /** The Box's `game` record, read from its own resolver (which answers only through ENSIP-10 `resolve`). */
+  game(box: BoxInfo, label: string): Promise<string>;
   roundUsed(box: string, round: bigint): Promise<boolean>;
   /** The labels of the pop-ups opened in the last half hour (live or not). */
   recentPopups(): Promise<string[]>;
@@ -40,6 +60,17 @@ export function sepoliaChain(rpcUrl: string, contracts: Contracts): BoxChain {
         args: [label],
       });
       return { account: box.account, resolver: box.resolver, expiry: Number(box.expiry), status: box.status };
+    },
+    async game(box, label) {
+      const name = fullName(label);
+      const call = { abi: resolverProfilesAbi, functionName: 'text' } as const;
+      const answer = await client.readContract({
+        address: box.resolver,
+        abi: permissionedResolverAbi,
+        functionName: 'resolve',
+        args: [toHex(packetToBytes(name)), encodeFunctionData({ ...call, args: [namehash(name), BOX_KEYS.game] })],
+      });
+      return decodeFunctionResult({ ...call, data: answer });
     },
     roundUsed(box, round) {
       return client.readContract({
