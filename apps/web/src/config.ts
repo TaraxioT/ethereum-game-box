@@ -34,8 +34,11 @@ export function ensAppLink(name: string): string {
 /** The largest block range one `eth_getLogs` asks for. */
 export const LOG_CHUNK = 9_999n;
 
-/** The Box the story reports results from, and the game whose title moves on stage. */
-export const DEMO_BOX_LABEL = "mumbai-01";
-export const LIVE_TITLE_GAME = "quickdraw";
+/** The demo Box Worker's Box: it signs the results "Report a match" and the Story send, with its software key. */
+export const DEMO_BOX_LABEL = "demo-01";
+/** The Pi's Box (its HYP2003 key): every pop-up links to its record (`DemoLicences.BOX`). */
+export const POPUP_BOX_LABEL = "mumbai-01";
+/** The game the Story plays: its two wins move this game's title and score its open championship, in one result each. */
+export const STORY_GAME = "stockduel";
 export const GAMES = ["stockduel", "quickdraw"] as const;
 export const AGENT_LABEL = "bot";

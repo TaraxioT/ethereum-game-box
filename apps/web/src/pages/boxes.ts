@@ -6,9 +6,9 @@
 import { BOX_KEYS, BOX_OPERATOR_KEYS, fullName } from "@egb/shared/names";
 
 import { freshLabel, openPopup, popupAvailability } from "../actions.ts";
-import { dir, render, state } from "../app.ts";
+import { dir, render } from "../app.ts";
 import { client } from "../chain.ts";
-import { DEMO_BOX_LABEL } from "../config.ts";
+import { POPUP_BOX_LABEL } from "../config.ts";
 import { type BoxView, boxLicensed, readBox } from "../model.ts";
 import { TxFailed } from "../txs.ts";
 import { addressLink, h, key, nameParts, tag } from "../ui/dom.ts";
@@ -22,7 +22,7 @@ function statusTag(status: string | null): HTMLElement {
 export function boxCard(box: BoxView): HTMLElement {
   const dead = box.resolves === null;
   const popup = box.ofBox !== null;
-  const focus = [popup ? "popup" : "box", box.label === state.story.popup ? "story-popup" : "", box.label === DEMO_BOX_LABEL ? "mumbai" : ""].join(" ");
+  const focus = [popup ? "popup" : "box", box.label === POPUP_BOX_LABEL ? "mumbai" : ""].join(" ");
   if (dead) {
     return h(
       "div.card.dead",
@@ -79,7 +79,7 @@ function popupPanel(licensed: boolean): HTMLElement {
       h(
         "p",
         {},
-        h("b", {}, fullName(DEMO_BOX_LABEL)),
+        h("b", {}, fullName(POPUP_BOX_LABEL)),
         " isn't licensed yet: its operator registers it from the operator site with a passkey. A pop-up links to its record, so pop-ups open once it is. Until then, the name answers with ",
         h("b", {}, "gamebox.eth"),
         "'s default record, like any free name.",
@@ -106,7 +106,6 @@ function popupPanel(licensed: boolean): HTMLElement {
     const label = input.value.trim();
     try {
       await openPopup(label);
-      state.story.popup = `popup-${label}`;
       await render(true);
     } catch (err) {
       hint.className = "hint bad";
@@ -125,7 +124,7 @@ function popupPanel(licensed: boolean): HTMLElement {
       "Anyone may open one. ",
       h("code", {}, "DemoLicences"),
       " registers it for 10 minutes and links it to ",
-      h("b", {}, fullName(DEMO_BOX_LABEL)),
+      h("b", {}, fullName(POPUP_BOX_LABEL)),
       "'s record, so it serves exactly the same records; the relayer pays the gas. Then it lapses: it has no address, and ",
       h("b", {}, "gamebox.eth"),
       "'s default record answers for it.",
@@ -139,7 +138,7 @@ export async function boxesPage(): Promise<HTMLElement> {
   const entries = [...d.boxes.values(), ...d.popups.values()].sort((a, b) => Number(b.block - a.block));
   const [boxes, licensed] = await Promise.all([
     Promise.all(entries.slice(0, 12).map((entry) => readBox(client, entry.label))),
-    boxLicensed(client, DEMO_BOX_LABEL),
+    boxLicensed(client, POPUP_BOX_LABEL),
   ]);
   // Live licences first, then the lapsed, each newest first.
   boxes.sort((a, b) => Number(a.resolves === null) - Number(b.resolves === null));
@@ -160,7 +159,7 @@ export async function boxesPage(): Promise<HTMLElement> {
       " are written by the Box's own account; the operator writes its four keys on the operator site. A pop-up Box borrows its Box's record for 10 minutes.",
     ),
     popupPanel(licensed),
-    recordWatch(DEMO_BOX_LABEL, BOX_KEYS.location),
+    recordWatch(POPUP_BOX_LABEL, BOX_KEYS.location),
     h("h2", {}, "EVERY LICENCE"),
     boxes.length ? h("div.cards", {}, ...boxes.map(boxCard)) : h("p", {}, "No Box licences yet."),
   );

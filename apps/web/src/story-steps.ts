@@ -1,39 +1,24 @@
-// The seven steps of the Story, about two minutes at the ENS booth. Each shows a page and points at the part that
-// proves the brief's words; the steps that write do it for real on Sepolia, on fresh labels, so the story runs again
-// and again. Reset only resets the walkthrough: the chain keeps everything.
-import { fullName, popupLabel, titleName } from "@egb/shared/names";
+// The five steps of the Story, about two minutes at the ENS booth. Each shows a page and points at the part that
+// proves it; the steps that write do it for real on Sepolia, with a fresh test badge and fresh labels, so the story
+// runs again and again. Reset only resets the walkthrough: the chain keeps everything.
+import { formatUsdc, fullName, titleName } from "@egb/shared/names";
 
-import { claim, freshLabel, openPopup, reportWin, revokeStats, tokenGone } from "./actions.ts";
+import { claim, freshLabel, reportWin, tokenGone, topUp } from "./actions.ts";
 import { dir, go, render, setFocus, state } from "./app.ts";
 import { newTestBadge } from "./badge.ts";
 import { client } from "./chain.ts";
-import { AGENT_LABEL, DEMO_BOX_LABEL, LIVE_TITLE_GAME } from "./config.ts";
+import { AGENT_LABEL, DEMO_BOX_LABEL, STORY_GAME } from "./config.ts";
 import { boxLicensed } from "./model.ts";
 import { locate } from "./registry.ts";
 import type { Step } from "./story.ts";
+import { readBalance } from "./usdc.ts";
 
-/** A line the current step adds under its caption once its writes are done. */
-export const outcome = { text: null as string | null };
+/** A line the current step adds under its caption once its writes are done, by step id. */
+export const outcomes = new Map<string, string>();
 
 async function show(hash: string, focus: string | null): Promise<void> {
   await go(hash);
   setFocus(focus);
-}
-
-/** The story's pop-up Box: the one this run opened while it is live, or a new one. */
-async function ensureStoryPopup(): Promise<string> {
-  const current = state.story.popup;
-  if (current) {
-    const where = await locate(client, fullName(current));
-    if (where.status === "registered") return current;
-  }
-  if (!(await boxLicensed(client, DEMO_BOX_LABEL))) {
-    throw new Error(`${fullName(DEMO_BOX_LABEL)} isn't licensed yet, so no pop-up can link to its record. This step runs once it is.`);
-  }
-  const label = freshLabel("demo").replace("demo-", "story");
-  await openPopup(label);
-  state.story.popup = popupLabel(label);
-  return state.story.popup;
 }
 
 function needClaim(): { label: string } {
@@ -47,14 +32,14 @@ export const STEPS: Step[] = [
     id: "tree",
     title: "The tree",
     brief: "Your own subname registry",
-    caption: "gamebox.eth's subregistry is a UserRegistry we deployed. GameBoxNames holds only REGISTRAR, RENEW and SET_PARENT in it: your own subname registry.",
+    caption: "gamebox.eth's subregistry is a UserRegistry we deployed, and every Box, player, game, title and championship is a name in it or under it, each with its own resolver.",
     show: () => show("#/", "registry"),
   },
   {
     id: "claim",
-    title: "Claim",
+    title: "Claim a name",
     brief: "A forever name with no parent control",
-    caption: "A fresh test badge signs ClaimName and the relayer sends it, no ETH needed. The name never expires, its registry is emancipated, and the badge holds every resolver role: a forever name with no parent control.",
+    caption: "A fresh test badge, made in this browser, signs ClaimName and the relayer sends it: no ETH needed. The name never expires, its registry is emancipated, and the badge holds every role on its own resolver.",
     show: () => (state.story.label ? show(`#/name/${fullName(state.story.label)}`, "roles") : show("#/players", "claim")),
     async act() {
       const badge = newTestBadge();
@@ -66,52 +51,32 @@ export const STEPS: Step[] = [
     },
   },
   {
-    id: "scoped",
-    title: "Scoped writes",
-    brief: "Edit only certain text records",
-    caption: "In the Try grid, PlayerStats may write stats and nothing else. The badge revokes that (a small drip pays its gas first), and the cell turns red: edit only certain text records.",
-    show: () => (state.story.label ? show(`#/name/${fullName(state.story.label)}`, "try") : show("#/players", "claim")),
+    id: "topup",
+    title: "Top up",
+    brief: "Top up by name",
+    caption: "In the lobby, the new name tops up 100 test USDC to play for. The relayer resolves the name through ENS and mints to the badge: no ETH and no wallet.",
+    show: () => (state.story.label ? show(`#/lobby/${fullName(state.story.label)}`, "topup") : show("#/lobby", "topup")),
     async act() {
       const { label } = needClaim();
-      // Let the first Try finish, so the grid has an answer to change.
-      await new Promise((resolve) => setTimeout(resolve, 4_000));
-      await revokeStats(state.badge!, label);
+      const name = fullName(label);
+      await show(`#/lobby/${name}`, "topup");
+      await topUp(name);
+      const balance = await readBalance(client, state.badge!.address);
+      outcomes.set("topup", `${name} now holds ${formatUsdc(balance)} USDC.`);
       await render(true);
-      setFocus("try");
-    },
-  },
-  {
-    id: "licence",
-    title: "A Box licence",
-    brief: "Edit only certain text records",
-    caption: "mumbai-01: status is the registrar's alone, the demo Box writes lastSeen (ticking) and game, and the operator writes its four keys from the operator site with a passkey. A pop-up opens for this story; change location on the operator site and watch it land on mumbai-01 and its pop-up in the same block.",
-    show: () => show(`#/name/${fullName(DEMO_BOX_LABEL)}`, "operator-watch"),
-    async act() {
-      await ensureStoryPopup();
-      await show(`#/name/${fullName(DEMO_BOX_LABEL)}`, "operator-watch");
-    },
-  },
-  {
-    id: "aliasing",
-    title: "Aliasing and expiry",
-    brief: "Record aliasing · Expiring names · Wildcard",
-    caption: "The pop-up has no record of its own: it is linked to mumbai-01's record, so it serves exactly its records (record aliasing). Its 10-minute licence counts down while the story runs; then it has no address, and gamebox.eth's default record answers by wildcard.",
-    show: () => (state.story.popup ? show(`#/name/${fullName(state.story.popup)}`, "answer") : show("#/boxes", "popup")),
-    async act() {
-      const popup = await ensureStoryPopup();
-      await show(`#/name/${fullName(popup)}`, "answer");
+      setFocus("balance");
     },
   },
   {
     id: "title",
     title: "Title",
     brief: "Non-transferable names",
-    caption: "Two Quick Draw wins: the title moves to the new winner, and the old token is gone. Then the holder tries to transfer it, and it reverts TransferDisallowed: non-transferable names.",
-    show: () => show(`#/name/${titleName(LIVE_TITLE_GAME)}`, "transfer"),
+    caption: `The demo Box (${DEMO_BOX_LABEL}) reports two ${STORY_GAME} wins. The title moves to each new winner by re-registration, so the old token is gone; then the holder tries to transfer it, and it reverts TransferDisallowed.`,
+    show: () => show(`#/name/${titleName(STORY_GAME)}`, "transfer"),
     async act() {
       const { label } = needClaim();
       if (!(await boxLicensed(client, DEMO_BOX_LABEL))) {
-        throw new Error(`${fullName(DEMO_BOX_LABEL)} isn't licensed yet, and BoxResults takes results only from a licensed Box. This step runs once it is.`);
+        throw new Error(`${fullName(DEMO_BOX_LABEL)} isn't licensed, and BoxResults takes results only from a licensed Box.`);
       }
       let d = await dir();
       let opponent = [...d.players.values()].reverse().find((p) => p.label !== label && p.label !== AGENT_LABEL);
@@ -124,24 +89,24 @@ export const STEPS: Step[] = [
       }
       const judge = d.players.get(label);
       if (!judge || !opponent) throw new Error("The story needs two player names on chain.");
-      state.story.opponent = opponent.label;
-      await show("#/champions", `title-${LIVE_TITLE_GAME}`);
-      await reportWin(LIVE_TITLE_GAME, judge, opponent);
+      await show("#/champions", `title-${STORY_GAME}`);
+      await reportWin(STORY_GAME, judge, opponent);
       await render(true);
-      const before = (await locate(client, titleName(LIVE_TITLE_GAME))).tokenId;
-      await reportWin(LIVE_TITLE_GAME, opponent, judge);
-      const gone = await tokenGone(LIVE_TITLE_GAME, before);
-      outcome.text = gone
-        ? `The title moved to ${fullName(opponent.label)}; ${fullName(label)}'s token is gone.`
-        : "The title stayed put: check the strip for the results.";
-      await show(`#/name/${titleName(LIVE_TITLE_GAME)}`, "transfer");
+      const before = (await locate(client, titleName(STORY_GAME))).tokenId;
+      await reportWin(STORY_GAME, opponent, judge);
+      const gone = await tokenGone(STORY_GAME, before);
+      outcomes.set(
+        "title",
+        gone ? `The title moved to ${fullName(opponent.label)}, and ${fullName(label)}'s token is gone.` : "The title stayed put: check the strip for the results.",
+      );
+      await show(`#/name/${titleName(STORY_GAME)}`, "transfer");
     },
   },
   {
-    id: "agent",
-    title: "The agent",
-    brief: "Agents as namespaces",
-    caption: "bot.gamebox.eth, the practice opponent, has its own name, its own ENSIP-26 records and its own permissions: agents as namespaces.",
-    show: () => show("#/agent", "agent"),
+    id: "championship",
+    title: "Championship",
+    brief: "Live records, then frozen",
+    caption: `The same two results scored the open ${STORY_GAME} championship: its standings, leader and addr records moved. Below it, a closed one: the winner holds its name with no expiry, its records are frozen, and every write reverts, ours included.`,
+    show: () => show("#/championships", "cups"),
   },
 ];

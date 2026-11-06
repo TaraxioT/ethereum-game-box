@@ -6,11 +6,13 @@ import { watchHead } from "./chain.ts";
 import { agentPage } from "./pages/agent.ts";
 import { boxesPage } from "./pages/boxes.ts";
 import { championsPage } from "./pages/champions.ts";
+import { championshipsPage } from "./pages/championships.ts";
 import { inspectorPage } from "./pages/inspector.ts";
+import { lobbyPage } from "./pages/lobby.ts";
 import { playersPage } from "./pages/players.ts";
 import { treePage } from "./pages/tree.ts";
 import { Story } from "./story.ts";
-import { STEPS, outcome } from "./story-steps.ts";
+import { STEPS, outcomes } from "./story-steps.ts";
 import { mountChainTag, mountTxStrip } from "./ui/chrome.ts";
 import { registerLive } from "./ui/live.ts";
 import { mountRail } from "./ui/rail.ts";
@@ -27,6 +29,8 @@ mountChainTag(byId("chain"));
 mountTxStrip(byId("txs"));
 
 registerPage("", treePage);
+registerPage("lobby", lobbyPage);
+registerPage("championships", championshipsPage);
 registerPage("boxes", boxesPage);
 registerPage("players", playersPage);
 registerPage("champions", championsPage);
@@ -38,17 +42,17 @@ const story = new Story(
   STEPS,
   (view) => draw(view),
   () => {
-    state.story = { label: null, popup: null, opponent: null };
-    outcome.text = null;
+    state.story = { label: null };
+    outcomes.clear();
   },
 );
 draw = mountRail(byId("rail"), story);
 draw(story.current);
 mountRouter(byId("page"));
 
-// Pages that change by themselves (heartbeats, titles, pop-ups) are read again every minute, in place.
+// Pages that change by themselves (heartbeats, titles, standings, balances, pop-ups) are read again every minute, in place.
 // Not while someone is typing in a form.
 setInterval(() => {
   const typing = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLSelectElement;
-  if (!typing && ["boxes", "champions", ""].includes(parseRoute(location.hash).page)) void render(true);
+  if (!typing && ["boxes", "champions", "championships", "lobby", ""].includes(parseRoute(location.hash).page)) void render(true);
 }, 60_000);
