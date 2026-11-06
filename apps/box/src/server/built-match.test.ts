@@ -1,7 +1,8 @@
 // A built game end to end through the real server: the Forge's sim provider builds and installs a game (Lantern Race,
 // in its own child process), the library picks it up and Home's rack hears of it, its cartridge and frame are served,
-// and a whole match plays by injected taps with its rules in the sandboxed child: join, stake, play, result, paid.
-// Then a game whose rules never answer is voided at its budget and both stakes go back.
+// and a whole match plays by injected taps with its rules in the sandboxed child: join, stake, play, result. A built game
+// isn't on chain, so it plays for nothing: no transaction, no balance moves. Then a game whose rules never answer is
+// voided at its budget.
 import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -75,6 +76,19 @@ function transcripts(): Transcript[] {
     .map((line) => JSON.parse(line) as Transcript);
 }
 
+/** The last transcript of `game`, once the session log has it: it is written after the end hold, off the tap path. */
+async function transcriptOf(game: string): Promise<Transcript | undefined> {
+  const of = () => {
+    try {
+      return transcripts().filter((t) => t.game === game);
+    } catch {
+      return [];
+    }
+  };
+  await waitFor(() => of().length > 0, 10_000);
+  return of().at(-1);
+}
+
 beforeAll(async () => {
   tb = await startTestBox();
   screen = await openScreen(tb.box);
@@ -109,12 +123,11 @@ describe("a built game on the Box", () => {
     for (const file of ["icon.svg", "frame.html", "screen.js"]) expect((await fetch(`${tb.box.url}/games/${built}/${file}`)).status, file).toBe(200);
   }, 150_000);
 
-  it("plays a whole match with its rules in the sandboxed child, and pays the winner", async () => {
+  it("plays a whole match with its rules in the sandboxed child, for nothing", async () => {
     await toPlaying(built);
-    // Each stake is in escrow now.
-    const staked = tb.box.core.state().seats.map((s) => s.balance);
+    const before = tb.box.core.state().seats.map((s) => s.balance);
     const state = tb.box.core.state();
-    expect(state.match).toMatchObject({ game: built, play: { game: "built", id: built }, voided: false, stake: 5 });
+    expect(state.match).toMatchObject({ game: built, play: { game: "built", id: built }, voided: false, stake: 0 });
     // The stations show the rules' own views.
     expect(state.stations.map((v) => [v.tag, v.big, v.small])).toEqual([["P1", "0/7", "TAP TO LIGHT"], ["P2", "0/7", "TAP TO LIGHT"]]);
 
@@ -128,14 +141,14 @@ describe("a built game on the Box", () => {
     expect(tb.box.core.state().match?.outcome).toEqual({ winner: 0 });
     expect(tb.box.core.state().stations.map((v) => v.big)).toEqual(["WIN", "LOSE"]);
     await play((s) => s.phase === "result");
-    await play((s) => s.txs.every((tx) => tx.step === "paid"));
-    expect(tb.box.core.state().seats.map((s) => s.balance)).toEqual([(staked[0] ?? 0) + 10, staked[1]]);
-    const last = transcripts().at(-1);
-    expect(last).toMatchObject({ game: built, result: { winner: 0 }, stake: 5 });
+    expect(tb.box.core.state().txs).toEqual([]);
+    expect(tb.box.core.state().seats.map((s) => s.balance)).toEqual(before);
+    const last = await transcriptOf(built);
+    expect(last).toMatchObject({ game: built, result: { winner: 0 }, stake: 0 });
     expect(last?.taps.filter((t) => t.seat === 0)).toHaveLength(7);
   }, 60_000);
 
-  it("voids a match whose rules run over their budget, and sends both stakes back", async () => {
+  it("voids a match whose rules run over their budget", async () => {
     // A copy of the game whose rules loop forever on a tap.
     const hung = "hung-lanterns";
     const dir = join(tb.dir, "data", "games", hung);
@@ -165,9 +178,8 @@ process.stdin.on("end", () => process.exit(0));
     expect(tb.box.core.state().stations.map((v) => v.big)).toEqual(["VOID", "VOID"]);
     expect(tb.logs.some((l) => l.includes(`${hung} took over its 50 ms budget`))).toBe(true);
     await play((s) => s.phase === "result");
-    await play((s) => s.txs.every((tx) => tx.step === "paid"));
-    // Both stakes back: nobody gained or lost.
+    // Nobody gained or lost.
     expect(tb.box.core.state().seats.map((s) => s.balance)).toEqual(before);
-    expect(transcripts().at(-1)).toMatchObject({ game: hung, result: "void", counts: false });
+    expect(await transcriptOf(hung)).toMatchObject({ game: hung, result: "void", counts: false });
   }, 60_000);
 });

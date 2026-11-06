@@ -19,6 +19,14 @@ export function teamLibrary(): LibraryPort {
   return { games: () => TEAM_GAMES, subscribe: () => () => {} };
 }
 
+/** Each team game's label on chain (`stockduel.gamebox.eth`): its stakes, results, title and championships. */
+const CHAIN_LABELS: Readonly<Record<TeamGameId, string>> = { "quick-draw": "quickdraw", "stock-duel": "stockduel" };
+
+/** A game's label on chain, or null for a game that isn't there (a built game plays for nothing). */
+export function chainLabel(id: GameId): string | null {
+  return isTeamGame(id) ? CHAIN_LABELS[id] : null;
+}
+
 /** A game whose rules run in the core. */
 export function isTeamGame(id: GameId): id is TeamGameId {
   return id === "quick-draw" || id === "stock-duel";

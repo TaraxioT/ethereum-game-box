@@ -16,7 +16,7 @@ import { factoryAccountKey } from '../account.ts';
 import { allowedCall } from '../allowlist.ts';
 import * as field from '../parse.ts';
 import { Refusal } from '../refusal.ts';
-import { type Context, type Prepared, accountCallGas, requireDeadline, simulate } from '../request.ts';
+import { type Context, type Prepared, callGas, requireDeadline, simulate } from '../request.ts';
 import { accountSignatureProblem } from '../verify.ts';
 
 /** The most calls one batch may hold. */
@@ -89,7 +89,7 @@ export async function prepareExecute(ctx: Context, input: unknown): Promise<Prep
     account,
     ...call,
     value: 0n,
-    gas: await accountCallGas(ctx, call),
+    gas: await callGas(ctx, call),
     replay: { key: digest, until: Number(deadline) },
     locks: [`nonce:${account.toLowerCase()}:${nonce}`],
   };

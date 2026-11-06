@@ -2,13 +2,18 @@
 
 import {
   boxResultsAbi,
+  boxSeatsAbi,
+  championshipsAbi,
   defaultReverseRegistrarAbi,
   demoLicencesAbi,
+  duelPotAbi,
+  fakeUsdcAbi,
   gameBoxNamesAbi,
   p256AccountAbi,
   p256AccountFactoryAbi,
   permissionedRegistryAbi,
   rawSignature,
+  universalResolverAbi,
 } from '@egb/shared/names';
 import { p256 } from '@noble/curves/nist.js';
 import {
@@ -21,10 +26,13 @@ import {
   hexToBytes,
   labelhash,
   numberToHex,
+  parseAbi,
   parseEther,
   toHex,
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { sepolia } from 'viem/chains';
+import { packetToBytes } from 'viem/ens';
 
 import type { Addresses, Context } from '../src/request.ts';
 import { type Deps, handle } from '../src/routes.ts';
@@ -39,6 +47,10 @@ export const addresses: Addresses = {
   names: '0x00000000000000000000000000000000000000a1',
   results: '0x00000000000000000000000000000000000000a2',
   licences: '0x00000000000000000000000000000000000000a3',
+  usdc: '0x00000000000000000000000000000000000000a7',
+  pot: '0x00000000000000000000000000000000000000a8',
+  cups: '0x00000000000000000000000000000000000000a9',
+  seats: '0x00000000000000000000000000000000000000aa',
   factory: '0x00000000000000000000000000000000000000a6',
   factoryBlock: 50n,
   registry: REGISTRY,
@@ -94,6 +106,33 @@ interface BoxEntry {
   expiry: bigint;
 }
 
+/** A `DuelPot.Pot`. `state`: 0 none, 1 open, 2 settled, 3 refunded. */
+export interface PotEntry {
+  a: Address;
+  b: Address;
+  amount: bigint;
+  opened: bigint;
+  state: number;
+  game: Hex;
+}
+
+/** A `Championships.Cup`. */
+export interface CupEntry {
+  game: string;
+  label: string;
+  resolver: Address;
+  opener: Address;
+  ends: bigint;
+  prize: bigint;
+  closed: boolean;
+  winner: Address;
+}
+
+/** The slice of the Universal Resolver viem's `getEnsAddress` calls. */
+const resolveWithGatewaysAbi = parseAbi([
+  'function resolveWithGateways(bytes name, bytes data, string[] gateways) view returns (bytes, address)',
+]);
+
 interface AccountEntry {
   qx: Hex;
   qy: Hex;
@@ -114,6 +153,15 @@ export class World {
   readonly usedRounds = new Set<string>();
   readonly usedNonces = new Set<string>();
   readonly accounts = new Map<string, AccountEntry>();
+  /** USDC balances by address (lower-cased). */
+  readonly usdc = new Map<string, bigint>();
+  /** Pots by `box:round`. */
+  readonly pots = new Map<string, PotEntry>();
+  /** Open championship ids by game, and championships by id. */
+  readonly openCups = new Map<string, bigint>();
+  readonly cups = new Map<bigint, CupEntry>();
+  /** What the Universal Resolver resolves each ENS name to. */
+  readonly ensNames = new Map<string, Address>();
   /** Signatures (lower-cased) each account's `isValidSignature` accepts. */
   readonly erc1271 = new Map<string, Set<string>>();
   /** Function name -> the contract error its `eth_call` reverts with. */
@@ -171,6 +219,31 @@ export class World {
       })
       .contract(addresses.reverseRegistrar, defaultReverseRegistrarAbi as Abi, {
         setNameForAddrWithSignature: () => this.fail('setNameForAddrWithSignature'),
+      })
+      .contract(addresses.usdc, fakeUsdcAbi as Abi, {
+        balanceOf: ([account]) => this.usdc.get(String(account).toLowerCase()) ?? 0n,
+        mint: () => this.fail('mint'),
+      })
+      .contract(addresses.pot, duelPotAbi as Abi, {
+        getPot: ([box, round]) => this.pots.get(`${box}:${round}`) ?? noPot,
+        REFUND_DELAY: () => 3600n,
+        open: () => this.fail('open'),
+        refund: () => this.fail('refund'),
+      })
+      .contract(addresses.cups, championshipsAbi as Abi, {
+        openCup: ([game]) => this.openCups.get(String(game)) ?? 0n,
+        getCup: ([id]) => this.cups.get(id as bigint),
+        close: () => (this.fail('close'), zero),
+      })
+      .contract(addresses.seats, boxSeatsAbi as Abi, {
+        claim: () => (this.fail('claim'), zero),
+      })
+      .contract(sepolia.contracts.ensUniversalResolver.address, resolveWithGatewaysAbi, {
+        resolveWithGateways: ([name]) => {
+          const entry = [...this.ensNames].find(([known]) => toHex(packetToBytes(known)) === name);
+          if (!entry) throw new Revert(universalResolverAbi as Abi, 'ResolverNotFound', [name]);
+          return [encodeAbiParameters([{ type: 'address' }], [entry[1]]), zero];
+        },
       });
 
     this.relay = new Relay({
@@ -247,3 +320,4 @@ export class World {
 }
 
 const zero: Address = '0x0000000000000000000000000000000000000000';
+const noPot: PotEntry = { a: zero, b: zero, amount: 0n, opened: 0n, state: 0, game: `0x${'00'.repeat(32)}` };

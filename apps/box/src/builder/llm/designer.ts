@@ -42,7 +42,7 @@ export function designerSchema(ctx: DesignerModelContext): JsonSchema {
       mechanic: nullable({ type: "string" }, "how a tap scores, one sentence"),
       theme: nullable({ type: "string" }, "where it is set, a few words"),
       twist: nullable({ type: "string" }, "what makes it theirs, one short line"),
-      stakes: nullable({ type: "array", items: { type: "integer", minimum: 1 }, maxItems: 4 }, "EGB a seat, ascending, 1 to 4 amounts"),
+      stakes: nullable({ type: "array", items: { type: "integer", minimum: 1 }, maxItems: 4 }, "USDC a seat, ascending, 1 to 4 amounts"),
       voice: nullable({ type: "string" }, "who calls the game: a commentator, a robot, a pirate"),
       title: nullable({ type: "string" }, "the game's name, at most 24 characters"),
       build: { type: "boolean", description: "true only when they agree to build the game now" },
@@ -57,7 +57,7 @@ export function designerSystem(ctx: DesignerModelContext): string {
   return [
     "You read one answer in a short game-design interview on the Ethereum Game Box, a two-player party console played by tapping NFC badges on two tap stations.",
     "Fill only the fields the answer settles; everything else is null (build: false). Keep the player's words, tidied and short.",
-    "An answer may settle more than the question asked (\"pirates, for 5 or 10 EGB\" settles the theme and the stakes).",
+    "An answer may settle more than the question asked (\"pirates, for 5 or 10 USDC\" settles the theme and the stakes).",
     "Templates (id: label):",
     ...ctx.templates.map((t) => `- ${t.id}: ${t.label}`),
   ].join("\n");

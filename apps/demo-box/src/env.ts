@@ -18,6 +18,8 @@ export interface Env {
   BOX_LABEL: string;
   /** The `game` a Box shows before its first result. */
   DEFAULT_GAME: string;
+  /** Comma-separated games whose open championship the alarm closes once its `ends` has passed. */
+  CUP_GAMES: string;
   /** The agent's label. */
   AGENT_LABEL: string;
   /** Comma-separated origins a browser may call from. `http://localhost:*` allows any localhost port. */

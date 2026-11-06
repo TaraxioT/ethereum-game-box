@@ -7,7 +7,7 @@ import { chamferClip, fitFrame } from "../parts/frame.ts";
 import { motion } from "../parts/part.ts";
 import { el } from "../shell/dom.ts";
 
-/** idle, ask (act now), done, win, lose (dimmed), alert (something stops this seat: `NEEDS n EGB`). */
+/** idle, ask (act now), done, win, lose (dimmed), alert (something stops this seat: `NEEDS n USDC`). */
 export type SeatTone = "idle" | "ask" | "done" | "win" | "lose" | "alert";
 
 export interface SeatPanel {
@@ -50,7 +50,8 @@ export function createSeatPanel(seat: Seat): SeatPanel {
         address = s.badge?.address ?? "";
         tile.innerHTML = s.badge ? blockieLedSvg(s.badge.address, 72) : "";
       }
-      name.textContent = s.badge ? s.badge.name.replace(/\.gamebox\.eth$/, "") : "EMPTY";
+      // The player name on chain once it is read, else the badge's local label.
+      name.textContent = s.badge ? (s.ens ?? s.badge.name).replace(/\.gamebox\.eth$/, "") : "EMPTY";
       words.textContent = text;
       glow.textContent = text;
     },

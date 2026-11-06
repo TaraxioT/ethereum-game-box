@@ -1,5 +1,6 @@
-// The `DemoBox` Durable Object: the one demo Box and its agent, with the alarm that beats every 5 minutes. Both are
-// built on first use, so a missing address or secret is an error on that call, not a broken object.
+// The `DemoBox` Durable Object: the one demo Box and its agent, with the alarm that beats every 5 minutes and closes
+// any championship whose `ends` has passed. Both are built on first use, so a missing address or secret is an error on
+// that call, not a broken object.
 
 import { type DemoBoxView, contractAddress, namesProxies } from '@egb/shared/names';
 import { describe } from '@egb/relayer/chain';
@@ -8,13 +9,14 @@ import { type Hex, toHex } from 'viem';
 
 import { Agent, type AgentView } from './agent.ts';
 import { Box } from './box.ts';
-import { sepoliaChain } from './chain.ts';
+import { type BoxChain, sepoliaChain } from './chain.ts';
+import { closeEndedCups } from './cups.ts';
 import type { Env } from './env.ts';
 import { relayer } from './relayer.ts';
 import type { Reply } from './relayer.ts';
 import { p256Signer } from './signer.ts';
 
-/** How often the Box beats. */
+/** How often the Box beats, and looks for an ended championship. */
 const HEARTBEAT_MS = 5 * 60_000;
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -28,6 +30,8 @@ function deployedContracts() {
   return {
     names: contractAddress('GameBoxNames'),
     results: contractAddress('BoxResults'),
+    pot: contractAddress('DuelPot'),
+    cups: contractAddress('Championships'),
     factory: contractAddress('P256AccountFactory'),
     registry: namesProxies().registry,
   };
@@ -36,18 +40,25 @@ function deployedContracts() {
 export class DemoBox extends DurableObject<Env> {
   private madeBox: Box | undefined;
   private madeAgent: Agent | undefined;
+  private madeChain: BoxChain | undefined;
+
+  private get chain(): BoxChain {
+    this.madeChain ??= sepoliaChain(this.env.SEPOLIA_RPC_URL, deployedContracts());
+    return this.madeChain;
+  }
 
   private get box(): Box {
     if (this.madeBox) return this.madeBox;
     const contracts = deployedContracts();
     this.madeBox = new Box({
       store: this.ctx.storage,
-      chain: sepoliaChain(this.env.SEPOLIA_RPC_URL, contracts),
+      chain: this.chain,
       signer: p256Signer(this.env.DEMO_BOX_P256_KEY as Hex),
       account: contractAddress('DemoBoxAccount'),
       label: this.env.BOX_LABEL,
       defaultGame: this.env.DEFAULT_GAME,
       results: contracts.results,
+      pot: contracts.pot,
       relayer: relayer(this.env),
       now,
       nonce: randomNonce,
@@ -80,6 +91,10 @@ export class DemoBox extends DurableObject<Env> {
     return this.box.report(input, ip);
   }
 
+  stake(input: unknown, ip: string): Promise<Reply> {
+    return this.box.stake(input, ip);
+  }
+
   agentView(): Promise<AgentView> {
     return this.agent.view();
   }
@@ -98,6 +113,12 @@ export class DemoBox extends DurableObject<Env> {
       await this.box.heartbeat();
     } catch (error) {
       console.error(`heartbeat failed: ${describe(error)}`);
+    }
+    try {
+      const games = this.env.CUP_GAMES.split(',').map((game) => game.trim()).filter(Boolean);
+      await closeEndedCups({ chain: this.chain, relayer: relayer(this.env), games, now });
+    } catch (error) {
+      console.error(`closing championships failed: ${describe(error)}`);
     } finally {
       await this.ctx.storage.setAlarm(Date.now() + HEARTBEAT_MS);
     }

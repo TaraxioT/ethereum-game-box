@@ -56,7 +56,9 @@ step build lowprio pnpm --filter @egb/box build:box
 port=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
 smoke_data=$(mktemp -d)
 log "smoke test on port $port"
-EGB_PORT=$port EGB_DATA=$smoke_data EGB_RECEIVER=fake node apps/box/src/server/main.ts >"$rel/.smoke.log" 2>&1 &
+# No env file: the smoke test runs as the simulator (the demo chain), so it never starts the Box's signer or sends a
+# request on chain, and none of the Pi's keys reach it.
+EGB_ENV_FILE=/dev/null EGB_PORT=$port EGB_DATA=$smoke_data EGB_RECEIVER=fake node apps/box/src/server/main.ts >"$rel/.smoke.log" 2>&1 &
 smoke_pid=$!
 if ! wait_health "$port" "$(setting_int EGB_SMOKE_WAIT 60 1)" "$smoke_pid"; then
   tail -n 40 "$rel/.smoke.log" | tee -a "$EGB_DEPLOY_LOG" >&2

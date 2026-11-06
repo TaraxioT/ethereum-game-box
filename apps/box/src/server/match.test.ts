@@ -1,14 +1,12 @@
 // Whole matches through the server: injected taps over HTTP, the screen's commands over the link, the core on a fake
-// clock, and the ledger on disk at the end.
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+// clock, on the demo chain (the stakes, the pot and the payout; `chain-match.test.ts` plays one on the Sepolia port).
 import { afterEach, describe, expect, it } from "vitest";
 import type { Seat } from "@egb/sdk";
 import type { BoxState, ScreenCommand } from "../core/types.ts";
 import { END_HOLD_MS } from "../core/core.ts";
 import { reactionMs, SETTLE_MS } from "../games/quick-draw/rules.ts";
 import type { Injected } from "./inject.ts";
-import { openScreen, post, startTestBox, type TestBox, type TestScreen } from "./testing.ts";
+import { flush, openScreen, post, startTestBox, type TestBox, type TestScreen } from "./testing.ts";
 
 // Badges the roster doesn't know are named by their address's start.
 const NOVA = { address: `0x${"a1".repeat(20)}`, name: "0xa1a1" };
@@ -55,14 +53,11 @@ async function seatedAtStake(game: "quick-draw" | "stock-duel"): Promise<{ tb: T
 async function settled(tb: TestBox, screen: TestScreen): Promise<BoxState> {
   tb.until(() => tb.box.core.state().phase === "result");
   tb.until(() => tb.box.core.state().txs.every((tx) => tx.step === "paid"));
+  // The balances are read from the chain again once the payout is paid.
+  await flush();
   const final = tb.box.core.state();
   await screen.next((m) => JSON.stringify(m.state) === JSON.stringify(final));
   return final;
-}
-
-async function ledgerOnDisk(tb: TestBox): Promise<unknown> {
-  await tb.box.stop();
-  return JSON.parse(await readFile(join(tb.dir, "data", "ledger.json"), "utf8"));
 }
 
 describe("whole matches over the link", () => {
@@ -86,7 +81,7 @@ describe("whole matches over the link", () => {
     expect(final.seats.map((s) => s.balance)).toEqual([90, 110]);
     const phases = screen.messages.flatMap((m) => (m.t === "event" && m.event.type === "phase" ? [m.event.to] : []));
     expect(phases).toEqual(["attract", "home", "stake", "playing", "result"]);
-    expect(await ledgerOnDisk(tb)).toEqual({ balances: { [NOVA.address]: 90, [KITE.address]: 110 }, escrow: {} });
+    expect(final.match?.lines).toEqual(["0xb2b2…b2b2 +20 USDC", "0xb2b2…b2b2 now holds champion.quickdraw.gamebox.eth"]);
   });
 
   it("plays a Stock Duel by injected taps, each with its own roll, to a paid result", async () => {

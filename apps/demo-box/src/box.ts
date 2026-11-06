@@ -1,5 +1,6 @@
 // The demo Box: what the Pi does, with a software key. It signs heartbeats (`P256Account.execute` writing `lastSeen`,
-// and `game` when it changes) and match results, and sends them through the relayer.
+// and `game` when it changes), match stakes and match results, and sends them through the relayer. A stake and the
+// result that settles it share one round.
 //
 // `Box` is the logic over a plain store, chain and relayer; the tests run it in memory, and the `DemoBox` Durable
 // Object (`object.ts`) runs it with an alarm that beats every 5 minutes.
@@ -10,9 +11,14 @@ import {
   type ReportResponse,
   type Result,
   type ResultRequest,
+  type Stake,
+  type StakeRequest,
+  formatUsdc,
   fullName,
   labelProblem,
   resultDigest,
+  stakeDigest,
+  usdc,
 } from '@egb/shared/names';
 import { Limits } from '@egb/relayer/limits';
 import type { Store } from '@egb/relayer/store';
@@ -35,6 +41,8 @@ export interface BoxOptions {
   defaultGame: string;
   /** `BoxResults`, the verifying contract of `Result`. */
   results: Address;
+  /** `DuelPot`, the verifying contract of `Stake`. */
+  pot: Address;
   relayer: Relayer;
   /** Unix seconds. */
   now: () => number;
@@ -42,9 +50,12 @@ export interface BoxOptions {
   nonce: () => bigint;
 }
 
-/** How long a signed heartbeat or result stays valid, in seconds. */
+/** How long a signed heartbeat, stake or result stays valid, in seconds. */
 export const DEADLINE = 600;
+/** The largest stake the demo Box vouches for: the Box's own largest. */
+export const MAX_STAKE = usdc(25);
 const RESULT_LIMITS = [{ key: 'result:ip', max: 10, windowSeconds: 3600, what: '10 results per hour from one address' }];
+const STAKE_LIMITS = [{ key: 'stake:ip', max: 10, windowSeconds: 3600, what: '10 stakes per hour from one address' }];
 
 const refuse = (status: number, error: string): Reply => ({ status, body: { error } });
 
@@ -96,43 +107,90 @@ export class Box {
     return ids;
   }
 
-  /** Signs `{ box, game, winner, loser, draw }` with the next round and sends it. Reports run one at a time. */
+  /** Signs `{ box, game, winner, loser, draw, round? }` and sends it: for the round of a pot this Box opened, or the
+   *  next round. Reports and stakes run one at a time. */
   report(input: unknown, ip: string): Promise<Reply> {
-    const run = this.tail.then(() => this.reportNow(input, ip));
+    return this.serial(() => this.reportNow(input, ip));
+  }
+
+  /** Signs `{ box, game, a, b, amount }` as a `Stake` with the next round and sends it to `/duel/open`. A
+   *  `POST /result` with that round settles the pot. */
+  stake(input: unknown, ip: string): Promise<Reply> {
+    return this.serial(() => this.stakeNow(input, ip));
+  }
+
+  private serial(task: () => Promise<Reply>): Promise<Reply> {
+    const run = this.tail.then(task);
     this.tail = run.catch(() => undefined);
     return run;
   }
 
   private async reportNow(input: unknown, ip: string): Promise<Reply> {
-    const { store, chain, signer, label, results, relayer, now } = this.options;
+    const { store, signer, results, relayer, now } = this.options;
     const parsed = parseReport(input);
     if (typeof parsed === 'string') return refuse(400, parsed);
-    const limits = RESULT_LIMITS.map((limit) => ({ ...limit, key: `${limit.key}:${ip}` }));
     const at = now();
-    const hit = await this.limits.exceeded(limits, at);
-    if (hit) return refuse(429, `rate limit: ${hit.what}`);
-    if (parsed.box !== label || !this.runs(await chain.box(parsed.box))) {
-      return refuse(403, `the demo Box does not run ${fullName(parsed.box)}`);
+    const refusal = await this.admit(RESULT_LIMITS, ip, parsed.box, at);
+    if (refusal) return refusal;
+    const { round: staked, ...report } = parsed;
+    if (staked !== undefined && !(await store.get<boolean>(potKey(report.box, staked)))) {
+      return refuse(409, `round ${staked} is not an open pot of ${fullName(report.box)}`);
     }
 
-    await this.limits.take(limits, at);
-    const round = await this.nextRound(parsed.box);
-    const result: Result = { ...parsed, round, deadline: BigInt(at + DEADLINE) };
+    await this.limits.take(this.ipLimits(RESULT_LIMITS, ip), at);
+    const round = staked ?? (await this.nextRound(report.box));
+    const result: Result = { ...report, round, deadline: BigInt(at + DEADLINE) };
     const body: ResultRequest = {
       result: { ...result, round: String(round), deadline: String(result.deadline) },
       ...signer.sign(resultDigest(result, results)),
     };
     const reply = await relayer.post('/box/result', body);
     if (reply.status !== 202) return reply;
-    await store.put('game', parsed.game);
+    await store.put('game', report.game);
+    if (staked !== undefined) await store.delete(potKey(report.box, staked));
     return { status: 202, body: { id: String(reply.body.id), round: Number(round) } satisfies ReportResponse };
   }
 
-  /** The round after the last one this Box reported, skipping any the chain has already settled. */
+  private async stakeNow(input: unknown, ip: string): Promise<Reply> {
+    const { store, signer, pot, relayer, now } = this.options;
+    const parsed = parseStake(input);
+    if (typeof parsed === 'string') return refuse(400, parsed);
+    const at = now();
+    const refusal = await this.admit(STAKE_LIMITS, ip, parsed.box, at);
+    if (refusal) return refusal;
+
+    await this.limits.take(this.ipLimits(STAKE_LIMITS, ip), at);
+    const round = await this.nextRound(parsed.box);
+    const stake: Stake = { ...parsed, round, deadline: BigInt(at + DEADLINE) };
+    const body: StakeRequest = {
+      stake: { ...stake, round: String(round), amount: String(stake.amount), deadline: String(stake.deadline) },
+      ...signer.sign(stakeDigest(stake, pot)),
+    };
+    const reply = await relayer.post('/duel/open', body);
+    if (reply.status !== 202) return reply;
+    await store.put(potKey(stake.box, round), true);
+    return { status: 202, body: { id: String(reply.body.id), round: Number(round) } satisfies ReportResponse };
+  }
+
+  /** A refusal if `ip` is over `limits` or the Box is not this one, else `null`. */
+  private async admit(limits: typeof RESULT_LIMITS, ip: string, box: string, at: number): Promise<Reply | null> {
+    const hit = await this.limits.exceeded(this.ipLimits(limits, ip), at);
+    if (hit) return refuse(429, `rate limit: ${hit.what}`);
+    if (box !== this.options.label || !this.runs(await this.options.chain.box(box))) {
+      return refuse(403, `the demo Box does not run ${fullName(box)}`);
+    }
+    return null;
+  }
+
+  private ipLimits(limits: typeof RESULT_LIMITS, ip: string) {
+    return limits.map((limit) => ({ ...limit, key: `${limit.key}:${ip}` }));
+  }
+
+  /** The round after the last one this Box signed, skipping any the chain already has a result or a pot for. */
   private async nextRound(box: string): Promise<bigint> {
     const { store, chain } = this.options;
     let round = BigInt((await store.get<number>(`round:${box}`)) ?? 0) + 1n;
-    while (await chain.roundUsed(box, round)) round++;
+    while (await chain.roundTaken(box, round)) round++;
     await store.put(`round:${box}`, Number(round));
     return round;
   }
@@ -142,26 +200,66 @@ export class Box {
   }
 }
 
-type Report = Pick<Result, 'box' | 'game' | 'winner' | 'loser' | 'draw'>;
+type Report = Pick<Result, 'box' | 'game' | 'winner' | 'loser' | 'draw'> & { round?: bigint };
+type StakeReport = Pick<Stake, 'box' | 'game' | 'a' | 'b' | 'amount'>;
+
+const potKey = (box: string, round: bigint) => `pot:${box}:${round}`;
+
+/** `field` of `body` as a label, or why it isn't one. */
+function label(body: Record<string, unknown>, field: string): string | { problem: string } {
+  const value = body[field];
+  if (typeof value !== 'string') return { problem: `${field}: expected a label` };
+  const problem = labelProblem(value);
+  return problem ? { problem: `${field}: ${problem}` } : value;
+}
+
+/** `field` of `body` as an address, or `null`. */
+function address(body: Record<string, unknown>, field: string): Address | null {
+  const value = body[field];
+  return typeof value === 'string' && isAddress(value, { strict: false }) ? getAddress(value) : null;
+}
+
+/** `field` of `body` as a positive integer (a decimal string or a safe integer), or `null`. */
+function positive(body: Record<string, unknown>, field: string): bigint | null {
+  const value = body[field];
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return BigInt(value);
+  if (typeof value === 'string' && /^[1-9][0-9]{0,30}$/.test(value)) return BigInt(value);
+  return null;
+}
 
 /** The report, or why it is malformed. */
 function parseReport(input: unknown): Report | string {
-  if (typeof input !== 'object' || input === null) return 'body: expected { box, game, winner, loser, draw }';
-  const { box, game, winner, loser, draw } = input as Record<string, unknown>;
-  for (const [field, value] of [['box', box], ['game', game]] as const) {
-    if (typeof value !== 'string') return `${field}: expected a label`;
-    const problem = labelProblem(value);
-    if (problem) return `${field}: ${problem}`;
-  }
-  for (const [field, value] of [['winner', winner], ['loser', loser]] as const) {
-    if (typeof value !== 'string' || !isAddress(value, { strict: false })) return `${field}: expected an address`;
-  }
-  if (typeof draw !== 'boolean') return 'draw: expected true or false';
-  return {
-    box: box as string,
-    game: game as string,
-    winner: getAddress(winner as string),
-    loser: getAddress(loser as string),
-    draw,
-  };
+  if (typeof input !== 'object' || input === null) return 'body: expected { box, game, winner, loser, draw, round? }';
+  const body = input as Record<string, unknown>;
+  const box = label(body, 'box');
+  if (typeof box !== 'string') return box.problem;
+  const game = label(body, 'game');
+  if (typeof game !== 'string') return game.problem;
+  const winner = address(body, 'winner');
+  if (!winner) return 'winner: expected an address';
+  const loser = address(body, 'loser');
+  if (!loser) return 'loser: expected an address';
+  if (typeof body.draw !== 'boolean') return 'draw: expected true or false';
+  const round = body.round === undefined ? undefined : positive(body, 'round');
+  if (round === null) return 'round: expected a positive integer';
+  return { box, game, winner, loser, draw: body.draw, ...(round !== undefined && { round }) };
+}
+
+/** The stake, or why it is malformed. */
+function parseStake(input: unknown): StakeReport | string {
+  if (typeof input !== 'object' || input === null) return 'body: expected { box, game, a, b, amount }';
+  const body = input as Record<string, unknown>;
+  const box = label(body, 'box');
+  if (typeof box !== 'string') return box.problem;
+  const game = label(body, 'game');
+  if (typeof game !== 'string') return game.problem;
+  const a = address(body, 'a');
+  if (!a) return 'a: expected an address';
+  const b = address(body, 'b');
+  if (!b) return 'b: expected an address';
+  if (a === b) return 'b: the same player as a';
+  const amount = positive(body, 'amount');
+  if (amount === null) return 'amount: expected a positive integer of USDC base units';
+  if (amount > MAX_STAKE) return `amount: at most ${formatUsdc(MAX_STAKE)} USDC`;
+  return { box, game, a, b, amount };
 }

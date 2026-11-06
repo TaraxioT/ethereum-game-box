@@ -75,7 +75,8 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
     if (!tap || !layout || !machine || !stage || link.state().phase === "boot") return;
     const frame = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-seat]") : null;
     let seat: Seat | null = frame ? (Number(frame.dataset.seat) as Seat) : null;
-    if (seat === null && machine.root.dataset.pose === "game") {
+    const pose = machine.root.dataset.pose;
+    if (seat === null && (pose === "game" || pose === "full")) {
       const box = area.getBoundingClientRect();
       const x = (e.clientX - box.left - placed.x) / placed.scale;
       const y = (e.clientY - box.top - placed.y) / placed.scale;

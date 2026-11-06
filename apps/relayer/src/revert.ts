@@ -1,11 +1,15 @@
-// Names a revert by its contract error, decoded with the names ABIs.
+// Names a revert by its contract error, decoded with the ABIs of every contract the relayer calls.
 
 import { type Abi, type Hex, BaseError, decodeErrorResult } from 'viem';
 
 import {
   boxResultsAbi,
+  boxSeatsAbi,
+  championshipsAbi,
   defaultReverseRegistrarAbi,
   demoLicencesAbi,
+  duelPotAbi,
+  fakeUsdcAbi,
   gameBoxNamesAbi,
   p256AccountAbi,
   p256AccountFactoryAbi,
@@ -20,6 +24,10 @@ const errors: Abi = [
   gameBoxNamesAbi,
   playerStatsAbi,
   boxResultsAbi,
+  duelPotAbi,
+  championshipsAbi,
+  boxSeatsAbi,
+  fakeUsdcAbi,
   defaultReverseRegistrarAbi,
   demoLicencesAbi,
   p256AccountAbi,

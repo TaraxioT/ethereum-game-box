@@ -13,6 +13,11 @@ import {
   primaryNameMessage,
   resultDigest,
   type Result,
+  type Seat,
+  type Stake,
+  seatDigest,
+  stakeDigest,
+  usdc,
 } from '@egb/shared/names';
 import {
   type Address,
@@ -122,11 +127,11 @@ export function resultBody(
   world: World,
   winner: Address,
   loser: Address,
-  options: { round?: bigint; highS?: boolean; box?: string } = {},
+  options: { round?: bigint; highS?: boolean; box?: string; game?: string } = {},
 ) {
   const result: Result = {
     box: options.box ?? BOX,
-    game: 'quickdraw',
+    game: options.game ?? 'quickdraw',
     round: options.round ?? 1n,
     winner,
     loser,
@@ -142,4 +147,27 @@ export function accountClaimBody(world: World, label: string, account: Address, 
   const signature = key.raw(claimNameDigest({ label, badge: account, deadline }, addresses.names));
   world.erc1271.set(account.toLowerCase(), new Set([signature.toLowerCase()]));
   return { label, badge: account, deadline, signature };
+}
+
+/** A `Stake` of 10 USDC each for round 1 of `stockduel`, signed by the Box (or by `key`). */
+export function stakeBody(world: World, a: Address, b: Address, options: Partial<Stake> & { key?: Key; highS?: boolean } = {}) {
+  const { key = world.key, highS, ...fields } = options;
+  const stake: Stake = {
+    box: BOX,
+    game: 'stockduel',
+    round: 1n,
+    a,
+    b,
+    amount: usdc(10),
+    deadline: BigInt(NOW + 600),
+    ...fields,
+  };
+  return { stake, ...key.sign(stakeDigest(stake, addresses.pot), { highS }) };
+}
+
+/** A `Seat` of `<label>.gamebox.eth` for `badge`, signed by the Box (or by `key`). */
+export function seatBody(world: World, label: string, badge: Address, options: Partial<Seat> & { key?: Key; highS?: boolean } = {}) {
+  const { key = world.key, highS, ...fields } = options;
+  const seat: Seat = { label, badge, box: BOX, deadline: BigInt(NOW + 600), ...fields };
+  return { seat, ...key.sign(seatDigest(seat, addresses.seats), { highS }) };
 }

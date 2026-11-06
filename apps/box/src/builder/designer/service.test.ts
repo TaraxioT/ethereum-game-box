@@ -298,10 +298,10 @@ describe("voice", () => {
     expect(turns.map((t) => t.say)).toEqual([
       "Where is it set? Pick one, or say anywhere you like.",
       "What's the twist?",
-      "What can players stake, in EGB a seat?",
+      "What can players stake, in USDC a seat?",
       "Who calls the game?",
       "How about “Wild Duel”? Keep it, or say another name.",
-      "“Wild Duel”: Stock Duel set in a Wild West showdown, and it gets faster every round. Each player picks a stock from a turning hand; the better move wins the round. 5, 10 or 25 EGB a seat, called by a pirate. Shall I build it?",
+      "“Wild Duel”: Stock Duel set in a Wild West showdown, and it gets faster every round. Each player picks a stock from a turning hand; the better move wins the round. 5, 10 or 25 USDC a seat, called by a pirate. Shall I build it?",
     ]);
     const live = rig({ voice: { ...createMockVoice(), mode: "elevenlabs" } as VoicePort });
     live.designer.start();

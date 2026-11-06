@@ -7,14 +7,13 @@ import { WebSocket } from "ws";
 import type { ScreenCommand } from "../core/types.ts";
 import type { LinkDown } from "../core/wire.ts";
 import { LINK_PATH } from "../core/wire.ts";
-import { ANCHOR_AT, BLOCK_MS } from "../core/chain.ts";
 import { createFakeClock, type FakeClock } from "../core/fake-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { startBox, type Box, type BoxOptions } from "./box.ts";
 import type { ReceiverSetting } from "./settings.ts";
 
-/** One second after a block, so the next one lands 11 s in. */
-export const TEST_START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
+/** When every test Box's clock starts. */
+export const TEST_START = Date.parse("2026-11-06T10:00:00Z");
 
 export const PAGE = "<!doctype html><html><head><title>screen</title></head><body></body></html>";
 
@@ -45,7 +44,7 @@ export async function flush(rounds = 6): Promise<void> {
 export const TEST_BUILDER_ENV = { EGB_MODEL: "off", EGB_FORGE_PROVIDER: "sim", PATH: process.env.PATH, HOME: process.env.HOME };
 
 export async function startTestBox(
-  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"] } = {},
+  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"]; chain?: BoxOptions["chain"] } = {},
 ): Promise<TestBox> {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "egb-box-")));
   await mkdir(join(dir, "screen", "assets"), { recursive: true });
@@ -61,10 +60,12 @@ export async function startTestBox(
       screenDir: join(dir, "screen"),
       receiver: options.receiver ?? { kind: "none" },
       stations: ["e4ba70", "df3d88"],
+      chain: { kind: "demo" },
     },
     repoRoot: dir,
     clock,
     ...(options.fake ? { fake: options.fake } : {}),
+    ...(options.chain ? { chain: options.chain } : {}),
     log: (text) => logs.push(text),
     builder: { env: TEST_BUILDER_ENV, simSpeed: 0, ...options.builder },
   });
