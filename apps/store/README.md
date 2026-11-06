@@ -14,8 +14,8 @@ from the team. A bundle's format is `@egb/sdk/bundle`, and the plan is section 7
 | `POST /bundles` | The zip's bytes, with `Authorization: Bearer <STORE_PUBLISH_TOKEN>` | The listing: `201` if this upload finished it, `200` if it was already there |
 
 A hash is the zip's sha256 as lower-case `0x` hex, and anything else in that path is a `404`. Reads are open to any
-origin. An upload has no CORS, since nothing uploads from a browser. Nothing else is routed, so no request can change
-or remove what is stored.
+origin, and `HEAD` answers as `GET` does, with the length and no body. An upload has no CORS, since nothing uploads from
+a browser. Nothing else is routed, so no request can change or remove what is stored.
 
 An error is `{ error }`, with one of these statuses:
 
@@ -60,11 +60,20 @@ An error is `{ error }`, with one of these statuses:
 - **The hash comes from the bytes that arrived,** and from nothing the client says.
 - **The token** is compared by its sha256 with `crypto.subtle.timingSafeEqual`. With no secret set, uploads are off.
 - **The index is kept for 30 seconds** in each isolate, and for as long by whoever reads it. The Cache API works only
-  on custom domains and the store is on workers.dev. A publish is in the index at once in the isolate that took it, and
-  in the others within 30 seconds.
+  on custom domains and the store is on workers.dev. When it runs out, one request rebuilds it and the others get the
+  old text meanwhile, for 5 seconds at most if that request never comes back. A request with no text to serve, in a new
+  isolate or just after an upload, builds its own, since a Worker can't await another request's I/O.
+- **A publish is in the index at once** in the isolate that took it, even if a build was under way, and in the others
+  soon after 30 seconds.
 
-An upload's work is the reader's. The heaviest bundle tried, a 15.8 MB zip of 27 MB of text, took 1.1 s under `wrangler
-dev`, against a CPU limit of 30 s. That runtime doesn't enforce a Worker's 128 MB, so memory at that size is unproven.
+An upload's work is the reader's. A bundle's files are stored, so a read is one pass over the zip: its cost follows the
+zip's size, and nothing in it can make that worse. Measured under `wrangler dev` on a Mac, against a CPU limit of 30 s,
+the full 16 MB of the text that was slowest when files were deflated uploads in 0.3 s, where it took 37 s. A bomb is
+refused at its header: a 1 MB zip of 1 GiB took 0.01 s and 4 MB of memory.
+
+Memory at the limit is unproven. A 16 MB upload grew workerd's resident memory by 70 MB to read it, and by 101 MB with
+local R2 writing it in the same process. That isn't how Cloudflare measures an isolate, and `wrangler dev` doesn't
+enforce a Worker's 128 MB.
 
 ## Publish
 
@@ -99,11 +108,17 @@ runs parallel uploads almost one after the other, and a claim that checked and t
 forced in `test/overwrite.test.ts`, which holds both uploads until each has passed every check, and that bug fails
 there. Neither touches production R2, so its promise of an atomic conditional put is taken on trust.
 
-Deploy, then set the secret:
+`test:live` also covers what only the real runtime shows: what a `HEAD` sends, a bomb, and the slowest text at the
+limit.
+
+Deploy, then set the secret. A Worker secret can't be read back and `pnpm store:publish` needs the same value, so it
+goes in `.env` too. The last line of a name in `.env` wins, so a blank one left from `.env.example` does no harm.
 
 ```sh
 cd apps/store
 wrangler r2 bucket create gamebox-bundles
 wrangler deploy
-openssl rand -hex 32 | wrangler secret put STORE_PUBLISH_TOKEN
+token=$(openssl rand -hex 32)
+echo "STORE_PUBLISH_TOKEN=$token" >> ../../.env
+printf %s "$token" | wrangler secret put STORE_PUBLISH_TOKEN
 ```
