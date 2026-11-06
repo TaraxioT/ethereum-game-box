@@ -37,6 +37,9 @@ means something upstream failed and the Box can repeat it. `503` means `StorePot
 Then the pot's Durable Object takes over, and its alarm does the rest:
 
 1. **Run.** A fresh container gets `POST /run`. Each attempt is a new container Durable Object, `<box>:<round>:<attempt>`.
+   With every container taken the run never started, so it costs no attempt: it waits, from 5 seconds doubling up to a
+   minute, for 10 minutes in all across the pot's runs. After that, no free container counts as a failed run, so a full
+   pool can't outlast the refund.
 2. **Weigh.** A failure is a timeout, 0G unreachable, a turn the TEE check refuses, `cannot_judge`, or a verdict that
    doesn't pay each player a whole number adding up to exactly the pot. A failed first run gets one retry.
 3. **Seal.** The Worker builds the `AuditRecord`, once, and keeps its exact text. Its keccak256 goes in the message.

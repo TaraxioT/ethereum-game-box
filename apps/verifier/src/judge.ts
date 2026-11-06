@@ -111,12 +111,20 @@ interface Keeping {
   tx: Hex | null;
 }
 
+/** A wait for a free container, over the pot's whole judgement. */
+interface Queue {
+  since: number;
+  tries: number;
+  nextAt: number;
+}
+
 interface Hearing extends Omit<JudgeJob, 'log' | 'instructions'> {
   phase: JudgeStatus['state'];
   /** Attempts started. */
   attempt: number;
   /** Whether attempt `attempt` is out. Still true on waking means the object died during it. */
   running: boolean;
+  queue: Queue | null;
   failures: Failure[];
   payment: Payment | null;
   reason: string | null;
@@ -205,6 +213,7 @@ export class Judge {
         phase: 'judging',
         attempt: 0,
         running: false,
+        queue: null,
         failures: [],
         payment: null,
         reason: null,
@@ -230,8 +239,8 @@ export class Judge {
     return this.nextWake(hearing);
   }
 
-  private nextWake({ phase, payment, keeping }: Hearing): number | null {
-    if (phase === 'judging') return this.deps.now();
+  private nextWake({ phase, payment, keeping, queue }: Hearing): number | null {
+    if (phase === 'judging') return Math.max(queue?.nextAt ?? 0, this.deps.now());
     if (phase === 'paying') return (payment as Payment).nextAt;
     return keeping && !keeping.root ? keeping.nextAt : null;
   }
@@ -285,6 +294,7 @@ export class Judge {
     if (hearing.running) await this.fail(hearing, LOST);
     if (hearing.phase !== 'judging') return;
     const { store, runner, now } = this.deps;
+    if (hearing.queue && now() < hearing.queue.nextAt) return;
     hearing.attempt += 1;
     hearing.running = true;
     await this.save(hearing, now() + LIMITS.leaseMs);
@@ -293,9 +303,24 @@ export class Judge {
       { judgement: judgementName(hearing.box, hearing.round), attempt: hearing.attempt },
       { log: log as string, instructions: instructions as string },
     );
+    if (await this.queued(hearing, result)) return;
     const outcome = await this.weigh(hearing, result);
     if ('failure' in outcome) await this.fail(hearing, outcome.failure);
     else await this.close(hearing, outcome.verdict);
+  }
+
+  /** Puts a run that found no free container back in line. It never started, so it costs no attempt: one Box filling the
+   *  pool mustn't void another's match. Past `queueMs` it counts as failed, so a full pool can't outlast the refund. */
+  private async queued(hearing: Hearing, result: RunResult): Promise<boolean> {
+    if (!('failure' in result) || result.failure.kind !== 'full') return false;
+    const { now } = this.deps;
+    const { since, tries } = hearing.queue ?? { since: now(), tries: 0 };
+    if (now() - since >= LIMITS.queueMs) return false;
+    hearing.queue = { since, tries: tries + 1, nextAt: now() + backoff(tries, LIMITS.retryMs, LIMITS.queueRetryMaxMs) };
+    hearing.attempt -= 1;
+    hearing.running = false;
+    await this.save(hearing);
+    return true;
   }
 
   /** What a finished run comes to. A bad turn fails it whatever the container answered. */

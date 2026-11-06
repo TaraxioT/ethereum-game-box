@@ -20,6 +20,9 @@ const WATCH_MS = 1000;
 /** A container exits the moment it has answered, so its answer gets this long to arrive after the exit. */
 const ANSWER_GRACE_MS = 2000;
 
+/** Part of the error Cloudflare and the library give when every instance is taken. The library doesn't export its check. */
+const NO_INSTANCE = 'no container instance';
+
 /** What the container answered `POST /run` with. */
 export interface RunReply {
   readonly status: number;
@@ -52,10 +55,15 @@ export class AgentContainer extends Container<Env> {
     return this.ctx.storage.get<Ticket>(TICKET);
   }
 
-  /** Starts the container and gives it its one job. */
-  async run(ticket: Ticket, job: AgentRunRequest): Promise<RunReply> {
+  /** Starts the container and gives it its one job. Null if no instance was free, so nothing started. */
+  async run(ticket: Ticket, job: AgentRunRequest): Promise<RunReply | null> {
     await this.ctx.storage.put(TICKET, ticket);
-    await this.startAndWaitForPorts({ cancellationOptions: { instanceGetTimeoutMS: 30_000, portReadyTimeoutMS: 60_000 } });
+    try {
+      await this.startAndWaitForPorts({ cancellationOptions: { instanceGetTimeoutMS: 30_000, portReadyTimeoutMS: 60_000 } });
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes(NO_INSTANCE)) return null;
+      throw error;
+    }
     return Promise.race([this.ask(job), this.dies()]);
   }
 
@@ -98,7 +106,8 @@ export function containerRunner(env: Pick<Env, 'AGENT'>, scrub: Scrub): AgentRun
       const container = env.AGENT.getByName(`${ticket.judgement}:${ticket.attempt}`);
       try {
         const reply = await Promise.race([container.run(ticket, job), sleep(LIMITS.runMs).then((): typeof STOPPED => STOPPED)]);
-        return reply === STOPPED ? { failure: failed('timeout', 'the run timed out') } : readRunReply(reply);
+        if (reply === STOPPED) return { failure: failed('timeout', 'the run timed out') };
+        return reply ? readRunReply(reply) : { failure: failed('full', 'no container was free') };
       } catch (error) {
         console.error(`the container failed: ${scrub(error)}`);
         return { failure: failed('container', 'the container failed') };

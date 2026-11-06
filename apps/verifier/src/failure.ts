@@ -4,7 +4,8 @@
 import type { AgentVerdict } from '@egb/shared/store';
 
 export interface Failure {
-  readonly kind: 'timeout' | 'zg' | 'tee' | 'cannot_judge' | 'verdict' | 'container' | 'lost';
+  /** `full` is no container being free: the run never started. */
+  readonly kind: 'timeout' | 'zg' | 'tee' | 'cannot_judge' | 'verdict' | 'container' | 'lost' | 'full';
   readonly why: string;
   /** The agent's own answer, for the audit record, when it said it can't judge. */
   readonly answer?: Extract<AgentVerdict, { kind: 'cannot_judge' }>;

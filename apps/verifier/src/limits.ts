@@ -11,6 +11,11 @@ export const LIMITS = {
   runMs: 7 * MINUTE,
   /** The alarm set while a run is out: if the object dies mid-run, this wakes it. Past `runMs`, under an alarm's 15. */
   leaseMs: 9 * MINUTE,
+  /** How long a pot waits for a free container, in all. Past `runMs`, so a run ahead of it can end, and short enough to
+   *  leave its runs and its payment time before the refund opens. After this, no free container is a failed run. */
+  queueMs: 10 * MINUTE,
+  /** The first wait for a free container is `retryMs`, doubling up to this. */
+  queueRetryMaxMs: MINUTE,
   /** Model turns in a run, as the container's limit: a shell can call `zg.internal` itself, so the proxy counts too. */
   turns: 16,
   /** Tokens in a run, as the container's limit and for the same reason, counting each turn's whole prompt. */

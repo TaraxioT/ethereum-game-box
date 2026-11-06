@@ -307,6 +307,61 @@ describe('one judgement per pot', () => {
   });
 });
 
+describe('a full pool', () => {
+  const full = async (): Promise<RunResult> => ({ failure: failed('full', 'no container was free') });
+  const broken = async (): Promise<RunResult> => ({ failure: failed('container', 'the container failed') });
+
+  it('costs no attempt: the run waits, and starts once a container is free', async () => {
+    const { world, judge } = await begun();
+    world.runner.scripts.push(full, full, full);
+    await world.settle(judge);
+    expect(world.runner.runs.map(({ ticket }) => ticket.attempt)).toEqual([1, 1, 1, 1]);
+    expect(await judge.status()).toMatchObject({ state: 'paid', reason: null });
+    expect(recordOf(world).attempts).toBe(1);
+    expect(world.relayer.sends.map(({ path }) => path)).toEqual(['/store/settle']);
+  });
+
+  it('waits longer each time, and not at all before its time', async () => {
+    const { world, judge } = await begun();
+    world.runner.scripts.push(full, full);
+    const first = (await judge.advance()) as number;
+    expect(first).toBe(world.now + LIMITS.retryMs);
+    expect(await judge.advance()).toBe(first);
+    expect(world.runner.runs).toHaveLength(1);
+    world.now = first;
+    expect(await judge.advance()).toBe(world.now + 2 * LIMITS.retryMs);
+    expect(world.runner.runs).toHaveLength(2);
+  });
+
+  it('leaves both attempts for runs that really ran', async () => {
+    const { world, judge } = await begun();
+    world.runner.scripts.push(full, broken, full, broken);
+    await world.settle(judge);
+    expect(world.runner.runs.map(({ ticket }) => ticket.attempt)).toEqual([1, 1, 2, 2]);
+    expect(await judge.status()).toMatchObject({ state: 'refunded', reason: 'the container failed; the container failed' });
+  });
+
+  it('keeps waiting across a restart', async () => {
+    const { world, judge } = await begun();
+    world.runner.scripts.push(full);
+    world.now = (await judge.advance()) as number;
+    const restarted = world.judge();
+    await world.settle(restarted);
+    expect(await restarted.status()).toMatchObject({ state: 'paid' });
+    expect(world.runner.runs.map(({ ticket }) => ticket.attempt)).toEqual([1, 1]);
+  });
+
+  it("gives up in time for the pot's refund: a pool that stays full voids", async () => {
+    const { world, judge } = await begun();
+    const started = world.now;
+    world.runner.scripts.push(...Array<typeof full>(100).fill(full));
+    await world.settle(judge, 100);
+    expect(await judge.status()).toMatchObject({ state: 'refunded', reason: 'no container was free; no container was free' });
+    expect(world.relayer.sends.map(({ path }) => path)).toEqual(['/store/void']);
+    expect(world.now - started).toBeLessThanOrEqual(LIMITS.queueMs + LIMITS.queueRetryMaxMs);
+  });
+});
+
 describe('a crash', () => {
   it('mid-run counts as a failed run: the retry is on a fresh container', async () => {
     const { world, judge } = await begun();

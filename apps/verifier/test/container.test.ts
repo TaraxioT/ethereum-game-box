@@ -132,6 +132,31 @@ describe('a run', () => {
     return { container, state };
   }
 
+  it("knows the real library's error for a pool with no instance free, and asks nothing", async () => {
+    vi.useFakeTimers();
+    const noInstance = new Error('there is no container instance that can be provided to this durable object');
+    const rejected = () => {
+      const failure = Promise.reject(noInstance);
+      failure.catch(() => undefined);
+      return failure;
+    };
+    const state = fakeState();
+    Object.assign(state.container, { start: () => undefined, monitor: rejected, getTcpPort: () => ({ fetch: rejected }) });
+    const container = new AgentContainer(state as never, {} as Env);
+    const ask = vi.spyOn(container, 'containerFetch');
+    const reply = container.run(TICKET, { instructions: 'i', log: 'l' });
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(await reply).toBeNull();
+    expect(ask).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('lets any other failure to start through', async () => {
+    const { container } = started(async () => new Response('{}'));
+    vi.spyOn(container, 'startAndWaitForPorts').mockRejectedValue(new Error('Container exited before we could determine the container health, exit code: 1'));
+    await expect(container.run(TICKET, { instructions: 'i', log: 'l' })).rejects.toThrow('exit code: 1');
+  });
+
   it('hands back what the container answered', async () => {
     const { container, state } = started(async () => new Response('{"verdict":1}'));
     const reply = await container.run(TICKET, { instructions: 'i', log: 'l' });
@@ -204,6 +229,12 @@ describe('the runner', () => {
     expect(await containerRunner(bindings, scrub).run(TICKET, job)).toEqual({ failure: { kind: 'container', why: 'the container failed' } });
     expect(destroy).toHaveBeenCalledOnce();
     error.mockRestore();
+  });
+
+  it('says the pool was full, and destroys what it asked for', async () => {
+    const { env: bindings, destroy } = stub(async () => null);
+    expect(await containerRunner(bindings, scrub).run(TICKET, job)).toEqual({ failure: { kind: 'full', why: 'no container was free' } });
+    expect(destroy).toHaveBeenCalledOnce();
   });
 
   it('times out a run that hangs, and destroys it', async () => {
