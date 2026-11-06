@@ -89,6 +89,12 @@
       "deployBlock": 12077988,
       "txHash": "0x1f4b77e55559ddc44ac13a5250f08dd04de56125a79e6bbdff060c58a2e84cbf",
       "verified": true
+    },
+    "BoxLease": {
+      "address": "0xb03B16cAE9a18575ea2b17fe4cb4379B7A7529A9",
+      "deployBlock": 12078750,
+      "txHash": "0x0fabbf1163b3155264664b4a4a6b22db1b7757062b38ab0910c444fcd95e715a",
+      "verified": false
     }
   },
   "ens": {
