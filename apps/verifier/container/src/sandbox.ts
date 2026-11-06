@@ -22,7 +22,9 @@ const AS_AGENT = [
   "--",
 ] as const;
 
-/** The shell's fork bombs and full disks stop here, ahead of the server's memory and disk. */
+/** Caps on the shell's processes, its open files and the size of any one file, which is what stops a fork bomb. Nothing
+ *  here caps memory or the disk: that takes a cgroup, and the server has none of its own. A shell that fills memory kills
+ *  the container, which fails the run. One that fills the disk stops its own writes, as the server has none left. */
 const BOUNDED = ["prlimit", "--nproc=128", "--nofile=256", `--fsize=${64 * 1024 * 1024}`, "--core=0", "--"] as const;
 
 /** Runs `reap.ts`, which says why the agent can't fight it. It's outside BOUNDED, so a fork bomb at its process limit

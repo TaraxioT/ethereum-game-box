@@ -219,6 +219,16 @@ echo "sleep state=$state"; kill -KILL $!`,
     check: noSurvivors,
   },
   {
+    name: "a file stops at the size limit",
+    command: `head -c 65M /dev/zero > big; echo "head exit=$?"; wc -c < big; rm big`,
+    check: (output) => requireAll(output, "head exit=153", "67108864"),
+  },
+  {
+    name: "a full disk stops the shell's own writes, and the run goes on",
+    command: `for file in 1 2; do head -c 64M /dev/zero > fill-$file; done; rm fill-*`,
+    check: (output) => requireAll(output, "No space left on device"),
+  },
+  {
     name: "jq counts the log's taps",
     command: `jq -c '[.entries[] | select(.src == "box" and .t == "tap") | .seat] | group_by(.) | map(length)' log.json`,
     check: (output) => requireAll(output, "[3,1]"),

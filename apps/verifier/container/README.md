@@ -56,7 +56,7 @@ Three users, and the image starts as root only to leave it.
   process with `setuid` could become root. What keeps the agent away from it is that it's a different user.
 - **`agent` (10001)** runs the shell, through `setpriv`. It has no capabilities in any set, `no_new_privs`, and an
   environment of just `PATH`, `HOME` and `LANG`. It can't read the server's memory, environment or files, and it
-  can't change the two files it was given. `prlimit` caps its processes, open files and file sizes.
+  can't change the two files it was given. `prlimit` caps its processes, its open files and the size of any one file.
 - **`reaper` (10002)** runs only `src/reap.ts`, which ends the agent's processes.
 
 Nothing the agent starts outlives its call. As each call ends, `reap.ts` makes one `kill -1` with the agent's effective
@@ -70,6 +70,10 @@ otherwise use up the shell's process limit.
 
 The server checks all this as it starts, and exits rather than serve if it's root, or the switch of user or the cleanup
 fails.
+
+**Memory and the disk aren't capped.** That takes a cgroup, and the server has none of its own. A shell that fills memory
+gets the container killed, and a shell that fills the disk stops its own writes, as the server has none left to make.
+The first fails the run, so the Worker retries once and refunds, spending 0G twice for that match.
 
 ## What the Worker must do
 

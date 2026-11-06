@@ -31,6 +31,8 @@ const STOPPED = `${VERIFIER}-stop`;
 const REFUSED = `${VERIFIER}-refuse`;
 /** The server's capabilities as `/proc/<pid>/status` writes them: setuid, setgid and setpcap. */
 const SERVER_CAPS = "00000000000001c0";
+/** Room for one file at the shell's size limit and not two, so the agent can fill it. */
+const WORK_DISK = "/tmp:size=96m,mode=1777";
 const MAX_LINES = 14;
 
 let failures = 0;
@@ -186,7 +188,7 @@ try {
   docker("pull", "--quiet", ...PLATFORM_ARGS, NODE_IMAGE);
   docker("build", ...PLATFORM_ARGS, "--quiet", "--tag", IMAGE, FOLDER);
   docker("network", "create", "--internal", NETWORK);
-  startVerifier(VERIFIER, "--env", `${DECOY_NAME}=${DECOY_VALUE}`);
+  startVerifier(VERIFIER, "--env", `${DECOY_NAME}=${DECOY_VALUE}`, "--tmpfs", WORK_DISK);
   await waitForPort(VERIFIER);
 
   checkProcesses();
