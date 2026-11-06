@@ -60,10 +60,26 @@ describe("packBundle", () => {
     expect(opened.files.get("empty.mp3")).toEqual(new Uint8Array(0));
   });
 
-  it("packs a bundle right at the limits", async () => {
+  it("takes exactly as many files as the limit", async () => {
     const files = goodFiles();
     for (let i = files.size; i < BUNDLE_LIMITS.files; i++) files.set(`f${i}.js`, text("x"));
     expect((await readBundle(packBundle(files))).files.size).toBe(BUNDLE_LIMITS.files);
+  });
+
+  it("takes a zip of exactly the limit, and refuses a byte more", async () => {
+    const overhead = packBundle(goodFiles().set("big.mp3", new Uint8Array(0))).length;
+    const fits = goodFiles().set("big.mp3", new Uint8Array(BUNDLE_LIMITS.zipBytes - overhead));
+    const zip = packBundle(fits);
+    expect(zip.length).toBe(BUNDLE_LIMITS.zipBytes);
+    expect((await readBundle(zip)).files.size).toBe(fits.size);
+    expect(() => packBundle(goodFiles().set("big.mp3", new Uint8Array(BUNDLE_LIMITS.zipBytes - overhead + 1)))).toThrow(/the zip is/);
+  });
+
+  it("takes files that inflate to exactly the limit, and refuses a byte more", async () => {
+    const used = [...goodFiles().values()].reduce((sum, body) => sum + body.length, 0);
+    const fits = goodFiles().set("big.js", new Uint8Array(BUNDLE_LIMITS.totalBytes - used));
+    expect((await readBundle(packBundle(fits))).files.size).toBe(fits.size);
+    expect(() => packBundle(goodFiles().set("big.js", new Uint8Array(BUNDLE_LIMITS.totalBytes - used + 1)))).toThrow(/at most 33554432/);
   });
 
   it.each<[string, Map<string, Uint8Array>, RegExp]>([

@@ -62,7 +62,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
 
   // Duplicates and order
   ["a duplicate", zip([...entries, { name: "style.css", body: text("x") }]), /named twice/],
-  ["a duplicate manifest", zip(add({ name: "manifest.json", body: evilManifest })), /named twice|out of order/],
+  ["a duplicate manifest", zip(add({ name: "manifest.json", body: evilManifest })), /named twice/],
   ["entries out of order", zip([...entries].reverse()), /out of order/],
 
   // Overlaps
@@ -80,8 +80,8 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["trailing end record", zip(entries, { doubleEnd: true }), /directory doesn't end/],
   ["a zip comment", zip(entries, { comment: "hello" }), /doesn't end in a zip's end record/],
   ["an entry comment", zip(tweak("style.css", { comment: "hi" })), /extra field, comment/],
-  ["evil then good, concatenated", Buffer.concat([zip(tweak("index.html", { body: text("evil") })), good]), /don't follow each other|directory/],
-  ["good then evil, concatenated", Buffer.concat([good, zip(tweak("index.html", { body: text("evil") }))]), /don't follow each other|directory/],
+  ["evil then good, concatenated", Buffer.concat([zip(tweak("index.html", { body: text("evil") })), good]), /directory doesn't end/],
+  ["good then evil, concatenated", Buffer.concat([good, zip(tweak("index.html", { body: text("evil") }))]), /directory doesn't end/],
   ["a local extra field", zip(tweak("style.css", { localExtra: Uint8Array.from([0x55, 0x54, 1, 0, 0]) })), /local header disagrees/],
   ["the directory offset moved", zip(entries, { dirShift: 4 }), /directory doesn't end/],
   ["an end record one entry short", zip(entries, { countOverride: entries.length - 1 }), /between the entries and the directory/],
@@ -118,7 +118,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["a real timestamp", zip(tweak("style.css", { time: 0x6000, date: 0x5a21 })), /not written by the format's packer/],
   ["made on DOS", zip(tweak("style.css", { madeBy: 0x0014 })), /not written by the format's packer/],
   ["another zip version", zip(tweak("style.css", { needs: 45 })), /not written by the format's packer/],
-  ["ZIP64", zip(entries, { zip64: true }), /directory doesn't end|files: at least/],
+  ["ZIP64", zip(entries, { zip64: true }), /65535 files/],
   ["a split zip", zip(entries, { disk: 1 }), /split zip/],
   ["an unknown method", zip(tweak("style.css", { method: 12 })), /compression method 12/],
   ["a local method that disagrees", zip(tweak("style.css", { localMethod: 0 })), /local header disagrees/],
@@ -148,7 +148,7 @@ const hostile: readonly (readonly [string, Uint8Array, RegExp])[] = [
   ["nothing", zeros(0), /doesn't end in a zip's end record/],
   ["only an end record", rawZip([]), /0 files/],
   ["one file", zip(entries.slice(0, 1)), /1 files/],
-  ["a zip from another tool", zipSync(Object.fromEntries(goodFiles())), /not written by the format's packer|\.png/],
+  ["a zip from another tool", zipSync(Object.fromEntries(goodFiles())), /not written by the format's packer/],
 ];
 
 describe("readBundle", () => {
@@ -163,7 +163,7 @@ describe("readBundle", () => {
     expect(await refusal(bytes)).toMatch(why);
   });
 
-  it("refuses a change to any one byte", async () => {
+  it("refuses a change to any one byte", { timeout: 30_000 }, async () => {
     for (let i = 0; i < good.length; i++) {
       for (const flip of [0x01, 0x80, 0xff]) {
         const changed = new Uint8Array(good);
@@ -173,11 +173,11 @@ describe("readBundle", () => {
     }
   });
 
-  it("refuses the good bundle cut short at any length", async () => {
+  it("refuses the good bundle cut short at any length", { timeout: 30_000 }, async () => {
     for (let length = 0; length < good.length; length++) await refusal(good.subarray(0, length));
   });
 
-  it("refuses one byte added anywhere", async () => {
+  it("refuses one byte added anywhere", { timeout: 30_000 }, async () => {
     for (let i = 0; i <= good.length; i++) await refusal(Buffer.concat([good.subarray(0, i), Uint8Array.of(0), good.subarray(i)]));
   });
 

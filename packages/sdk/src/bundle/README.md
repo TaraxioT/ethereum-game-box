@@ -1,0 +1,52 @@
+# packages/sdk/src/bundle
+
+`@egb/sdk/bundle`: the game bundle format, with its one reader and its one packer. It runs unchanged on the Box, in a
+Worker and in a browser. It uses WebCrypto for the hash and DecompressionStream to inflate, with no Node and no DOM. A
+browser needs a secure context for WebCrypto: `https`, or `localhost`.
+
+A bundle is a zip of `index.html`, `manifest.json` and any assets the page uses by relative path. Its identity is the
+sha256 of the zip, as `0x` hex. Its code is untrusted: it runs only in the kiosk's sandboxed frame, and never in Node.
+
+| Module | Holds |
+|---|---|
+| `format.ts` | `BundleManifest`, `bundleManifestProblems()`, `nameProblem()`, `BUNDLE_LIMITS`, `BundleRefused`, and `judgeFiles()`, the checks the reader and the packer share |
+| `read.ts` | `readBundle(zip)`: the manifest, the files and the hash, or a `BundleRefused` saying why not |
+| `pack.ts` | `packBundle(files)`: a map of names to bytes as the one zip shape, and the shape's fixed fields |
+| `index.ts` | The entry: everything above except the internals |
+
+## What a bundle may hold
+
+- **At most:** 16 MB a zip, 32 MB inflated, 64 files, and 120 bytes a name.
+- **Names:** `manifest.json`, or lower-case ASCII paths ending in `.html`, `.css`, `.js`, `.png`, `.jpg`, `.webp`,
+  `.svg`, `.woff2` or `.mp3`. Folders are fine; `..`, dotfiles, capitals and backslashes aren't.
+- **The manifest:** the fields in plan section 6 and no others, with its layout free. A repeated key is refused, so
+  nobody can read one set of instructions while the parser takes another.
+
+## The one shape
+
+The reader accepts what the packer writes and nothing else, so a zip from any other tool is refused:
+
+- Names are sorted by byte. Every field is fixed: no timestamps, no extras, no comments, mode 0644.
+- Entries tile the file from byte 0 to the directory, with no gaps, overlaps or trailing bytes.
+- `.html`, `.css`, `.js`, `.svg` and `manifest.json` are deflated. The other kinds are compressed already, so they are
+  stored.
+- Inflating stops the moment a file passes its stated size, so a bomb costs nothing. Then the CRC is checked.
+- Last, the reader packs the files again and compares the bytes. That covers the deflate streams, which have many valid
+  spellings. A Worker on an old compatibility date also lets bytes hide after one.
+
+That last step is why deflate comes from `fflate`, pure JavaScript at a pinned version, and not CompressionStream, whose
+bytes belong to each runtime's zlib. **Changing `fflate`'s version or the packer's level changes the bytes of every
+bundle, and the reader then refuses every bundle already published.** A pinned hash in `pack.test.ts` fails if that
+happens.
+
+## Tests
+
+The tests live in `packages/sdk/test/bundle/`, with Node's types: `tsconfig.json` keeps `src/` free of them.
+
+| File | Covers |
+|---|---|
+| `hostile.test.ts` | Every hostile zip, each the good bundle with one thing wrong and refused for that reason. Any one byte changed, cut or added |
+| `pack.test.ts` | Packing twice to one hash, the pinned hash, the limits to the byte, what the packer refuses |
+| `format.test.ts` | Every manifest and name refusal |
+| `tap-rush.test.ts` | The sample: its folder, its instructions worked by hand, and its page |
+| `raw-zip.ts` | A zip writer that does as it is told, for the hostile zips |
