@@ -234,6 +234,18 @@ interface IPermissionedResolver is IEnhancedAccessControl {
     function resolve(bytes calldata name, bytes calldata data) external view returns (bytes memory);
 }
 
+/// @notice The ENSIP-1, 5 and 9 profile calls (`ens-contracts/contracts/resolvers/profiles`). A `PermissionedResolver`
+///         doesn't implement them directly: they are the `data` its `resolve(name, data)` (and the Universal Resolver's)
+///         takes, and they describe how to decode the answer.
+interface IResolverProfiles {
+    /// @notice ENSIP-5 text record `key` of `node`.
+    function text(bytes32 node, string calldata key) external view returns (string memory);
+    /// @notice ENSIP-1 address of `node`.
+    function addr(bytes32 node) external view returns (address);
+    /// @notice ENSIP-9 address of `node` for `coinType`.
+    function addr(bytes32 node, uint256 coinType) external view returns (bytes memory);
+}
+
 /// @notice `verifiable-factory/src/IVerifiableFactory.sol`.
 interface IVerifiableFactory {
     event ProxyDeployed(address indexed sender, address indexed proxyAddress, uint256 salt, address implementation);

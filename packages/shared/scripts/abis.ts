@@ -16,6 +16,7 @@ const sources: Record<string, [string, string]> = {
   boxAccountAbi: ['BoxAccount.sol', 'BoxAccount'],
   permissionedRegistryAbi: ['IENSv2.sol', 'IPermissionedRegistry'],
   permissionedResolverAbi: ['IENSv2.sol', 'IPermissionedResolver'],
+  resolverProfilesAbi: ['IENSv2.sol', 'IResolverProfiles'],
   verifiableFactoryAbi: ['IENSv2.sol', 'IVerifiableFactory'],
   universalResolverAbi: ['IENSv2.sol', 'IUniversalResolver'],
 };
