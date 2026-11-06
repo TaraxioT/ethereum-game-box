@@ -250,6 +250,12 @@ key and the verifier key, and the script refuses either. The deployer gives the 
 first. After that the script can't change a key, and a new `STORE_VERIFIER` reverts. To rotate the verifier, the admin
 grants `VERIFIER_ROLE` to the new key and revokes the old one.
 
+On Sepolia today the hand-over hasn't happened. `StoreUSDC` and `StorePot` went out with `forge create` and `cast`,
+not the script, because the team chose `sepolia-deployer` for every role: it holds the pot's admin role, `LISTER_ROLE`
+and `VERIFIER_ROLE`, so the verifier Worker's `VERIFIER_PRIVATE_KEY` is that key for now. Running the script with a
+separate `STORE_VERIFIER` and `STORE_ADMIN` keeps both contracts, grants the roles and finishes the hand-over. The
+deployer's `VERIFIER_ROLE` then has to be revoked by hand.
+
 The deployer's key can't sign a verdict, but it isn't harmless if it leaks. It keeps `LISTER_ROLE`, and `StoreUSDC`'s
 admin and minter roles. Until the admin hand-over it can also license a Box or change a Box's key, and so forge a log.
 
