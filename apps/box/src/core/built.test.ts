@@ -1,19 +1,19 @@
 // A built game through the core, on a fake rules runner: its child starts at Join, the match opens on the rules'
 // first state, taps reach the rules at their touch time (with the roll when the game's taps are `random`), the
-// stations show the rules' own views, and any failure voids the match and sends both stakes back.
+// stations show the rules' own views, and any failure voids the match. A built game isn't on chain: it plays for
+// nothing, and the Box sends no stake and no result for it.
 import { describe, expect, it } from "vitest";
 import { mulberry32, stationView, type BuiltEvent, type GameManifest, type Transcript } from "@egb/sdk";
 import type { LibraryPort, RulesRunnerPort, RulesSnapshot } from "./ports.ts";
 import type { Badge, BoxState, GameInfo } from "./types.ts";
 import { createCore, END_HOLD_MS, type Core } from "./core.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
-import { memoryLedgerStore } from "./ledger.ts";
+import { createDemoChain, type DemoChain } from "./demo-chain.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
-import { ANCHOR_AT, BLOCK_MS } from "./chain.ts";
 import { instantTap } from "./instant-tap.ts";
 
-const START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
+const START = Date.parse("2026-11-06T10:00:00Z");
 const [NOVA, KITE] = DEMO_BADGES as [Badge, Badge];
 
 function manifest(taps: GameManifest["taps"]): GameManifest {
@@ -67,7 +67,7 @@ function fakeRunner() {
 interface Rig {
   readonly core: Core;
   readonly clock: FakeClock;
-  readonly store: ReturnType<typeof memoryLedgerStore>;
+  readonly chain: DemoChain;
   readonly logged: Transcript[];
   readonly fake: ReturnType<typeof fakeRunner>;
 }
@@ -75,7 +75,7 @@ interface Rig {
 function rig(taps: GameManifest["taps"] = "identify"): Rig {
   const clock = createFakeClock(START);
   const rnd = mulberry32(3);
-  const store = memoryLedgerStore();
+  const chain = createDemoChain(clock);
   const logged: Transcript[] = [];
   const fake = fakeRunner();
   const games = [...TEAM_GAMES, info(manifest(taps))];
@@ -84,7 +84,7 @@ function rig(taps: GameManifest["taps"] = "identify"): Rig {
     {
       clock,
       stations: { show: () => {}, buzz: () => {} },
-      ledger: store,
+      chain,
       library,
       rules: fake.runner,
       log: { record: (t) => void logged.push(t), countedSince: () => 0 },
@@ -92,7 +92,7 @@ function rig(taps: GameManifest["taps"] = "identify"): Rig {
     },
     { builder: true },
   );
-  return { core, clock, store, logged, fake };
+  return { core, clock, chain, logged, fake };
 }
 
 /** Moves the clock in ticks, letting the runner's answers (microtasks) land between them. */
@@ -154,8 +154,11 @@ describe("a built game in the core", () => {
     await until(r, (state) => state.phase === "result", END_HOLD_MS + 1_000);
     expect(r.logged.at(-1)).toMatchObject({ game: "tap-three", result: { winner: 0 } });
     expect(r.logged.at(-1)?.taps).toHaveLength(3);
-    // The winner is paid when the settle lands.
-    await until(r, () => Object.keys(r.store.current().escrow).length === 0);
+    // Played for nothing: no stake, and nothing sent to the chain.
+    expect(core.state().match?.stake).toBe(0);
+    expect(r.logged.at(-1)?.stake).toBe(0);
+    expect(r.chain.sent).toEqual([]);
+    expect(core.state().txs).toEqual([]);
   });
 
   it("sends the badge's verified roll when the game's taps are random", async () => {
@@ -167,11 +170,9 @@ describe("a built game in the core", () => {
     expect(r.fake.events.filter((e) => e.type === "tap")).toEqual([expect.objectContaining({ seat: 1, roll: 0xdeadbeef })]);
   });
 
-  it("voids the match when the rules fail mid-game, and sends both stakes back", async () => {
+  it("voids the match when the rules fail mid-game", async () => {
     const r = rig();
     await toPlaying(r);
-    expect(r.store.current().escrow).toEqual({ [NOVA.address]: 5, [KITE.address]: 5 });
-    const before = [r.store.current().balances[NOVA.address], r.store.current().balances[KITE.address]];
     r.fake.fail("took over its 50 ms budget");
     stationTap(r.core, 0, NOVA, null);
     await flush();
@@ -179,8 +180,7 @@ describe("a built game in the core", () => {
     expect(r.core.state().stations.map((v) => v.big)).toEqual(["VOID", "VOID"]);
     await until(r, (state) => state.phase === "result", END_HOLD_MS + 1_000);
     expect(r.logged.at(-1)).toMatchObject({ result: "void", counts: false });
-    await until(r, () => Object.keys(r.store.current().escrow).length === 0);
-    expect([r.store.current().balances[NOVA.address], r.store.current().balances[KITE.address]]).toEqual([(before[0] ?? 0) + 5, (before[1] ?? 0) + 5]);
+    expect(r.chain.sent).toEqual([]);
   });
 
   it("voids a match whose rules won't start, straight to the result", async () => {

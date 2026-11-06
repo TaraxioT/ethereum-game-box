@@ -26,18 +26,22 @@ const lines = (big: string, small: string): Lines => ({ big, small });
 /** Printable ASCII only: the stat's minus sign becomes a hyphen. */
 const ascii = (text: string): string => text.replace(/−/g, "-");
 
-function blocks(n: number): string {
-  return `wait ${n} block${n === 1 ? "" : "s"}`;
+/** `wait 59 min`, or seconds in the last minute. */
+function wait(ms: number): string {
+  return ms >= 60_000 ? `wait ${Math.ceil(ms / 60_000)} min` : `wait ${Math.ceil(ms / 1000)} s`;
 }
 
+/** Whole USDC as a station prints it, or `...` before the first read. */
+const usdc = (amount: number | null): string => (amount === null ? "... USDC" : `${Math.floor(amount)} USDC`);
+
 function seated(state: SeatState): Lines {
-  return state.badge ? lines(badgeLabel(state.badge), `${state.balance} EGB`) : lines("TAP", "to join");
+  return state.badge ? lines(badgeLabel(state.badge), usdc(state.balance)) : lines("TAP", "to join");
 }
 
 function staking(input: StationInput, seat: Seat): Lines {
   const mine = input.seats[seat];
   if (!mine.badge) return seated(mine);
-  if (!mine.signed) return lines("SIGN", `${input.stake} EGB`);
+  if (!mine.signed) return lines("SIGN", `${input.stake} USDC`);
   const bothSigned = input.seats[0].signed && input.seats[1].signed;
   return lines("SIGNED", bothSigned ? "opening" : "waiting");
 }
@@ -74,10 +78,10 @@ function stockDuel(game: StockDuelState, seat: Seat, now: number): Lines {
   }
 }
 
-function refunding(input: StationInput, match: Match, seat: Seat): Lines {
-  if (match.refunded[seat]) return lines("REFUNDED", `+${match.stake} EGB`);
-  const left = match.refundBlock - input.chain.block;
-  return left > 0 ? lines("OFFLINE", blocks(left)) : lines("TAP", "to refund");
+function refunding(match: Match, seat: Seat, now: number): Lines {
+  if (match.refunded[seat]) return lines("REFUNDED", `+${match.stake} USDC`);
+  const left = match.refundAt - now;
+  return left > 0 ? lines("OFFLINE", wait(left)) : lines("TAP", "to refund");
 }
 
 function idle(input: StationInput, seat: Seat, now: number): Lines {
@@ -102,7 +106,9 @@ function idle(input: StationInput, seat: Seat, now: number): Lines {
       if (match.play.game === "built") return lines(match.play.stations[seat].big, match.play.stations[seat].small);
       return match.play.game === "quick-draw" ? quickDraw(match.play.state, seat) : stockDuel(match.play.state, seat, now);
     case "refund":
-      return match ? refunding(input, match, seat) : seated(mine);
+      return match ? refunding(match, seat, now) : seated(mine);
+    case "lobby":
+      return lines("LOBBY", "tap to see yours");
   }
 }
 

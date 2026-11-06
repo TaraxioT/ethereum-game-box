@@ -1,7 +1,8 @@
 # The core
 
-The Box's phase machine (boot → attract → home → join → stake → playing → result | refund, and home ⇄ build), with its
-simulated ledger, chain clock, transactions, station views and bot. It has no DOM, no Node APIs and no clock of its own: it
+The Box's phase machine (boot → attract → home → join → stake → playing → result | refund, home ⇄ build and home ⇄
+lobby ⇄ stake), with its transactions on screen, station views and bot. Money is on chain, behind the chain port:
+USDC stakes in a pot, the result that settles it, the lobby's top-ups and player names. It has no DOM, no Node APIs and no clock of its own: it
 reaches the world only through `CorePorts` (`ports.ts`). Two hosts run it: `SimLink` in the browser for the demo
 (`screen/link/sim.ts`) and the Box server on the Pi (`server/box.ts`). `tsconfig.core.json` checks it with ES2023
 alone (no DOM, no Node types, no timers), so anything platform-bound fails the check.
@@ -12,11 +13,11 @@ alone (no DOM, no Node types, no timers), so anything platform-bound fails the c
 |---|---|
 | `clock` | `now()` for every time it reads, `after` / `every` / `cancel` for every timer (the block clock, gas drift, game ticks, the end hold, Join's settle, Home's idle). |
 | `stations` | `show(seat, view)` whenever a station's view changes (and once at start); `buzz(seat, "ok" \| "no")` for every judged tap. |
-| `ledger` | `load()` once at start; `save(ledger)` after every change (faucet, stake lock, settle, refund). A stake still in escrow at start belonged to a match the Box lost when it stopped: each goes straight back to the badge that put it in (the escrow keeps every stake under its badge for this), as its refund would have paid it. |
+| `chain` | The chain behind the money (`ChainPort`): `balance`, `player` (balance and player name) and `board` (the title and the open championship) are reads; `open` (both stakes into the pot), `settle` (the result), `refund`, `topup` and `claim` are sends that never wait, each step coming back through its watch; `outcome` reads what a paid result did; `watchHead` drives the block clock; `nextRound` (kept on disk on the Box, never repeated) and `refundAfterMs`; `onChain(game)`: a built game isn't, and plays for nothing. The Box runs Sepolia through the relayer (`src/chain/`); the demo and the tests run `demo-chain.ts`. |
 | `library` | `games()` for the rack; `subscribe` for installs and removals (a `games` event). A `GameInfo` carries its checked game.json (`manifest`) and, for a game that should play but can't, why (`sealed`). |
 | `rules` | Built games' rules, run outside the core (the server's sandboxed children): `prepare` at Join, `start` when the match opens, `step` for each tick and tap; any rejection voids the match. Absent in the demo, where built games can't be played. |
 | `log` | `record(transcript)` once per match, after its end hold; `countedSince(pair, since)` for the per-pair cap. The demo keeps nothing. |
-| `random` | uint32s for match seeds and the simulated chain's gas. Never a game's outcome on a real Box: badges roll those. |
+| `random` | uint32s for match seeds and the lobby's proposed labels. Never a game's outcome on a real Box: badges roll those. |
 
 ## Taps
 
@@ -38,13 +39,36 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
 - On the result, a seated badge's tap is a rematch, but only `REMATCH_TAP_MS` (4 s) after the game ended: a chip left
   on the reader must not skip the result.
 
+## Stakes, results and the lobby
+
+- **Stake.** A seated badge's balance and player name are read from chain when it sits down and again at Stake. A
+  Stake tap whose balance can't cover the stake (or isn't read yet) is refused and opens the lobby on that badge, with
+  Back returning to Stake.
+- **Open.** When both seats have signed, the match opens at once and the stakes go to the pot (`open`, a Box-signed
+  `Stake` with the round from `nextRound`) without waiting: the transaction bar follows it, SIGNED › SENT › IN BLOCK ›
+  PAID, with its hash and Etherscan link. A pot that fails to open leaves the match played for nothing.
+- **Result.** After the end hold the result (`settle`, the same round) goes once the pot has landed, so it settles the
+  pot it belongs to; it goes even after a rematch or a reset, and with nothing paid when the pot never opened. Once it
+  is paid, `outcome` reads its lines from chain at the receipt (the payout, the title, the championship) into
+  `match.lines`: never from local state. Money on its way to a badge shows as `pending` until its transaction ends,
+  and every balance it touched is read again.
+- **Refund.** With the power off the Box misses its settle: Refund opens `refundAfterMs` after the open (an hour on
+  Sepolia), and either seat's tap sends one refund for the whole pot, then Home. A pot the players walk away from, or
+  one left by a reset, stays on chain until the server refunds it.
+- **Lobby** (`lobby` from Home, or a short Stake tap). Any station's tap shows that badge's card: its player name and
+  USDC. A badge with no name is offered its own label first (the roster's word; the demo's badges are `nova`, `kite`
+  and `juno`), `propose` gives another (`comet-42`), and `claim` sends it; `topup` sends 100 USDC. The title and the
+  open championship of the focused game (Stock Duel's, for a game not on chain) are read when it opens. It goes Home
+  after `IDLE_MS` alone.
+
 ## Built games
 
 A built game's rules run outside the core, through `RulesRunnerPort` (`built.ts` drives it):
 
 - Play on a built game starts its child at once (`prepare`), at Join, so the first step pays no start-up cost; a
   rematch prepares it again, and going Home stops it.
-- When the stakes land, the core asks the rules to `start` with the match's seed; the match opens (`playing`) on
+- A built game isn't on chain: it plays for nothing (stake 0, no pot, no result sent). When both seats sign, the
+  core asks the rules to `start` with the match's seed; the match opens (`playing`) on
   their first state. The play is `{ game: "built", id, state, stations }`: the rules' state as they returned it (the
   kiosk's frame draws it) and their two station views, which the stations show as they are, tag and tap words
   included.
@@ -52,8 +76,7 @@ A built game's rules run outside the core, through `RulesRunnerPort` (`built.ts`
   as finished taps (`BuiltEvent`), judged at their touch time: a known badge's at its touch when the game.json's taps
   are `identify`; otherwise on the chip's `done`, with its verified roll when they are `random`. A tap is never dropped.
 - Any rejection (over budget, a throw, a crash or exit, a broken protocol) voids the match: `voided`, a draw nobody
-  played, the stations read `VOID`, and after the end hold both stakes go back at the settle and the transcript's
-  result is `void` (it never counts). Rules that fail to start void the match before it plays: straight to Result.
+  played, the stations read `VOID`, and after the end hold the transcript's result is `void` (it never counts). Rules that fail to start void the match before it plays: straight to Result.
 - A snapshot or failure from a match that is over, or that a reset overtook, never reaches the next one.
 
 ## The build phase
@@ -73,28 +96,25 @@ stake, when it started and ended, each game tap (touch time, roll, taken or not)
 records only on taps the Box saw (`transcript.ts`): both seated badges tapped a station from Stake to the end, at least
 12 s passed since the first of those taps, and the pair has had fewer than 12 counted results in the hour before.
 
-`core.reset()` (the test page) goes back to Home at once: a match that hasn't sent its settlement hands each stake
-back, and a refund still on its way is cancelled (it was paid by that, so it is no longer money a stake can count on);
-an open transaction still on its way locks nothing when it lands. An open whose stakes can't be locked when it lands
-(a balance short after all) locks nothing either: the match doesn't open, and both seats sign again. A transaction
-whose effect throws still goes into its block, so it can't hold up every transaction after it.
+`core.reset()` (the test page) goes back to Home at once. A pot that never settles stays on chain until its refund
+opens; a result already decided is still sent once its pot lands.
 
 ## Modules
 
 | Module | What it is | API |
 |---|---|---|
-| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState`, `BoxEvent`, `ScreenCommand`, `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art, `sealed`, `manifest`), `Match` (`voided`), `MatchPlay` (with `BuiltPlay`), `Tx`. `StationView` is `@egb/sdk`'s. | types |
-| `ports.ts` | `CorePorts` and the types that cross them: `Clock`, `StationsPort`, `LedgerStore`, `LibraryPort`, `RulesRunnerPort`, `MatchLog`, `TapEvent`, `TapPlan`. | types |
+| `types.ts` | The screen's interface to the Box: `BoxLink` (`state`, `now`, `subscribe`, `send`), `BoxState` (with `lobby`), `BoxEvent`, `ScreenCommand` (`lobby`, `topup`, `propose`, `claim` among them), `GameInfo` (`kind: "team" \| "built"`, `icon` for a built game's art, `sealed`, `manifest`), `SeatState` (`ens`, `balance` in USDC or null before its read, `pending`), `Match` (`round`, `refundAt`, `voided`, `lines`), `MatchPlay` (with `BuiltPlay`), `Tx` (`hash`, `etherscan`, `error`; steps up to `paid` or `failed`), `Lobby`, `PlayerCard`, `Board`, `Standing`. `StationView` is `@egb/sdk`'s. | types |
+| `ports.ts` | `CorePorts` and the types that cross them: `Clock`, `StationsPort`, `ChainPort` (with `StakeOrder`, `ResultOrder`, `ChainHead`, `ChainTxUpdate`, `TxWatch`), `LibraryPort`, `RulesRunnerPort`, `MatchLog`, `TapEvent`, `TapPlan`. | types |
 | `wire.ts` | The link's messages (`LinkDown`, `LinkUp`), `LINK_PATH`, `LINK_COALESCE_MS`, and `STATE_ONLY`: the one event that goes out as a coalesced `state` message. | types, constants |
 | `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
 | `built.ts` | A built game's match through the rules runner: a start, then ticks (skipped while a step is out) and taps (never), each snapshot handed on, the first failure once. | `startBuilt(rules, game, seed, now, { snapshot, failed }): BuiltDriver` |
 | `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
-| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library. | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake` |
-| `chain.ts` | The simulated chain: a block every 12 s from Sepolia's real height, gas that wanders. Pure. | `blockAt`, `nextBlockAt`, `nextGas`, `firstGas` |
-| `ledger.ts` | The simulated EGB ledger (faucet, escrow kept per badge, settle, refund, every stake back). Pure. | `faucet`, `canLock`, `lock`, `settle`, `refund`, `returnAll`, `escrowTotal`, `memoryLedgerStore()` |
-| `txs.ts` | Simulated transactions and their timing on the core's clock: signed, sent 0.4 s later, in the next block, paid 0.9 s after it. A block takes every transaction due even when one's effect throws (the first throw is rethrown after). | `createTxBook(hooks, clock)` |
+| `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `chainLabel` |
+| `txs.ts` | The transactions on screen: signed at once, then each step its chain port reports (sent, in a block, paid, or failed, keeping the hash, block and Etherscan link), `ended` once, then on screen `LINGER_MS` more. | `createTxBook(hooks, clock)` |
+| `demo-chain.ts` | The chain port in memory, for the browser demo and the tests: a head every 12 s, every badge starting with 100 USDC, each transaction sent 0.4 s after it is signed, in the next head, paid 0.9 s later, with no hashes; pots refund after a minute; names, top-ups and a title per game. `sent` lists every request. | `createDemoChain(clock)` |
+| `labels.ts` | The short words badges are named with: the roster's local labels, and the lobby's proposals (a badge's own label first, then `word-NN`), each a valid ENS label. Pure. | `LABELS`, `ownLabel`, `proposeLabel` |
 | `bot.ts` | The demo's bot on Player 2: a pure planner (what it waits to tap, and how long a person would take) and a scheduler on the core's clock. | `botIntent`, `botDelay`, `createBot` |
 | `badges.ts` | The badges Demo mode taps with and the bot's; how a station or port prints a badge; when two are the same. | `DEMO_BADGES`, `BOT_BADGE`, `badgeLabel`, `sameBadge` |
 | `instant-tap.ts` | A whole injected tap at once (touch, then done, with the roll only if the plan asks): Demo mode's screen taps, the bot and the server's injected taps. | `instantTap(core, seat, badge, roll)` |
@@ -102,12 +122,16 @@ whose effect throws still goes into its block, so it can't hold up every transac
 | `fake-clock.ts` | A clock moved by hand, for tests: timers fire in due order, each at its own time. | `createFakeClock(start)` |
 | `system-clock.ts` | The real clocks, for the hosts. `monotonicClock()` (the server, the taps, the bench): the wall time at start, then monotonic, so an NTP step never moves touch times against the game's timers. `systemClock()` (SimLink): the wall clock. Left out of the core's own check, and never imported by the core. | `monotonicClock()`, `systemClock()` |
 
-Tests: `core.test.ts` drives whole matches through the ports on a fake clock (judged by touch time, an unknown chip's
-earlier touch waited for, rolls from `done`, a frozen card let go on `fail`, refusals, dropped stale taps, transcripts
-and their counting, the rematch tap, the stranded escrow returned, reset (a refund on its way cancelled, so a later
-stake needs the faucet), station pushes, the ledger store, the library, the build phase: only on a Box with the
-builder, taps refused, its idle); `bot`, `chain`, `ledger`, `stations`, `transcript` and `txs` have their own (`txs`:
-a throwing effect doesn't hold up the block); `system-clock.test.ts` checks the server's clock ignores a step of the
+Tests: `core.test.ts` drives whole matches through the ports on a fake clock, on the demo chain or on a recording port
+whose transactions a test moves step by step (judged by touch time, an unknown chip's earlier touch waited for, rolls
+from `done`, a frozen card let go on `fail`, refusals, dropped stale taps, transcripts and their counting, the rematch
+tap, station pushes, balances and names read from chain, the head, the library; stakes on chain: the match open at
+once with the bar following the pot, the result only after the pot lands with the same round and its lines from
+`outcome`, a failed pot still reported, a result sent after a rematch, a round per match, a short or unread balance
+sent to the lobby and back; the lobby: cards at either station with nova, kite and juno proposed, another label, a
+claim, a top-up, the board of the focused game, its idle; Refund after its delay with one refund for both; reset
+leaving the pot on chain; the build phase: only on a Box with the builder, taps refused, its idle); `bot`,
+`demo-chain`, `labels`, `stations`, `transcript` and `txs` have their own; `system-clock.test.ts` checks the server's clock ignores a step of the
 wall clock (it is left out of the core's check, with the clocks); `built.test.ts` plays a built game on a fake rules
 runner (prepared at Join, opened on the first state, taps at their touch time with the roll for `random`, the rules'
-stations, a void mid-game and at start with both stakes back, the child stopped at Home).
+stations, played for nothing with no request to the chain, a void mid-game and at start, the child stopped at Home).

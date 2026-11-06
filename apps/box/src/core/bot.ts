@@ -58,7 +58,7 @@ export function botIntent(state: BoxState, now: number, bot: Badge): BotIntent |
       return { kind: "card", key: `card:${match.id}:${duel.round}:${slot}`, remainingMs };
     }
     case "refund":
-      if (!match || match.refunded[BOT_SEAT] || state.chain.block < match.refundBlock) return null;
+      if (!match || match.refunded[BOT_SEAT] || now < match.refundAt) return null;
       return { kind: "refund", key: `refund:${match.id}` };
     default:
       return null;

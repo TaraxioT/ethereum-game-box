@@ -8,8 +8,8 @@ import { REFRESH_MS, Screens } from "./screens.ts";
 
 describe("screenPayload", () => {
   it("writes key=value lines: big always, tag and small when set, then ttl and the overrides", () => {
-    expect(screenPayload({ tag: "P1", big: "SIGN", small: "10 EGB", sign: "HOLD STILL|signing", done: "PAID" }, 15)).toBe(
-      "tag=P1\nbig=SIGN\nsmall=10 EGB\nttl=15\nsign=HOLD STILL|signing\ndone=PAID",
+    expect(screenPayload({ tag: "P1", big: "SIGN", small: "10 USDC", sign: "HOLD STILL|signing", done: "PAID" }, 15)).toBe(
+      "tag=P1\nbig=SIGN\nsmall=10 USDC\nttl=15\nsign=HOLD STILL|signing\ndone=PAID",
     );
     expect(screenPayload({ tag: "", big: "", small: "" }, 0)).toBe("big=");
   });

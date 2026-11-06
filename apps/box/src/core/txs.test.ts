@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Tx } from "./types.ts";
 import { createFakeClock } from "./fake-clock.ts";
-import { createTxBook, LINGER_MS, PAY_MS, SEND_MS } from "./txs.ts";
+import { createTxBook, LINGER_MS } from "./txs.ts";
 
 const START = 1_000_000;
+const HASH = `0x${"ab".repeat(32)}` as const;
+const LINK = `https://sepolia.etherscan.io/tx/${HASH}`;
 
 describe("tx book", () => {
   function setup() {
@@ -14,26 +16,25 @@ describe("tx book", () => {
     return { steps, dropped, book, clock };
   }
 
-  it("signs at once, sends ~400 ms later, lands in the next block and pays ~900 ms after it", () => {
+  it("shows a transaction signed at once, then each step its port reports, keeping the hash and block", () => {
     const { steps, dropped, book, clock } = setup();
-    let landed = 0;
-    const tx = book.submit({ kind: "faucet", seat: 0, direction: "out", amount: 100 }, () => {
-      landed = steps.length;
-    });
-    expect(tx).toMatchObject({ id: 1, step: "signed", block: null, hash: null, stepAt: START });
+    const ended: Tx[] = [];
+    const { tx, watch } = book.submit({ kind: "topup", seat: null, direction: "out", amount: 100 }, (t) => ended.push(t));
+    expect(tx).toMatchObject({ id: 1, step: "signed", block: null, hash: null, etherscan: null, error: null, stepAt: START });
+    expect(steps).toEqual([tx]);
 
-    book.seal(7, START + 100); // sealed before it was sent: not in it
-    clock.advance(SEND_MS);
-    expect(steps.map((t) => t.step)).toEqual(["signed", "sent"]);
-    expect(steps[1]?.stepAt).toBe(START + SEND_MS);
+    clock.advance(300);
+    watch({ step: "sent", hash: HASH, etherscan: LINK, block: null, error: null });
+    expect(steps[1]).toMatchObject({ step: "sent", hash: HASH, etherscan: LINK, stepAt: START + 300 });
+    clock.advance(12_000);
+    // A later step that carries no hash or link keeps the ones it had.
+    watch({ step: "in-block", hash: null, etherscan: null, block: 8, error: null });
+    expect(steps[2]).toMatchObject({ step: "in-block", hash: HASH, etherscan: LINK, block: 8 });
+    expect(ended).toEqual([]);
 
-    clock.advance(5_000);
-    book.seal(8, START + 5_400);
-    expect(landed).toBe(2);
-    expect(steps[2]).toMatchObject({ step: "in-block", block: 8, stepAt: START + 5_400 });
-
-    clock.advance(PAY_MS);
-    expect(steps[3]).toMatchObject({ step: "paid", block: 8, stepAt: START + 5_400 + PAY_MS });
+    watch({ step: "paid", hash: HASH, etherscan: LINK, block: null, error: null });
+    expect(steps[3]).toMatchObject({ step: "paid", block: 8 });
+    expect(ended.map((t) => t.step)).toEqual(["paid"]);
     expect(book.list()).toHaveLength(1);
 
     clock.advance(LINGER_MS);
@@ -41,48 +42,36 @@ describe("tx book", () => {
     expect(dropped.map((t) => t.id)).toEqual([1]);
   });
 
-  it("leaves a transaction sent at the very moment of a block for the next one", () => {
+  it("ends a failed transaction once, with its error, and ignores whatever its port says after", () => {
     const { steps, book, clock } = setup();
-    book.submit({ kind: "open", seat: null, direction: "in", amount: 20 }, () => undefined);
-    clock.advance(SEND_MS);
-    book.seal(9, START + SEND_MS);
-    expect(steps.at(-1)?.step).toBe("sent");
+    let ends = 0;
+    const { watch } = book.submit({ kind: "open", seat: null, direction: "in", amount: 20 }, () => ends++);
+    watch({ step: "failed", hash: null, etherscan: null, block: null, error: "PotExists" });
+    expect(steps.at(-1)).toMatchObject({ step: "failed", error: "PotExists" });
+    watch({ step: "paid", hash: HASH, etherscan: LINK, block: 9, error: null });
+    expect(steps.at(-1)?.step).toBe("failed");
+    expect(ends).toBe(1);
+    clock.advance(LINGER_MS);
+    expect(book.list()).toEqual([]);
   });
 
-  it("lands transactions in the order they were signed", () => {
-    const { book, clock } = setup();
-    const order: number[] = [];
-    book.submit({ kind: "faucet", seat: 0, direction: "out", amount: 100 }, () => order.push(1));
-    book.submit({ kind: "open", seat: null, direction: "in", amount: 20 }, () => order.push(2));
-    clock.advance(SEND_MS);
-    book.seal(10, START + 1_000);
-    expect(order).toEqual([1, 2]);
-  });
-
-  it("puts every transaction in its block even when one's effect throws, then reports the throw", () => {
-    const { steps, book, clock } = setup();
-    let later = 0;
-    book.submit({ kind: "open", seat: null, direction: "in", amount: 20 }, () => {
-      throw new RangeError("short");
-    });
-    book.submit({ kind: "faucet", seat: 0, direction: "out", amount: 100 }, () => {
-      later++;
-    });
-    clock.advance(SEND_MS);
-    expect(() => book.seal(9, START + 1_000)).toThrow(RangeError);
-    expect(later).toBe(1);
-    expect(steps.filter((t) => t.step === "in-block").map((t) => t.id)).toEqual([1, 2]);
-    // Nothing is left behind to throw again at the next block, and both are paid.
-    expect(() => book.seal(10, START + 13_000)).not.toThrow();
-    clock.advance(PAY_MS);
-    expect(book.list().map((t) => t.step)).toEqual(["paid", "paid"]);
+  it("keeps transactions in the order they were signed, each on its own steps", () => {
+    const { book } = setup();
+    const one = book.submit({ kind: "topup", seat: null, direction: "out", amount: 100 });
+    const two = book.submit({ kind: "open", seat: null, direction: "in", amount: 20 });
+    two.watch({ step: "sent", hash: HASH, etherscan: LINK, block: null, error: null });
+    expect(book.list().map((t) => [t.id, t.step])).toEqual([
+      [one.tx.id, "signed"],
+      [two.tx.id, "sent"],
+    ]);
   });
 
   it("stops every timer", () => {
-    const { steps, book, clock } = setup();
-    book.submit({ kind: "refund", seat: 1, direction: "out", amount: 10 }, () => undefined);
+    const { dropped, book, clock } = setup();
+    const { watch } = book.submit({ kind: "refund", seat: null, direction: "out", amount: 20 });
+    watch({ step: "paid", hash: HASH, etherscan: LINK, block: 3, error: null });
     book.stop();
-    clock.advance(10_000);
-    expect(steps).toHaveLength(1);
+    clock.advance(LINGER_MS * 2);
+    expect(dropped).toEqual([]);
   });
 });

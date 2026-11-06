@@ -1,7 +1,7 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
 import type { Seat, StationView, Transcript, BuiltEvent, Outcome, TapNeed } from "@egb/sdk";
-import type { Badge, GameInfo } from "./types.ts";
+import type { Badge, Board, GameId, GameInfo, PlayerCard, TxStep } from "./types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };
@@ -58,16 +58,75 @@ export type TapEvent =
       readonly error: { readonly code: TapErrorCode; readonly text: string };
     };
 
-/** The simulated ledger as stored: a balance per badge address, and the open match's stakes by the badge that put each in. */
-export interface LedgerData {
-  readonly balances: Readonly<Record<string, number>>;
-  readonly escrow: Readonly<Record<string, number>>;
+/** A relayed transaction's progress, as the relayer reports it (`GET /tx/:id`). */
+export interface ChainTxUpdate {
+  readonly step: Exclude<TxStep, "signed">;
+  readonly hash: `0x${string}` | null;
+  readonly etherscan: string | null;
+  readonly block: number | null;
+  readonly error: string | null;
 }
 
-/** Where the ledger lives: memory in the browser, $EGB_DATA/ledger.json (written atomically) on the Pi. */
-export interface LedgerStore {
-  load(): LedgerData;
-  save(ledger: LedgerData): void;
+/** Hears a transaction's every step, up to `paid` or `failed`. */
+export type TxWatch = (update: ChainTxUpdate) => void;
+
+/** Both stakes of a match, for the pot. The game is the core's id; the port names it on chain. */
+export interface StakeOrder {
+  readonly round: number;
+  readonly game: GameId;
+  readonly badges: readonly [`0x${string}`, `0x${string}`];
+  /** Whole USDC per seat. */
+  readonly amount: number;
+}
+
+/** A finished match, for `BoxResults`: the same round as its stakes. `winner` is the seat, or null for a draw. */
+export interface ResultOrder {
+  readonly round: number;
+  readonly game: GameId;
+  readonly badges: readonly [`0x${string}`, `0x${string}`];
+  readonly winner: 0 | 1 | null;
+}
+
+/** Sepolia's head: its number, when it was sealed (ms since the epoch) and its base fee (gwei). */
+export interface ChainHead {
+  readonly block: number;
+  readonly at: number;
+  readonly gasGwei: number;
+}
+
+/**
+ * The chain behind the stakes and the lobby: USDC balances, the pot, results, top-ups and player names. On the Box it
+ * is Sepolia through the relayer, every request signed by the Box's P-256 key (`src/chain/`); the demo runs it in
+ * memory (`demo-chain.ts`). Sends never wait: each step comes back through its watch. Reads reject when the chain
+ * can't be read.
+ */
+export interface ChainPort {
+  /** Whether a game's stakes and results go on chain. A game that doesn't (a built game) plays for nothing. */
+  onChain(game: GameId): boolean;
+  /** The next round for this Box: kept on disk, so it never repeats, even across restarts. */
+  nextRound(): number;
+  /** How long after its open an unsettled pot may be refunded (ms). */
+  readonly refundAfterMs: number;
+  balance(address: `0x${string}`): Promise<number>;
+  player(address: `0x${string}`): Promise<PlayerCard>;
+  board(game: GameId): Promise<Board>;
+  /** Sends both stakes into the pot (a Box-signed `Stake`). */
+  open(order: StakeOrder, watch: TxWatch): void;
+  /** Sends the result (a Box-signed `Result`), which settles the pot. */
+  settle(order: ResultOrder, watch: TxWatch): void;
+  /** Sends an unsettled pot back to both badges. */
+  refund(round: number, watch: TxWatch): void;
+  /** 100 USDC to a badge. */
+  topup(address: `0x${string}`, watch: TxWatch): void;
+  /** `<label>.gamebox.eth` for a badge (a Box-signed `Seat`). */
+  claim(label: string, address: `0x${string}`, watch: TxWatch): void;
+  /**
+   * What a settled result did, read from chain at its receipt: the payout, the title, the championship. `hash` is the
+   * result's transaction (null on a chain with no hashes: the demo's).
+   */
+  outcome(order: ResultOrder, hash: `0x${string}` | null): Promise<readonly string[]>;
+  /** Calls back with each new head; returns the unsubscribe. */
+  watchHead(listener: (head: ChainHead) => void): () => void;
 }
 
 /** The games the Box can run: the team games plus the installed built games. */
@@ -113,11 +172,11 @@ export type TapSource = "station" | "injected";
 export interface CorePorts {
   readonly clock: Clock;
   readonly stations: StationsPort;
-  readonly ledger: LedgerStore;
+  readonly chain: ChainPort;
   readonly library: LibraryPort;
   /** Absent: built games can't run (the demo). */
   readonly rules?: RulesRunnerPort;
   readonly log: MatchLog;
-  /** uint32 randomness for seeds and the simulated chain (not for game outcomes on a real Box: badges roll those). */
+  /** uint32 randomness for seeds and the lobby's proposed labels (never a game's outcome on a real Box: badges roll those). */
   readonly random: () => number;
 }

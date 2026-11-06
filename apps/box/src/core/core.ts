@@ -1,5 +1,5 @@
-// The Box's core: the phase machine, composed from the catalogue, chain clock, ledger, transactions and station
-// views, behind BoxLink. It has no DOM, no Node APIs and no clock of its own: everything comes through CorePorts,
+// The Box's core: the phase machine, composed from the catalogue, the chain port (USDC stakes, results, the lobby),
+// transactions and station views, behind BoxLink. It has no DOM, no Node APIs and no clock of its own: everything comes through CorePorts,
 // so SimLink runs it in the browser, the Box server on the Pi, and tests on a fake clock.
 //
 // Taps come in as TapEvents: a `touch`, then `done` or `fail`. A tap is judged at its touch time.
@@ -11,10 +11,11 @@
 //     as finished taps judged at their touch time, a known badge's at its touch when the game needs no roll, and
 //     anything the rules get wrong (over budget, a throw, a crash) voids the match and sends both stakes back.
 //   - A tap that touched before the phase changed never reaches the new phase.
-// Every finished match goes to the match log as a transcript; a stake left in escrow from before a restart goes back.
+// Every finished match goes to the match log as a transcript. Stakes go on chain the moment both seats sign, and the
+// match opens at once: the transaction bar follows the pot, and the result waits only for the pot to land.
 import type { Seat } from "@egb/sdk";
 import { hash32, other, SEATS } from "@egb/sdk";
-import type { CorePorts, RulesSnapshot, TapEvent, TapPlan, TapSource, TimerHandle } from "./ports.ts";
+import type { ChainHead, CorePorts, ResultOrder, RulesSnapshot, TapEvent, TapPlan, TapSource, TimerHandle, TxWatch } from "./ports.ts";
 import type { TranscriptTap } from "@egb/sdk";
 import type {
   Badge,
@@ -25,6 +26,7 @@ import type {
   Cue,
   GameId,
   GameInfo,
+  Lobby,
   Match,
   MatchPlay,
   Phase,
@@ -32,16 +34,16 @@ import type {
   SeatState,
   StationView,
   TeamGameId,
+  Tx,
 } from "./types.ts";
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
 import type { QuickDrawEvent } from "../games/quick-draw/types.ts";
 import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame } from "./catalogue.ts";
-import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
-import { balanceOf, canLock, escrowTotal, faucet, FAUCET_EGB, lock, refund, returnAll, settle, type Ledger } from "./ledger.ts";
 import { transcriptOf } from "./transcript.ts";
-import { createTxBook } from "./txs.ts";
+import { createTxBook, type TxOrder } from "./txs.ts";
+import { proposeLabel } from "./labels.ts";
 import { stationViews, type StationInput } from "./stations.ts";
 import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
@@ -63,10 +65,10 @@ export const TICK_MS = 50;
 export const END_HOLD_MS = 2_400;
 /** Refund goes back to Home this long after both stakes are back. */
 export const REFUND_DONE_MS = 2_000;
-/** A match may be refunded this many blocks after it opened. */
-export const REFUND_AFTER_BLOCKS = 3;
-/** A refund opens at least this many blocks after the Box missed its settle. */
-export const REFUND_MIN_WAIT_BLOCKS = 2;
+/** The lobby's top-up, in USDC (the relayer mints it). */
+export const TOPUP_USDC = 100;
+/** Sepolia's pace, for the screen's block clock between heads. */
+export const BLOCK_MS = 12_000;
 
 /** Who plays Player 2: the bot (the demo) or a person at the second station. */
 export type Opponent = "bot" | "hotseat";
@@ -94,8 +96,8 @@ export interface Core extends BoxLink {
   power(): boolean;
   setPower(on: boolean): void;
   /**
-   * Back to Home now (the test page). Stakes of a match that hasn't settled go back to their badges; a settlement
-   * already sent lands as it would have.
+   * Back to Home now (the test page). A pot that hasn't settled stays on chain until its refund opens (the server
+   * refunds it then); a settlement already sent lands as it would have.
    */
   reset(): void;
   /** Stops every timer. */
@@ -206,8 +208,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   const bot = options.bot ?? null;
   const timers = createTimers(clock);
   const listeners = new Set<(state: BoxState, event: BoxEvent) => void>();
-  /** The simulated chain's randomness in [0, 1). */
-  const rnd = (): number => ports.random() / 2 ** 32;
+  const { chain: port } = ports;
 
   let phase: Phase = "boot";
   /** Bumped on every phase change: taps that touched before it are dropped. */
@@ -226,18 +227,21 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let built: BuiltDriver | null = null;
   let match: Match | null = null;
   let matchCount = 0;
-  let ledger: Ledger = ports.ledger.load();
-  // A stake still in escrow at start belongs to a match the Box no longer has (it stopped mid-match): each stake goes
-  // straight back to the badge that put it in, as the escrow's refund would have paid it.
-  if (escrowTotal(ledger) > 0) setLedger(returnAll(ledger));
-  /** EGB on its way to each address: faucet, payout and refund transactions not yet in a block. */
+  /** Each badge's USDC and player name, as last read from chain (absent: not read yet). */
+  const balances = new Map<string, number>();
+  const names = new Map<string, string | null>();
+  /** USDC on its way to each address: top-ups, payouts and refunds not yet paid. */
   const incoming = new Map<string, number>();
-  const fauceting = new Set<string>();
-  /** Refund transactions sent and not yet landed, by seat. */
-  const refunding: [boolean, boolean] = [false, false];
-  /** Those refunds' payments: a reset hands their stakes back at once, and cancels them. */
-  const refundsOut = new Set<{ readonly address: string; readonly amount: number; cancelled: boolean }>();
-  let openTxId: number | null = null;
+  let lobby: Lobby = { badge: null, card: null, proposal: null, board: null, from: "home" };
+  /** How many labels the lobby has proposed to the badge on show. */
+  let proposals = 0;
+  /**
+   * Each on-chain match's pot, by match id: on its way, open on chain, or never opened (the open failed), and the
+   * result held until it lands. Kept per match, so a result decided before its pot landed is still sent after a
+   * rematch or a reset.
+   */
+  const pots = new Map<number, { state: "pending" | "open" | "none"; then: (() => void) | null }>();
+  let refunding = false;
   let opponent: Opponent = bot ? "bot" : "hotseat";
   let power = true;
   /** Open taps by source and id. */
@@ -249,8 +253,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let matchTaps: TranscriptTap[] = [];
   const seen: [number | null, number | null] = [null, null];
 
-  const head = blockAt(clock.now());
-  const chain = { block: head.block, blockAt: head.at, gasGwei: firstGas(rnd) };
+  /** Sepolia's head, as the port last reported it. */
+  let head: ChainHead = { block: 0, at: clock.now(), gasGwei: 0 };
 
   let idleTimer: TimerHandle | null = null;
   let joinTimer: TimerHandle | null = null;
@@ -263,7 +267,6 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     {
       step(tx) {
         emit({ type: "tx", tx });
-        if (tx.id === openTxId && tx.step === "in-block" && tx.block !== null) openMatch(tx.block);
       },
       // A `tx` event for a transaction no longer in `txs` tells the screen it left.
       drop(tx) {
@@ -277,17 +280,13 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return games.find((info) => info.id === id);
   }
 
-  function setLedger(next: Ledger): void {
-    ledger = next;
-    ports.ledger.save(next);
-  }
-
   function seatState(seat: Seat): SeatState {
     const { badge, signed } = seats[seat];
     return {
       badge,
       signed,
-      balance: badge ? balanceOf(ledger, badge.address) : 0,
+      ens: badge ? (names.get(badge.address) ?? null) : null,
+      balance: badge ? (balances.get(badge.address) ?? null) : null,
       pending: badge ? (incoming.get(badge.address) ?? 0) : 0,
     };
   }
@@ -298,10 +297,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       games,
       focus,
       seats: [seatState(0), seatState(1)],
-      chain: { block: chain.block, blockAt: chain.blockAt, blockMs: BLOCK_MS, gasGwei: chain.gasGwei },
+      chain: { block: head.block, blockAt: head.at, blockMs: BLOCK_MS, gasGwei: head.gasGwei },
       stake,
       match,
       txs: book.list(),
+      lobby,
     };
     return { ...input, stations: stationViews(input, clock.now()) };
   }
@@ -343,6 +343,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   function resetIdle(): void {
     timers.cancel(idleTimer);
     if (phase === "home") idleTimer = timers.after(IDLE_MS, () => setPhase("attract"));
+    else if (phase === "lobby") idleTimer = timers.after(IDLE_MS, () => setPhase("home"));
     else if (phase === "build") idleTimer = timers.after(BUILD_IDLE_MS, () => setPhase("home"));
     else idleTimer = null;
   }
@@ -367,7 +368,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (to === "stake") {
       seen[0] = null;
       seen[1] = null;
-      fundSeats();
+      readSeats();
     }
     resetIdle();
     emit({ type: "phase", from, to });
@@ -416,35 +417,34 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     else incoming.delete(address);
   }
 
-  /** The escrow still holds this badge's stake. */
-  function holds(address: string, amount: number): boolean {
-    return (ledger.escrow[address] ?? 0) >= amount;
+  /** Reads a badge's balance and player name from chain; the seats and the lobby show them when they come back. */
+  function read(badge: Badge): void {
+    port.player(badge.address).then(
+      (card) => {
+        balances.set(card.address, card.balance);
+        names.set(card.address, card.name);
+        if (sameBadge(lobby.badge, badge)) {
+          lobby = { ...lobby, card, proposal: card.name ? null : (lobby.proposal ?? proposeLabel(badge, proposals, ports.random())) };
+          emit({ type: "lobby" });
+        }
+        for (const seat of SEATS) if (sameBadge(seats[seat].badge, badge)) emit({ type: "seat", seat });
+      },
+      // Unread for now: the seat shows no balance, and the next read tries again.
+      () => {},
+    );
   }
 
-  /** What a badge can stake: its balance plus the money already on its way to it. */
-  function available(address: string): number {
-    return balanceOf(ledger, address) + (incoming.get(address) ?? 0);
-  }
-
-  /** A seated badge that can't cover the chosen stake (new, or spent out) gets topped up by the faucet. */
-  function fundIfLow(seat: Seat, badge: Badge): void {
-    const { address } = badge;
-    if (available(address) >= stake || fauceting.has(address)) return;
-    const amount = FAUCET_EGB - available(address);
-    fauceting.add(address);
-    owe(address, amount);
-    book.submit({ kind: "faucet", seat, direction: "out", amount }, () => {
-      setLedger(faucet(ledger, address, amount));
-      land(address, amount);
-      fauceting.delete(address);
-    });
-  }
-
-  function fundSeats(): void {
+  function readSeats(): void {
     for (const seat of SEATS) {
       const badge = seats[seat].badge;
-      if (badge) fundIfLow(seat, badge);
+      if (badge) read(badge);
     }
+  }
+
+  /** Sends a transaction through the port, and puts it on screen. `ended` runs when it is paid or failed. */
+  function send(order: TxOrder, run: (watch: TxWatch) => void, ended?: (tx: Tx) => void): void {
+    const { watch } = book.submit(order, ended);
+    run(watch);
   }
 
   function takeSeat(seat: Seat, badge: Badge): TapResult {
@@ -453,77 +453,84 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (sameBadge(seats[other(seat)].badge, badge)) clearSeat(other(seat));
     seats[seat] = { badge, signed: false };
     emit({ type: "seat", seat });
-    fundIfLow(seat, badge);
+    read(badge);
     maybeLeaveJoin();
     return "accepted";
   }
 
   // ── Stake and open ────────────────────────────────────────────────────────────────────────────────────────────
 
-  function addresses(): [string, string] {
+  function addresses(): [`0x${string}`, `0x${string}`] {
     const [one, two] = seats;
     if (!one.badge || !two.badge) throw new Error("a match needs both seats");
     return [one.badge.address, two.badge.address];
   }
 
+  /** The chosen game's stakes go on chain. */
+  function staked(): boolean {
+    return game !== null && port.onChain(game);
+  }
+
   function sign(seat: Seat): TapResult {
     const mine = seats[seat];
     if (!mine.badge || mine.signed) return "ignored";
-    if (available(mine.badge.address) < stake) return "refused";
+    // A badge that can't cover the stake (or whose balance isn't read yet) is sent to the lobby to top up.
+    const balance = balances.get(mine.badge.address);
+    if (staked() && (balance === undefined || balance < stake)) {
+      openLobby(mine.badge, "stake");
+      return "refused";
+    }
     mine.signed = true;
     emit({ type: "seat", seat });
-    if (seats[0].signed && seats[1].signed) {
-      const both = addresses();
-      const amount = stake;
-      const id: number = book.submit({ kind: "open", seat: null, direction: "in", amount: amount * 2 }, () => {
-        // A reset while it was on its way leaves the stakes where they are.
-        if (openTxId !== id) return;
-        if (canLock(ledger, both, amount)) setLedger(lock(ledger, both, amount));
-        else voidOpen();
-      }).id;
-      openTxId = id;
-    }
+    if (seats[0].signed && seats[1].signed) openMatch();
     return "accepted";
   }
 
   /**
-   * The stakes can't be locked after all (a balance spent while the open was on its way): the open locks nothing, the
-   * match doesn't open, and both signatures are handed back, so the players see Stake again.
+   * Both seats signed: the match opens now, and the stakes go to the pot on chain (a Box-signed `Stake`) without
+   * waiting for it. A pot that fails to open leaves the match played for nothing; its result is still reported.
    */
-  function voidOpen(): void {
-    openTxId = null;
-    for (const seat of SEATS) {
-      if (!seats[seat].signed) continue;
-      seats[seat].signed = false;
-      emit({ type: "seat", seat });
-    }
-    fundSeats();
-    cue("error");
-  }
-
-  function openMatch(block: number): void {
-    openTxId = null;
+  function openMatch(): void {
     if (!game) throw new Error("no game was chosen");
-    const [one, two] = addresses();
+    const badges = addresses();
     const id = ++matchCount;
     const now = clock.now();
-    // The seed takes fresh randomness, so nobody can work out the draw from the seats and the block.
-    seed = hash32("match", id, one, two, block, ports.random());
+    const onChain = port.onChain(game);
+    const round = onChain ? port.nextRound() : 0;
+    // The seed takes fresh randomness, so nobody can work out the draw from the seats and the round.
+    seed = hash32("match", id, badges[0], badges[1], round, ports.random());
     matchStartedAt = now;
     matchTaps = [];
-    refunding[0] = false;
-    refunding[1] = false;
+    refunding = false;
+    if (onChain) {
+      const amount = stake;
+      const pot: { state: "pending" | "open" | "none"; then: (() => void) | null } = { state: "pending", then: null };
+      pots.set(id, pot);
+      send(
+        { kind: "open", seat: null, direction: "in", amount: amount * 2 },
+        (watch) => port.open({ round, game: game ?? "", badges, amount }, watch),
+        (tx) => {
+          pot.state = tx.step === "paid" ? "open" : "none";
+          for (const badge of badges) refreshBalance(badge);
+          const settleNow = pot.then;
+          pot.then = null;
+          settleNow?.();
+        },
+      );
+    }
     const opened = (play: MatchPlay): Match => ({
       id,
       game: game ?? play.game,
-      stake,
-      openedBlock: block,
-      refundBlock: block + REFUND_AFTER_BLOCKS,
+      round,
+      stake: onChain ? stake : 0,
+      openedBlock: head.block,
+      refundAt: now + port.refundAfterMs,
       play,
       outcome: null,
       voided: false,
       endedAt: null,
       refunded: [false, false],
+      lines: null,
     });
     if (gameOf(game)?.kind === "built") return openBuilt(game, now, opened);
     const play = startPlay(game as TeamGameId, seed, now);
@@ -534,6 +541,21 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     tickTimer = timers.every(TICK_MS, () => stepGame(null));
     // The draw lands on its exact moment, not on the next tick, so reaction times are fair to the millisecond.
     if (play.game === "quick-draw") timers.after(Math.max(0, play.state.drawAt - now), () => stepGame(null));
+  }
+
+  /** Reads a badge's balance again, after money moved. */
+  function refreshBalance(address: `0x${string}`): void {
+    port.balance(address).then(
+      (balance) => {
+        balances.set(address, balance);
+        for (const seat of SEATS) if (seats[seat].badge?.address === address) emit({ type: "seat", seat });
+        if (lobby.badge?.address === address && lobby.card) {
+          lobby = { ...lobby, card: { ...lobby.card, balance } };
+          emit({ type: "lobby" });
+        }
+      },
+      () => {},
+    );
   }
 
   // ── Built games ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -649,58 +671,155 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     );
   }
 
-  /** After the end hold: settle if the Box has power, else it has missed its settle and Refund opens. */
+  /**
+   * After the end hold: report the result on chain if the Box has power (it settles the pot), else the Box has missed
+   * its settle and Refund opens, once the pot's refund delay has run.
+   */
   function conclude(): void {
     if (!match?.outcome) return;
     const { winner } = match.outcome;
     record(winner, match.endedAt ?? clock.now());
     if (!power) {
-      match = { ...match, refundBlock: Math.max(match.refundBlock, chain.block + REFUND_MIN_WAIT_BLOCKS) };
+      pots.delete(match.id);
       setPhase("refund");
       cue("error");
       return;
     }
-    const both = addresses();
-    const amount = match.stake;
-    const payees = winner === null ? both.map((a) => [a, amount] as const) : [[both[winner], amount * 2] as const];
-    for (const [address, sum] of payees) owe(address, sum);
-    book.submit({ kind: "settle", seat: winner, direction: "out", amount: amount * 2 }, () => {
-      if (holds(both[0], amount) && holds(both[1], amount)) setLedger(settle(ledger, both, amount, winner));
-      for (const [address, sum] of payees) land(address, sum);
-    });
+    const current = match;
+    if (port.onChain(current.game) && !current.voided) {
+      const order: ResultOrder = { round: current.round, game: current.game, badges: addresses(), winner };
+      // The result goes once the pot has landed, so it settles the pot it belongs to.
+      const pot = pots.get(current.id);
+      if (pot?.state === "pending") pot.then = () => settle(current, order);
+      else settle(current, order);
+    }
     setPhase("result");
-    if (winner !== null && !match.voided) cue(opponent === "bot" && winner === 1 ? "lose" : "win");
+    if (winner !== null && !current.voided) cue(opponent === "bot" && winner === 1 ? "lose" : "win");
+  }
+
+  /** Sends the result. Once it is paid, its lines are read from chain at its receipt, never made up here. */
+  function settle(settled: Match, order: ResultOrder): void {
+    const paid = pots.get(settled.id)?.state === "open" ? settled.stake * 2 : 0;
+    pots.delete(settled.id);
+    const payees: (readonly [`0x${string}`, number])[] =
+      paid === 0 ? [] : order.winner === null ? order.badges.map((a) => [a, settled.stake] as const) : [[order.badges[order.winner], paid] as const];
+    for (const [address, sum] of payees) owe(address, sum);
+    send(
+      { kind: "settle", seat: order.winner, direction: "out", amount: paid },
+      (watch) => port.settle(order, watch),
+      (tx) => {
+        for (const [address, sum] of payees) land(address, sum);
+        for (const address of order.badges) refreshBalance(address);
+        if (tx.step !== "paid") return;
+        port.outcome(order, tx.hash).then(
+          (lines) => {
+            if (match?.id !== settled.id) return;
+            match = { ...match, lines };
+            emit({ type: "game" });
+          },
+          () => {},
+        );
+      },
+    );
   }
 
   // ── Refund ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  function claimRefund(seat: Seat): TapResult {
-    if (!match || match.refunded[seat] || refunding[seat] || chain.block < match.refundBlock) return "ignored";
-    const address = seats[seat].badge?.address;
-    if (!address) return "ignored";
-    const amount = match.stake;
-    const id = match.id;
-    refunding[seat] = true;
-    owe(address, amount);
-    const payment = { address, amount, cancelled: false };
-    refundsOut.add(payment);
-    book.submit({ kind: "refund", seat, direction: "out", amount }, () => {
-      refundsOut.delete(payment);
-      refunding[seat] = false;
-      // A reset handed the stake back already (and the escrow may hold a new match's stake by now).
-      if (payment.cancelled) return;
-      if (holds(address, amount)) setLedger(refund(ledger, address, amount));
-      land(address, amount);
-      if (!match || match.id !== id) return;
-      const refunded: [boolean, boolean] = seat === 0 ? [true, match.refunded[1]] : [match.refunded[0], true];
-      match = { ...match, refunded };
-      if (refunded[0] && refunded[1]) {
-        timers.after(REFUND_DONE_MS, () => {
-          if (phase === "refund" && match?.id === id) setPhase("home");
-        });
-      }
-    });
+  /** Either seat's tap, once the pot's refund delay has run, sends the pot back to both. */
+  function claimRefund(): TapResult {
+    if (!match || match.refunded[0] || refunding || clock.now() < match.refundAt) return "ignored";
+    const { id, round, stake: amount } = match;
+    if (!port.onChain(match.game) || amount === 0) {
+      match = { ...match, refunded: [true, true] };
+      timers.after(REFUND_DONE_MS, () => phase === "refund" && match?.id === id && setPhase("home"));
+      return "accepted";
+    }
+    const badges = addresses();
+    refunding = true;
+    for (const address of badges) owe(address, amount);
+    send(
+      { kind: "refund", seat: null, direction: "out", amount: amount * 2 },
+      (watch) => port.refund(round, watch),
+      (tx) => {
+        refunding = false;
+        for (const address of badges) {
+          land(address, amount);
+          refreshBalance(address);
+        }
+        if (tx.step !== "paid" || match?.id !== id) return;
+        match = { ...match, refunded: [true, true] };
+        emit({ type: "game" });
+        timers.after(REFUND_DONE_MS, () => phase === "refund" && match?.id === id && setPhase("home"));
+      },
+    );
     return "accepted";
+  }
+
+  // ── The lobby ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** Opens the lobby (Home's LOBBY, or a Stake tap that can't cover the stake), showing `badge` if one tapped. */
+  function openLobby(badge: Badge | null, from: Lobby["from"]): void {
+    lobby = { badge: null, card: null, proposal: null, board: null, from };
+    setPhase("lobby");
+    readBoard();
+    if (badge) showInLobby(badge);
+  }
+
+  /** A badge tapped a station in the lobby: its card, read from chain. */
+  function showInLobby(badge: Badge): TapResult {
+    resetIdle();
+    if (!sameBadge(lobby.badge, badge)) {
+      proposals = 0;
+      lobby = { ...lobby, badge, card: null, proposal: null };
+      emit({ type: "lobby" });
+    }
+    read(badge);
+    return "accepted";
+  }
+
+  /** The title and the championship of the game the lobby is about: the focused game, if it is on chain. */
+  function readBoard(): void {
+    const about = port.onChain(focus) ? focus : DEFAULT_FOCUS;
+    port.board(about).then(
+      (board) => {
+        if (phase !== "lobby") return;
+        lobby = { ...lobby, board };
+        emit({ type: "lobby" });
+      },
+      () => {},
+    );
+  }
+
+  function topUp(): void {
+    const badge = lobby.badge;
+    if (!badge) return;
+    owe(badge.address, TOPUP_USDC);
+    send(
+      { kind: "topup", seat: null, direction: "out", amount: TOPUP_USDC },
+      (watch) => port.topup(badge.address, watch),
+      () => {
+        land(badge.address, TOPUP_USDC);
+        refreshBalance(badge.address);
+      },
+    );
+  }
+
+  function claimName(): void {
+    const { badge, proposal, card } = lobby;
+    if (!badge || !proposal || card?.name) return;
+    send(
+      { kind: "claim", seat: null, direction: "out", amount: 0 },
+      (watch) => port.claim(proposal, badge.address, watch),
+      () => read(badge),
+    );
+  }
+
+  function proposeAnother(): void {
+    const { badge, card } = lobby;
+    if (!badge || card?.name) return;
+    proposals++;
+    lobby = { ...lobby, proposal: proposeLabel(badge, proposals, ports.random()) };
+    emit({ type: "lobby" });
   }
 
   // ── Taps ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -733,7 +852,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "playing":
         return seatedHere ? gameTap({ kind: "tap", seat, at, roll }) : "ignored";
       case "refund":
-        return seatedHere ? claimRefund(seat) : "ignored";
+        return seatedHere ? claimRefund() : "ignored";
+      case "lobby":
+        return showInLobby(badge);
     }
   }
 
@@ -865,10 +986,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         if (!game || !gameOf(game)?.stakes.includes(cmd.amount)) return;
         stake = cmd.amount;
         emit({ type: "stake", amount: stake });
-        fundSeats();
         return;
       case "back":
-        if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
+        if (phase === "lobby") setPhase(lobby.from === "stake" && bothSeated() && game ? "stake" : "home");
+        else if (phase === "join" || phase === "build" || (phase === "stake" && nobodySigned())) setPhase("home");
         return;
       case "rematch":
         if (phase !== "result") return;
@@ -877,46 +998,40 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         setPhase(bothSeated() ? "stake" : "join");
         return;
       case "home":
-        if (phase === "result" || phase === "build") setPhase("home");
+        // From Refund too: a pot left unrefunded is refunded by the server once its delay has run.
+        if (phase === "result" || phase === "build" || phase === "refund" || phase === "lobby") setPhase("home");
         return;
       case "build":
         // From Home, the builder opens; inside it, resetIdle() above was the point (a player is still there).
         if (phase === "home" && options.builder) setPhase("build");
         return;
       case "refund":
-        if (phase === "refund") for (const seat of SEATS) claimRefund(seat);
+        if (phase === "refund") claimRefund();
+        return;
+      case "lobby":
+        if (phase === "home" || phase === "attract") openLobby(null, "home");
+        return;
+      case "topup":
+        if (phase === "lobby") topUp();
+        return;
+      case "propose":
+        if (phase === "lobby") proposeAnother();
+        return;
+      case "claim":
+        if (phase === "lobby") claimName();
         return;
     }
   }
 
   // ── The clock ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-  function scheduleBlock(): void {
-    const now = clock.now();
-    timers.after(nextBlockAt(now) - now, () => {
-      // The next block is armed first, so nothing a block sets off can stop the chain.
-      scheduleBlock();
-      const sealed = blockAt(clock.now());
-      if (sealed.block > chain.block) {
-        chain.block = sealed.block;
-        chain.blockAt = sealed.at;
-        const gas = nextGas(chain.gasGwei, rnd);
-        const gasMoved = gas !== chain.gasGwei;
-        chain.gasGwei = gas;
-        emit({ type: "block", block: sealed.block });
-        cue("block");
-        if (gasMoved) emit({ type: "gas", gwei: gas });
-        book.seal(sealed.block, sealed.at);
-      }
-    });
-  }
-
-  scheduleBlock();
-  timers.every(DRIFT_MS, () => {
-    const gas = nextGas(chain.gasGwei, rnd, GAS_DRIFT);
-    if (gas === chain.gasGwei) return;
-    chain.gasGwei = gas;
-    emit({ type: "gas", gwei: gas });
+  const unwatchHead = port.watchHead((next) => {
+    if (next.block <= head.block) return;
+    const gasMoved = next.gasGwei !== head.gasGwei;
+    head = next;
+    emit({ type: "block", block: next.block });
+    cue("block");
+    if (gasMoved) emit({ type: "gas", gwei: next.gasGwei });
   });
 
   const unwatchLibrary = ports.library.subscribe(() => {
@@ -955,17 +1070,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     },
     reset() {
       stopBuilt();
-      openTxId = null;
-      // A match that hasn't sent its settlement hands each stake back; one in Result is already paying out. A refund
-      // on its way is paid by that, so it is no longer money coming: a stake can't count on it.
-      if (phase !== "result" && escrowTotal(ledger) > 0) {
-        setLedger(returnAll(ledger));
-        for (const payment of refundsOut) {
-          payment.cancelled = true;
-          land(payment.address, payment.amount);
-        }
-        refundsOut.clear();
-      }
+      // A pot that never settles stays on chain until its refund opens; the server refunds it then. A result already
+      // decided is still sent once its pot lands.
       setPhase("home");
     },
     stop() {
@@ -974,6 +1080,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       timers.clear();
       book.stop();
       unwatchLibrary();
+      unwatchHead();
     },
   };
 }

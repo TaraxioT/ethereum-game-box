@@ -1,59 +1,143 @@
-// The core through its ports alone: a fake clock drives whole matches, taps arrive as touch / done / fail, and the
-// stations, the ledger store and the library are recorders.
+// The core through its ports alone: a fake clock drives whole matches, taps arrive as touch / done / fail, the stations
+// and the library are recorders, and the chain is the demo's in-memory chain, or a recording port whose transactions
+// a test moves step by step.
 import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
-import type { LedgerData, LibraryPort } from "./ports.ts";
-import type { Badge, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, type Core } from "./core.ts";
+import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
+import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
+import { BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
-import { memoryLedgerStore } from "./ledger.ts";
-import { TEAM_GAMES, teamLibrary } from "./catalogue.ts";
+import { createDemoChain, DEMO_REFUND_MS, type DemoChain } from "./demo-chain.ts";
+import { chainLabel, TEAM_GAMES, teamLibrary } from "./catalogue.ts";
 import { DEMO_BADGES } from "./badges.ts";
-import { ANCHOR_AT, BLOCK_MS } from "./chain.ts";
 import { instantTap } from "./instant-tap.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
 
-const START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
-const [NOVA, KITE] = DEMO_BADGES as [Badge, Badge];
+const START = Date.parse("2026-11-06T10:00:00Z");
+const [NOVA, KITE, JUNO] = DEMO_BADGES as [Badge, Badge, Badge];
+const HASH = `0x${"cd".repeat(32)}` as const;
+const LABEL = /^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])$/;
 
-interface Rig {
+/** One request a recording port took, with the watch the test moves it on with. */
+interface Sent {
+  readonly kind: "open" | "settle" | "refund" | "topup" | "claim";
+  readonly order: unknown;
+  readonly watch: TxWatch;
+}
+
+/** A chain port that records every request and leaves each transaction where it is until the test moves it. */
+interface Recording extends ChainPort {
+  readonly sent: Sent[];
+  readonly outcomes: (readonly [ResultOrder, string | null])[];
+  readonly boards: string[];
+  readonly balances: Map<string, number>;
+  readonly names: Map<string, string>;
+  head(head: ChainHead): void;
+}
+
+function recordingPort(): Recording {
+  const sent: Sent[] = [];
+  const outcomes: (readonly [ResultOrder, string | null])[] = [];
+  const boards: string[] = [];
+  const balances = new Map<string, number>();
+  const names = new Map<string, string>();
+  const heads = new Set<(head: ChainHead) => void>();
+  // The port's rounds start where it says, not at 1: the core takes them as they come.
+  let round = 40;
+  const take = (kind: Sent["kind"]) => (order: unknown, watch: TxWatch) => void sent.push({ kind, order, watch });
+  return {
+    sent,
+    outcomes,
+    boards,
+    balances,
+    names,
+    onChain: (game) => chainLabel(game) !== null,
+    nextRound: () => ++round,
+    refundAfterMs: 3_600_000,
+    balance: (address) => Promise.resolve(balances.get(address) ?? 100),
+    player: (address) => Promise.resolve({ address, name: names.get(address) ?? null, balance: balances.get(address) ?? 100 }),
+    board(game): Promise<Board> {
+      boards.push(game);
+      return Promise.resolve({ title: { name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 }, cup: null });
+    },
+    open: take("open"),
+    settle: take("settle"),
+    refund: (round, watch) => void sent.push({ kind: "refund", order: round, watch }),
+    topup: (address, watch) => void sent.push({ kind: "topup", order: address, watch }),
+    claim: (label, address, watch) => void sent.push({ kind: "claim", order: { label, address }, watch }),
+    outcome(order, hash) {
+      outcomes.push([order, hash]);
+      return Promise.resolve(["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
+    },
+    watchHead(listener) {
+      heads.add(listener);
+      return () => void heads.delete(listener);
+    },
+    head: (head) => heads.forEach((listener) => listener(head)),
+  };
+}
+
+/** Moves a recorded transaction through to paid, or fails it. */
+function pay(sent: Sent | undefined, block = 7): void {
+  if (!sent) throw new Error("nothing was sent");
+  sent.watch({ step: "sent", hash: HASH, etherscan: `https://sepolia.etherscan.io/tx/${HASH}`, block: null, error: null });
+  sent.watch({ step: "in-block", hash: HASH, etherscan: null, block, error: null });
+  sent.watch({ step: "paid", hash: HASH, etherscan: null, block, error: null });
+}
+
+function fail(sent: Sent | undefined, error = "reverted"): void {
+  if (!sent) throw new Error("nothing was sent");
+  sent.watch({ step: "failed", hash: null, etherscan: null, block: null, error });
+}
+
+interface Rig<C extends ChainPort = DemoChain> {
   readonly core: Core;
   readonly clock: FakeClock;
+  readonly chain: C;
   readonly events: BoxEvent[];
   readonly shows: [Seat, StationView][];
   readonly buzzes: [Seat, "ok" | "no"][];
-  readonly store: ReturnType<typeof memoryLedgerStore>;
   readonly logged: Transcript[];
 }
 
-function rig(options: { ledger?: LedgerData; library?: LibraryPort; builder?: boolean } = {}): Rig {
+function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: { library?: LibraryPort; builder?: boolean } = {}): Rig<C> {
   const clock = createFakeClock(START);
   const rnd = mulberry32(7);
   const shows: [Seat, StationView][] = [];
   const buzzes: [Seat, "ok" | "no"][] = [];
-  const store = memoryLedgerStore(options.ledger);
   const logged: Transcript[] = [];
+  const chain = chainOf(clock);
   const core = createCore({
     clock,
     stations: { show: (seat, view) => shows.push([seat, view]), buzz: (seat, kind) => buzzes.push([seat, kind]) },
-    ledger: store,
+    chain,
     library: options.library ?? teamLibrary(),
     log: { record: (t) => void logged.push(t), countedSince: () => 0 },
     random: () => Math.floor(rnd() * 2 ** 32) >>> 0,
   }, { builder: options.builder ?? false });
   const events: BoxEvent[] = [];
   core.subscribe((_, event) => events.push(event));
-  return { core, clock, events, shows, buzzes, store, logged };
+  return { core, clock, chain, events, shows, buzzes, logged };
 }
 
-function until(r: Rig, check: (state: BoxState) => boolean, limit = 60_000): void {
+/** A Box on the demo's in-memory chain. */
+const rig = (options: { library?: LibraryPort; builder?: boolean } = {}): Rig => rigOn(createDemoChain, options);
+
+/** Lets the chain's reads (promises) land. */
+async function flush(): Promise<void> {
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+}
+
+/** Moves the clock in ticks, letting the chain's reads land between them. */
+async function until<C extends ChainPort>(r: Rig<C>, check: (state: BoxState) => boolean, limit = 60_000): Promise<void> {
   for (let waited = 0; !check(r.core.state()); waited += 50) {
     if (waited > limit) throw new Error(`still ${r.core.state().phase} after ${limit} ms`);
     r.clock.advance(50);
+    await flush();
   }
 }
 
@@ -69,19 +153,33 @@ function stationTap(core: Core, seat: Seat, badge: Badge, roll: number | null = 
   core.tap({ phase: "done", tap, seat, at: core.now(), badge, roll });
 }
 
-/** Boots, seats NOVA and KITE, picks the game and opens a match at 10 EGB each. */
-function toPlaying(r: Rig, game: "quick-draw" | "stock-duel"): void {
+/** Boots and seats NOVA and KITE on Home, their balances read. */
+async function seated<C extends ChainPort>(r: Rig<C>): Promise<void> {
+  r.core.send({ type: "booted" });
+  instantTap(r.core, 0, NOVA, 1);
+  instantTap(r.core, 0, NOVA, 1);
+  instantTap(r.core, 1, KITE, 1);
+  await flush();
+}
+
+/** Seats NOVA and KITE, picks the game and opens a match at 10 USDC each. */
+async function toPlaying<C extends ChainPort>(r: Rig<C>, game: "quick-draw" | "stock-duel"): Promise<void> {
   const { core } = r;
-  core.send({ type: "booted" });
-  instantTap(core, 0, NOVA, 1);
-  instantTap(core, 0, NOVA, 1);
-  instantTap(core, 1, KITE, 1);
+  await seated(r);
   core.send({ type: "focus", game });
   core.send({ type: "play" });
   expect(core.state().phase).toBe("stake");
+  await flush();
   instantTap(core, 0, NOVA, 1);
   instantTap(core, 1, KITE, 1);
-  until(r, (state) => state.phase === "playing");
+  expect(core.state().phase).toBe("playing");
+}
+
+/** Plays the running Quick Draw to a win for `seat` and waits out the end hold. */
+async function quickWin<C extends ChainPort>(r: Rig<C>, seat: Seat): Promise<void> {
+  await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
+  instantTap(r.core, seat, seat === 0 ? NOVA : KITE, 1);
+  await until(r, (state) => state.phase === "result");
 }
 
 const lastTap = (r: Rig) => r.events.filter((event) => event.type === "tap").at(-1);
@@ -97,14 +195,13 @@ describe("the core on its ports", () => {
     expect([core.plan(0), core.plan(1)]).toEqual(["identify", "identify"]);
   });
 
-  it("runs a whole Quick Draw on the fake clock, judged by the touch time, and settles it", () => {
+  it("runs a whole Quick Draw on the fake clock, judged by the touch time, and settles it on chain", async () => {
     const r = rig();
     const { core, clock } = r;
-    toPlaying(r, "quick-draw");
-    expect(r.store.current().escrow).toEqual({ [NOVA.address]: 10, [KITE.address]: 10 });
+    await toPlaying(r, "quick-draw");
     expect([core.plan(0), core.plan(1)]).toEqual(["identify", "identify"]);
 
-    until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
+    await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
     const play = core.state().match?.play;
     if (play?.game !== "quick-draw") throw new Error("no Quick Draw");
     const { drawAt } = play.state;
@@ -129,19 +226,25 @@ describe("the core on its ports", () => {
 
     clock.advance(END_HOLD_MS);
     expect(core.state().phase).toBe("result");
-    until(r, (state) => state.txs.every((tx) => tx.step === "paid"));
-    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 90, [KITE.address]: 110 }, escrow: {} });
+    // The pot lands in the next head; the result goes then, and its lines come from the chain once it is paid.
+    await until(r, (state) => state.match?.lines !== null);
+    expect(r.chain.sent).toEqual(["open 1", "settle 1"]);
+    expect(await r.chain.balance(NOVA.address)).toBe(90);
+    expect(await r.chain.balance(KITE.address)).toBe(110);
+    expect(core.state().seats.map((seat) => seat.balance)).toEqual([90, 110]);
+    expect(core.state().match?.lines?.[0]).toMatch(/\+20 USDC$/);
 
     core.stop();
+    r.chain.stop();
     expect(clock.pending()).toBe(0);
   });
 
-  it("waits for a Stock Duel tap's done, and plays the card in front at its touch with the badge's roll", () => {
+  it("waits for a Stock Duel tap's done, and plays the card in front at its touch with the badge's roll", async () => {
     const r = rig();
     const { core, clock } = r;
-    toPlaying(r, "stock-duel");
+    await toPlaying(r, "stock-duel");
     expect(core.plan(0)).toBe("none");
-    until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
+    await until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
     expect([core.plan(0), core.plan(1)]).toEqual(["random", "random"]);
 
     const duelAt = (state: BoxState) => {
@@ -169,11 +272,11 @@ describe("the core on its ports", () => {
     expect(dial.stat).toBe(STATS[((0xdeadbeef + 3) >>> 0) % STATS.length]);
   });
 
-  it("ends a tap that fails with a refusal and changes nothing", () => {
+  it("ends a tap that fails with a refusal and changes nothing", async () => {
     const r = rig();
     const { core } = r;
-    toPlaying(r, "stock-duel");
-    until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
+    await toPlaying(r, "stock-duel");
+    await until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
     const tap = touch(core, 0, NOVA);
     core.tap({ phase: "fail", tap, seat: 0, at: core.now(), badge: NOVA, error: { code: "lifted", text: "lifted" } });
     expect(lastTap(r)).toEqual({ type: "tap", seat: 0, accepted: false });
@@ -222,17 +325,33 @@ describe("the core on its ports", () => {
     }
   });
 
-  it("starts from the ledger its store kept, and saves every change to it", () => {
-    const r = rig({ ledger: { balances: { [NOVA.address]: 40 }, escrow: {} } });
-    const { core } = r;
-    core.send({ type: "booted" });
-    instantTap(core, 0, NOVA, 1);
-    instantTap(core, 0, NOVA, 1);
-    instantTap(core, 1, KITE, 1);
-    expect(core.state().seats[0].balance).toBe(40);
-    expect(core.state().txs.map((tx) => [tx.kind, tx.seat])).toEqual([["faucet", 1]]);
-    until(r, (state) => state.txs[0]?.step === "paid");
-    expect(r.store.current().balances).toEqual({ [NOVA.address]: 40, [KITE.address]: 100 });
+  it("reads a seated badge's balance and player name from chain", async () => {
+    const r = rigOn(recordingPort);
+    r.chain.balances.set(NOVA.address, 40);
+    r.chain.names.set(NOVA.address, "nova.gamebox.eth");
+    r.core.send({ type: "booted" });
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 0, NOVA, 1);
+    // Unread until the chain answers: no balance yet, and the station says so.
+    expect(r.core.state().seats[0]).toMatchObject({ balance: null, ens: null });
+    expect(r.core.state().stations[0].small).toBe("... USDC");
+    await flush();
+    expect(r.core.state().seats[0]).toMatchObject({ balance: 40, ens: "nova.gamebox.eth" });
+    expect(r.core.state().stations[0].small).toBe("40 USDC");
+    // Nothing is sent to the chain for a seat: no faucet, no top-up.
+    expect(r.chain.sent).toEqual([]);
+  });
+
+  it("follows the chain's head for the block clock and the gas", () => {
+    const r = rigOn(recordingPort);
+    expect(r.core.state().chain.block).toBe(0);
+    r.chain.head({ block: 12_080_000, at: START + 5, gasGwei: 1.5 });
+    expect(r.core.state().chain).toMatchObject({ block: 12_080_000, blockAt: START + 5, gasGwei: 1.5 });
+    expect(r.events.slice(-3)).toEqual([{ type: "block", block: 12_080_000 }, { type: "cue", cue: "block" }, { type: "gas", gwei: 1.5 }]);
+    // An older head (a lagging RPC) changes nothing.
+    const count = r.events.length;
+    r.chain.head({ block: 12_079_999, at: START + 6, gasGwei: 2 });
+    expect(r.events.length).toBe(count);
   });
 
   it("takes the library's games, and hears when one is installed", () => {
@@ -259,11 +378,11 @@ describe("the core on its ports", () => {
     expect(r.core.state().phase).toBe("home");
   });
 
-  it("waits for a chip still being read that touched first, and lets it win when it is the seated player's", () => {
+  it("waits for a chip still being read that touched first, and lets it win when it is the seated player's", async () => {
     const r = rig();
     const { core, clock } = r;
-    toPlaying(r, "quick-draw");
-    until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
+    await toPlaying(r, "quick-draw");
+    await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
     const play = core.state().match?.play;
     if (play?.game !== "quick-draw") throw new Error("no Quick Draw");
     const { drawAt } = play.state;
@@ -277,11 +396,11 @@ describe("the core on its ports", () => {
     expect(core.state().match?.outcome).toEqual({ winner: 0 });
   });
 
-  it("freezes the Stock Duel card a touch saw, and lets it go when the tap fails", () => {
+  it("freezes the Stock Duel card a touch saw, and lets it go when the tap fails", async () => {
     const r = rig();
     const { core, clock } = r;
-    toPlaying(r, "stock-duel");
-    until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
+    await toPlaying(r, "stock-duel");
+    await until(r, (state) => state.match?.play.game === "stock-duel" && state.match.play.state.phase === "pick");
     const held = () => {
       const play = core.state().match?.play;
       return play?.game === "stock-duel" ? play.state.held : null;
@@ -298,20 +417,21 @@ describe("the core on its ports", () => {
     expect(held()).toEqual([null, null]);
   });
 
-  it("logs each match's transcript, and counts it only on station taps from both badges over 12 s", () => {
+  it("logs each match's transcript, and counts it only on station taps from both badges over 12 s", async () => {
     const r = rig();
     const { core, clock } = r;
     core.send({ type: "booted" });
     for (const [seat, badge] of [[0, NOVA], [0, NOVA], [1, KITE]] as const) stationTap(core, seat, badge);
     core.send({ type: "focus", game: "quick-draw" });
     core.send({ type: "play" });
+    await flush();
     stationTap(core, 0, NOVA);
     stationTap(core, 1, KITE);
-    until(r, (state) => state.phase === "playing");
+    await until(r, (state) => state.phase === "playing");
     clock.advance(12_000);
-    until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
+    await until(r, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
     stationTap(core, 1, KITE);
-    until(r, (state) => state.phase === "result");
+    await until(r, (state) => state.phase === "result");
     expect(r.logged).toHaveLength(1);
     const [t] = r.logged;
     expect(t).toMatchObject({ v: 1, game: "quick-draw", badges: [NOVA.address, KITE.address], stake: 10, result: { winner: 1 }, counts: true });
@@ -320,21 +440,20 @@ describe("the core on its ports", () => {
 
     // The same match from injected taps is played, logged, and doesn't count.
     const injected = rig();
-    toPlaying(injected, "quick-draw");
-    until(injected, (state) => state.phase === "playing");
+    await toPlaying(injected, "quick-draw");
     injected.clock.advance(15_000);
-    until(injected, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
+    await until(injected, (state) => state.match?.play.game === "quick-draw" && state.match.play.state.phase === "draw");
     instantTap(injected.core, 0, NOVA, 1);
-    until(injected, (state) => state.phase === "result");
+    await until(injected, (state) => state.phase === "result");
     expect(injected.logged[0]?.counts).toBe(false);
   });
 
-  it("takes a seated badge's tap on the result as a rematch, but only after REMATCH_TAP_MS", () => {
+  it("takes a seated badge's tap on the result as a rematch, but only after REMATCH_TAP_MS", async () => {
     const r = rig();
     const { core, clock } = r;
-    toPlaying(r, "quick-draw");
+    await toPlaying(r, "quick-draw");
     instantTap(core, 0, NOVA, 1);
-    until(r, (state) => state.phase === "result");
+    await until(r, (state) => state.phase === "result");
     const endedAt = core.state().match?.endedAt ?? 0;
     expect(core.plan(0)).toBe("none");
     instantTap(core, 0, NOVA, 1);
@@ -345,67 +464,252 @@ describe("the core on its ports", () => {
     expect(core.state().phase).toBe("stake");
   });
 
-  it("hands back a stake left in escrow by a match the Box lost when it stopped", () => {
-    const ledger = { balances: { [NOVA.address]: 90, [KITE.address]: 90 }, escrow: { [NOVA.address]: 10, [KITE.address]: 10 } };
-    const r = rig({ ledger });
-    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 100, [KITE.address]: 100 }, escrow: {} });
-  });
-
-  it("resets to Home mid-match with both stakes back, and keeps a stake the open was still carrying", () => {
+  it("resets to Home mid-match and leaves the pot on chain, for the server to refund once its delay has run", async () => {
     const r = rig();
-    toPlaying(r, "stock-duel");
+    await toPlaying(r, "stock-duel");
     r.core.reset();
     expect(r.core.state()).toMatchObject({ phase: "home", match: null });
-    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 100, [KITE.address]: 100 }, escrow: {} });
-
-    // Reset while the open transaction is on its way: it lands, and locks nothing.
-    r.core.send({ type: "play" });
-    instantTap(r.core, 0, NOVA, 1);
-    instantTap(r.core, 1, KITE, 1);
-    r.core.reset();
-    until(r, (state) => state.txs.every((tx) => tx.step === "paid"));
-    expect(r.core.state().phase).toBe("home");
-    expect(r.store.current().escrow).toEqual({});
+    await until(r, (state) => state.txs.length > 0 && state.txs.every((tx) => tx.step === "paid"));
+    expect(r.chain.sent).toEqual(["open 1"]);
+    expect(await r.chain.balance(NOVA.address)).toBe(90);
   });
 });
 
-describe("money that never arrives", () => {
-  /** A Quick Draw at 10 EGB each that ended with the Box's power off: on Refund, both refunds claimed and on their way. */
-  function refunding(): Rig {
-    const r = rig({ ledger: { balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} } });
-    toPlaying(r, "quick-draw");
-    r.core.setPower(false);
+describe("stakes on chain", () => {
+  it("opens the match the moment both seats sign, and the transaction bar follows the pot", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    const [open] = r.chain.sent;
+    expect(open).toMatchObject({ kind: "open", order: { round: 41, game: "quick-draw", badges: [NOVA.address, KITE.address], amount: 10 } satisfies StakeOrder });
+    expect(r.core.state().match).toMatchObject({ round: 41, stake: 10 });
+    const bar = () => r.core.state().txs.map((tx) => [tx.kind, tx.amount, tx.step]);
+    expect(bar()).toEqual([["open", 20, "signed"]]);
+    pay(open, 9);
+    expect(r.core.state().txs[0]).toMatchObject({ step: "paid", hash: HASH, block: 9, etherscan: `https://sepolia.etherscan.io/tx/${HASH}` });
+    const steps = r.events.flatMap((event) => (event.type === "tx" ? [event.tx.step] : []));
+    expect(steps).toEqual(["signed", "sent", "in-block", "paid"]);
+  });
+
+  it("sends the result only once the pot has landed, with the same round, and shows what the chain says it did", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    await quickWin(r, 1);
+    // The game is over, but the pot is still on its way: no result yet.
+    expect(r.chain.sent.map((sent) => sent.kind)).toEqual(["open"]);
+    pay(r.chain.sent[0]);
+    const settle = r.chain.sent[1];
+    const order: ResultOrder = { round: 41, game: "quick-draw", badges: [NOVA.address, KITE.address], winner: 1 };
+    expect(settle).toMatchObject({ kind: "settle", order });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 20, seat: 1 });
+    expect(r.core.state().seats[1].pending).toBe(20);
+    expect(r.core.state().match?.lines).toBeNull();
+    pay(settle);
+    await flush();
+    expect(r.chain.outcomes).toEqual([[order, HASH]]);
+    expect(r.core.state().match?.lines).toEqual(["nova.gamebox.eth +20 USDC", "nova.gamebox.eth now holds champion.quickdraw.gamebox.eth"]);
+    expect(r.core.state().seats[1].pending).toBe(0);
+  });
+
+  it("plays a match whose pot failed to open, and still reports its result, with nothing paid", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    fail(r.chain.sent[0], "PotExists");
+    expect(r.core.state().phase).toBe("playing");
+    await quickWin(r, 0);
+    expect(r.chain.sent.map((sent) => sent.kind)).toEqual(["open", "settle"]);
+    expect(r.chain.sent[1]?.order).toMatchObject({ round: 41, winner: 0 });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "settle", amount: 0 });
+    expect(r.core.state().seats[0].pending).toBe(0);
+  });
+
+  it("still sends a result decided before its pot landed after a rematch", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    await quickWin(r, 0);
+    r.core.send({ type: "rematch" });
+    expect(r.core.state().phase).toBe("stake");
+    pay(r.chain.sent[0]);
+    expect(r.chain.sent[1]).toMatchObject({ kind: "settle", order: { round: 41, winner: 0 } });
+  });
+
+  it("takes a fresh round from the port for each match", async () => {
+    const r = rigOn(recordingPort);
+    await toPlaying(r, "quick-draw");
+    pay(r.chain.sent[0]);
+    await quickWin(r, 0);
+    pay(r.chain.sent[1]);
+    r.core.send({ type: "rematch" });
+    await flush();
     instantTap(r.core, 0, NOVA, 1);
-    until(r, (state) => state.phase === "refund");
-    until(r, (state) => state.chain.block >= (state.match?.refundBlock ?? Infinity));
-    r.core.send({ type: "refund" });
-    expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([10, 10]);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.chain.sent.filter((sent) => sent.kind === "open").map((sent) => (sent.order as StakeOrder).round)).toEqual([41, 42]);
+    expect(r.core.state().match?.round).toBe(42);
+  });
+
+  it("sends a badge that can't cover the stake to the lobby, and Back returns to Stake with both seats", async () => {
+    const r = rigOn(recordingPort);
+    r.chain.balances.set(KITE.address, 4);
+    await seated(r);
+    r.core.send({ type: "play" });
+    await flush();
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state().seats[0].signed).toBe(true);
+    instantTap(r.core, 1, KITE, 1);
+    expect(r.buzzes.at(-1)).toEqual([1, "no"]);
+    expect(r.core.state()).toMatchObject({ phase: "lobby", lobby: { badge: KITE, from: "stake" } });
+    expect(r.chain.sent).toEqual([]);
+    r.core.send({ type: "back" });
+    expect(r.core.state().phase).toBe("stake");
+    expect(r.core.state().seats.map((seat) => [seat.badge, seat.signed])).toEqual([[NOVA, false], [KITE, false]]);
+  });
+
+  it("sends a badge whose balance isn't read yet to the lobby too", () => {
+    const r = rigOn(recordingPort);
+    r.core.send({ type: "booted" });
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    r.core.send({ type: "play" });
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.core.state()).toMatchObject({ phase: "lobby", lobby: { badge: NOVA, from: "stake" } });
+  });
+});
+
+describe("the lobby", () => {
+  it("opens from Home and shows the card of whoever taps, at either station, with their own label to claim", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "lobby" });
+    expect(r.core.state()).toMatchObject({ phase: "lobby", lobby: { badge: null, from: "home" } });
+    expect([r.core.plan(0), r.core.plan(1)]).toEqual(["identify", "identify"]);
+    const proposals: (string | null)[] = [];
+    for (const [seat, badge] of [[1, NOVA], [0, KITE], [1, JUNO]] as const) {
+      instantTap(r.core, seat, badge, 1);
+      expect(r.buzzes.at(-1)).toEqual([seat, "ok"]);
+      await flush();
+      expect(r.core.state().lobby.card).toEqual({ address: badge.address, name: null, balance: 100 });
+      proposals.push(r.core.state().lobby.proposal);
+    }
+    expect(proposals).toEqual(["nova", "kite", "juno"]);
+    // Nobody was seated by it.
+    expect(r.core.state().seats.map((seat) => seat.badge)).toEqual([null, null]);
+  });
+
+  it("proposes another label on request, then claims the one on show", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    instantTap(r.core, 0, NOVA, 1);
+    await flush();
+    r.core.send({ type: "propose" });
+    const another = r.core.state().lobby.proposal ?? "";
+    expect(another).toMatch(/^[a-z]+-\d\d$/);
+    expect(another).toMatch(LABEL);
+    r.core.send({ type: "claim" });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "claim", amount: 0, step: "signed" });
+    await until(r, (state) => state.lobby.card?.name !== null);
+    expect(r.chain.sent).toEqual([`claim ${another}`]);
+    expect(r.core.state().lobby).toMatchObject({ card: { name: `${another}.gamebox.eth` }, proposal: null });
+    // A badge with a name has nothing to claim.
+    r.core.send({ type: "claim" });
+    expect(r.chain.sent).toHaveLength(1);
+  });
+
+  it("claims the badge's own label: NOVA becomes nova.gamebox.eth, and a seat shows it", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    instantTap(r.core, 1, NOVA, 1);
+    await flush();
+    r.core.send({ type: "claim" });
+    await until(r, (state) => state.lobby.card?.name !== null);
+    expect(r.core.state().lobby.card?.name).toBe("nova.gamebox.eth");
+    r.core.send({ type: "back" });
+    instantTap(r.core, 0, NOVA, 1);
+    await flush();
+    expect(r.core.state().seats[0].ens).toBe("nova.gamebox.eth");
+  });
+
+  it("tops up 100 USDC and reads the balance again once it is paid", async () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    instantTap(r.core, 0, KITE, 1);
+    await flush();
+    r.core.send({ type: "topup" });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "topup", amount: TOPUP_USDC });
+    await until(r, (state) => state.lobby.card?.balance === 200);
+    expect(r.chain.sent).toEqual([`topup ${KITE.address}`]);
+  });
+
+  it("reads the title and the championship of the focused game, or Stock Duel's for a game not on chain", async () => {
+    const built: GameInfo = { ...TEAM_GAMES[0], id: "coin-rush", kind: "built", title: "Coin Rush" } as GameInfo;
+    const library: LibraryPort = { games: () => [...TEAM_GAMES, built], subscribe: () => () => {} };
+    const r = rigOn(recordingPort, { library });
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    for (const game of ["quick-draw", "coin-rush"]) {
+      r.core.send({ type: "focus", game });
+      r.core.send({ type: "lobby" });
+      await flush();
+      r.core.send({ type: "back" });
+    }
+    expect(r.chain.boards).toEqual(["quick-draw", "stock-duel"]);
+    r.core.send({ type: "lobby" });
+    await flush();
+    expect(r.core.state().lobby.board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2 });
+  });
+
+  it("goes back Home after IDLE_MS with nobody there", () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    r.clock.advance(IDLE_MS - 1);
+    expect(r.core.state().phase).toBe("lobby");
+    r.clock.advance(1);
+    expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("refund", () => {
+  /** A Quick Draw at 10 USDC each, its pot open, that ended with the Box's power off. */
+  async function offline(): Promise<Rig> {
+    const r = rig();
+    await toPlaying(r, "quick-draw");
+    r.core.setPower(false);
+    await until(r, (state) => state.txs[0]?.step === "paid");
+    instantTap(r.core, 0, NOVA, 1);
+    await until(r, (state) => state.phase === "refund");
     return r;
   }
 
-  it("forgets a refund on its way when a reset hands the stake back, and the late refund pays nothing twice", () => {
-    const r = refunding();
-    r.core.reset();
-    expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([0, 0]);
-    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} });
-    until(r, (state) => state.txs.every((tx) => tx.step === "paid"));
-    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} });
+  it("opens once the pot's refund delay has run, sends one refund for both, then goes Home", async () => {
+    const r = await offline();
+    const match = r.core.state().match;
+    expect(match?.refundAt).toBe(START + DEMO_REFUND_MS);
+    expect(r.core.plan(0)).toBe("none");
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.chain.sent).toEqual(["open 1"]);
+    await until(r, () => r.core.now() >= (match?.refundAt ?? Infinity));
+    expect(r.core.plan(1)).toBe("identify");
+    instantTap(r.core, 1, KITE, 1);
+    instantTap(r.core, 0, NOVA, 1);
+    expect(r.chain.sent).toEqual(["open 1", "refund 1"]);
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "refund", amount: 20 });
+    expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([10, 10]);
+    await until(r, (state) => state.match?.refunded[0] === true);
+    expect(r.core.state().match?.refunded).toEqual([true, true]);
+    expect([await r.chain.balance(NOVA.address), await r.chain.balance(KITE.address)]).toEqual([100, 100]);
+    r.clock.advance(REFUND_DONE_MS);
+    expect(r.core.state().phase).toBe("home");
   });
 
-  it("stakes more than the real balance only with the faucet's top-up, so the open always locks", () => {
-    const r = refunding();
-    r.core.reset();
-    r.core.setPower(true);
-    r.core.send({ type: "play" });
-    r.core.send({ type: "stake", amount: 25 });
-    instantTap(r.core, 0, NOVA, 1);
-    instantTap(r.core, 1, KITE, 1);
-    until(r, (state) => state.phase === "playing");
-    expect(r.store.current().escrow).toEqual({ [NOVA.address]: 25, [KITE.address]: 25 });
-    instantTap(r.core, 0, NOVA, 1);
-    until(r, (state) => state.phase === "result");
-    until(r, (state) => state.txs.length > 0 && state.txs.every((tx) => tx.step === "paid"));
-    expect(r.store.current().escrow).toEqual({});
+  it("lets the players leave Refund for Home before it opens", async () => {
+    const r = await offline();
+    r.core.send({ type: "home" });
+    expect(r.core.state().phase).toBe("home");
+    expect(r.chain.sent).toEqual(["open 1"]);
   });
 });
 
