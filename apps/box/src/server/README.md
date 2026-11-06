@@ -18,7 +18,7 @@ named.
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
 | `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games) and `forge/`. |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
-| `EGB_STATIONS` | `e4ba70,df3d88` | The station ids at Player 1's and Player 2's seats. |
+| `EGB_STATIONS` | `df3b9c,df3d88` | The station ids at Player 1's and Player 2's seats. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
 | `EGB_FORGE_PROVIDER` | `claude` | Who builds games: `claude` (the Pi's Claude login) or `sim` (a recorded build replayed, shown SIMULATED). Anything else stops the start. |
 

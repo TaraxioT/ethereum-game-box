@@ -1,0 +1,32 @@
+{
+  "name": "@egb/relayer",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./chain": "./src/chain.ts",
+    "./cors": "./src/cors.ts",
+    "./guard": "./src/guard.ts",
+    "./limits": "./src/limits.ts",
+    "./store": "./src/store.ts",
+    "./test/memory-store": "./test/memory-store.ts",
+    "./verify": "./src/verify.ts"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.live.json",
+    "test": "vitest run",
+    "test:live": "LIVE=1 vitest run test/live"
+  },
+  "dependencies": {
+    "@egb/shared": "workspace:*",
+    "@noble/curves": "2.4.0",
+    "viem": "2.57.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261015.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

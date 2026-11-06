@@ -17,7 +17,7 @@ receiver port ─bytes─▶ scanner ─lines─▶ events (parse) ─▶ taps f
 ```ts
 const taps = createTaps({
   receiver: "auto",                // a /dev/serial/by-id path, auto, or fake (EGB_RECEIVER)
-  stations: ["e4ba70", "df3d88"],  // P1's station, P2's (EGB_STATIONS)
+  stations: ["df3b9c", "df3d88"],  // P1's station, P2's (EGB_STATIONS)
   dataDir,                         // $EGB_DATA: badges.json (badges.fake.json for the fake)
   clock,                           // the core's Clock
   plan: (seat) => core.plan(seat), // asked after each touch

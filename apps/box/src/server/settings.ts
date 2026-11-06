@@ -25,7 +25,7 @@ export const DEFAULTS = {
   port: 8790,
   host: "127.0.0.1",
   receiver: "auto",
-  stations: "e4ba70,df3d88",
+  stations: "df3b9c,df3d88",
 } as const;
 
 export class SettingsError extends Error {
@@ -65,7 +65,7 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
   const stationIds = (get("EGB_STATIONS") ?? DEFAULTS.stations).split(",").map((id) => id.trim().toLowerCase());
   const [one = "", two = ""] = stationIds;
   if (stationIds.length !== 2 || !STATION.test(one) || !STATION.test(two) || one === two) {
-    problems.push("EGB_STATIONS must be two different station ids, P1 then P2 (six hex digits each: e4ba70,df3d88)");
+    problems.push("EGB_STATIONS must be two different station ids, P1 then P2 (six hex digits each: df3b9c,df3d88)");
   }
 
   if (problems.length > 0) throw new SettingsError(problems);

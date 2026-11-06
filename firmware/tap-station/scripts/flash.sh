@@ -9,7 +9,7 @@ pi=${EGB_PI:-pi}
 target=${1:-all}
 by_id=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_
 receiver="receiver esp32c3 ${by_id}7C:DF:A1:D5:04:CC-if00"
-p1="station esp32s3 ${by_id}DC:54:75:E4:BA:70-if00"
+p1="station esp32s3 ${by_id}DC:54:75:DF:3B:9C-if00"
 p2="station esp32s3 ${by_id}DC:54:75:DF:3D:88-if00"
 case "$target" in
   receiver) boards="$receiver" ;;
