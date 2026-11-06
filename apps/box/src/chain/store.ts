@@ -10,7 +10,7 @@
 // - topup: `POST /store/topup`.
 import type { MatchLog } from "@egb/sdk";
 import { formatUsdc, usdc } from "@egb/shared/names";
-import { jsonTextHash, judgeDigest, storeStakeDigest, type Judge, type JudgeRequest, type JudgeStatus, type StoreStake } from "@egb/shared/store";
+import { jsonTextHash, judgeDigest, storeStakeDigest, type Judge, type JudgeStatus, type StoreStake } from "@egb/shared/store";
 import { ETHERSCAN } from "@egb/shared/web";
 import type { Address } from "viem";
 import type { Clock, JudgeOrder, StoreChainPort, StoreStakeOrder } from "../core/ports.ts";
@@ -24,6 +24,10 @@ import type { Verifier } from "./verifier.ts";
 
 /** How often the verifier is asked how a match is going. */
 export const JUDGE_POLL_MS = 2_000;
+/** The wait before a log the verifier didn't take goes again, doubling up to the second. A try can use up one of the
+ *  judgements it allows a Box in an hour, so a short outage mustn't spend them. */
+export const JUDGE_RETRY_MS = 5_000;
+export const JUDGE_RETRY_MAX_MS = 2 * 60_000;
 /** A run takes up to 7 minutes, then its one retry, then the transaction: past this, the Box stops waiting. */
 export const JUDGE_GIVE_UP_MS = 20 * 60_000;
 
@@ -89,7 +93,7 @@ export function createStoreChain(options: StoreChainOptions): StoreChainPort {
     judge(order, watch) {
       const { round } = order;
       const text = JSON.stringify(matchLogOf(box, order));
-      const judge: Judge = { box, round: BigInt(round), log: jsonTextHash(text), deadline: deadline() };
+      const logHash = jsonTextHash(text);
       const started = clock.now();
       let last = "";
 
@@ -104,30 +108,35 @@ export function createStoreChain(options: StoreChainOptions): StoreChainPort {
         return over(update.step);
       };
       const fail = (reason: string): void => void tell({ step: "failed", payouts: null, hash: null, etherscan: null, reason });
-      const again = (run: () => void): void => {
+      const again = (ms: number, run: () => void): void => {
         if (clock.now() - started > JUDGE_GIVE_UP_MS) fail("no answer from the verifier");
-        else requests.later(JUDGE_POLL_MS, run);
+        else requests.later(ms, run);
       };
 
       const ask = (): void => {
         void verifier.status(box, round).then((status) => {
           const update = status && judgedOf(status);
           // Whatever it says, the pot stays on the rounds file: only the chain ends one, and the sweep reads the chain.
-          if (!update || !tell(update)) again(ask);
+          if (!update || !tell(update)) again(JUDGE_POLL_MS, ask);
         });
       };
-      const send = (request: JudgeRequest): void => {
-        void verifier.judge(request).then((reply) => {
-          if (reply.taken) return ask();
-          if (reply.again) return again(() => send(request));
-          fail(reply.error);
-        });
+      /** One try. Each is signed afresh: the last deadline may have passed, and the log's hash is what names the match. */
+      const send = (tries: number): void => {
+        const judge: Judge = { box, round: BigInt(round), log: logHash, deadline: deadline() };
+        signer
+          .sign(judgeDigest(judge, storePot))
+          .then((sig) => verifier.judge({ log: text, deadline: String(judge.deadline), ...sig }))
+          .then(
+            (reply) => {
+              if (reply.taken) return ask();
+              if (reply.again) return again(Math.min(JUDGE_RETRY_MS * 2 ** tries, JUDGE_RETRY_MAX_MS), () => send(tries + 1));
+              fail(reply.error);
+            },
+            (error: unknown) => fail(error instanceof Error ? error.message : String(error)),
+          );
       };
 
-      signer.sign(judgeDigest(judge, storePot)).then(
-        (sig) => send({ log: text, deadline: String(judge.deadline), ...sig }),
-        (error: unknown) => fail(error instanceof Error ? error.message : String(error)),
-      );
+      send(0);
     },
   };
 }

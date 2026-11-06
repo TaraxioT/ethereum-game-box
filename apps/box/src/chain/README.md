@@ -38,12 +38,13 @@ a second `FakeUSDC`.
 
 A closed match goes to the verifier (`EGB_VERIFIER_URL`, `apps/verifier`), not the relayer: the Box writes the `MatchLog`
 from the core's entries, signs a `Judge` ("Game Box Verifier" v1, its verifying contract the `StorePot`) over the
-keccak256 of its exact JSON text, and sends that same text to `POST /judge`. A verifier that is down or busy is asked
-again, with the same request, every 2 seconds. Then `GET /judge/<box>/<round>` is followed every 2 seconds to `paid`,
-`refunded` or `failed`. Failed, a refusal, or 20 minutes with no end to it (`JUDGE_GIVE_UP_MS`, past the verifier's two
-runs and its payment) go to the core's Refund. Only the chain pays: what the verifier says is shown, and it can't move a
-stake or end a pot. Whatever it says, the round stays on the file for the sweep, which reads the chain: it forgets a pot
-that is over, and refunds one that isn't.
+keccak256 of its exact JSON text, and sends that same text to `POST /judge`. A verifier that is down or busy gets it
+again after 5 seconds, then doubling up to every 2 minutes (a try can use up one of the judgements it allows a Box in an
+hour), each try signed afresh, as a long outage outlasts a deadline. Then `GET /judge/<box>/<round>` is followed every 2
+seconds to `paid`, `refunded` or `failed`. Failed, a refusal, or 20 minutes with no end to it (`JUDGE_GIVE_UP_MS`, past
+the verifier's two runs and its payment) go to the core's Refund. Only the chain pays: what the verifier says is shown,
+and it can't move a stake or end a pot. Whatever it says, the round stays on the file for the sweep, which reads the
+chain: it forgets a pot that is over, and refunds one that isn't.
 
 Reads go to `SEPOLIA_RPC_URL`: USDC balances, `GameBoxNames.nameOf`, the pot and rounds, the head for the block clock,
 and a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`) and open championship (`Championships.openCup`, then
@@ -57,7 +58,7 @@ The RPC URL carries the node's key, so every error that leaves `reads.ts` has it
 |---|---|---|
 | `port.ts` | The port: requests, rounds, the sweep, the result's lines | `createSepoliaChain(options)`, `stakeOf`, `resultOf`, `seatOf`, `outcomeLines` |
 | `requests.ts` | A request through the relayer: signed, sent and followed to its end | `createRequests(options)`, `RequestEnd`, `POLL_MS`, `GIVE_UP_MS` |
-| `store.ts` | The port's `store`: `StorePot`, Store USDC and the judge | `createStoreChain(options)`, `storeStakeOf`, `matchLogOf`, `JUDGE_POLL_MS`, `JUDGE_GIVE_UP_MS` |
+| `store.ts` | The port's `store`: `StorePot`, Store USDC and the judge | `createStoreChain(options)`, `storeStakeOf`, `matchLogOf`, `JUDGE_POLL_MS`, `JUDGE_RETRY_MS`, `JUDGE_RETRY_MAX_MS`, `JUDGE_GIVE_UP_MS` |
 | `verifier.ts` | The verifier's HTTP API, its answers checked | `verifierAt(url)`, `parseStatus` |
 | `relayer.ts` | The relayer's HTTP API: POSTs answered with a `TxView` or an error | `relayerAt(url)` |
 | `reads.ts` | Sepolia reads, URLs redacted from every error | `sepoliaReads(rpcUrl)`, `redact` |
@@ -68,6 +69,6 @@ Tests: `port.test.ts` checks the `Stake`, `Result` and `Seat` the Box signs agai
 byte (and each posted signature against the vector key), every route's body, the steps to paid or failed, a refusal, an
 open that may have landed, a key that can't sign, the rounds across a restart, the sweep and the result's lines.
 `store.test.ts` does the same for a store game: `Stake` and `Judge` against the store's vectors, every route's body, each
-way an open may have landed, the verifier followed to each end, a refusal, an outage, one that never answers, and its
-HTTP API. `server/chain-match.test.ts` plays a whole match through this port on the Box server, and
+way an open may have landed, the verifier followed to each end, a refusal, an outage with its backoff and fresh
+deadlines, one that never answers, and its HTTP API. `server/chain-match.test.ts` plays a whole match through this port on the Box server, and
 `server/store-match.test.ts` a store game's.

@@ -17,7 +17,7 @@ import { softwareSigner } from "../signer/software.ts";
 import { createSepoliaChain, REFUND_AFTER_MS } from "./port.ts";
 import { GIVE_UP_MS, POLL_MS } from "./requests.ts";
 import { roundsFile } from "./rounds.ts";
-import { JUDGE_GIVE_UP_MS, JUDGE_POLL_MS, matchLogOf, storeStakeOf } from "./store.ts";
+import { JUDGE_GIVE_UP_MS, JUDGE_POLL_MS, JUDGE_RETRY_MAX_MS, JUDGE_RETRY_MS, matchLogOf, storeStakeOf } from "./store.ts";
 import { memoryReads, mockRelayer, mockVerifier } from "./testing.ts";
 import { parseStatus, verifierAt } from "./verifier.ts";
 
@@ -333,17 +333,67 @@ describe("the judge on the Sepolia port", () => {
     expect(r.verifier.requests).toHaveLength(1);
   });
 
-  it("sends the same request again while the verifier is down", async () => {
+  it("sends the same log again while the verifier is down, and follows it once taken", async () => {
     const r = rig();
     r.verifier.reply = { taken: false, again: true, error: "the verifier answered 503" };
     r.store.judge(ORDER, r.hear);
     await flush();
-    await r.tick(JUDGE_POLL_MS);
+    await r.tick(JUDGE_RETRY_MS);
     r.verifier.reply = { taken: true };
-    await r.tick(JUDGE_POLL_MS);
+    await r.tick(JUDGE_RETRY_MS * 2);
     expect(r.verifier.requests).toHaveLength(3);
-    expect(new Set(r.verifier.requests.map((request) => JSON.stringify(request))).size).toBe(1);
+    expect(new Set(r.verifier.requests.map((request) => request.log)).size).toBe(1);
     expect(r.said).toEqual([]);
+    r.verifier.statuses.set(`${BOX}/3`, status("judging"));
+    await r.tick(JUDGE_POLL_MS);
+    expect(r.said.map((u) => u.step)).toEqual(["judging"]);
+    expect(r.verifier.requests).toHaveLength(3);
+  });
+
+  it("backs off while the verifier is down, as each try may use up one of the Box's 60 judgements an hour", async () => {
+    const r = rig();
+    r.verifier.reply = { taken: false, again: true, error: "the verifier answered 502" };
+    r.store.judge(ORDER, r.hear);
+    await flush();
+    const sent = [NOW];
+    while (r.clock.now() - NOW < JUDGE_GIVE_UP_MS) {
+      const before = r.verifier.requests.length;
+      await r.tick(1_000);
+      if (r.verifier.requests.length > before) sent.push(r.clock.now());
+    }
+    expect(r.verifier.requests.length).toBeLessThan(20);
+    const gaps = sent.slice(1).map((at, i) => at - sent[i]!);
+    expect(gaps.slice(0, 5)).toEqual([1, 2, 4, 8, 16].map((times) => JUDGE_RETRY_MS * times));
+    expect(new Set(gaps.slice(5))).toEqual(new Set([JUDGE_RETRY_MAX_MS]));
+    await r.tick(JUDGE_RETRY_MAX_MS);
+    expect(r.said).toMatchObject([{ step: "failed", reason: "no answer from the verifier" }]);
+  });
+
+  it("signs each try afresh, so a verifier down past the first deadline can still take the log", async () => {
+    const r = rig();
+    r.verifier.reply = { taken: false, again: true, error: "the verifier answered 503" };
+    r.store.judge(ORDER, r.hear);
+    await flush();
+    while (r.clock.now() - NOW < 11 * 60_000) await r.tick(1_000);
+    const { requests } = r.verifier;
+    expect(Number(requests.at(-1)?.deadline) * 1000).toBeGreaterThan(r.clock.now());
+    for (const request of requests) {
+      expect(request.log).toBe(requests[0]?.log);
+      const digest = judgeDigest({ box: BOX, round: 3n, log: jsonTextHash(request.log), deadline: BigInt(request.deadline) }, STORE_VECTOR.storePot);
+      expect(verifyP256(KEY, BigInt(request.r), BigInt(request.s), hexToBytes(digest))).toBe(true);
+    }
+  });
+
+  it("fails when the Box's key stops signing between tries", async () => {
+    const key = softwareSigner(P256_VECTOR_KEY.privateKey);
+    let signed = 0;
+    const r = rig({ ...key, sign: (digest) => (signed++ === 0 ? key.sign(digest) : Promise.reject(new Error("the token is out"))) });
+    r.verifier.reply = { taken: false, again: true, error: "the verifier answered 503" };
+    r.store.judge(ORDER, r.hear);
+    await flush();
+    await r.tick(JUDGE_RETRY_MS);
+    expect(r.said).toMatchObject([{ step: "failed", reason: "the token is out" }]);
+    expect(r.verifier.requests).toHaveLength(1);
   });
 
   it("gives up on a verifier that never answers, and the pot stays for the sweep", async () => {

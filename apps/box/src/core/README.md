@@ -112,7 +112,8 @@ keeps the money, the clock and the log, and the verifier says who gets what. It 
   short of the stake goes to the lobby, whose top-up is Store USDC too, and a badge needs a player name where the port
   says so. There's no title or championship to play for. Both signed, `store.open` sends a `Stake` naming the bundle's
   hash, and the match begins once it is confirmed.
-- **The match** has no rules child. The play is `{ game: "store", id, title, bundle, taps, endsAt, lines, judged, resultAt }`.
+- **The match** has no rules child. The play is
+  `{ game: "store", id, title, bundle, taps, endsAt, lines, judged, resultAt }`.
   A finished tap, judged at its touch time like a built game's (a known badge's at its touch unless the manifest's
   taps are `random`), goes in the log and to the frame as a `game-tap` event. What the page says arrives as a `frame`
   command, once the kiosk's gate has passed it: `event` goes in the log as the game's claim, `station` sets that seat's

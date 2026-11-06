@@ -15,7 +15,7 @@ export interface Rounds {
   /** The round the next `take` gives. */
   peek(): number;
   opened(round: number, at: number, kind?: PotKind): void;
-  /** The pot settled or was refunded. */
+  /** The pot is over: it settled, was refunded, or was refused at its open. */
   closed(round: number): void;
   /** Pots still open, with when each opened (ms since the epoch). */
   open(kind?: PotKind): ReadonlyMap<number, number>;
