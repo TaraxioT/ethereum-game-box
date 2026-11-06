@@ -31,7 +31,7 @@ const DEFAULT_HOURS = 3;
 
 const WHY: Readonly<Record<LeaseStatus["standing"], string>> = {
   none: "This Box has no name yet. Stake GBX to register it and turn it on.",
-  active: "Its lease has run out. Stake GBX to turn it back on.",
+  active: "No GBX is staked on it, so it can't host. Stake GBX to turn it on.",
   suspended: "Nothing is staked on it, so its name is suspended. Stake GBX to turn it back on.",
   revoked: "Its name is revoked: gamebox.eth's admin took it back.",
 };
