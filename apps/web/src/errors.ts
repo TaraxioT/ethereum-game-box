@@ -1,9 +1,13 @@
-// Decodes a revert to its error name, from every names ABI and the ENSv2 slice, so a refusal reads as
+// Decodes a revert to its error name, from every names and USDC ABI and the ENSv2 slice, so a refusal reads as
 // `EACUnauthorizedAccountRoles` and not as hex.
 import { type Abi, type Hex, BaseError, decodeErrorResult } from "viem";
 import {
   boxResultsAbi,
+  boxSeatsAbi,
+  championshipsAbi,
   demoLicencesAbi,
+  duelPotAbi,
+  fakeUsdcAbi,
   gameBoxNamesAbi,
   permissionedRegistryAbi,
   permissionedResolverAbi,
@@ -16,6 +20,10 @@ const errorsAbi = [
   ...playerStatsAbi,
   ...boxResultsAbi,
   ...demoLicencesAbi,
+  ...championshipsAbi,
+  ...duelPotAbi,
+  ...fakeUsdcAbi,
+  ...boxSeatsAbi,
   ...permissionedRegistryAbi,
   ...permissionedResolverAbi,
   ...universalResolverAbi,

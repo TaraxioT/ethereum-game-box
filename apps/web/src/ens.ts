@@ -1,7 +1,7 @@
 // The ENS reads, in one place: stock viem through ENSv2's Universal Resolver. A name that doesn't resolve (expired,
 // never registered, no resolver) reads as null, and nothing is cached, so a lapsed name never shows a stale value.
 import type { Address, PublicClient } from "viem";
-import { ensAddress } from "@egb/shared/names";
+import { ensAddress, fullName } from "@egb/shared/names";
 
 const universalResolverAddress = ensAddress("UniversalResolver");
 
@@ -36,4 +36,10 @@ export async function readTexts<K extends string>(
 /** The address's primary name (ENS reverse resolution, checked forward by viem), or null. */
 export async function readPrimaryName(client: PublicClient, address: Address): Promise<string | null> {
   return (await client.getEnsName({ address, universalResolverAddress })) ?? null;
+}
+
+/** A name as a visitor typed it: lower-cased, and a bare label is a Game Box player name (`nova.gamebox.eth`). */
+export function playerName(typed: string): string {
+  const name = typed.trim().toLowerCase();
+  return name.includes(".") ? name : fullName(name);
 }

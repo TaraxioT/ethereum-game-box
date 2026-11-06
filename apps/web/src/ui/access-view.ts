@@ -1,8 +1,11 @@
 // Draws the role table and the Try grid. The grid lights the cells the chain allows; a refusal is a quiet ✕ with
 // the decoded error in its tooltip; a cell whose answer changed since the last try is outlined in red.
-import type { Account, RoleRow, TryCell } from "../access.ts";
+import type { Address } from "viem";
+
+import { type Account, type RoleRow, type TryCell, tryAll } from "../access.ts";
+import { client } from "../chain.ts";
 import type { AccountKind } from "../kinds.ts";
-import { addressLink, append, h, short } from "./dom.ts";
+import { addressLink, append, h, key, short } from "./dom.ts";
 
 const KIND_NOTE: Record<AccountKind, string> = {
   P256Account: "moved only by a P-256 signature (a passkey, the Box's token or a Worker key)",
@@ -86,4 +89,23 @@ export function tryLegend(cells: TryCell[][] | null): HTMLElement {
     h("span", {}, h("i", { style: "box-shadow:inset 0 0 0 1px rgb(207 232 246 / 0.2)" }), "reverts ", h("code", {}, [...errors].join(", ") || "…")),
     h("span", {}, h("i", { style: "box-shadow:inset 0 0 0 1px var(--alert);background:rgb(255 45 61 / .15)" }), "changed since the last try"),
   );
+}
+
+/** Each name's Try answers from its last draw, so a cell that changed shows it. */
+const memories = new Map<string, TryMemory>();
+
+/** The Try grid on `name`'s resolver, its legend and a Try-again key, run once at once. `run` tries every cell again. */
+export function tryBlock(name: string, resolver: Address, accounts: readonly Account[], keys: readonly string[]): { el: HTMLElement; run: () => Promise<void> } {
+  const memory = memories.get(name) ?? new Map();
+  memories.set(name, memory);
+  const grid = h("div", { "data-focus": "try" }, tryGrid(accounts, keys, null, new Map()));
+  const legend = h("div", {}, tryLegend(null));
+  const run = async () => {
+    grid.replaceChildren(tryGrid(accounts, keys, null, new Map()));
+    const cells = await tryAll(client, name, resolver, accounts, keys);
+    grid.replaceChildren(tryGrid(accounts, keys, cells, memory));
+    legend.replaceChildren(tryLegend(cells));
+  };
+  void run();
+  return { el: h("div", {}, grid, legend, h("div.actions", {}, key("Try again", () => void run()))), run };
 }

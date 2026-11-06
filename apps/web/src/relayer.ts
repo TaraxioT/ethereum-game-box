@@ -14,6 +14,17 @@ import type {
 
 import { DEMO_BOX_URL, RELAYER_URL } from "./config.ts";
 
+/** `POST /usdc/topup`: 100 test USDC to a player whose balance is under 25. `player` is an address or an ENS name,
+ * which the relayer resolves. */
+export interface TopUpRequest {
+  player: string;
+}
+
+/** `POST /cup/close`: closes `game`'s open championship once its `ends` has passed. */
+export interface CloseCupRequest {
+  game: string;
+}
+
 /** A refused request: the reason, and the contract error the relayer's `eth_call` hit, if any. */
 export class ApiRefusal extends Error {
   constructor(
@@ -39,6 +50,8 @@ export const relayer = {
   claim: (body: ClaimRequest) => request<TxView>(RELAYER_URL, "/names/claim", body),
   popup: (body: PopupRequest) => request<TxView>(RELAYER_URL, "/box/popup", body),
   drip: (body: DripRequest) => request<TxView>(RELAYER_URL, "/names/drip", body),
+  topUp: (body: TopUpRequest) => request<TxView>(RELAYER_URL, "/usdc/topup", body),
+  closeCup: (body: CloseCupRequest) => request<TxView>(RELAYER_URL, "/cup/close", body),
   tx: (id: string) => request<TxView>(RELAYER_URL, `/tx/${encodeURIComponent(id)}`),
   health: () => request<RelayerHealth>(RELAYER_URL, "/health"),
 };

@@ -6,6 +6,7 @@ import {
   AGENT_PROTOCOLS,
   BOX_KEYS,
   BOX_STATUS,
+  CUP_KEYS,
   DEFAULT_KEYS,
   PARENT_NAME,
   POPUP_PREFIX,
@@ -188,12 +189,13 @@ export async function readAgent(client: PublicClient): Promise<AgentView> {
 // ---------------------------------------------------------------------------------------------------------------------
 // What a name is, and who and what its inspector shows
 
-export type NameKind = "parent" | "box" | "popup" | "player" | "agent" | "game" | "title" | "other";
+export type NameKind = "parent" | "box" | "popup" | "player" | "agent" | "game" | "title" | "cup" | "other";
 
 export function kindOf(dir: Directory, name: string): NameKind {
   if (name === PARENT_NAME) return "parent";
   const labels = name.split(".");
-  if (labels.length === 4 && labels[0] === "champion" && name.endsWith(`.${PARENT_NAME}`)) return "title";
+  // Two registrars write a game's registry: GameBoxNames its title, `champion`, and Championships everything else.
+  if (labels.length === 4 && name.endsWith(`.${PARENT_NAME}`)) return labels[0] === "champion" ? "title" : "cup";
   if (labels.length !== 3 || !name.endsWith(`.${PARENT_NAME}`)) return "other";
   const label = labels[0] ?? "";
   if (label === AGENT_LABEL) return "agent";
@@ -216,6 +218,8 @@ export function keysFor(kind: NameKind): string[] {
       return [ADDR, "stats", AGENT_KEYS.context, agentEndpointKey("mcp"), "avatar"];
     case "title":
       return [ADDR, ...Object.values(TITLE_KEYS)];
+    case "cup":
+      return [ADDR, ...Object.values(CUP_KEYS)];
     case "game":
       return ["title", "titleTerm", "description"];
     default:
@@ -269,6 +273,14 @@ export async function accountsFor(client: PublicClient, dir: Directory, name: st
     add({ label: "GameBoxNames", role: "registrar", address: names });
     if (holder) add({ label: playerLabel(dir, holder) ?? "holder", role: "holds the title", address: holder });
     add({ label: "PlayerStats", role: "the game's stats writer", address: stats });
+    add(otherPlayer(holder));
+  } else if (kind === "cup") {
+    const cup = [...dir.cups.values()].find((c) => c.name === name);
+    const holder = await readAddress(client, name);
+    add({ label: "Championships", role: cup?.closed ? "closed it, and gave up every role here" : "writes the records", address: contractAddress("Championships") });
+    if (holder) add({ label: playerLabel(dir, holder) ?? "holder", role: cup?.closed ? "the winner: holds the name" : "the leader", address: holder });
+    add({ label: "GameBoxNames", role: "registrar", address: names });
+    if (cup) add({ label: "opener", role: "opened it and paid the prize", address: cup.opener });
     add(otherPlayer(holder));
   } else {
     add({ label: "GameBoxNames", role: "registrar", address: names });
