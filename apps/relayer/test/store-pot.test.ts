@@ -1,9 +1,7 @@
 import { fakeUsdcAbi, storePotAbi, usdc } from '@egb/shared/names';
-import { storePotAddress, storeUsdcAddress } from '@egb/shared/store';
-import { type Abi, type Address, decodeFunctionData, keccak256, toHex } from 'viem';
-import { describe, expect, it } from 'vitest';
+import { type Abi, type Address, decodeFunctionData, getAddress, keccak256, toHex } from 'viem';
+import { describe, expect, it, vi } from 'vitest';
 
-import { deployedAddresses } from '../src/request.ts';
 import { BUNDLE, highSignature, newBadge, storeStakeBody, verdictBody, voidBody } from './bodies.ts';
 import { Revert, nodeRevert } from './fake-chain.ts';
 import { BOX, NOW, STORE_POT, STORE_USDC, type StorePotEntry, World, addresses, boxKey } from './world.ts';
@@ -734,9 +732,17 @@ describe('before StorePot is deployed', () => {
     expect(world.chain.sent).toHaveLength(0);
   });
 
-  it('takes both addresses from the deployments, undefined until then', () => {
-    expect(deployedAddresses().storePot).toBe(storePotAddress());
-    expect(deployedAddresses().storeUsdc).toBe(storeUsdcAddress());
+  it('reads the pot and its token each from its own key in the deployments', async () => {
+    const entry = (address: Address) => ({ address, deployBlock: 1, txHash: '0x', verified: false });
+    vi.resetModules();
+    vi.doMock('../../../deployments/sepolia.json', async (original) => {
+      const { default: sepolia } = await original<{ default: { contracts: object } }>();
+      const contracts = { ...sepolia.contracts, StorePot: entry(STORE_POT), StoreUSDC: entry(STORE_USDC) };
+      return { default: { ...sepolia, contracts } };
+    });
+    const { deployedAddresses } = await import('../src/request.ts');
+    vi.doUnmock('../../../deployments/sepolia.json');
+    expect(deployedAddresses()).toMatchObject({ storePot: getAddress(STORE_POT), storeUsdc: getAddress(STORE_USDC) });
   });
 
   it('leaves the other routes alone', async () => {
