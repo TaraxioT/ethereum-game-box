@@ -1,0 +1,74 @@
+// The HTTP routes. Each POST route runs its checks (no gas), then hands the checked call to the sender.
+
+import type { RelayerHealth, TxView } from '@egb/shared/names';
+
+import { describe } from './chain.ts';
+import { corsHeaders, originAllowed } from './cors.ts';
+import { Refusal } from './refusal.ts';
+import type { Context, Prepared } from './request.ts';
+import { prepareClaim } from './requests/claim.ts';
+import { prepareDrip } from './requests/drip.ts';
+import { prepareExecute } from './requests/execute.ts';
+import { preparePopup } from './requests/popup.ts';
+import { prepareResult } from './requests/result.ts';
+import type { Submitted } from './sender.ts';
+
+/** The sender, as the routes see it (the Durable Object's stub, or a `Relay` in tests). */
+export interface Relayer {
+  submit(request: Prepared, ip: string): Promise<Submitted>;
+  status(id: string): Promise<TxView | null>;
+  health(): Promise<RelayerHealth>;
+}
+
+export interface Deps {
+  ctx: Context;
+  relayer: Relayer;
+  allowedOrigins: string;
+}
+
+const prepare: Record<string, (ctx: Context, body: unknown) => Promise<Prepared>> = {
+  '/names/claim': prepareClaim,
+  '/names/drip': prepareDrip,
+  '/box/execute': prepareExecute,
+  '/box/result': prepareResult,
+  '/box/popup': preparePopup,
+};
+
+const json = (status: number, body: unknown, headers: Record<string, string>) =>
+  Response.json(body, { status, headers });
+
+export async function handle(request: Request, deps: Deps): Promise<Response> {
+  const origin = request.headers.get('origin');
+  if (origin && !originAllowed(origin, deps.allowedOrigins)) return json(403, { error: 'origin not allowed' }, {});
+  const cors = corsHeaders(origin);
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+
+  try {
+    const { pathname } = new URL(request.url);
+    const route = prepare[pathname];
+    if (route && request.method === 'POST') {
+      const body = await request.json().catch(() => {
+        throw new Refusal(400, 'body: expected JSON');
+      });
+      const checked = await route(deps.ctx, body);
+      const sent = await deps.relayer.submit(checked, request.headers.get('cf-connecting-ip') ?? 'unknown');
+      return sent.ok ? json(202, sent.tx, cors) : json(sent.status, { error: sent.error }, cors);
+    }
+    if (request.method === 'GET') {
+      const id = /^\/tx\/([0-9a-f-]{36})$/.exec(pathname)?.[1];
+      if (id) {
+        const tx = await deps.relayer.status(id);
+        return tx ? json(200, tx, cors) : json(404, { error: 'no request with that id' }, cors);
+      }
+      if (pathname === '/health') return json(200, await deps.relayer.health(), cors);
+    }
+    return json(404, { error: 'not found' }, cors);
+  } catch (error) {
+    if (error instanceof Refusal) {
+      return json(error.status, { error: error.message, ...(error.revert && { revert: error.revert }) }, cors);
+    }
+    const message = describe(error);
+    console.error(message);
+    return json(502, { error: `upstream: ${message}` }, cors);
+  }
+}
