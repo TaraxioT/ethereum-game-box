@@ -5,13 +5,12 @@
 import { type BoxContext, requireBoxSigned, requireLabel } from '@egb/relayer/box';
 import * as field from '@egb/relayer/parse';
 import { Refusal } from '@egb/relayer/refusal';
-import { LOG_LIMITS, type MatchLog, logProblems } from '@egb/sdk';
+import { type MatchLog, logTextProblems } from '@egb/sdk';
 import { type JudgeStatus, judgeDigest, jsonTextHash } from '@egb/shared/store';
 import { type Address, type Hex, isAddressEqual } from 'viem';
 
 import { fetchManifest } from './bundle.ts';
 import { ANOTHER_LOG, type JudgeJob } from './judge.ts';
-import { parsed, utf8Bytes } from './json.ts';
 import { POT_STATE, type Pot, readPot } from './pot.ts';
 import type { Upstream } from './upstream.ts';
 
@@ -44,19 +43,17 @@ export interface Signed {
 
 const ANOTHER_LOG_REFUSAL = 'this pot is already being judged, on another log';
 
-/** The request's fields and its log, checked for shape alone. */
+/** The request's fields and its log, checked for shape alone. The check is on the text, since the agent, the signature
+ *  and the audit record all use the text, not what it parses to. */
 export function parseRequest(input: unknown): Signed {
   const body = field.object(input);
   const text = field.text(body, 'log');
   const deadline = field.uint(body, 'deadline');
   const r = field.bytes32(body, 'r');
   const s = field.bytes32(body, 's');
-  if (utf8Bytes(text) > LOG_LIMITS.logBytes) throw new Refusal(400, `log: over ${LOG_LIMITS.logBytes} bytes`);
-  const log = parsed(text);
-  if (log === undefined) throw new Refusal(400, 'log: not JSON');
-  const [problem] = logProblems(log);
+  const [problem] = logTextProblems(text);
   if (problem) throw new Refusal(400, `log: ${problem}`);
-  return { text, log: log as MatchLog, hash: jsonTextHash(text), deadline, r, s };
+  return { text, log: JSON.parse(text) as MatchLog, hash: jsonTextHash(text), deadline, r, s };
 }
 
 /** Throws unless the Box signed this exact log, and the deadline hasn't passed. */

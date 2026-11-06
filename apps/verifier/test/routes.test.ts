@@ -59,14 +59,23 @@ describe('a malformed request', () => {
   it('is refused with a log that is not JSON', async () => {
     const { world, deps } = await setup();
     const reply = await world.post(deps, world.signedRequest(world.log, { text: 'not json' }));
-    expect(reply).toMatchObject({ status: 400, body: { error: 'log: not JSON' } });
+    expect(reply).toMatchObject({ status: 400, body: { error: 'log: the log is not JSON' } });
   });
 
   it('is refused with a log over the limit, before parsing it', async () => {
     const { world, deps } = await setup();
     const text = `${JSON.stringify(world.log)}${' '.repeat(1024 * 1024)}`;
     const reply = await world.post(deps, world.signedRequest(world.log, { text }));
-    expect(reply).toMatchObject({ status: 400, body: { error: 'log: over 1048576 bytes' } });
+    expect(reply).toMatchObject({ status: 400, body: { error: 'log: the log is over 1048576 bytes' } });
+  });
+
+  it('is refused with a log that reads two ways: the agent and the record get the text, not the parsed value', async () => {
+    const { world, deps } = await setup();
+    const first = '"entries":[{"src":"box","t":"tap","seat":1,"at":2,"roll":null},{"src":"box","t":"end","at":3,"why":"game"}]';
+    const text = `{${first},${JSON.stringify(world.log).slice(1)}`;
+    const reply = await world.post(deps, world.signedRequest(world.log, { text }));
+    expect(reply).toMatchObject({ status: 400, body: { error: 'log: the log repeats a key, or spells a value oddly' } });
+    expectNothingRan(world);
   });
 
   it.each([

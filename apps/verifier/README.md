@@ -24,7 +24,8 @@ means something upstream failed and the Box can repeat it. `503` means `StorePot
 
 `POST /judge` checks, in this order, and starts nothing until all of them pass:
 
-1. The body, and `logProblems` on the log. A log over 1 MiB is refused before parsing.
+1. The body, and `logTextProblems` on the log's exact text. A log over 1 MiB is refused before parsing, and one with a
+   repeated key is refused, as it would read two ways.
 2. The deadline, and the Box's P-256 signature over `Judge`, against `GameBoxNames.getBox`, as the relayer checks it.
 3. Whether this pot already has a judgement. The same log gets the running one back, and another log is refused.
 4. The Box's rate limit: 60 new judgements an hour. It counts only requests the Box signed.
