@@ -8,7 +8,7 @@ A built game's screen runs with no same-origin access, its page under a CSP with
 (`@egb/sdk`'s `ToFrame`); it answers only `ready` and `error` (`FromFrame`).
 
 **The kiosk's side.** `frameView(builtMatch)` is the router's view for a built match (`views/routes.ts`); in dev,
-Vite passes `/games`, `/parts…` and `/frame.js` through to the Box server.
+Vite passes `/games`, `/parts…`, `/frame.js`, `/bundle-host.js` and `/store/…` through to the Box server.
 
 `frameView(source)` is the `ViewFactory`: the iframe fills the stage below
 the Box's overlay (130 px landscape, 150 px portrait). When the frame says `ready` it gets `init` with the state as it
@@ -106,5 +106,6 @@ preference tried stops the prerender. So nothing else on the Pi's loopback may t
 
 Tests: `frame.test.ts` (the sandbox attribute, the channel dropping anything but ready and error and anything from
 another window or a non-opaque origin, closing for good on the frame's second load, the runtime's mount, updates and capped errors, the feed's events).
-`bundle.test.ts` (what a page may say and how much, `window.egb`, the view of a store match). A real browser proves the
-walls: `server/games/sandbox.test.ts`.
+`bundle.test.ts` (what a page may say and how much, what a heavy message costs, `window.egb`, the view of a store match).
+`dev-proxy.test.ts` (the dev server passes a frame's paths to the Box, and keeps the Host on its pages). A real browser
+proves the walls: `server/games/sandbox.test.ts`.

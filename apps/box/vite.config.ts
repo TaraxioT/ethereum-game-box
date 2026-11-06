@@ -52,8 +52,10 @@ export default defineConfig(() => {
     envDir: "..",
     plugins: [pagePaths()],
     build: { outDir: "../dist/screen", emptyOutDir: true, target: "es2023", rollupOptions: { input } },
-    // Built games' cartridges and frames are the Box server's too (server/games/): the frame's page, its parts and fonts.
-    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": { target: BOX, bypass: ownFile }, "/parts": BOX, "/frame.js": BOX } },
+    // Games' cartridges and frames are the Box server's too (server/games/): a frame's page, its parts and fonts, and a
+    // store bundle's files and host script. A string target rewrites the Host, and a frame page's CSP names the origin
+    // from its Host, so /games and /store/ are objects: the page stays on the dev server's origin.
+    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": { target: BOX, bypass: ownFile }, "/parts": BOX, "/frame.js": BOX, "/bundle-host.js": BOX, "/store/": { target: BOX } } },
     test: { root: ".", include: ["src/**/*.test.ts"], environment: "node", passWithNoTests: true },
   };
 });
