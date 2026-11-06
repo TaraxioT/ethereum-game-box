@@ -6,7 +6,7 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 
 | Folder | Holds |
 |---|---|
-| `src/box/` | The P-256 account every role-holder uses (`P256Account`) and its factory, the Box registry (register, rotate, revoke a Box's P-256 key) and P-256 verification with low-s enforced |
+| `src/box/` | The P-256 account every role-holder uses (`P256Account`), its factory (`P256AccountFactory`), and P-256 verification through the EIP-7951 precompile with low `s` enforced. Box licences and key rotation live in `names/GameBoxNames.sol` |
 | `src/games/` | The game interface and escrow (open, settle, refund), then one contract per game |
 | `src/token/` | The Game Box token and its launch through Uniswap's auction |
 | `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
