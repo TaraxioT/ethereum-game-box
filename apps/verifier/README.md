@@ -26,7 +26,8 @@ means something upstream failed and the Box can repeat it. `503` means `StorePot
 
 1. The body, and `logTextProblems` on the log's exact text. A log over 1 MiB is refused before parsing, and one with a
    repeated key is refused, as it would read two ways.
-2. The deadline, and the Box's P-256 signature over `Judge`, against `GameBoxNames.getBox`, as the relayer checks it.
+2. The deadline, and the Box's P-256 signature over `Judge`, against `GameBoxNames.getBox`, as the relayer checks it. That
+   reads the chain for anyone who asks, signed or not, so 600 requests an hour from one address get that far.
 3. Whether this pot already has a judgement. The same log gets the running one back, and another log is refused.
 4. The Box's rate limit: 60 new judgements an hour. It counts only requests the Box signed. A request that then fails
    upstream gives its count back, so a Box repeating a `502` through an outage uses none of it. A refusal keeps its count.
@@ -131,7 +132,7 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 | `src/routes.ts`, `src/admit.ts` | The HTTP routes, and `POST /judge`'s checks |
 | `src/body.ts` | Reads a body with a byte count, so a chunked one can't dodge a limit |
 | `src/bundle.ts` | Fetches a zip by hash and checks it |
-| `src/gate.ts` | `BoxGate`: the rate limit, one Durable Object per Box |
+| `src/gate.ts` | `BoxGate`: the rate limits, one Durable Object per Box and per address |
 | `src/judgement.ts`, `src/judge.ts` | `Judgement`, the Durable Object per pot, and `Judge`, its logic over a plain store |
 | `src/verdict.ts`, `src/audit.ts` | The checks on a verdict, and the sealed audit record |
 | `src/signer.ts`, `src/upstream.ts`, `src/pot.ts` | The verifier key, the relayer and store, and `StorePot`'s reads |

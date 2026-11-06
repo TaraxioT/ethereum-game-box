@@ -1,7 +1,7 @@
 import { MemoryStore } from '@egb/relayer/test/memory-store';
 import { describe, expect, it } from 'vitest';
 
-import { returnJudgement, takeJudgement } from '../src/gate.ts';
+import { returnJudgement, takeCaller, takeJudgement } from '../src/gate.ts';
 
 describe('the Box gate', () => {
   it('lets 60 judgements through in an hour, and refuses the next', async () => {
@@ -35,5 +35,15 @@ describe('the Box gate', () => {
     const store = new MemoryStore();
     for (let i = 0; i < 60; i++) await takeJudgement(store, 'mumbai-01', 1000);
     expect(await takeJudgement(store, 'delhi-02', 1000)).toBeNull();
+  });
+});
+
+describe('the address gate', () => {
+  it('lets 600 requests through in an hour, and refuses the next', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 600; i++) expect(await takeCaller(store, '203.0.113.7', 1000)).toBeNull();
+    expect(await takeCaller(store, '203.0.113.7', 1000)).toBe('600 requests per hour from one address');
+    expect(await takeCaller(store, '203.0.113.8', 1000)).toBeNull();
+    expect(await takeCaller(store, '203.0.113.7', 1000 + 3601)).toBeNull();
   });
 });

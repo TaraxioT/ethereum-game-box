@@ -39,6 +39,8 @@ export default {
         reads: judgement,
         takeJudgement: (box, now) => env.BOX_GATE.getByName(box).take(box, now),
         returnJudgement: (box, at) => env.BOX_GATE.getByName(box).giveBack(box, at),
+        // A Box's label has no `:`, so this can't be a Box's own object.
+        takeCaller: (ip, now) => env.BOX_GATE.getByName(`ip:${ip}`).takeCaller(ip, now),
       },
       verifier: () => privateKeyToAccount(env.VERIFIER_PRIVATE_KEY as Hex).address,
       scrub: envScrubber(env),

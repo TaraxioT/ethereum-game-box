@@ -2,10 +2,10 @@ import { boxKey } from '@egb/relayer/test/world';
 import { packBundle } from '@egb/sdk/bundle';
 import { describe, expect, it, vi } from 'vitest';
 
-import { takeJudgement } from '../src/gate.ts';
+import { takeCaller, takeJudgement } from '../src/gate.ts';
 import { handle } from '../src/routes.ts';
 import { POT_STATE } from '../src/pot.ts';
-import { BOX, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, endlessBody, matchLog, stakedWorld } from './world.ts';
+import { BOX, CALLER, NOW, PLAYERS, ROUND, RPC_SECRET, ZG_API_KEY, endlessBody, matchLog, stakedWorld } from './world.ts';
 
 async function setup() {
   const world = await stakedWorld();
@@ -380,6 +380,42 @@ describe('the rate limit', () => {
     const body = world.signedRequest(world.log);
     for (let i = 0; i < 60; i++) expect((await world.post(deps, body)).status).toBe(409);
     expect((await world.post(deps, body)).status).toBe(429);
+  });
+});
+
+describe('the limit on an address', () => {
+  const fill = async (world: Awaited<ReturnType<typeof stakedWorld>>, ip: string) => {
+    for (let i = 0; i < 600; i++) await takeCaller(world.gate, ip, NOW);
+  };
+
+  it('stops forged requests before they can reach the chain', async () => {
+    const { world, deps } = await setup();
+    await fill(world, CALLER);
+    const forged = world.signedRequest(world.log, { key: boxKey() });
+    expect(await world.post(deps, forged)).toMatchObject({ status: 429, body: { error: 'rate limit: 600 requests per hour from one address' } });
+    expect(world.boxReads).toBe(0);
+  });
+
+  it('holds a Box behind that address to it too, and no other address', async () => {
+    const { world, deps } = await setup();
+    await fill(world, CALLER);
+    const body = world.signedRequest(world.log);
+    expect((await world.post(deps, body)).status).toBe(429);
+    expect((await world.post(deps, body, '203.0.113.8')).status).toBe(202);
+  });
+
+  it('counts callers with no address together', async () => {
+    const { world, deps } = await setup();
+    await fill(world, 'unknown');
+    const request = new Request('http://verifier/judge', { method: 'POST', body: JSON.stringify(world.signedRequest(world.log)) });
+    expect((await handle(request, deps)).status).toBe(429);
+  });
+
+  it('counts nothing for a request refused before the read', async () => {
+    const { world, deps } = await setup();
+    await fill(world, CALLER);
+    expect((await world.post(deps, world.signedRequest(world.log, { deadline: BigInt(NOW) }))).status).toBe(400);
+    expect((await world.post(deps, 'nope')).status).toBe(400);
   });
 });
 

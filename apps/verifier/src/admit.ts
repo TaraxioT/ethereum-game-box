@@ -32,6 +32,8 @@ export interface Doors {
   takeJudgement(box: string, now: number): Promise<string | null>;
   /** Gives back the count taken at `at`. */
   returnJudgement(box: string, at: number): Promise<void>;
+  /** Counts one chain read against an address. Returns the limit it broke, or null. */
+  takeCaller(ip: string, now: number): Promise<string | null>;
 }
 
 export interface Signed {
@@ -59,11 +61,14 @@ export function parseRequest(input: unknown): Signed {
 }
 
 /** Throws unless the Box signed this exact log, and the deadline hasn't passed. */
-async function requireSigned(ctx: AdmitContext, { log, hash, deadline, r, s }: Signed): Promise<void> {
+async function requireSigned(ctx: AdmitContext, doors: Doors, ip: string, { log, hash, deadline, r, s }: Signed): Promise<void> {
   const { box, round } = log.header;
   requireLabel(box, 'log.header.box');
   if (deadline <= BigInt(ctx.now())) throw new Refusal(400, `deadline ${deadline} has passed`);
   const digest = judgeDigest({ box, round: BigInt(round), log: hash, deadline }, ctx.pot());
+  // Anyone can get this far with a made-up signature, and checking it reads the chain, on the key the payments rely on.
+  const limited = await doors.takeCaller(ip, ctx.now());
+  if (limited) throw new Refusal(429, `rate limit: ${limited}`);
   await requireBoxSigned(ctx, box, digest, r, s);
 }
 
@@ -101,9 +106,9 @@ async function open(ctx: AdmitContext, judgement: JudgementDoor, { log, hash, te
 export type Admitted = { readonly fresh: boolean; readonly status: JudgeStatus };
 
 /** Runs every check, and opens the pot's one judgement. A repeat of the same log gets the running one back. */
-export async function admit(ctx: AdmitContext, doors: Doors, input: unknown): Promise<Admitted> {
+export async function admit(ctx: AdmitContext, doors: Doors, input: unknown, ip: string): Promise<Admitted> {
   const signed = parseRequest(input);
-  await requireSigned(ctx, signed);
+  await requireSigned(ctx, doors, ip, signed);
 
   const { box, round } = signed.log.header;
   const judgement = doors.judgement(box, round);

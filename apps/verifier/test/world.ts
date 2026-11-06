@@ -15,7 +15,7 @@ import { generatePrivateKey } from 'viem/accounts';
 import type { AdmitContext, Doors } from '../src/admit.ts';
 import type { AuditStore, Landed, Paying } from '../src/audit-store.ts';
 import { failed } from '../src/failure.ts';
-import { returnJudgement, takeJudgement } from '../src/gate.ts';
+import { returnJudgement, takeCaller, takeJudgement } from '../src/gate.ts';
 import { type AgentRunner, Judge, type RunResult, type Ticket, judgementName } from '../src/judge.ts';
 import { POT_STATE } from '../src/pot.ts';
 import { type Deps, handle } from '../src/routes.ts';
@@ -30,6 +30,8 @@ export const NOW = 1_800_000_000;
 export const BOX = 'mumbai-01';
 export const ROUND = '42';
 export const AMOUNT = '5000000';
+/** Who `POST /judge` comes from, unless a test says. */
+export const CALLER = '203.0.113.7';
 export const POT: Address = '0x00000000000000000000000000000000000000f1';
 export const NAMES: Address = '0x00000000000000000000000000000000000000f2';
 export const PLAYERS: readonly Address[] = [
@@ -244,6 +246,8 @@ export class World {
   storeReply: (() => Response) | null = null;
   /** The real gate's store. */
   readonly gate = new MemoryStore();
+  /** Reads of `getBox`, each one a call on the Sepolia RPC. */
+  boxReads = 0;
   private latest: Judge | null = null;
 
   private readonly services = cachedServices(
@@ -264,15 +268,18 @@ export class World {
   constructor() {
     const box = this.box;
     this.chain.contract(NAMES, gameBoxNamesAbi as Abi, {
-      getBox: () => ({
-        operator: PLAYERS[0],
-        account: PLAYERS[1],
-        qx: box.qx,
-        qy: box.qy,
-        status: this.entry.status,
-        resolver: PLAYERS[0],
-        expiry: this.entry.expiry,
-      }),
+      getBox: () => {
+        this.boxReads += 1;
+        return {
+          operator: PLAYERS[0],
+          account: PLAYERS[1],
+          qx: box.qx,
+          qy: box.qy,
+          status: this.entry.status,
+          resolver: PLAYERS[0],
+          expiry: this.entry.expiry,
+        };
+      },
     });
     this.chain.contract(POT, storePotAbi as Abi, {
       getPot: () => {
@@ -377,6 +384,7 @@ export class World {
       reads: judgement,
       takeJudgement: (box, now) => takeJudgement(this.gate, box, now),
       returnJudgement: (box, now) => returnJudgement(this.gate, box, now),
+      takeCaller: (ip, now) => takeCaller(this.gate, ip, now),
     };
     return { ctx, doors, verifier: () => this.signer.address, scrub: scrubber([ZG_API_KEY, this.key, RPC_SECRET]) };
   }
@@ -387,9 +395,13 @@ export class World {
   }
 
   /** `POST /judge`, through the real routes. */
-  async post(deps: Deps, body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  async post(deps: Deps, body: unknown, ip = CALLER): Promise<{ status: number; body: Record<string, unknown> }> {
     const response = await handle(
-      new Request('http://verifier/judge', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body) }),
+      new Request('http://verifier/judge', {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': ip },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      }),
       deps,
     );
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };

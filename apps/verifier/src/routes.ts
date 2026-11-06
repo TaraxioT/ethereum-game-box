@@ -52,7 +52,7 @@ async function route(request: Request, deps: Deps): Promise<Response> {
   if (text === null) return json(413, { error: 'body: too large' });
   const body = parsed(text);
   if (body === undefined) return json(400, { error: 'body: expected JSON' });
-  const { fresh, status } = await admit(deps.ctx, deps.doors, body);
+  const { fresh, status } = await admit(deps.ctx, deps.doors, body, request.headers.get('cf-connecting-ip') ?? 'unknown');
   return json(fresh ? 202 : 200, status);
 }
 
