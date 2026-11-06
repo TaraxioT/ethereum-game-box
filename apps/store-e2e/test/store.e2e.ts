@@ -48,6 +48,12 @@ const WAYS_OUT = [
   `timeout 8 node -e 'fetch("https://example.com").then(() => process.exit(0), () => process.exit(1))'; echo "https example.com exit=$?"`,
 ];
 
+/** Why the verifier refused a run, in its own words: every other failure refunds the same way. */
+const NOT_THE_POT = 'a split does not add up to exactly the pot';
+const NOT_THE_ENCLAVE = "the signature is not the enclave's";
+/** A reason, as the Box and the record give it after a run and its retry. */
+const bothRuns = (why: string) => `${why}; ${why}`;
+
 /** A byte inside the first file of a zip, past its header. */
 const FLIPPED_BYTE = 60;
 
@@ -399,9 +405,14 @@ describe('the game store, end to end', () => {
     const shown = await boxResult();
     expect(shown.step).toBe('refunded');
     say(`Box: ${shown.step}: ${shown.reason}`);
+    expect(shown.reason).toBe(bothRuns(NOT_THE_POT));
     const [voided] = await chain.events.voided(round);
     await stakesWentBack(voided, before);
-    expect(await recordOnStorage(round)).toMatchObject({ attempts: 2, verdict: { kind: 'failed' } });
+    const record = await recordOnStorage(round);
+    expect(record).toMatchObject({ attempts: 2, verdict: { kind: 'failed', why: bothRuns(NOT_THE_POT) } });
+    expect(record.turns.length).toBeGreaterThanOrEqual(2);
+    expect(record.turns.every(({ teeVerified }) => teeVerified)).toBe(true);
+    say(`${record.turns.length} model turns, each teeVerified: the agent ran, and only its split was refused`);
   });
 
   it('refunds when a turn fails the TEE check', async () => {
@@ -411,12 +422,13 @@ describe('the game store, end to end', () => {
     const shown = await boxResult();
     expect(shown.step).toBe('refunded');
     say(`Box: ${shown.step}: ${shown.reason}`);
+    expect(shown.reason).toBe(bothRuns(NOT_THE_ENCLAVE));
     const [voided] = await chain.events.voided(round);
     await stakesWentBack(voided, before);
     expect(await chain.events.settled(round)).toHaveLength(0);
     await world.zg.script({});
     const record = await recordOnStorage(round);
-    expect(record).toMatchObject({ attempts: 2, verdict: { kind: 'failed' } });
+    expect(record).toMatchObject({ attempts: 2, verdict: { kind: 'failed', why: bothRuns(NOT_THE_ENCLAVE) } });
     expect(record.turns.length).toBeGreaterThanOrEqual(2);
     expect(record.turns.some(({ teeVerified }) => teeVerified)).toBe(false);
     say(`${record.turns.length} model turns, none teeVerified`);
