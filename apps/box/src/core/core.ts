@@ -71,7 +71,7 @@ import { transcriptOf } from "./transcript.ts";
 import { createTxBook, type TxOrder } from "./txs.ts";
 import { proposeLabel } from "./labels.ts";
 import { stationViews, type StationInput } from "./stations.ts";
-import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
+import { rematchOpen, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
 import { sameBadge } from "./badges.ts";
 import { startBuilt, type BuiltDriver } from "./built.ts";
@@ -792,7 +792,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   /** The store game begins: its page takes the frame, the Box's log opens, and the manifest's time runs. */
   function openStore({ id, title, hash }: WantedBundle, facts: StoreBundle, now: number, opened: (play: MatchPlay) => Match): void {
     const limit = facts.minutes * 60_000;
-    match = opened({ game: "store", id, title, bundle: hash, taps: facts.taps, endsAt: now + limit, lines: ["PLAY", "PLAY"], judged: null });
+    match = opened({ game: "store", id, title, bundle: hash, taps: facts.taps, endsAt: now + limit, lines: ["PLAY", "PLAY"], judged: null, resultAt: null });
     storeLog = createStoreLog();
     setPhase("playing");
     cue("round");
@@ -872,11 +872,12 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
    */
   function heardJudge(id: number, update: Judged): void {
     if (phase !== "judging" || match?.id !== id || match.play.game !== "store") return;
-    match = { ...match, play: { ...match.play, judged: update } };
+    const over = update.step === "paid" || update.step === "refunded";
+    match = { ...match, play: { ...match.play, judged: update, resultAt: over ? clock.now() : null } };
     if (update.step === "failed") {
       setPhase("refund");
       cue("error");
-    } else if (update.step === "paid" || update.step === "refunded") {
+    } else if (over) {
       setPhase("result");
       cue("over");
     } else {
@@ -1128,8 +1129,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   /** A seated badge's tap on the result, once the result has been seen: the same as the screen's Rematch. */
   function rematchTap(seat: Seat, badge: Badge): TapMeaning {
-    const endedAt = match?.endedAt ?? null;
-    if (!sameBadge(seats[seat].badge, badge) || endedAt === null || clock.now() - endedAt < REMATCH_TAP_MS) return "ignored";
+    if (!sameBadge(seats[seat].badge, badge) || !rematchOpen(match, clock.now())) return "ignored";
     command({ type: "rematch" });
     return "rematch";
   }

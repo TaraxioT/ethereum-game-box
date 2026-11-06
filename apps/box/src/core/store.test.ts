@@ -6,6 +6,7 @@ import { LOG_LIMITS, mulberry32, type LogEntry, type Transcript } from "@egb/sdk
 import type { BundlePort, ChainPort, JudgeOrder, JudgeWatch, LibraryPort, StoreBundle, StoreChainPort, StoreStakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, BoxEvent, BoxState, GameInfo, Judged, StorePlay } from "./types.ts";
 import { createCore, END_HOLD_MS, JOIN_SETTLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { REMATCH_TAP_MS } from "./plan.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
 import { createDemoChain, DEMO_REFUND_MS, type DemoChain } from "./demo-chain.ts";
 import { TEAM_GAMES } from "./catalogue.ts";
@@ -336,6 +337,28 @@ describe("a store game", () => {
     await settle(r);
     expect(r.core.state()).toMatchObject({ phase: "home", match: null });
     expect(r.core.state().seats.map((s) => s.pending)).toEqual([0, 0]);
+  });
+
+  it.each(["paid", "refunded"] as const)("holds the rematch tap from when Result opens, not from the game's end: %s", async (step) => {
+    const r = rig();
+    await toPlaying(r);
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    // Judging takes far longer than the guard, and the players are waiting with their badges.
+    r.clock.advance(REMATCH_TAP_MS * 10);
+    r.store.judges[0]?.watch(said(step, { payouts: step === "paid" ? [15, 5] : null, hash: TX }));
+    await settle(r);
+    expect(r.core.state().phase).toBe("result");
+    expect(r.core.plan(0)).toBe("none");
+    await tap(r, 0, NOVA);
+    expect(r.core.state().phase).toBe("result");
+    r.clock.advance(REMATCH_TAP_MS - 1);
+    await tap(r, 1, KITE);
+    expect(r.core.state().phase).toBe("result");
+    r.clock.advance(1);
+    expect(r.core.plan(0)).toBe("identify");
+    await tap(r, 0, NOVA);
+    expect(r.core.state()).toMatchObject({ phase: "join", fetching: true });
   });
 
   it("goes to Refund with the power off, and sends no log", async () => {

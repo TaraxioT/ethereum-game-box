@@ -142,6 +142,8 @@ export interface StorePlay {
   readonly lines: readonly [string, string];
   /** null until the verifier first answers. */
   readonly judged: Judged | null;
+  /** When Result opened, the verifier's word having ended Judging (ms since the epoch); null before. */
+  readonly resultAt: number | null;
 }
 
 export type MatchPlay =

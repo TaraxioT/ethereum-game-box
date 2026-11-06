@@ -37,8 +37,8 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
   `done`, and lets it go on `fail`, or when the chip turns out not to be the seated badge.
 - A `fail` on a tap still waiting is a refusal (two buzzes). A `done` for a tap that touched before the phase changed
   is dropped, so a stake tap that finishes after the match opened never reaches the game.
-- On the result, a seated badge's tap is a rematch, but only `REMATCH_TAP_MS` (4 s) after the game ended: a chip left
-  on the reader must not skip the result.
+- On the result, a seated badge's tap is a rematch, but only `REMATCH_TAP_MS` (4 s) after the game ended, or after a
+  store match's Result opened (it waits on the judge): a chip left on the reader must not skip the result.
 
 ## Stakes, results and the lobby
 
@@ -110,7 +110,7 @@ keeps the money, the clock and the log, and the verifier says who gets what. It 
   short of the stake goes to the lobby, whose top-up is Store USDC too, and a badge needs a player name where the port
   says so. There's no title or championship to play for. Both signed, `store.open` sends a `Stake` naming the bundle's
   hash, and the match begins once it is confirmed.
-- **The match** has no rules child. The play is `{ game: "store", id, title, bundle, taps, endsAt, lines, judged }`.
+- **The match** has no rules child. The play is `{ game: "store", id, title, bundle, taps, endsAt, lines, judged, resultAt }`.
   A finished tap, judged at its touch time like a built game's (a known badge's at its touch unless the manifest's
   taps are `random`), goes in the log and to the frame as a `game-tap` event. What the page says arrives as a `frame`
   command, once the kiosk's gate has passed it: `event` goes in the log as the game's claim, `station` sets that seat's
@@ -157,7 +157,7 @@ opens; a result already decided is still sent once its pot lands.
 | `store-log.ts` | A store match's log within its limits: the Box's taps and the game's events, labelled, closed by one `end`. Pure. | `createStoreLog(): StoreLog` |
 | `core.ts` | The phase machine on its ports. | `createCore(ports, { bot?, builder? }): Core` (`BoxLink` plus `tap(event, source)`, `plan`, `nextTap`, `opponent` / `setOpponent`, `power` / `setPower`, `reset`, `stop`); the timing constants (`END_HOLD_MS`, `JOIN_SETTLE_MS`, `BUILD_IDLE_MS`, …). |
 | `built.ts` | A built game's match through the rules runner: a start, then ticks (skipped while a step is out) and taps (never), each snapshot handed on, the first failure once. | `startBuilt(rules, game, seed, now, { snapshot, failed }): BuiltDriver` |
-| `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `REMATCH_TAP_MS` |
+| `plan.ts` | What a tap at each seat asks of the badge, from the state and the time. Pure. | `tapPlan(state, seat, now)`, `rematchOpen(match, now)`, `REMATCH_TAP_MS` |
 | `transcript.ts` | A finished match as its transcript, and whether its result counts. Pure. | `transcriptOf`, `counts`, `FREE_MIN_MATCH_MS`, `FREE_PER_PAIR_HOUR` |
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
 | `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library, and each team game's label on chain (`stockduel`, `quickdraw`). | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake`, `MODE_STAKES`, `stakeOf`, `chainLabel`, `gameOfLabel` |
@@ -186,6 +186,7 @@ runner (prepared at Join, opened on the first state, taps at their touch time wi
 stations, played for nothing with no request to the chain, a void mid-game and at start, the child stopped at Home);
 `store.test.ts` plays a store game on fake bundles and a fake store port (a whole match to its split, each way it closes,
 the verifier refunding, failing and never answering, a bad download, the rack losing the game at every step, a rematch's
-fresh download, Store USDC and its top-up, the frame's words and what they can't do, a log filled by taps, an event timed just before the tap that fills it);
+fresh download, Store USDC and its top-up, the frame's words and what they can't do, a log filled by taps, an event timed just before the tap that fills it, the
+rematch tap held from when Result opens);
 `store-log.test.ts` runs the logs it makes, the fullest ones and every order of taps and events, through the verifier's
 own `logProblems`.
