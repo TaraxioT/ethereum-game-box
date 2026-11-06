@@ -1,4 +1,4 @@
-// HTTP plumbing: the local-origin rule, static files, capped JSON bodies, plain replies.
+// HTTP plumbing: the loopback-host and same-origin rules, static files, capped JSON bodies, plain replies.
 import type http from "node:http";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
@@ -27,13 +27,28 @@ export const mimeOf = (file: string): string => MIME[extname(file).toLowerCase()
 /** JSON bodies are capped at this many bytes. */
 export const JSON_LIMIT = 64 * 1024;
 
+/** This machine's names, with any port: what a Host header may say. */
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
+
 /**
- * Only pages served from this machine may change anything: any page the kiosk browser might open could otherwise
- * POST to the Box. A request with no Origin (curl, the deploy's updater, tests) is allowed: browsers always send one
- * on a POST and on a WebSocket upgrade.
+ * The request was addressed to this machine by name. The Box listens on 127.0.0.1 only, but a page on any site can
+ * point its own name at 127.0.0.1 (DNS rebinding) and then read the Box as its own origin: its requests carry that
+ * name as their Host, so every request and every upgrade with another Host is refused.
  */
-export function localOrigin(origin: string | undefined): boolean {
-  return origin === undefined || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+export function loopbackHost(host: string | undefined): boolean {
+  return host !== undefined && LOOPBACK_HOST.test(host.toLowerCase());
+}
+
+/**
+ * Only the Box's own pages may change anything: any page the kiosk browser might open, another local server's
+ * included, could otherwise POST to the Box. The Origin must be the very origin the request was sent to (`http://`
+ * and its Host, port and all): the Box's port, or the dev server's when it passes a page's requests through. A
+ * request with no Origin (curl, the deploy's updater, tests) is allowed: browsers always send one on a POST and on a
+ * WebSocket upgrade.
+ */
+export function sameOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (origin === undefined) return true;
+  return loopbackHost(host) && origin.toLowerCase() === `http://${host?.toLowerCase()}`;
 }
 
 /** Resolves `pathname` inside `rootDir`; null when it would escape it, or is malformed. */

@@ -14,18 +14,29 @@ namespace frame {
 
 constexpr uint8_t HOST_TO_PN532 = 0xD4;
 constexpr uint8_t PN532_TO_HOST = 0xD5;
-constexpr size_t MAX_DATA = 254;  // a normal frame's LEN is one byte: 255 minus the TFI
+// A normal frame's LEN is one byte (the TFI and up to 254 bytes); longer ones, such as an InDataExchange with a 253-
+// to 255-byte APDU, go as extended frames (00 00 FF FF FF LENm LENl LCS), up to 265 bytes with the TFI.
+constexpr size_t MAX_DATA = 264;
+constexpr size_t MAX_FRAME = 1 + 8 + 1 + MAX_DATA + 2;  // ready byte, the longest header, TFI, data, DCS, 00
 
-// The frame for `cmd` (without the TFI) into `out` (room for n + 8); returns its length, 0 if too long.
+// The frame for `cmd` (without the TFI) into `out` (room for n + 11); returns its length, 0 if too long.
 inline size_t build(const uint8_t *cmd, size_t n, uint8_t *out) {
-  if (n + 1 > 255) return 0;
-  uint8_t len = (uint8_t)(n + 1), sum = HOST_TO_PN532;
-  size_t i = 0;
+  if (n > MAX_DATA) return 0;
+  size_t len = n + 1, i = 0;
   out[i++] = 0x00;
   out[i++] = 0x00;
   out[i++] = 0xFF;
-  out[i++] = len;
-  out[i++] = (uint8_t)(~len + 1);
+  if (len <= 255) {
+    out[i++] = (uint8_t)len;
+    out[i++] = (uint8_t)(~len + 1);
+  } else {
+    out[i++] = 0xFF;
+    out[i++] = 0xFF;
+    out[i++] = (uint8_t)(len >> 8);
+    out[i++] = (uint8_t)len;
+    out[i++] = (uint8_t)(~((len >> 8) + len) + 1);
+  }
+  uint8_t sum = HOST_TO_PN532;
   out[i++] = HOST_TO_PN532;
   for (size_t k = 0; k < n; k++) {
     out[i++] = cmd[k];
@@ -42,25 +53,40 @@ inline bool isAck(const uint8_t *b, size_t got) {
   return got >= 7 && !memcmp(b + 1, ACK, 6);
 }
 
-// How many bytes the whole answer is (ready byte included), from the first few; 0 when they aren't a frame start.
+// Where an answer's TFI sits and how long its LEN says it is (TFI and data), from its first bytes (ready byte first):
+// false when they aren't a frame start or the length's checksum is wrong.
+inline bool header(const uint8_t *b, size_t got, size_t &tfiAt, size_t &len) {
+  if (got < 6 || b[1] != 0x00 || b[2] != 0x00 || b[3] != 0xFF) return false;
+  if (b[4] == 0xFF && b[5] == 0xFF) {  // extended
+    if (got < 9 || (uint8_t)(b[6] + b[7] + b[8]) != 0) return false;
+    tfiAt = 9;
+    len = (size_t)b[6] << 8 | b[7];
+  } else {
+    if ((uint8_t)(b[4] + b[5]) != 0) return false;
+    tfiAt = 6;
+    len = b[4];
+  }
+  return true;
+}
+
+// How many bytes the whole answer is (ready byte included), from its first 16; 0 when they aren't a frame start.
 inline size_t fullLength(const uint8_t *b, size_t got) {
-  if (got < 6 || b[1] != 0x00 || b[2] != 0x00 || b[3] != 0xFF) return 0;
-  return (size_t)b[4] + 8;  // ready, 00 00 FF LEN LCS, LEN bytes, DCS, 00
+  size_t at, len;
+  return header(b, got, at, len) ? at + len + 2 : 0;  // header, TFI and data, DCS, 00
 }
 
 // The answer to command `code`: its data (after D5 and code+1) copied to `out`; the data length, or -1 when the frame
 // is broken, isn't that answer, or doesn't fit `max`.
 inline int parse(const uint8_t *b, size_t got, uint8_t code, uint8_t *out, size_t max) {
-  size_t full = fullLength(b, got);
-  if (!full || full > got || full < 10) return -1;
-  uint8_t len = b[4];
-  if ((uint8_t)(len + b[5]) != 0 || b[6] != PN532_TO_HOST || b[7] != (uint8_t)(code + 1)) return -1;
+  size_t at, len;
+  if (!header(b, got, at, len) || len < 2 || at + len + 1 > got) return -1;
+  if (b[at] != PN532_TO_HOST || b[at + 1] != (uint8_t)(code + 1)) return -1;
   uint8_t sum = 0;
-  for (size_t i = 6; i < 6 + (size_t)len + 1; i++) sum = (uint8_t)(sum + b[i]);  // the data and DCS sum to 0
+  for (size_t i = at; i <= at + len; i++) sum = (uint8_t)(sum + b[i]);  // the data and DCS sum to 0
   if (sum) return -1;
-  size_t n = (size_t)len - 2;
+  size_t n = len - 2;
   if (n > max) return -1;
-  memcpy(out, b + 8, n);
+  memcpy(out, b + at + 2, n);
   return (int)n;
 }
 

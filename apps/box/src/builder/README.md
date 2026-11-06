@@ -1,7 +1,8 @@
 # The game builder
 
 Build a new game on the Box: the Designer asks one question at a time and settles a `GameBrief`; the Forge builds
-the game from it. Shared types are in `types.ts`.
+the game from it. Shared types are in `types.ts` (with `isFinished(status)`: a build that has ended, which the server,
+the Forge and the test page all ask).
 
 ## Routes and screens
 
@@ -99,7 +100,9 @@ touch.
 **The budget guard.** The free tier's 10,000 credits a month are shared, so the Box keeps its own monthly caps on disk:
 `EGB_VOICE_TTS_MAX_CHARS` (default 6,000 characters) and `EGB_VOICE_STT_MAX_MIN` (default 40 minutes). Each call
 reserves its cost before it starts and is refused when it wouldn't fit (calls in flight count), and spends only once
-ElevenLabs answered; a refused call costs nothing. Past a cap the screen shows captions and the player taps keys.
+ElevenLabs answered; a refused call costs nothing. Past a cap the screen shows captions and the player taps keys. The
+totals and the clips are written atomically (`server/files.ts`); a totals file that is there but can't be read counts
+as the whole cap spent until the month turns, so a damaged file never starts the spending over from zero.
 `EGB_VOICE_ID` changes the Designer's voice (default Charlie, a stock voice).
 
 | Module | Job |
@@ -108,7 +111,7 @@ ElevenLabs answered; a refused call costs nothing. Past a cap the screen shows c
 | `select.ts` | `createVoice(env, { dir })`: picks the port from the env. |
 | `mock.ts` | The scripted voice: hears queued lines in order, speaks captions. |
 | `elevenlabs.ts` | Speech-to-text and text-to-speech, behind the budgets; logs only HTTP statuses. |
-| `budget.ts` | The monthly caps: reserve, release, spend, persisted per UTC month. |
+| `budget.ts` | The monthly caps: reserve, release, spend (saved atomically, in order), persisted per UTC month; an unreadable total counts as spent. |
 
 ## Forge
 
@@ -139,7 +142,9 @@ the agent's task, run the agent, check the game, give a failed check one resumed
 turn (then a plain icon), and install. Statuses: `queued`, `preparing`, `working`, `compiling`, `fixing`,
 `installing`, `done` or `failed`; a job's last event is its `result`. A cancel or the time limit stops it until the
 install begins. Limits: 40 turns, 8 minutes (`FORGE_TIMEOUT_MS`), `claude-sonnet-5-5` (`FORGE_MODEL`), 40 files of at
-most 128 KB, bundles of 256 KB (rules) and 768 KB (screen), a 12 KB icon.
+most 128 KB, bundles of 256 KB (rules) and 768 KB (screen), a 12 KB icon. Every text an event carries is cut to 4,000
+characters before the Forge keeps, saves or streams it (a compile event quotes the game's own error messages), and a
+job's record is written atomically.
 
 **The agent** (`claude.ts`): the Claude Agent SDK, imported when a build starts. Tools Read, Write, Edit, Glob and
 Grep, and one MCP tool, `build_game`, deliberately not in `allowedTools` so every call passes the permission check;
@@ -180,7 +185,7 @@ may call it verified, provable or proven.
 
 | Module | Job |
 |---|---|
-| `service.ts` | `createForge`: the queue, job records, events and replays, cancel, remove; `forkLauncher` runs `child.ts`. |
+| `service.ts` | `createForge`: the queue, job records (written atomically), events (their text capped) and replays, cancel, remove; `forkLauncher` runs `child.ts`. |
 | `child.ts` | The build's process: takes `{ t: "run", spec }` and `{ t: "cancel" }`, sends `{ t: "event", event }`. |
 | `job.ts` | `runJob`: one build, from the folder to the install, as ForgeEvents. |
 | `shelf.ts` | `readShelf(roots)`: the templates, the default first; where each one's built form is. |
@@ -195,13 +200,13 @@ may call it verified, provable or proven.
 | `icon.ts` | The icon check and the plain fallback icon. |
 | `install.ts` | The data folders, the install, `installedProblems`, `removeGame`. |
 | `provider.ts` | The provider interface. |
-| `limits.ts` | Turns, time, events, files and sizes. |
+| `limits.ts` | Turns, time, events and their text, files and sizes. |
 | `smoke.ts` | One whole build from the command line: `node apps/box/src/builder/forge/smoke.ts [--provider claude] [--fixture] [--fast]`. |
 | `authoring.md` | The agent's guide, appended to its system prompt (read fresh for every build). |
 | `reference/parts.md` | The Box's parts a built screen may use by tag. |
 | `sim/run.jsonl` | The sim's recorded run. |
 | `fixtures/` | The test template `tap-three` and a recorded error run. |
-| `test-helpers.ts` | Temp folders, briefs, a scripted provider, an in-process launcher. |
+| `test-helpers.ts` | Temp folders, briefs, a scripted provider, an in-process launcher, a rules.js played in the rules host's own child (`playRules`). |
 
 ## Bundler
 
@@ -222,9 +227,16 @@ packages, other SDK paths, and any file but `.ts`, `.js` and `.json` (no CSS, no
 |---|---|
 | `bundle.ts` | `bundleGame(gameDir, outDir, sdk)`: both bundles into a staging folder, swapped in only when both built and fit. |
 | `guard.ts` | The esbuild plugin above. |
-| `typecheck.ts` | `typecheckGame`: the repo's tsc with a Box-written tsconfig mapping `@egb/sdk` to its sources, and a contract file checking the two default exports. |
-| `rules-check.ts` | `checkRulesBundle`: plays a short match against rules.js in its sandboxed child; `rulesChildArgs(rulesJs)`, the rules child's command line; `stationProblems`. |
+| `typecheck.ts` | `typecheckGame`: the repo's TypeScript with a Box-written tsconfig mapping `@egb/sdk` to its sources, and a contract file checking the two default exports. Confined: see below. |
+| `rules-check.ts` | `checkRulesBundle`: plays a short match against rules.js in the rules host's own child (`server/rules/child.ts`: the same flags, memory caps, line cap and reply check); `stationProblems`. |
 | `runner-loop.ts` | The runner protocol's loop, pure: one request line in, one reply out. |
 | `runner-main.ts` | The rules child's program: takes stdout, reads stdin, sends `ready`, exits when stdin closes. Bundled into rules.js, never imported. |
 | `jail.ts` | Bundled first of all: closes what Node's permission model leaves open (`node:sqlite`, `v8` heap snapshots, `process.kill`): no import resolves at run time and `process.getBuiltinModule` throws. Proven in `server/rules/sandbox.test.ts`. |
-| `paths.ts` | Where the SDK's sources and tsc are; the bundles' file names. |
+| `paths.ts` | Where the SDK's sources and TypeScript's lib files are; the bundles' file names. |
+
+**The type checker is confined** to what a game may read. TypeScript 7's compiler is a native binary, which Node's
+permission model can't hold, so `typecheck.ts` runs it behind its API (`typescript/unstable/async`) with every
+file-system call it makes (read, exists, list, realpath) answered by `confinedFileSystem`: the game's folder, the SDK's
+sources, TypeScript's lib files and the temp folder holding the tsconfig, by real path, and nothing else. Outside them
+nothing exists, so an absolute import naming a file elsewhere (a JSON of keys, say), a type query or a symlink out of the
+folder is "cannot find module", and nothing in that file shows in an error. `bundle.test.ts` proves it.

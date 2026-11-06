@@ -8,15 +8,11 @@ import type { Badge } from "../../core/types.ts";
 import type { SimLink } from "./control.ts";
 import { createCore } from "../../core/core.ts";
 import { createBot } from "../../core/bot.ts";
-import { BOT_BADGE, DESK_BADGES } from "../../core/badges.ts";
+import { BOT_BADGE, DESK_BADGES, sameBadge } from "../../core/badges.ts";
 import { teamLibrary } from "../../core/catalogue.ts";
 import { memoryLedgerStore } from "../../core/ledger.ts";
 import { instantTap } from "../../core/instant-tap.ts";
 import { systemClock } from "../../core/system-clock.ts";
-
-function sameBadge(a: Badge | null, b: Badge | null): boolean {
-  return a !== null && b !== null && a.address === b.address;
-}
 
 export function createSimLink(options: { seed?: number } = {}): SimLink {
   const seed = (options.seed ?? Date.now()) >>> 0;

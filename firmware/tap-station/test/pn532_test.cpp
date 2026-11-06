@@ -44,3 +44,38 @@ TEST(listed_chips) {
   CHECK_EQ(frame::targets(none, 1, c, 2), 0);
   CHECK_EQ(frame::targets(r, 9, c, 2), 0);  // cut inside the UID
 }
+
+TEST(a_255_byte_apdu_goes_as_an_extended_frame) {
+  uint8_t cmd[2 + egb::APDU_MAX], out[frame::MAX_FRAME];
+  cmd[0] = 0x40;
+  cmd[1] = 0x01;
+  memset(cmd + 2, 0xAB, egb::APDU_MAX);
+  size_t n = frame::build(cmd, sizeof cmd, out);
+  CHECK_EQ(n, sizeof cmd + 11);
+  CHECK_EQ(out[3], 0xFF);
+  CHECK_EQ(out[4], 0xFF);
+  CHECK_EQ((out[5] << 8 | out[6]), (int)sizeof cmd + 1);  // TFI and data
+  CHECK_EQ((uint8_t)(out[5] + out[6] + out[7]), 0);
+  CHECK_EQ(out[8], frame::HOST_TO_PN532);
+  uint8_t sum = 0;
+  for (size_t i = 8; i < n - 1; i++) sum = (uint8_t)(sum + out[i]);
+  CHECK_EQ(sum, 0);
+  CHECK_EQ(frame::build(cmd, frame::MAX_DATA + 1, out), 0u);
+}
+
+TEST(a_long_answer_comes_back_as_an_extended_frame) {
+  // ready, 00 00 FF FF FF LEN(0x0103) LCS, D5 41, status 00, 256 bytes of data, DCS, 00
+  uint8_t b[1 + 8 + 0x103 + 2] = {0x01, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x01, 0x03};
+  b[8] = (uint8_t)-(0x01 + 0x03);
+  b[9] = 0xD5;
+  b[10] = 0x41;
+  b[11] = 0x00;
+  uint8_t sum = (uint8_t)(0xD5 + 0x41);
+  for (int i = 0; i < 256; i++) sum = (uint8_t)(sum + (b[12 + i] = (uint8_t)i));
+  b[12 + 256] = (uint8_t)-sum;
+  CHECK_EQ(frame::fullLength(b, 16), sizeof b);
+  uint8_t data[300];
+  CHECK_EQ(frame::parse(b, sizeof b, 0x40, data, sizeof data), 257);
+  CHECK_EQ(data[0], 0x00);
+  CHECK_EQ(data[256], 255);
+}

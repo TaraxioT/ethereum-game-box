@@ -54,7 +54,12 @@ function takeStake(ledger: Ledger, from: string, stake: number): Ledger {
   return { ...ledger, escrow };
 }
 
-/** Opens a match: both seats' stakes move into escrow, each under its own badge. */
+/** Both badges hold the stake. */
+export function canLock(ledger: Ledger, addresses: readonly [string, string], stake: number): boolean {
+  return addresses.every((address) => balanceOf(ledger, address) >= stake);
+}
+
+/** Opens a match: both seats' stakes move into escrow, each under its own badge. Throws unless `canLock`. */
 export function lock(ledger: Ledger, addresses: readonly [string, string], stake: number): Ledger {
   let next = ledger;
   for (const address of addresses) {

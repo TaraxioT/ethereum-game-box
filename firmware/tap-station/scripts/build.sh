@@ -6,7 +6,7 @@ set -eu
 cd "$(dirname "$0")/.."
 extra=""
 # Arduino's bundled ctags is Intel-only; on Apple Silicon use Homebrew's universal-ctags (brew install universal-ctags).
-# Safe because each .ino is a stub: there are no prototypes to generate.
+# Safe because each .ino is a stub: it declares nothing for ctags to index.
 if [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ]; then
   extra="--build-property tools.ctags.path=/opt/homebrew/bin"
 fi

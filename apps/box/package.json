@@ -29,7 +29,6 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "esbuild": "0.28.2",
-    "serialport": "13.0.0",
     "ws": "8.22.1"
   }
 }

@@ -40,8 +40,44 @@ describe("the session log", () => {
     await appendFile(join(dir, "sessions", `${dayOf(END)}.jsonl`), '{"v":1,"match":');
     const again = createSessionLog(dir, () => {});
     const expected = { [A]: { wins: 2, losses: 0, draws: 1 }, [B]: { wins: 0, losses: 1, draws: 1 }, [C]: { wins: 0, losses: 1, draws: 0 } };
+    expect(again.records()).toEqual({});
+    await again.load();
     expect(again.records()).toEqual(expected);
     expect(log.records()).toEqual(expected);
+  });
+
+  it("starts a new line after a torn one, so the next transcript isn't lost with it", async () => {
+    const file = join(dir, "sessions", `${dayOf(END)}.jsonl`);
+    const first = createSessionLog(dir, () => {});
+    await first.load();
+    first.record(transcript(0));
+    await first.flush();
+    await appendFile(file, '{"v":1,"match":');
+
+    const second = createSessionLog(dir, () => {});
+    await second.load();
+    second.record(transcript(1, { endedAt: END + 1 }));
+    await second.flush();
+    const lines = (await readFile(file, "utf8")).split("\n");
+    expect(lines).toHaveLength(4);
+    expect(JSON.parse(lines[2] ?? "")).toEqual(transcript(1, { endedAt: END + 1 }));
+
+    const third = createSessionLog(dir, () => {});
+    await third.load();
+    expect(third.records()).toEqual({ [A]: { wins: 1, losses: 1, draws: 0 }, [B]: { wins: 1, losses: 1, draws: 0 } });
+  });
+
+  it("counts a match recorded before the log was read back once, not twice", async () => {
+    const first = createSessionLog(dir, () => {});
+    first.record(transcript(0));
+    await first.flush();
+
+    const second = createSessionLog(dir, () => {});
+    second.record(transcript(1, { endedAt: END + 1 }));
+    await second.load();
+    await second.flush();
+    expect(second.records()).toEqual({ [A]: { wins: 1, losses: 1, draws: 0 }, [B]: { wins: 1, losses: 1, draws: 0 } });
+    expect(second.countedSince([A, B], 0)).toBe(2);
   });
 
   it("counts a pair's counted results since a time, in either seat order", async () => {

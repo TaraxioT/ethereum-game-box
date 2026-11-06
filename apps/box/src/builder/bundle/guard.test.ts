@@ -71,7 +71,7 @@ console.log(fs, cp, left, hash32);`),
     expect(r.text).toMatch(/@egb\/sdk\/src\/random\.ts isn't exported/);
   });
 
-  it("refuses odd file types even inside the game's folder, and a dynamic import of one", async () => {
+  it("refuses odd file types even inside the game's folder, and a dynamic import that names one", async () => {
     const r = await build(
       game(`import notes from "./notes.txt";
 import "./look.css";

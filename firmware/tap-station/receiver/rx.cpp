@@ -30,20 +30,16 @@ struct Seen {
 };
 static Seen seenPress[egb::MAX_STATIONS];
 
-static bool freshPress(const uint8_t mac[6], uint32_t id) {
+static Seen *pressSlot(const uint8_t mac[6]) {
   uint64_t m = egb::radio::macBits(mac);
-  Seen *slot = nullptr;
+  Seen *empty = nullptr;
   for (auto &s : seenPress) {
-    if (s.mac == m) {
-      if (s.id == id) return false;
-      s.id = id;
-      return true;
-    }
-    if (!s.mac && !slot) slot = &s;
+    if (s.mac == m) return &s;
+    if (!s.mac && !empty) empty = &s;
   }
-  if (!slot) slot = &seenPress[0];  // more stations than slots: forget one (a resend may toggle it twice)
-  *slot = {m, id};
-  return true;
+  if (!empty) empty = &seenPress[0];  // more stations than slots: forget one (a resend may toggle it twice)
+  *empty = {m, 0};
+  return empty;
 }
 
 template <class T> static void reply(const uint8_t *to, T &p) {
@@ -56,22 +52,42 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *d, int len) {
   uint8_t kind = egb::kindOf(d, len);
   if (!kind || len > (int)egb::PACKET_MAX) return;
   const uint8_t *src = info->src_addr;
-  bool fresh = false;
+  Msg m;
+  m.type = Msg::PACKET;
+  m.fresh = false;
+  m.rssi = info->rx_ctrl ? info->rx_ctrl->rssi : 0;
+  memcpy(m.mac, src, 6);
+  m.atUs = atUs;
+  m.atMs = millis();
+  m.len = (uint16_t)len;
+  memcpy(m.data, d, len);
+  // Whatever the loop must report goes to it before the ack: with the inbox full, no ack, and the station's resend
+  // brings it again, instead of an acked tap that never reaches the Pi.
   if (kind == egb::K_PRESS) {  // a station's button: switch now, then ack (every copy, so a lost ack heals)
     egb::Press p;
     if (!egb::read(p, d, len)) return;
-    fresh = freshPress(src, p.id);
-    if (fresh) setLed(!ledOn);
+    Seen *seen = pressSlot(src);
+    m.fresh = seen->id != p.id;
+    if (!post(m)) return;
+    if (m.fresh) {
+      seen->id = p.id;
+      setLed(!ledOn);
+    }
     egb::Ack a;
     egb::head(a, egb::K_ACK, 0);
     a.h.tries = p.h.tries;
     a.id = p.id;
     a.t = p.t;
     reply(src, a);
-  } else if (kind == egb::K_ACK) {
-    egb::Ack a;
-    if (egb::read(a, d, len)) egb::press::onAck(a.id, atUs, a.h.flags, src);
-  } else if (kind == egb::K_PING) {
+  } else if (kind == egb::K_TAP || kind == egb::K_GONE || kind == egb::K_SIGNED) {
+    if (len < (int)(sizeof(egb::Head) + 4) || !post(m)) return;
+    egb::Got g;
+    egb::head(g, egb::K_GOT, 0);
+    g.h.tries = d[3];
+    g.of = kind;
+    memcpy(&g.id, d + sizeof(egb::Head), 4);
+    reply(src, g);  // every copy, so a lost Got heals; the loop reports each id once
+  } else if (kind == egb::K_PING) {  // the pong first: it times the link (a lost ping line costs nothing)
     egb::Ping p;
     if (!egb::read(p, d, len)) return;
     egb::Pong q;
@@ -79,25 +95,14 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *d, int len) {
     q.seq = p.seq;
     q.t = p.t;
     reply(src, q);
-  } else if (kind == egb::K_TAP || kind == egb::K_GONE || kind == egb::K_SIGNED) {
-    if (len < (int)(sizeof(egb::Head) + 4)) return;
-    egb::Got g;
-    egb::head(g, egb::K_GOT, 0);
-    g.h.tries = d[3];
-    g.of = kind;
-    memcpy(&g.id, d + sizeof(egb::Head), 4);
-    reply(src, g);
+    post(m);
+  } else {
+    if (kind == egb::K_ACK) {
+      egb::Ack a;
+      if (egb::read(a, d, len)) egb::press::onAck(a.id, atUs, a.h.flags, src);
+    }
+    post(m);
   }
-  Msg m;
-  m.type = Msg::PACKET;
-  m.fresh = fresh;
-  m.rssi = info->rx_ctrl ? info->rx_ctrl->rssi : 0;
-  memcpy(m.mac, src, 6);
-  m.atUs = atUs;
-  m.atMs = millis();
-  m.len = (uint16_t)len;
-  memcpy(m.data, d, len);
-  post(m);
 }
 
 }  // namespace rcv

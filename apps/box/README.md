@@ -8,11 +8,11 @@
 |---|---|
 | `src/core/` | The Box's phase machine, ledger, chain clock, transactions and station views, behind ports: no DOM, no Node |
 | `src/server/` | The Box server on the Pi: the core on Node's ports, HTTP, the screen's WebSocket link, the data folder |
-| `src/signer/` | The Box key: one `Signer` interface, a HYP2003 token signer (PKCS#11) and a software signer for laptops and tests |
-| `src/taps/` | Tap stations: the serial link to the receiver, tap events, and the badge commands (identify, sign) |
-| `src/chain/` | Reads and writes: builds Box-signed requests, sends them to the relayer, reads Sepolia and Robinhood Chain |
-| `src/games/` | One folder per game (Quick Draw, Stock Duel, Bet on X, B17): its rules and its screens |
-| `src/screen/` | The browser UI: lobby, game screens, progress while a transaction lands |
+| `src/taps/` | Tap stations: the receiver's tty, the tap state machine, HaLo commands over the stations' NFC, the roster, the fakes and the bench |
+| `src/builder/` | The game builder: the Designer, the Forge (a confined Claude agent in a child process), the bundler and voice |
+| `src/games/` | The team games (Quick Draw, Stock Duel) in the module shape: game.json, rules, screens, icon, blueprint |
+| `src/screen/` | The browser UI: the Box's screens, the team games' screens, the Designer and Build screens, built games' frames |
+| `src/signer/`, `src/chain/` | Later, with the chain: the Box key (a HYP2003 token signer) and Box-signed requests through the relayer |
 | `src/test-page/` | `/test`: Stations, Badges, Box and Builder tabs to check the Box on the Pi |
 
 ## Scripts
@@ -29,7 +29,7 @@
 
 ## Depends on
 
-`@egb/shared` for message digests, ABIs and addresses. It never holds a private key in code: the Box key stays on
+`@egb/sdk` for the game contract. Later, `@egb/shared` for message digests, ABIs and addresses. It never holds a private key in code: the Box key stays on
 the token, and the relayer pays the gas.
 
 ## First milestone

@@ -19,6 +19,7 @@ struct Policy {
 };
 
 constexpr Policy POLICY_PACKET = {PACKET_EVERY_MS, PACKET_TRIES, 0};
+constexpr Policy POLICY_CHIP_EVENT = {PACKET_EVERY_MS, 0, CHIP_EVENT_DEADLINE_MS};
 constexpr Policy POLICY_NFC = {NFC_EVERY_MS, 0, NFC_DEADLINE_MS};
 constexpr Policy POLICY_SCREEN = {SCREEN_EVERY_MS, 0, SCREEN_DEADLINE_MS};
 
@@ -90,6 +91,15 @@ template <size_t N> struct Pool {
     for (auto &s : slots)
       if (!s.used) return &s;
     return nullptr;
+  }
+
+  // A free slot, or else the one started longest ago: a new packet matters more than the oldest's last resends.
+  Slot *freeOrOldest() {
+    if (Slot *s = free()) return s;
+    Slot *old = &slots[0];
+    for (auto &s : slots)
+      if (sinceMs(old->startMs, s.startMs) > 0) old = &s;
+    return old;
   }
 
   // The slot in use for this station and kind (one NFC request and one screen in flight per station).

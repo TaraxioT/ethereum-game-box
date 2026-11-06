@@ -2,7 +2,13 @@
 // lines of firmware/tap-station/protocol.md, with simulated stations (links, pings, taps and gones, buzz and screen
 // acks, NFC answers) and simulated badges that answer real HaLo APDUs. Tests and the test page place and lift badges
 // on stations, drop links and pull the USB cable.
+//
+// Each station does what the hardware does with the HaLo applet: it selects it itself right after a chip's tap has
+// gone out (the AID that chip answered last first, else the last one any chip answered), keeps the chip's answer, and
+// answers the Pi's own SELECT with the same bytes from it, without the chip, while nothing else has gone to the chip.
+// Its NFC work is one queue: a request that comes while it is still selecting waits for it.
 import { Duplex } from "node:stream";
+import { ISO7816_SELECT_CMDS } from "@arx-research/libhalo/api/common";
 import type { Clock, TimerHandle } from "../../core/ports.ts";
 import { parseCommand } from "../commands.ts";
 import type { ReceiverCommand, ReceiverEvent, StationId, TagLine } from "../lines.ts";
@@ -12,8 +18,6 @@ import { SimBadge } from "./sim-badge.ts";
 export interface FakeOptions {
   /** Multiplies every simulated delay; 0 answers at once (tests). Default 1. */
   readonly timeScale?: number;
-  /** Stations select the HaLo applet themselves on detection and put the answer in the tap (`sel`). Default true. */
-  readonly stationSelects?: boolean;
   /** The simulated stations. Default: the seats' stations. */
   readonly stations?: readonly StationId[];
 }
@@ -47,6 +51,13 @@ interface SimStation {
   tapId: number;
   /** The NFC request it's working on; a newer one replaces it. */
   nfcId: number;
+  /** When its NFC task is free again (Pi ms): it selects the applet after each tap before it serves a request. */
+  busyUntil: number;
+  /** Which SELECT (an index into ISO7816_SELECT_CMDS) each chip answered last, and the last any chip answered. */
+  readonly aids: Map<string, number>;
+  lastAid: number;
+  /** The SELECT whose answer it kept, while nothing else has been exchanged with the chip. */
+  kept: number | null;
   screen: string;
   ping: TimerHandle | null;
   readonly rttUs: number;
@@ -63,7 +74,6 @@ export class FakeReceiver {
   readonly badges: readonly SimBadge[];
   private readonly clock: Clock;
   private readonly scale: number;
-  private readonly stationSelects: boolean;
   private readonly stations = new Map<StationId, SimStation>();
   private stream: Duplex | null = null;
   private plugged = true;
@@ -76,10 +86,12 @@ export class FakeReceiver {
   constructor(clock: Clock, stations: readonly StationId[], opts: FakeOptions = {}) {
     this.clock = clock;
     this.scale = opts.timeScale ?? 1;
-    this.stationSelects = opts.stationSelects ?? true;
     this.badges = BADGE_NAMES.map((name, i) => new SimBadge(name, i === BADGE_NAMES.length - 1 ? "legacy" : "arx"));
     (opts.stations ?? stations).forEach((st, i) => {
-      const s: SimStation = { st, up: true, badge: null, tapId: 0, nfcId: 0, screen: "", ping: null, rttUs: 2700 + 150 * i, rssi: -40 - 3 * i };
+      const s: SimStation = {
+        st, up: true, badge: null, tapId: 0, nfcId: 0, busyUntil: 0, aids: new Map(), lastAid: 0, kept: null, screen: "", ping: null,
+        rttUs: 2700 + 150 * i, rssi: -40 - 3 * i,
+      };
       this.stations.set(st, s);
       this.startPings(s);
     });
@@ -117,16 +129,18 @@ export class FakeReceiver {
     if (s.badge) this.lift(s.badge.name);
     s.badge = badge;
     s.tapId++;
+    s.kept = null;
     badge.powerUp();
     const id = s.tapId;
-    const sel = this.stationSelects ? badge.reselect() : null;
-    this.later(MS.read + MS.radio + (sel ? MS.select : 0), () => {
+    this.later(MS.read, () => {
       if (!s.up || s.badge !== badge || s.tapId !== id) return;
-      const at = this.micros();
-      this.emit({
-        ev: "tap", st, id, uid: badge.uid, ...HALO_TAG, read_us: MS.read * 1000, gap_us: 20_000,
-        ...(sel ? { sel, sel_us: MS.select * 1000 } : {}), tries: 1, at_us: at,
+      // The tap goes out first; the station selects the applet right after it, while the line is on its way.
+      const sent = this.clock.now();
+      this.later(MS.radio, () => {
+        if (s.up) this.emit({ ev: "tap", st, id, uid: badge.uid, ...HALO_TAG, read_us: MS.read * 1000, gap_us: 20_000, tries: 1, at_us: this.micros() });
       });
+      const tries = this.stationSelect(s, badge);
+      s.busyUntil = Math.max(s.busyUntil, sent + tries * MS.select * this.scale);
     });
   }
 
@@ -137,6 +151,7 @@ export class FakeReceiver {
       const { uid } = s.badge;
       const id = s.tapId;
       s.badge = null;
+      s.kept = null;
       this.later(MS.gone, () => {
         if (s.up) this.emit({ ev: "gone", st: s.st, id, uid, at_us: this.micros() });
       });
@@ -204,10 +219,35 @@ export class FakeReceiver {
     return (this.microsBase + Math.round(this.clock.now() * 1000)) % 2 ** 32;
   }
 
-  private later(ms: number, run: () => void): void {
-    const delay = ms * this.scale;
+  /** Runs `run` after `ms` of simulated time, plus `wait` ms of the Pi's clock (already scaled). */
+  private later(ms: number, run: () => void, wait = 0): void {
+    const delay = ms * this.scale + wait;
     if (delay <= 0) queueMicrotask(run);
     else this.clock.after(delay, run);
+  }
+
+  /**
+   * The station's own applet select (on a tap, and on `reselect`): the SELECT this chip answered last first, else the
+   * one the last chip answered; a 9000 is kept for the Pi's own SELECT. Returns how many SELECTs went to the chip.
+   */
+  private stationSelect(s: SimStation, badge: SimBadge): number {
+    s.kept = null;
+    const first = s.aids.get(badge.uid) ?? s.lastAid;
+    for (let k = 0; k < ISO7816_SELECT_CMDS.length; k++) {
+      const i = (first + k) % ISO7816_SELECT_CMDS.length;
+      if (badge.apdu(ISO7816_SELECT_CMDS[i]!) === "9000") {
+        s.aids.set(badge.uid, i);
+        s.lastAid = i;
+        s.kept = i;
+        return k + 1;
+      }
+    }
+    return ISO7816_SELECT_CMDS.length;
+  }
+
+  /** The Pi's SELECT that the station answers from its kept answer, without the chip. */
+  private fromKept(s: SimStation, hex: string): boolean {
+    return s.kept !== null && hex.toUpperCase() === ISO7816_SELECT_CMDS[s.kept]!.toUpperCase();
   }
 
   private emit(event: ReceiverEvent): void {
@@ -287,7 +327,9 @@ export class FakeReceiver {
     }
     s.nfcId = cmd.id;
     const badge = s.badge;
-    const cost = cmd.op === "apdu" || cmd.op === "sign" ? apduMs(cmd.hex) : cmd.op === "reselect" ? MS.reselect : MS.list;
+    const cached = cmd.op === "apdu" && this.fromKept(s, cmd.hex);
+    const cost = cached ? 0 : cmd.op === "apdu" || cmd.op === "sign" ? apduMs(cmd.hex) : cmd.op === "reselect" ? MS.reselect : MS.list;
+    const wait = Math.max(0, s.busyUntil - this.clock.now());
     this.later(cost + 2 * MS.radio, () => {
       // Replaced by a newer request, or the station dropped off: no answer, as on the hardware.
       if (s.nfcId !== cmd.id || !s.up) return;
@@ -300,6 +342,11 @@ export class FakeReceiver {
         case "sign": {
           // A chip lifted mid-exchange is an RF error; one that was never there, an APDU with no chip.
           if (!here) return fail(badge ? 2 : 3);
+          if (cached && this.fromKept(s, cmd.hex)) {
+            this.emit({ ev: "nfc_res", st: s.st, id: cmd.id, op: "apdu", ok: true, err: 0, hex: "9000", ...timing });
+            return;
+          }
+          s.kept = null;
           this.emit({ ev: "nfc_res", st: s.st, id: cmd.id, op: cmd.op, ok: true, err: 0, hex: here.apdu(cmd.hex), ...timing });
           if (cmd.op === "sign") {
             this.emit({ ev: "signed", st: s.st, id: cmd.id, tap: s.tapId, uid: here.uid, ok: true, chip_us: Math.round(us * 0.9), total_us: us + 60_000, at_us: this.micros() });
@@ -307,21 +354,27 @@ export class FakeReceiver {
           return;
         }
         case "reselect": {
+          // The field cycles, the chip comes back with nothing selected, and the station selects the applet again.
           if (!here) return fail(1);
-          const sel = here.reselect();
+          here.powerUp();
+          this.stationSelect(s, here);
+          const sel = s.kept === null ? "6D00" : "9000";
           this.emit({ ev: "nfc_res", st: s.st, id: cmd.id, op: "reselect", ok: true, err: 0, tags: [tagOf(here)], sel, ...timing });
           return;
         }
         case "select":
+          s.kept = null;
           if (!here || here.uid !== cmd.uid.toUpperCase()) return fail(1);
           here.powerUp();
           this.emit({ ev: "nfc_res", st: s.st, id: cmd.id, op: "select", ok: true, err: 0, tags: [tagOf(here)], ...timing });
           return;
         case "list":
+          s.kept = null;
+          here?.powerUp();
           this.emit({ ev: "nfc_res", st: s.st, id: cmd.id, op: "list", ok: true, err: 0, tags: here ? [tagOf(here)] : [], ...timing });
           return;
       }
-    });
+    }, wait);
   }
 }
 

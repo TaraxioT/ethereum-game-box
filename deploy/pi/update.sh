@@ -9,7 +9,10 @@
 # - A commit that fails to build or to come up is remembered and not retried; the next commit gets a fresh try.
 #   To retry one anyway: rm ~/egb/state/last-seen.
 # - A push from a laptop (push.sh) stays live until the branch moves again: only a new commit on the branch deploys.
-# - If the Box stays busy past EGB_IDLE_WAIT, the built release waits and the next run activates it.
+# - If the Box stays busy past EGB_IDLE_WAIT (activate.sh exits 3), the built release waits and the next run
+#   activates it. An activation that is cut short (exit 4) was put back and is treated like one that did not come up.
+# - It reads only the settings it needs from ~/.config/egb/env (setting): the unit gives it no EnvironmentFile, so the
+#   install and the build never see the Box's API keys.
 set -euo pipefail
 # shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
@@ -68,6 +71,12 @@ bash "$rel/deploy/pi/activate.sh" "$rel" || code=$?
 case $code in
   0) echo "$sha" >"$seen_file" ;;
   3) log "$short is built and waits for the Box to be idle" ;;
+  4)
+    # Cut short after the switch (a unit that would not install, a failed restart, a signal), and put back by
+    # activate.sh's own trap. Its release is marked failed, so retrying would rebuild it every tick: leave it.
+    echo "$sha" >"$seen_file"
+    die "$short was cut short while it went live and the previous release was put back; not retrying it until $branch moves"
+    ;;
   *)
     echo "$sha" >"$seen_file"
     die "$short did not come up and was rolled back; not retrying it until $branch moves"

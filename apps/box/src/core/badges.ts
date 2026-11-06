@@ -1,5 +1,5 @@
-// The badges on the demo desk and the bot's (names invented; addresses fake but fixed, derived from the name), and how
-// a station or port prints any badge.
+// The badges on the demo desk and the bot's (names invented; addresses fake but fixed, derived from the name), how a
+// station or port prints any badge, and when two are the same badge.
 import type { Badge } from "./types.ts";
 import { hash32 } from "@egb/sdk";
 
@@ -22,4 +22,9 @@ export const BOT_BADGE: Badge = badge("bot");
 /** What a station or port prints for a badge: the label before `.gamebox.eth`, in caps. */
 export function badgeLabel(badge: Badge): string {
   return (badge.name.split(".")[0] ?? badge.name).toUpperCase();
+}
+
+/** The same badge: both known, with one address. */
+export function sameBadge(a: Badge | null, b: Badge | null): boolean {
+  return a !== null && b !== null && a.address === b.address;
 }

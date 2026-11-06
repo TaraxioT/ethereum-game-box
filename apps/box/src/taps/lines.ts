@@ -42,9 +42,6 @@ export type ReceiverEvent =
       readonly id: number;
       readonly read_us: number;
       readonly gap_us: number;
-      /** The HaLo applet select's answer, when the station selected it on detection. */
-      readonly sel?: string;
-      readonly sel_us?: number;
       readonly tries: number;
       readonly at_us: number;
     })

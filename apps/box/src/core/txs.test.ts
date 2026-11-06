@@ -59,6 +59,25 @@ describe("tx book", () => {
     expect(order).toEqual([1, 2]);
   });
 
+  it("puts every transaction in its block even when one's effect throws, then reports the throw", () => {
+    const { steps, book, clock } = setup();
+    let later = 0;
+    book.submit({ kind: "open", seat: null, direction: "in", amount: 20 }, () => {
+      throw new RangeError("short");
+    });
+    book.submit({ kind: "faucet", seat: 0, direction: "out", amount: 100 }, () => {
+      later++;
+    });
+    clock.advance(SEND_MS);
+    expect(() => book.seal(9, START + 1_000)).toThrow(RangeError);
+    expect(later).toBe(1);
+    expect(steps.filter((t) => t.step === "in-block").map((t) => t.id)).toEqual([1, 2]);
+    // Nothing is left behind to throw again at the next block, and both are paid.
+    expect(() => book.seal(10, START + 13_000)).not.toThrow();
+    clock.advance(PAY_MS);
+    expect(book.list().map((t) => t.step)).toEqual(["paid", "paid"]);
+  });
+
   it("stops every timer", () => {
     const { steps, book, clock } = setup();
     book.submit({ kind: "refund", seat: 1, direction: "out", amount: 10 }, () => undefined);

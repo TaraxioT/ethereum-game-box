@@ -4,7 +4,9 @@
 // and a halted chip ignores the next read: a resting chip needs another way to show it's still there, or it reads as
 // lifted 33 ms after it landed. An ISO-DEP chip (a HaLo) gets a presence check every PRESENCE_MS that leaves it
 // selected, so the Pi's APDUs carry on (Pn532::present(), an R(NAK): ~4.3 ms); any other chip, or one that doesn't
-// answer the check before anything has talked to it, is read again after a short field cycle (~40 ms). For QUIET_MS
+// answer the check, is read again after a short field cycle (~40 ms). Some HaLos stop answering R(NAK) even after a
+// block was exchanged (one with SAK 28 did, right after the station's own select): such a chip is re-read too, never
+// counted gone for a missed check alone. For QUIET_MS
 // after a request there are no checks at all: the Pi is mid-session, and the chip's own answers show it's there.
 #include "reader.h"
 
@@ -16,6 +18,7 @@
 #include "motor.h"
 #include "nfc.h"
 #include "oled.h"
+#include "timing.h"
 
 namespace st {
 namespace nfc {
@@ -24,9 +27,7 @@ std::atomic<uint32_t> busyId{0};
 Pn532 pn532(Wire1, PIN_NFC_SDA, PIN_NFC_SCL, PIN_NFC_IRQ);
 Held held;
 
-constexpr uint32_t READ_TIMEOUT_MS = 60;
 constexpr uint8_t GONE_MISSES = 2;        // checks in a row without the chip before it counts as lifted
-constexpr uint32_t PRESENCE_MS = 20;
 constexpr uint32_t QUIET_MS = 150;
 constexpr uint16_t TAP_BUZZ_MS = 80;
 constexpr uint8_t SILENT_LISTS = 3;       // reads in a row the PN532 didn't answer before it's checked as lost
@@ -59,21 +60,25 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
     egb::Gone g;
     egb::head(g, egb::K_GONE, 0);
     g.id = held.tapId;
+    g.boot = held.boot;
     g.chip = held.chip;
     link::sendReliable(&g, sizeof g);
   }
   held.chip = c;
   held.deaf = false;
   held.detectedUs = startUs;
-  held.lastApduMs = 0;
   egb::Tap t;
   egb::head(t, egb::K_TAP, 0);
   t.id = ++held.tapId;
+  t.boot = held.boot;
   t.gapUs = gapUs;
   t.chip = c;
   t.readUs = micros() - startUs;
   link::sendReliable(&t, sizeof t);
-  feedback.detectedMs = millis();
+  uint32_t now = millis();
+  feedback.detectedMs = now;
+  feedback.activeMs = now;
+  feedback.goodMs = 0;
   feedback.phase = PH_DETECTED;
   feedback.tooSoon = false;
   feedback.chipOn = true;
@@ -86,9 +91,11 @@ bool found(const egb::Chip &c, uint32_t startUs, uint32_t gapUs, bool poll) {
   // leaving it to the Pi, it's as fast to the applet as the first and as fast to the tap as the second.
   if (poll && c.isoDep()) {
     uint32_t us, waitUs;
-    if (select(us, waitUs) == 0x9000) {  // a good read, as the Pi's own select was: DONE follows if nothing more comes
+    bool good = select(us, waitUs) == 0x9000;
+    feedback.activeMs = millis();
+    if (good) {  // a good read, as the Pi's own select was: DONE follows if nothing more comes (feedback.h)
+      feedback.goodMs = feedback.activeMs.load();
       feedback.phase = PH_READING;
-      held.lastApduMs = millis();
     }
   }
   return true;
@@ -104,9 +111,13 @@ void lost() {
   egb::Gone g;
   egb::head(g, egb::K_GONE, 0);
   g.id = held.tapId;
+  g.boot = held.boot;
   g.chip = held.chip;
   link::sendReliable(&g, sizeof g);
   forgetSelect();
+  // A chip still on the reader after a gone (two re-reads missed it) stays in its active ISO-DEP state and ignores the
+  // activation a plain list sends; a field cycle lets it come back as a fresh tap instead of never.
+  pn532.resetField();
   lastStartUs = micros();
   led::show();
   oled::poke();
@@ -147,6 +158,7 @@ static void lookForReader(uint32_t now, uint32_t &nextFind, uint32_t lostMs, boo
   if (pn532.begin()) {
     told = false;
     worked = true;
+    lastStartUs = micros();  // the detections start now
     feedback.nfcOk = true;
     egb::radio::setFlag(egb::F_NFC, true);
     char line[64];
@@ -170,7 +182,8 @@ static void run(void *) {
   uint32_t nextFind = 0, lostMs = 0;
   uint8_t silent = 0;
   bool worked = false;
-  held.tapId = esp_random();  // a rebooted station's first tap never looks like a resend
+  held.tapId = esp_random();  // tap ids count up from here, named by this boot's number
+  held.boot = esp_random();
   static Request r;
   for (;;) {
     uint32_t now = millis();
@@ -184,14 +197,15 @@ static void run(void *) {
     if (xQueueReceive(requests, &r, pdMS_TO_TICKS(on ? PRESENCE_MS : 1)) == pdTRUE) {
       if (r.q.op == OP_BENCH) runBench((const char *)r.q.data, r.q.len);
       else serve(r.q, r.from);
+      if (!feedback.chipOn) lastStartUs = micros();  // the next look starts the window afresh
       continue;
     }
     now = millis();
     if (on && egb::sinceMs(now, held.servedMs) < (int32_t)QUIET_MS) continue;
-    bool there = false, cycle = !on || !held.chip.isoDep() || (!held.talked && held.deaf);
+    bool there = false, cycle = !on || !held.chip.isoDep() || held.deaf;
     if (!cycle) {
       there = pn532.present();
-      if (!there && !held.talked) held.deaf = cycle = true;  // never answered it: re-read it, now and from here on
+      if (!there) held.deaf = cycle = true;  // it doesn't answer the check: re-read it, now and from here on
     }
     if (cycle) {
       if (on) {
@@ -204,18 +218,12 @@ static void run(void *) {
       bool answered = pn532.list(&c, 1, n, nullptr, 0, READ_TIMEOUT_MS);
       silent = answered ? 0 : silent + 1;
       there = answered && n;
-      uint32_t gap = start - lastStartUs;
+      uint32_t gap = gapUs(start, lastStartUs);
       lastStartUs = start;
       if (there) found(c, start, gap, true);
     }
     if (there) {
       held.misses = 0;
-      Snapshot s = feedback.snap();
-      if (s.phase == PH_READING && held.lastApduMs && egb::sinceMs(millis(), held.lastApduMs) >= (int32_t)DONE_IDLE_MS) {
-        feedback.phase = PH_DONE;
-        led::show();
-        oled::poke();
-      }
     } else if (on && ++held.misses >= GONE_MISSES) {
       lost();
     }

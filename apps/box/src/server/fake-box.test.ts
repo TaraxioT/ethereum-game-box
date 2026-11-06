@@ -14,6 +14,7 @@ import { flush, post, startTestBox, type TestBox } from "./testing.ts";
 const P1 = "e4ba70";
 const P2 = "df3d88";
 const GET_PKEYS = "B0510000010200";
+const ARX_SELECT = "00A404000AA0000009490148614C6F00";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -105,7 +106,8 @@ describe("the Box on the fake receiver", () => {
     expect(rig.apdus().some((line) => line.endsWith(GET_PKEYS))).toBe(true);
     await rig.tap("ada", P1);
     await rig.tap("ada", P1);
-    expect(rig.apdus()).toEqual([]);
+    // Only the applet select after each tap, off the tap's clock: the station answers it from its own select.
+    expect(rig.apdus().map((line) => line.split(" ").slice(3).join(" "))).toEqual([`apdu ${ARX_SELECT}`, `apdu ${ARX_SELECT}`]);
     expect(rig.state().seats[0].badge?.name).toBe("nova");
   });
 

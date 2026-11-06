@@ -40,6 +40,9 @@ export type ForgeProvider = "claude" | "sim";
 
 export type ForgeStatus = "queued" | "preparing" | "working" | "compiling" | "fixing" | "installing" | "done" | "failed";
 
+/** A build that has ended, installed or not: its status won't change again. */
+export const isFinished = (status: ForgeStatus): boolean => status === "done" || status === "failed";
+
 export type CompileStep = "manifest" | "typecheck" | "bundle" | "icon";
 
 /** One moment of a build, streamed to the screen. `at` is the server's clock. */

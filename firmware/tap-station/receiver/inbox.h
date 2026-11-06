@@ -24,7 +24,8 @@ struct Msg {
 };
 
 void inboxBegin();
-bool post(const Msg &m);  // never waits: a full inbox drops the message
+bool post(const Msg &m);  // never waits: a full inbox drops the message, counted
+uint32_t inboxDrops();
 
 // The loop's wait: the next message, or nothing within `ms`.
 bool next(Msg &m, uint32_t ms);

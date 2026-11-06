@@ -152,7 +152,8 @@ export async function openScreen(box: Box, origin?: string): Promise<TestScreen>
 export function post(box: Box, path: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
   return fetch(`${box.url}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "http://127.0.0.1:8790", ...headers },
+    // A page of the Box's own makes the request: its origin is the one the request goes to.
+    headers: { "content-type": "application/json", origin: new URL(box.url).origin, ...headers },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 }

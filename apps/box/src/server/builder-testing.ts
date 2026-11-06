@@ -4,12 +4,11 @@ import { fileURLToPath } from "node:url";
 import type { Box } from "./box.ts";
 import { LAUNCHER_HEADER } from "./security.ts";
 import { startTestBox, type TestBox } from "./testing.ts";
+import { readFrames } from "./builder-frames.ts";
 import type { BuilderEventName, BuilderEvents } from "./builder-wire.ts";
 
 /** The Forge's fixtures: its template `tap-three` builds and installs a real game from the sim's recording. */
 export const FIXTURE_GAMES = fileURLToPath(new URL("../builder/forge/fixtures", import.meta.url));
-
-export const ORIGIN = "http://127.0.0.1:8790";
 
 export function startBuilderBox(): Promise<TestBox> {
   return startTestBox({ builder: { gameRoots: [FIXTURE_GAMES] } });
@@ -22,7 +21,7 @@ export function call(box: Box, method: "GET" | "POST", path: string, body?: unkn
     method,
     headers: {
       [LAUNCHER_HEADER]: box.token,
-      ...(method === "POST" ? { origin: ORIGIN } : {}),
+      ...(method === "POST" ? { origin: new URL(box.url).origin } : {}),
       ...(json ? { "content-type": "application/json" } : {}),
       ...headers,
     },
@@ -48,32 +47,15 @@ export interface TestStream {
   close(): void;
 }
 
-/** The builder's event stream, parsed frame by frame. */
+/** The builder's event stream, read as the screen reads it (builder-frames.ts). */
 export async function openStream(box: Box, query = ""): Promise<TestStream> {
   const abort = new AbortController();
   const res = await fetch(`${box.url}/api/builder/events${query}`, { headers: { [LAUNCHER_HEADER]: box.token }, signal: abort.signal });
   if (!res.ok || !res.body) throw new Error(`events: ${res.status}`);
   const events: StreamEvent[] = [];
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  void (async () => {
-    let buffer = "";
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) return;
-        buffer += value;
-        for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
-          const block = buffer.slice(0, end);
-          buffer = buffer.slice(end + 2);
-          const event = /^event: (.+)$/m.exec(block)?.[1];
-          const data = /^data: (.+)$/m.exec(block)?.[1];
-          if (event && data) events.push({ event: event as BuilderEventName, data: JSON.parse(data) as never });
-        }
-      }
-    } catch {
-      // Closed by the test.
-    }
-  })();
+  readFrames(res.body, (event, data) => void events.push({ event, data } as StreamEvent)).catch(() => {
+    // Closed by the test.
+  });
   return {
     events,
     async next(event, check = () => true, from = 0, ms = 60_000) {

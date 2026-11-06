@@ -40,52 +40,100 @@ static Snapshot held(uint8_t phase, uint32_t detectedMs) {
   s.nfcOk = true;
   s.chipOn = true;
   s.phase = phase;
-  s.detectedMs = detectedMs;
+  s.detectedMs = s.activeMs = detectedMs;
   s.taps = 1;
   return s;
 }
 
-TEST(the_led_and_oled_table) {
+TEST(hold_while_the_app_reads_then_done_then_the_pis_screen) {
   Snapshot s = held(PH_DETECTED, 1000);
   Shown v = shown(s, 1000, false);
   CHECK_EQ(v.look, LOOK_HOLD);
   CHECK_EQ(v.led, BLUE);
   CHECK_EQ(shown(s, 1200, false).led, 0u);  // blinking, 200 ms
   CHECK_EQ(shown(s, 1375, false).sweep, 3u);
-  s.phase = PH_SIGNING;
+  CHECK_EQ(shown(s, 1600, true).look, LOOK_IDLE);  // nobody read it: the Pi's screen, the badge still resting
+  CHECK_EQ(shown(s, 1600, true).led, WHITE);
+  s.phase = PH_READING;  // the station's select, or the Pi's read, ended well at 1050
+  s.activeMs = s.goodMs = 1050;
+  CHECK_EQ(shown(s, 1300, false).look, LOOK_HOLD);  // the app may have more to ask
+  v = shown(s, 1550, false);
+  CHECK_EQ(v.look, LOOK_DONE);
+  CHECK_EQ(v.led, GREEN);
+  CHECK_EQ(shown(s, 3049, false).look, LOOK_DONE);
+  v = shown(s, 3050, true);  // 1.5 s of DONE, then the Pi's screen though the chip stays on the reader
+  CHECK_EQ(v.look, LOOK_IDLE);
+  CHECK_EQ(v.led, WHITE);
+  s.activeMs = 4000;  // the Pi reads again: HOLD again
+  CHECK_EQ(shown(s, 4100, false).look, LOOK_HOLD);
+}
+
+TEST(a_newer_screen_ends_the_result_at_once) {
+  Snapshot s = held(PH_READING, 1000);
+  s.activeMs = s.goodMs = 1050;
+  s.screenSet = true;
+  s.screenMs = 1100;  // sent while the chip was being read: the result still shows
+  CHECK_EQ(shown(s, 1800, false).look, LOOK_DONE);
+  s.screenMs = 1700;  // a different screen after DONE began
+  CHECK_EQ(shown(s, 1800, false).look, LOOK_IDLE);
+  CHECK_EQ(shown(s, 1800, false).led, 0u);
+}
+
+TEST(signing_and_its_results) {
+  Snapshot s = held(PH_SIGNING, 1000);
   CHECK_EQ(shown(s, 1000, false).look, LOOK_SIGN);
   CHECK_EQ(shown(s, 1080, false).led, 0u);  // the fast blink, 80 ms
   s.phase = PH_SIGNED;
-  CHECK_EQ(shown(s, 1500, false).look, LOOK_DONE);
-  CHECK_EQ(shown(s, 1500, false).led, GREEN);
+  s.signedMs = 2000;
+  CHECK_EQ(shown(s, 2100, false).look, LOOK_DONE);
+  CHECK_EQ(shown(s, 2100, false).led, GREEN);
+  CHECK_EQ(shown(s, 3500, false).look, LOOK_IDLE);
   s.phase = PH_FAILED;
   s.failedMs = 2000;
   CHECK_EQ(shown(s, 2100, false).look, LOOK_SIGN);  // the Pi retries at once: still HOLD STILL
-  CHECK_EQ(shown(s, 2600, false).look, LOOK_FAIL);  // then AGAIN, red
+  CHECK_EQ(shown(s, 2600, false).look, LOOK_FAIL);  // then AGAIN, red for a second
   CHECK_EQ(shown(s, 2600, false).led, RED);
-  s.chipOn = false;
+  CHECK_EQ(shown(s, 3700, false).look, LOOK_FAIL);
+  CHECK_EQ(shown(s, 3700, false).led, 0u);
+  CHECK_EQ(shown(s, 4100, false).look, LOOK_IDLE);
+  s.chipOn = false;  // lifted mid-sign
   s.phase = PH_SIGNING;
   s.tooSoon = true;
   s.liftedMs = 3000;
-  v = shown(s, 3100, true);
+  Shown v = shown(s, 3100, true);
   CHECK_EQ(v.look, LOOK_FAIL);
   CHECK(v.soon);
   CHECK_EQ(v.led, RED);
   CHECK_EQ(shown(s, 4100, true).led, WHITE);  // red for a second, then the receiver's white
-  CHECK_EQ(shown(s, 4600, true).look, LOOK_IDLE);
+  CHECK_EQ(shown(s, 4500, true).look, LOOK_IDLE);
   s.nfcOk = false;
-  CHECK_EQ(shown(s, 4600, true).look, LOOK_FAULT);
+  CHECK_EQ(shown(s, 4500, true).look, LOOK_FAULT);
+}
+
+TEST(lifted_after_a_good_read_is_done_at_once) {
+  Snapshot s = held(PH_READING, 1000);
+  s.activeMs = s.goodMs = 1050;
+  s.chipOn = false;
+  s.liftedMs = 1200;
+  CHECK_EQ(shown(s, 1300, false).look, LOOK_DONE);
+  CHECK_EQ(shown(s, 2700, false).look, LOOK_IDLE);
 }
 
 TEST(the_picture_wakes_the_oled_when_it_moves) {
   Snapshot s = held(PH_DETECTED, 1000);
   CHECK_EQ(nextChangeMs(s, 1000), 80);
   CHECK_EQ(nextChangeMs(s, 1190), 10);  // the 200 ms blink
+  s.phase = PH_READING;
+  s.activeMs = s.goodMs = 1050;
+  CHECK_EQ(nextChangeMs(s, 1540), 10);  // DONE begins at 1550, before the next blink or sweep step
+  CHECK_EQ(nextChangeMs(s, 3000), 50);  // DONE ends
   s.chipOn = false;
-  s.liftedMs = 2000;
-  CHECK_EQ(nextChangeMs(s, 2000), (int32_t)RED_MS);
-  CHECK_EQ(nextChangeMs(s, 3200), 300);
-  CHECK_EQ(nextChangeMs(s, 4000), -1);
+  s.phase = PH_SIGNING;
+  s.tooSoon = true;
+  s.liftedMs = 5000;
+  CHECK_EQ(nextChangeMs(s, 5000), (int32_t)RED_MS);
+  CHECK_EQ(nextChangeMs(s, 6200), 300);
+  CHECK_EQ(nextChangeMs(s, 7000), -1);
 }
 
 // U8g2 with no display behind it: the frame only goes into the buffer.

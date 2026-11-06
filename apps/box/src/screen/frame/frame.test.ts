@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FromFrame, GameManifest, ToFrame } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
-import { frameAttributes, openFrameChannel, parseFromFrame, type Incoming, type MessageHost } from "./channel.ts";
+import { frameAttributes, openFrameChannel, parseFromFrame, type FrameElement, type Incoming, type MessageHost } from "./channel.ts";
 import { frameEvent, frameInit, frameUpdate, type FrameMatch } from "./feed.ts";
 import { createFrameRuntime, MAX_ERRORS } from "./runtime.ts";
 
@@ -37,10 +37,17 @@ describe("the kiosk's end of the channel", () => {
       removeEventListener: (_type, fn) => void (listener === fn && (listener = null)),
     };
     const frameWindow = { postMessage: vi.fn() } as unknown as Window;
+    let onLoad: (() => void) | null = null;
+    const frame: FrameElement = {
+      contentWindow: frameWindow,
+      addEventListener: (_type, fn) => void (onLoad = fn),
+      removeEventListener: (_type, fn) => void (onLoad === fn && (onLoad = null)),
+    };
     const received: FromFrame[] = [];
-    const channel = openFrameChannel(host, { contentWindow: frameWindow }, (m) => received.push(m));
+    let left = 0;
+    const channel = openFrameChannel(host, frame, { message: (m) => received.push(m), left: () => left++ });
     const deliver = (data: unknown, source: unknown = frameWindow, origin = "null") => listener?.({ data, source: source as MessageEventSource, origin });
-    return { channel, frameWindow, received, deliver, listening: () => listener !== null };
+    return { channel, frameWindow, received, deliver, load: () => onLoad?.(), left: () => left, listening: () => listener !== null || onLoad !== null };
   }
 
   it("hears only its own frame, from an opaque origin", () => {
@@ -61,6 +68,24 @@ describe("the kiosk's end of the channel", () => {
     expect(h.frameWindow.postMessage).toHaveBeenCalledWith(update, "*");
     h.channel.dispose();
     expect(h.listening()).toBe(false);
+    h.channel.post(update);
+    expect(h.frameWindow.postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes for good when the frame loads a second page: nothing more goes out or comes in", () => {
+    const h = harness();
+    h.load(); // the frame's own page
+    h.deliver({ t: "ready" });
+    const update: ToFrame = { t: "update", state: { n: 1 }, event: { type: "step" }, now: 5 };
+    h.channel.post(update);
+    expect(h.left()).toBe(0);
+    h.load(); // the frame navigated itself
+    expect(h.left()).toBe(1);
+    expect(h.listening()).toBe(false);
+    h.channel.post(update);
+    h.deliver({ t: "ready" });
+    expect(h.frameWindow.postMessage).toHaveBeenCalledTimes(1);
+    expect(h.received).toEqual([{ t: "ready" }]);
   });
 });
 

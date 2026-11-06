@@ -27,7 +27,7 @@ template <class T> static bool start(int si, T &p, size_t len, Policy policy, ui
 }
 
 // buzz / screen to one station or `all`: one answer per station, or one fail when none is linked.
-static void toStations(const Command &c, const char *failEv) {
+static void toStations(const Command &c, const char *failEv, const char *line) {
   uint32_t now = millis();
   bool any = false;
   for (int i = 0; i < MAX_STATIONS; i++) {
@@ -51,7 +51,7 @@ static void toStations(const Command &c, const char *failEv) {
     }
     if (!ok) emit(evFail(json, failEv, stations.at[i].name, c.id, "busy"));
   }
-  if (!any) emit(evFail(json, failEv, c.st, c.id, "no such station linked"));
+  if (!any) emit(evNoStation(json, failEv, c.st, c.id, line));
 }
 
 static void nfc(const Command &c) {
@@ -64,9 +64,11 @@ static void nfc(const Command &c) {
   head(q, K_NFC_REQ, 0);
   q.id = wireId++;
   q.op = c.op;
+  Station &s = stations.at[si];
+  q.bound = s.tapSeen;  // bind it to the chip of the last tap passed on: the station refuses it for another
+  q.tap = s.tapId;
   q.len = c.len;
   memcpy(q.data, c.data, c.len);
-  Station &s = stations.at[si];
   s.nfcWire = q.id;
   s.nfcCaller = c.id;
   if (!start(si, q, sizeOf(q), POLICY_NFC, c.id, true)) emit(evFail(json, "nfc_fail", c.st, c.id, "busy"));
@@ -74,8 +76,8 @@ static void nfc(const Command &c) {
 
 static void stats(const Command &c, const char *line) {
   if (!c.st[0]) {
-    emit(evStatsC3(json, uxTaskGetStackHighWaterMark(nullptr), press::stackLeft(), serial::dropped(), radio::sendFails(),
-                   millis()));
+    emit(evStatsC3(json, uxTaskGetStackHighWaterMark(nullptr), press::stackLeft(), serial::dropped() + inboxDrops(),
+                   radio::sendFails(), millis()));
     return;
   }
   int si = stations.linkedNamed(c.st, millis());
@@ -104,10 +106,10 @@ void onCommand(const Command &c, const char *line) {
       press::trigger(c.id);
       break;
     case C_BUZZ:
-      toStations(c, "buzz_fail");
+      toStations(c, "buzz_fail", line);
       break;
     case C_SCREEN:
-      toStations(c, "screen_fail");
+      toStations(c, "screen_fail", line);
       break;
     case C_NFC:
       nfc(c);

@@ -1,9 +1,6 @@
 // The rules runner's loop, inside a built game's rules.js: one request line in, exactly one reply out, in order
 // (the runner protocol in @egb/sdk). Pure apart from the clock it measures with, so it is tested without a process.
-import type { BuiltEvent, BuiltRules, RunnerReply } from "@egb/sdk";
-
-/** An error message the Box can show and log, never the rules' whole stack. */
-const MAX_MESSAGE = 300;
+import { MAX_MESSAGE, type BuiltEvent, type BuiltRules, type RunnerReply } from "@egb/sdk";
 
 /** True when `value` has the four functions every built game's rules module provides. */
 export function isBuiltRules(value: unknown): value is BuiltRules<unknown> {
@@ -12,6 +9,7 @@ export function isBuiltRules(value: unknown): value is BuiltRules<unknown> {
   return ["start", "step", "outcome", "stations"].every((k) => typeof r[k] === "function");
 }
 
+/** An error message the Box can show and log, never the rules' whole stack. */
 function message(err: unknown): string {
   const text = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   return text.slice(0, MAX_MESSAGE);

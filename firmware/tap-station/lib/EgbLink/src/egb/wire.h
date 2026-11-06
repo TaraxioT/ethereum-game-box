@@ -109,7 +109,8 @@ struct __attribute__((packed)) Release {
 
 struct __attribute__((packed)) Tap {
   Head h;
-  uint32_t id;
+  uint32_t id;      // counts up from a random start each boot...
+  uint32_t boot;    // ...which this names, so a rebooted station's first tap is never taken for an old one
   uint32_t readUs;  // from the start of the detection that found the chip until this left
   uint32_t gapUs;   // the detection before it: the chip landed in that window
   Chip chip;
@@ -118,6 +119,7 @@ struct __attribute__((packed)) Tap {
 struct __attribute__((packed)) Gone {
   Head h;
   uint32_t id;  // the tap's id
+  uint32_t boot;
   Chip chip;
 };
 
@@ -159,6 +161,8 @@ struct __attribute__((packed)) NfcReq {
   Head h;
   uint32_t id;
   uint8_t op;
+  uint8_t bound;  // `tap` is set: an apdu / sign is for the chip of that tap only
+  uint32_t tap;   // the station's last tap the receiver passed on when the request arrived
   uint16_t len;
   uint8_t data[APDU_MAX];  // the APDU, or the UID for select
 };
@@ -198,6 +202,11 @@ struct __attribute__((packed)) StatsRes {
   uint32_t sendFails;
   uint16_t stack[T_COUNT];  // each task's lowest free stack, bytes
 };
+
+// An apdu / sign for a chip that has since left the reader (another tap came since the request was sent): refused,
+// so one badge's answer can never be taken for another's. The serial protocol doesn't name the chip, so the receiver
+// binds each request to the last tap it passed on for that station.
+inline bool forOtherChip(const NfcReq &q, uint32_t tapNow) { return q.bound && q.tap != tapNow; }
 
 // ---- building and reading ----
 

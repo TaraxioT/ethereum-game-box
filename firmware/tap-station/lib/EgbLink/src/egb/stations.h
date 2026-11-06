@@ -19,11 +19,31 @@ struct Station {
   uint8_t flags;     // the station's F_* as last reported to the Pi
   int8_t rssi;
   uint32_t tapId, goneId, signedId, reportId;  // the last of each the Pi was told about (each id counts once)
+  bool tapSeen, goneSeen, signedSeen;
+  uint32_t boot;  // the station's boot its tap ids count from
+  bool bootSeen;
   bool chipOn;
   Chip chip;  // the chip on its reader, for `state`
   // The station's last NFC request, so its `signed` line carries the caller's id even after the reply freed the slot.
   uint32_t nfcWire, nfcCaller;
 };
+
+// Whether a reliable packet's id is new: each counts once, and an old one resent after a newer one (its Got was lost,
+// a newer packet got through first) is dropped, comparing across the counter's wrap.
+inline bool fresh(uint32_t id, uint32_t &last, bool &seen) {
+  if (seen && (int32_t)(id - last) <= 0) return false;
+  last = id;
+  seen = true;
+  return true;
+}
+
+// A station's tap ids count from a random start each boot: a new boot starts its taps and gones afresh.
+inline void bootOf(Station &s, uint32_t boot) {
+  if (s.bootSeen && boot == s.boot) return;
+  s.boot = boot;
+  s.bootSeen = true;
+  s.tapSeen = s.goneSeen = false;
+}
 
 class Stations {
  public:

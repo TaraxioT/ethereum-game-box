@@ -150,3 +150,12 @@ TEST(press_and_stats_lines) {
   s.upMs = 358000;
   CHECK_IN_PROTOCOL(evStatsS3(j, "e4ba70", s));
 }
+
+TEST(no_linked_station_lines) {
+  CHECK_IN_PROTOCOL(evNoStation(j, "buzz_fail", "all", 4, "buzz all 4"));
+  size_t n = evNoStation(j, "screen_fail", "all", 6, "screen all 6 6269673d4849");
+  CHECK_STR(std::string(j.text(), n),
+            "{\"ev\":\"bad\",\"why\":\"no such station linked\",\"line\":\"screen all 6 6269673d4849\"}\n");
+  n = evNoStation(j, "screen_fail", "e4ba70", 7, "");
+  CHECK_STR(std::string(j.text(), n), "{\"ev\":\"screen_fail\",\"st\":\"e4ba70\",\"id\":7,\"why\":\"no such station linked\"}\n");
+}

@@ -1,4 +1,5 @@
-// Proves the rules child's refusals on the Node that runs this test (the Pi runs the same major, 26). Two layers:
+// Proves the rules child's refusals on the Node that runs this test (the Pi runs the same major, 26: the host refuses
+// built games on any Node older than SANDBOX_NODE_MAJOR, the one these tests proved). Two layers:
 //   1. Node's permission model alone: the attacks bundled without the runner or its jail, run with the child's
 //      exact flags. Every refusal the plan names must hold here.
 //   2. The real path: a hostile game bundled by the Forge's bundler (runner and jail included) and played by the
@@ -14,9 +15,9 @@ import * as esbuild from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bundleGame } from "../../builder/bundle/bundle.ts";
 import { BUNDLE_FILES, sdkPaths } from "../../builder/bundle/paths.ts";
-import { rulesChildArgs } from "../../builder/bundle/rules-check.ts";
 import { FIXTURES, tempDir } from "../../builder/forge/test-helpers.ts";
-import { CHILD_FLAGS } from "./child.ts";
+import { CHILD_FLAGS, rulesChildArgs, SANDBOX_NODE_MAJOR } from "./child.ts";
+import { canGuardMemory } from "./memory.ts";
 import { createRulesHost, type RulesHost } from "./host.ts";
 import type { Targets } from "./fixtures/hostile/targets.ts";
 
@@ -133,6 +134,8 @@ interface HostileState {
 
 describe("the rules child's sandbox", () => {
   it(`Node ${process.version}'s permission model refuses every capability the plan names`, async () => {
+    // A Node below the major these refusals were proved on runs no built game at all (host.ts).
+    expect(Number(process.versions.node.split(".")[0])).toBeGreaterThanOrEqual(SANDBOX_NODE_MAJOR);
     const raw = path.join(tmp, "raw.js");
     await esbuild.build({ entryPoints: [path.join(HERE, "fixtures", "raw-main.ts")], outfile: raw, bundle: true, format: "esm", platform: "node", target: "node22", logLevel: "silent" });
     const { verdicts, env } = JSON.parse(await runWithChildFlags(raw, [JSON.stringify(targets("raw"))])) as { verdicts: Record<string, string>; env: string[] };
@@ -166,12 +169,19 @@ describe("the rules child's sandbox", () => {
     const t0 = performance.now();
     await expect(host.step({ type: "tap", seat: 0, now: 1, roll: 7 })).rejects.toMatchObject({ code: "budget" });
     expect(performance.now() - t0).toBeLessThan(1_000);
-    expect(host.running()).toBeNull();
+    // The session is over with its child.
+    await expect(host.step({ type: "tick", now: 2 })).rejects.toMatchObject({ code: "budget" });
   });
 
   it("a game that eats memory dies at its heap cap, and only it", async () => {
     await host.start("hostile-slow", 1, 0);
     await expect(host.step({ type: "tap", seat: 0, now: 1, roll: 9 })).rejects.toMatchObject({ code: "crash" });
+  }, 20_000);
+
+  // Linux only: the guard reads /proc (memory.ts). On macOS a gigabyte would just be allocated.
+  it.runIf(canGuardMemory())("a game that fills a gigabyte of typed arrays, outside its heap, is killed at the memory cap", async () => {
+    await host.start("hostile-slow", 1, 0);
+    await expect(host.step({ type: "tap", seat: 0, now: 1, roll: 11 })).rejects.toMatchObject({ code: "crash", message: expect.stringMatching(/^used \d+ MB of memory$/) });
   }, 20_000);
 
   it("the host still plays a good game afterwards", async () => {

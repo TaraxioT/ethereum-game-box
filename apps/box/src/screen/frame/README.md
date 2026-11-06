@@ -14,8 +14,11 @@ the Box's own business. A frame that errors, or isn't ready within 8 s, gets a q
 the rules run on the server and the stations show the game, so the match goes on.
 
 **The channel.** Out: `postMessage(message, "*")`, since no origin can name an opaque frame. In: only from that
-frame's window, only from the opaque origin `null`, only `{ t: "ready" }` or `{ t: "error", message }` (cut to 300
-characters).
+frame's window, only from the opaque origin `null`, only `{ t: "ready" }` or `{ t: "error", message }` (cut to
+`MAX_MESSAGE`, 300 characters, from `@egb/sdk`). Only while the frame shows its own page: `allow-scripts` lets a
+frame navigate itself, and the page it lands on (the kiosk's `frame-src 'self'` keeps it on the Box's own) is out
+from under the frame's CSP. The iframe's first `load` is its page; a second closes the channel for good (nothing
+more goes out or comes in), and the view removes the frame and shows the fault plate.
 
 **The frame's side** (`/frame.js`, built by the server): loads the game's `screen.js` beside the page, posts `ready`,
 mounts the `GameScreen` on `init` (again on a second `init`), hands it each `update`, and reports errors from mount,
@@ -26,7 +29,7 @@ and posts only to it.
 |---|---|---|
 | `view.ts` | The kiosk's view of a built match. | `frameView(source): ViewFactory`, `READY_TIMEOUT_MS` |
 | `feed.ts` | What the frame is told, from BoxState and BoxEvents. Pure. | `builtMatch` (the router's source: the built play and its game.json from the library), `FrameMatch`, `FrameSource`, `frameSeats`, `frameInit`, `frameEvent`, `frameUpdate` |
-| `channel.ts` | The kiosk's end of the channel and the iframe's attributes. | `openFrameChannel(host, frame, onMessage)`, `parseFromFrame`, `frameAttributes(id, title)` |
+| `channel.ts` | The kiosk's end of the channel and the iframe's attributes. | `openFrameChannel(host, frame, { message, left })`, `parseFromFrame`, `frameAttributes(id, title)` |
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
 | `parts.ts` | `/parts.js`: defines the parts a built screen may use by tag. | entry |
@@ -34,4 +37,4 @@ and posts only to it.
 | `frame.css` | The view's iframe and fault plate. | |
 
 Tests: `frame.test.ts` (the sandbox attribute, the channel dropping anything but ready and error and anything from
-another window or a non-opaque origin, the runtime's mount, updates and capped errors, the feed's events).
+another window or a non-opaque origin, closing for good on the frame's second load, the runtime's mount, updates and capped errors, the feed's events).

@@ -1,5 +1,5 @@
 // No test here reaches ElevenLabs: every ElevenLabs voice gets a fetch that records the call and answers itself.
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -63,13 +63,13 @@ describe("the mock voice", () => {
 });
 
 describe("the budget guard", () => {
-  it("refuses what wouldn't fit, counts holds in flight, persists, and restarts each month", () => {
+  it("refuses what wouldn't fit, counts holds in flight, persists, and restarts each month", async () => {
     const dir = tmp();
     let now = NOV;
     const b = createBudget(dir, "chars", 100, () => now);
     expect(b.reserve(60)).toBe(true);
     expect(b.reserve(50)).toBe(false); // 60 held + 50 > 100
-    b.spend(60);
+    await b.spend(60);
     b.release(60);
     expect(b.used()).toBe(60);
     expect(createBudget(dir, "chars", 100, () => now).used()).toBe(60);
@@ -78,6 +78,25 @@ describe("the budget guard", () => {
     expect(b.reserve(40)).toBe(true);
     now = Date.UTC(2026, 11, 1);
     expect(b.used()).toBe(0);
+  });
+
+  it("counts a total it can't read as the whole cap spent, until the month turns; an old month's as nothing", async () => {
+    const dir = tmp();
+    let now = NOV;
+    writeFileSync(path.join(dir, "tts-usage.json"), '{"period":"2026-11","us');
+    const torn = createBudget(dir, "chars", 100, () => now);
+    expect(torn.used()).toBe(100);
+    expect(torn.reserve(1)).toBe(false);
+    now = Date.UTC(2026, 11, 1);
+    expect(torn.used()).toBe(0);
+    await torn.spend(5);
+    expect(createBudget(dir, "chars", 100, () => now).used()).toBe(5);
+    writeFileSync(path.join(dir, "stt-usage.json"), JSON.stringify({ period: "2026-11", used: 80 }));
+    expect(createBudget(dir, "seconds", 100, () => now).used()).toBe(0);
+    writeFileSync(path.join(dir, "stt-usage.json"), JSON.stringify({ period: "2026-12", used: "lots" }));
+    expect(createBudget(dir, "seconds", 100, () => now).used()).toBe(100);
+    // Saved whole: no temp file is left beside the totals.
+    expect(readdirSync(dir).sort()).toEqual(["stt-usage.json", "tts-usage.json"]);
   });
 
   it("ElevenLabs speech stops at the cap: no request once the characters are spent", async () => {

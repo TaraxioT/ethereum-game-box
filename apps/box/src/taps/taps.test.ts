@@ -70,7 +70,7 @@ function expectWhole(events: readonly TapEvent[]): void {
 }
 
 describe("the tap state machine", () => {
-  it("reads an unknown chip, then knows it: identify costs no chip command", async () => {
+  it("reads an unknown chip, then knows it: identify is done before any chip command", async () => {
     const t = await boot();
     const ada = t.fake.badge("ada");
     t.fake.place("ada", P1);
@@ -78,16 +78,18 @@ describe("the tap state machine", () => {
     expect(t.events.map((e) => e.phase)).toEqual(["touch", "done"]);
     expect(t.events[0]).toMatchObject({ phase: "touch", seat: 0, badge: null });
     expect(t.events[1]).toMatchObject({ phase: "done", seat: 0, badge: { address: ada.identity, name: "nova" }, roll: null });
-    expect(t.nfcSent()).toEqual([`apdu ${GET_PKEYS}`]);
+    expect(t.nfcSent()).toEqual([`apdu ${ARX_SELECT}`, `apdu ${GET_PKEYS}`]);
 
     t.fake.lift("ada");
     t.fake.place("ada", P1);
-    await flush();
+    await new Promise<void>((r) => setImmediate(r));
     expect(t.events.slice(2)).toMatchObject([
       { phase: "touch", badge: { name: "nova" } },
       { phase: "done", badge: { name: "nova" }, roll: null },
     ]);
-    expect(t.nfcSent()).toEqual([]);
+    // Then, off the tap's clock, the applet select alone (the station answers it from its kept answer).
+    await flush();
+    expect(t.nfcSent()).toEqual([`apdu ${ARX_SELECT}`]);
     expectWhole(t.events);
   });
 
@@ -109,26 +111,25 @@ describe("the tap state machine", () => {
     t.env.plan = "none";
     t.fake.place("cy", P1);
     await flush();
-    expect(t.nfcSent()).toEqual([`apdu ${GET_PKEYS}`]);
+    expect(t.nfcSent()).toEqual([`apdu ${ARX_SELECT}`, `apdu ${GET_PKEYS}`]);
     expect(t.events[1]).toMatchObject({ phase: "done", badge: { name: "nova" } });
     expect(t.taps.roster().map((e) => e.uid)).toEqual([t.fake.badge("cy").uid]);
   });
 
-  it("selects the applet after a known chip's tap when the station didn't, off the tap's clock", async () => {
-    const t = await boot({ stationSelects: false });
+  it("gets its SELECT answered from the station's own select: no second exchange with the chip", async () => {
+    const t = await boot({ timeScale: 1 });
+    const placed = t.clock.now();
     t.fake.place("ada", P1);
-    await flush();
-    expect(t.nfcSent()).toEqual([`apdu ${ARX_SELECT}`, `apdu ${GET_PKEYS}`]);
-    t.fake.lift("ada");
-    t.fake.place("ada", P1);
-    await new Promise<void>((r) => setImmediate(r));
-    expect(t.events.at(-1)!.phase).toBe("done");
-    await flush();
-    expect(t.nfcSent()).toEqual([`apdu ${ARX_SELECT}`]);
+    while (t.events.length < 2) await t.step(5);
+    // The read (27.4 ms), the station's select (45), the kept answer (3), get_pkeys (110 + 3): not a second select.
+    const took = t.clock.now() - placed;
+    expect(took).toBeGreaterThanOrEqual(27.4 + 45 + 3 + 113);
+    expect(took).toBeLessThan(27.4 + 45 + 3 + 113 + 30);
+    expect(t.events[1]).toMatchObject({ phase: "done", badge: { name: "nova" } });
   });
 
   it("remembers which applet ID a chip answers, so its next tap skips the miss", async () => {
-    const t = await boot({ stationSelects: false });
+    const t = await boot();
     t.env.plan = "random";
     t.fake.place("eve", P1); // a legacy-AID badge
     await flush();
@@ -146,7 +147,7 @@ describe("the tap state machine", () => {
     t.fake.place("di", P2);
     await flush();
     const sent = t.nfcSent();
-    expect(sent).toEqual([`apdu ${GET_PKEYS}`, "sign B051000002080200"]);
+    expect(sent).toEqual([`apdu ${ARX_SELECT}`, `apdu ${GET_PKEYS}`, "sign B051000002080200"]);
     const done = t.events[1]!;
     expect(done.phase).toBe("done");
     const roll = done.phase === "done" ? done.roll : null;
@@ -229,6 +230,43 @@ describe("the tap state machine", () => {
     await t.step(2500 + 500);
     t.fake.linkUp(P1);
     await t.step(4000);
+    expect(t.events[1]).toMatchObject({ phase: "done", badge: { name: "nova" } });
+  });
+
+  it("ignores a resend of an older tap that reaches the Pi after a newer one", async () => {
+    const t = await boot({ timeScale: 1 });
+    const ada = t.fake.badge("ada");
+    t.fake.place("ada", P1);
+    await t.step(300);
+    t.env.plan = "random";
+    t.fake.lift("ada");
+    await t.step(100);
+    t.fake.place("ada", P1);
+    await t.step(50);
+    // The first tap's line again (its ack was lost), while the second tap's roll is running.
+    const resend = { ev: "tap", st: P1, id: 1, uid: ada.uid, atqa: "0044", sak: "20", ats: "78807002", read_us: 27_400, gap_us: 20_000, tries: 3 };
+    (t.fake as unknown as { emit(line: object): void }).emit({ ...resend, at_us: 1 });
+    await t.step(1500);
+    expect(t.events.map((e) => e.phase)).toEqual(["touch", "done", "touch", "done"]);
+    expect(t.events[3]).toMatchObject({ phase: "done", tap: t.events[2]!.tap });
+  });
+
+  it("starts a fresh tap after a `ready` in the same chunk", async () => {
+    const t = await boot();
+    t.fake.place("ada", P1);
+    await flush();
+    t.events.length = 0;
+    t.env.plan = "random";
+    t.fake.lift("ada");
+    await flush();
+    const ada = t.fake.badge("ada");
+    // The fake's station put the chip back (its tap 2), and the receiver's reboot line came in the same chunk.
+    const tap = { ev: "tap", st: P1, id: 2, uid: ada.uid, atqa: "0044", sak: "20", ats: "78807002", read_us: 27_400, gap_us: 20_000, tries: 1, at_us: 5 };
+    const stream = (t.fake as unknown as { stream: { push(text: string): void } }).stream;
+    (t.fake as unknown as { stations: Map<string, { badge: unknown; tapId: number }> }).stations.get(P1)!.badge = ada;
+    stream.push(`${JSON.stringify({ ev: "ready", mac: "7CDFA1D504CC", fw: "1.0.0" })}\n${JSON.stringify(tap)}\n`);
+    await flush();
+    expect(t.events.map((e) => e.phase)).toEqual(["touch", "done"]);
     expect(t.events[1]).toMatchObject({ phase: "done", badge: { name: "nova" } });
   });
 

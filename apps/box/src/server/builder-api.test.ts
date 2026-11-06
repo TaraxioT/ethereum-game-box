@@ -46,7 +46,7 @@ function announced(box: TestBox["box"], path: string, length: number): Promise<n
   return new Promise((resolve, reject) => {
     const req = request(`${box.url}${path}`, {
       method: "POST",
-      headers: { [LAUNCHER_HEADER]: box.token, origin: "http://127.0.0.1:8790", "content-type": "audio/webm", "content-length": String(length) },
+      headers: { [LAUNCHER_HEADER]: box.token, origin: new URL(box.url).origin, "content-type": "audio/webm", "content-length": String(length) },
     });
     req.on("response", (res) => {
       res.resume();
@@ -74,7 +74,7 @@ describe("the builder's routes", () => {
     const routes = [...reads.map((path) => ["GET", path] as const), ...writes.map((path) => ["POST", path] as const)];
     for (const [method, path] of routes) {
       for (const token of [undefined, "x".repeat(box.token.length), `${box.token}x`]) {
-        const res = await fetch(`${box.url}${path}`, { method, headers: { origin: "http://127.0.0.1:8790", ...(token ? { [LAUNCHER_HEADER]: token } : {}) } });
+        const res = await fetch(`${box.url}${path}`, { method, headers: { origin: new URL(box.url).origin, ...(token ? { [LAUNCHER_HEADER]: token } : {}) } });
         expect(res.status, `${method} ${path} with ${token ? "a wrong" : "no"} token`).toBe(403);
       }
     }

@@ -7,9 +7,8 @@ import {
   LAUNCHER_HEADER,
   LAUNCHER_META,
   BUILDER,
-  type BuilderEventName,
-  type BuilderEvents,
 } from "../../server/builder-wire.ts";
+import { readFrames, type BuilderFrameListener } from "../../server/builder-frames.ts";
 
 /** A refusal from the builder: the HTTP status, the Designer's code when it has one, and the Box's own words. */
 export class BuilderError extends Error {
@@ -66,8 +65,6 @@ export function getBytes(path: string): Promise<ArrayBuffer> {
   return send(path, { headers: headers() }).then((res) => res.arrayBuffer());
 }
 
-export type BuilderListener = <K extends BuilderEventName>(event: K, data: BuilderEvents[K]) => void;
-
 export interface BuilderStreamHandle {
   close(): void;
 }
@@ -80,7 +77,7 @@ const RETRY_MAX_MS = 4_000;
  * The builder's event stream: `hello` first (and again after every reconnect), then `designer` and `forge` events.
  * `query` asks for a particular build's replay (`?job=…`).
  */
-export function openBuilderStream(listener: BuilderListener, query = ""): BuilderStreamHandle {
+export function openBuilderStream(listener: BuilderFrameListener, query = ""): BuilderStreamHandle {
   let closed = false;
   let abort: AbortController | null = null;
   let retry = RETRY_MS;
@@ -91,21 +88,11 @@ export function openBuilderStream(listener: BuilderListener, query = ""): Builde
     try {
       const res = await fetch(`${BUILDER.events}${query}`, { headers: headers(), cache: "no-store", signal: abort.signal });
       if (!res.ok || !res.body) throw new Error(String(res.status));
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      await readFrames(res.body, (event, data) => {
+        // A stream that delivers is a healthy one: the next drop starts its backoff over.
         retry = RETRY_MS;
-        buffer += value;
-        for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
-          const block = buffer.slice(0, end);
-          buffer = buffer.slice(end + 2);
-          const event = /^event: (.+)$/m.exec(block)?.[1] as BuilderEventName | undefined;
-          const data = /^data: (.+)$/m.exec(block)?.[1];
-          if (event && data) listener(event, JSON.parse(data) as never);
-        }
-      }
+        listener(event, data);
+      });
     } catch {
       // Dropped, refused or closed: try again unless closed.
     }

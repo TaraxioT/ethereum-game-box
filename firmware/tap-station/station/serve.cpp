@@ -33,16 +33,17 @@ static void apdu(const NfcReq &q, NfcRes &r, bool &signing, bool &signedOk, uint
     r.err = ERR_BAD;
     return;
   }
-  if (!feedback.chipOn || !held.chip.isoDep()) {
+  if (!feedback.chipOn || !held.chip.isoDep() || forOtherChip(q, held.tapId)) {  // that chip has gone
     r.err = ERR_NO_CHIP;
     return;
   }
   if (q.op == OP_APDU && fromCache(q.data, q.len, r)) {  // the chip's answer to this very SELECT, a moment ago
+    feedback.activeMs = feedback.goodMs = millis();
     feedback.phase = PH_READING;
-    held.lastApduMs = millis();
     return;
   }
   signing = q.op == OP_SIGN;
+  feedback.activeMs = millis();
   feedback.phase = signing ? PH_SIGNING : PH_READING;
   if (signing) {  // HOLD STILL while it runs
     led::show();
@@ -57,14 +58,17 @@ static void apdu(const NfcReq &q, NfcRes &r, bool &signing, bool &signedOk, uint
   chipUs = micros() - x0;
   r.waitUs = pn532.lastWaitUs();
   bool ok = n >= 0 && !(status & 0x3F);
-  held.lastApduMs = ok ? millis() : 0;  // a failed read isn't "done"
+  uint32_t now = millis();
+  feedback.activeMs = now;
+  feedback.goodMs = ok ? now : 0;  // a failed read isn't "done"
   if (signing) {
     signedOk = ok && n >= 2 && (r.data[n - 2] == 0x90 || r.data[n - 2] == 0x91) && r.data[n - 1] == 0x00;
     if (signedOk) {
+      feedback.signedMs = now;
       feedback.phase = PH_SIGNED;
       motor::buzz(SIGNED_BUZZ_MS, 2);
     } else {
-      feedback.failedMs = millis();
+      feedback.failedMs = now;
       feedback.phase = PH_FAILED;
     }
   }
@@ -130,6 +134,7 @@ void serve(const NfcReq &q, const uint8_t from[6]) {
   else r.err = ERR_BAD;
   r.us = micros() - t0;
   if (!r.err) held.servedMs = millis();  // only an answer from the chip shows it's there
+  if (feedback.chipOn) feedback.activeMs = millis();  // the Pi is at the chip: HOLD (feedback.h)
   memcpy(replyTo, from, 6);
   doneId = q.id;
   if (busyId == q.id) busyId = 0;

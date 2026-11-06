@@ -9,6 +9,8 @@
 #include <EgbLink.h>
 #include <esp_mac.h>
 
+#include <atomic>
+
 #include "board.h"
 #include "cli.h"
 #include "led.h"
@@ -24,17 +26,21 @@ namespace st {
 Shared feedback;
 
 static QueueHandle_t inbox;
-static egb::Pool<4> slots;  // taps, gones and signatures until their Got
+static egb::Pool<16> slots;  // taps, gones and signatures until their Got
 static egb::LineReader<64> input;
 static bool radioOk;
 
-void loopPost(const LoopMsg &m) { xQueueSend(inbox, &m, 0); }
+static std::atomic<uint32_t> inboxDrops{0};
+
+void loopPost(const LoopMsg &m) {
+  if (xQueueSend(inbox, &m, 0) != pdTRUE) inboxDrops++;
+}
 
 egb::StatsRes stats() {
   egb::StatsRes r;
   egb::head(r, egb::K_STATS_RES, 0);
   r.upMs = millis();
-  r.dropped = egb::serial::dropped();
+  r.dropped = egb::serial::dropped() + inboxDrops;
   r.sendFails = egb::radio::sendFails();
   r.stack[egb::T_LOOP] = (uint16_t)uxTaskGetStackHighWaterMark(nullptr);
   r.stack[egb::T_NFC] = (uint16_t)reader::stackLeft();
@@ -91,10 +97,10 @@ static void handle(const LoopMsg &m) {
       break;
     }
     case LoopMsg::RELIABLE: {
-      egb::Slot *slot = slots.free();
+      // Its first copy is out; resent until the Got, for as long as the Pi may wait for it.
       uint8_t to[6];
       link::receiver(to);
-      if (slot) slot->start(m.data, m.len, to, egb::POLICY_PACKET, millis(), micros());  // its first copy is out
+      slots.freeOrOldest()->start(m.data, m.len, to, egb::POLICY_CHIP_EVENT, millis(), micros());
       break;
     }
     case LoopMsg::PRESS:

@@ -64,12 +64,6 @@ export class SimBadge {
     return `${this.command(command)}${SW_OK}`;
   }
 
-  /** The station's `reselect`: the chip re-activates and the station selects the applet; the select's status word. */
-  reselect(): string {
-    this.powerUp();
-    return this.apdu(ISO7816_SELECT_CMDS[this.aid === "arx" ? 0 : 1]!);
-  }
-
   private command(command: Uint8Array): string {
     switch (command[0]) {
       case CMD_GET_PKEYS: {

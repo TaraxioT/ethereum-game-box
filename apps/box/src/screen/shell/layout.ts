@@ -98,7 +98,3 @@ export function layoutFor(orientation: Orientation): Layout {
 export function orientationFor(width: number, height: number): Orientation {
   return width / height < 0.9 ? "portrait" : "landscape";
 }
-
-export function centreOf(r: Rect): Point {
-  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-}

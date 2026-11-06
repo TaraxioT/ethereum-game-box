@@ -3,7 +3,8 @@ Description=Ethereum Game Box: build and deploy new commits (see egb-update.time
 
 [Service]
 Type=oneshot
-EnvironmentFile=-%h/.config/egb/env
+# No EnvironmentFile on purpose: the updater reads the few settings it needs (EGB_REPO_URL, EGB_DEPLOY_BRANCH, ...) from
+# ~/.config/egb/env itself, so the API keys in there never reach pnpm install, the build or the smoke test.
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 # A stable copy, refreshed on every good deploy, so a broken release can't break its own fix.
 ExecStart=%h/egb/bin/update.sh

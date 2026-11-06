@@ -74,7 +74,10 @@ records only on taps the Box saw (`transcript.ts`): both seated badges tapped a 
 12 s passed since the first of those taps, and the pair has had fewer than 12 counted results in the hour before.
 
 `core.reset()` (the test page) goes back to Home at once: a match that hasn't sent its settlement hands each stake
-back; an open transaction still on its way locks nothing when it lands.
+back, and a refund still on its way is cancelled (it was paid by that, so it is no longer money a stake can count on);
+an open transaction still on its way locks nothing when it lands. An open whose stakes can't be locked when it lands
+(a balance short after all) locks nothing either: the match doesn't open, and both seats sign again. A transaction
+whose effect throws still goes into its block, so it can't hold up every transaction after it.
 
 ## Modules
 
@@ -90,19 +93,21 @@ back; an open transaction still on its way locks nothing when it lands.
 | `stations.ts` | Each station's view from the state: the seat's tag, a big line and a small one, and the `done` / `sign` overrides. Pure. | `stationView(input, seat, now)`, `stationViews` |
 | `catalogue.ts` | The team games in rack order (two playable, two sealed), the default focus, the team library. | `TEAM_GAMES`, `DEFAULT_FOCUS`, `teamLibrary()`, `isTeamGame`, `defaultStake` |
 | `chain.ts` | The simulated chain: a block every 12 s from Sepolia's real height, gas that wanders. Pure. | `blockAt`, `nextBlockAt`, `nextGas`, `firstGas` |
-| `ledger.ts` | The simulated EGB ledger (faucet, escrow kept per badge, settle, refund, every stake back). Pure. | `faucet`, `lock`, `settle`, `refund`, `returnAll`, `escrowTotal`, `memoryLedgerStore()` |
-| `txs.ts` | Simulated transactions and their timing on the core's clock: signed, sent 0.4 s later, in the next block, paid 0.9 s after it. | `createTxBook(hooks, clock)` |
+| `ledger.ts` | The simulated EGB ledger (faucet, escrow kept per badge, settle, refund, every stake back). Pure. | `faucet`, `canLock`, `lock`, `settle`, `refund`, `returnAll`, `escrowTotal`, `memoryLedgerStore()` |
+| `txs.ts` | Simulated transactions and their timing on the core's clock: signed, sent 0.4 s later, in the next block, paid 0.9 s after it. A block takes every transaction due even when one's effect throws (the first throw is rethrown after). | `createTxBook(hooks, clock)` |
 | `bot.ts` | The demo's bot on Player 2: a pure planner (what it waits to tap, and how long a person would take) and a scheduler on the core's clock. | `botIntent`, `botDelay`, `createBot` |
-| `badges.ts` | The demo desk's badges and the bot's; how a station or port prints a badge. | `DESK_BADGES`, `BOT_BADGE`, `badgeLabel` |
+| `badges.ts` | The demo desk's badges and the bot's; how a station or port prints a badge; when two are the same. | `DESK_BADGES`, `BOT_BADGE`, `badgeLabel`, `sameBadge` |
 | `instant-tap.ts` | A whole injected tap at once (touch, then done, with the roll only if the plan asks): the desk, the bot and the server's injected taps. | `instantTap(core, seat, badge, roll)` |
 | `timers.ts` | Timers on the core's clock that one call cancels together. | `createTimers(clock)` |
 | `fake-clock.ts` | A clock moved by hand, for tests: timers fire in due order, each at its own time. | `createFakeClock(start)` |
-| `system-clock.ts` | The real clock, for the hosts (SimLink, the server, the taps). Left out of the core's own check, and never imported by the core. | `systemClock()` |
+| `system-clock.ts` | The real clocks, for the hosts. `monotonicClock()` (the server, the taps, the bench): the wall time at start, then monotonic, so an NTP step never moves touch times against the game's timers. `systemClock()` (SimLink): the wall clock. Left out of the core's own check, and never imported by the core. | `monotonicClock()`, `systemClock()` |
 
 Tests: `core.test.ts` drives whole matches through the ports on a fake clock (judged by touch time, an unknown chip's
 earlier touch waited for, rolls from `done`, a frozen card let go on `fail`, refusals, dropped stale taps, transcripts
-and their counting, the rematch tap, the stranded escrow returned, reset, station pushes, the ledger store, the
-library, the build phase: only on a Box with the builder, taps refused, its idle); `bot`, `chain`, `ledger`,
-`stations`, `transcript` and `txs` have their own; `built.test.ts` plays a built game on a fake rules runner (prepared at
-Join, opened on the first state, taps at their touch time with the roll for `random`, the rules' stations, a void
-mid-game and at start with both stakes back, the child stopped at Home).
+and their counting, the rematch tap, the stranded escrow returned, reset (a refund on its way cancelled, so a later
+stake needs the faucet), station pushes, the ledger store, the library, the build phase: only on a Box with the
+builder, taps refused, its idle); `bot`, `chain`, `ledger`, `stations`, `transcript` and `txs` have their own (`txs`:
+a throwing effect doesn't hold up the block); `system-clock.test.ts` checks the server's clock ignores a step of the
+wall clock (it is left out of the core's check, with the clocks); `built.test.ts` plays a built game on a fake rules
+runner (prepared at Join, opened on the first state, taps at their touch time with the roll for `random`, the rules'
+stations, a void mid-game and at start with both stakes back, the child stopped at Home).

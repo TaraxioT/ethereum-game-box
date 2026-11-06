@@ -85,8 +85,9 @@ void onPacket(const Msg &m) {
     }
     case K_TAP: {
       Tap p;
-      if (!read(p, m.data, m.len) || p.id == s.tapId) break;  // each id once: resends were acked by the callback
-      s.tapId = p.id;
+      if (!read(p, m.data, m.len)) break;
+      bootOf(s, p.boot);
+      if (!fresh(p.id, s.tapId, s.tapSeen)) break;  // a resend, or an older tap after a newer one
       p.chip.clamp();
       s.chip = p.chip;
       s.chipOn = true;
@@ -95,8 +96,9 @@ void onPacket(const Msg &m) {
     }
     case K_GONE: {
       Gone p;
-      if (!read(p, m.data, m.len) || p.id == s.goneId) break;
-      s.goneId = p.id;
+      if (!read(p, m.data, m.len)) break;
+      bootOf(s, p.boot);
+      if (!fresh(p.id, s.goneId, s.goneSeen)) break;
       p.chip.clamp();
       if (s.chipOn && s.chip.sameAs(p.chip)) s.chipOn = false;
       emit(evGone(json, s.name, p, m.atUs));
@@ -104,8 +106,7 @@ void onPacket(const Msg &m) {
     }
     case K_SIGNED: {
       Signed p;
-      if (!read(p, m.data, m.len) || p.id == s.signedId) break;
-      s.signedId = p.id;
+      if (!read(p, m.data, m.len) || !fresh(p.id, s.signedId, s.signedSeen)) break;  // ids: our own requests'
       p.chip.clamp();
       // Named by the caller's id for the sign request, which the reply may already have taken out of its slot.
       emit(evSigned(json, s.name, p.id == s.nfcWire ? s.nfcCaller : p.id, p, m.atUs));

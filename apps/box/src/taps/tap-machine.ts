@@ -4,9 +4,12 @@
 //
 // - An unknown chip is read (get_pkeys) whatever the plan, so a stranger's chip can never pass as a seated player.
 // - A known chip's identify or none tap costs no chip command: it is done the moment its line arrives.
-// - After such a tap the applet is selected anyway, off the tap's clock, so the station's presence check sees the chip
-//   stay instead of a flicker of new taps. Its errors are dropped: the tap is already done.
+// - After such a tap the applet is selected anyway, off the tap's clock: the station selects it itself right after
+//   the tap and answers this SELECT from its kept answer (~3 ms), and if the station's own select failed this one
+//   leaves the chip selected for the next tap's commands. Its errors are dropped: the tap is already done.
 // - A roll is key 2's sign_random, verified against the roster's key-2 identity.
+// - Nothing is recorded or rolled for a tap that ended while its chip was being read (a newer tap, the link, the
+//   receiver): the answer may have come from another chip.
 import { HaloLogicError, HaloTagError } from "@arx-research/libhalo/api/common";
 import type { Seat } from "@egb/sdk";
 import type { Clock, TapErrorCode, TapEvent, TapPlan } from "../core/ports.ts";
@@ -53,6 +56,8 @@ export class TapMachine {
   private readonly deps: TapMachineDeps;
   /** The tap each station is running, by station. */
   private readonly open = new Map<StationId, OpenTap>();
+  /** Each station's latest tap, running or not: its chip is the one on the reader until a `gone`. */
+  private readonly newest = new Map<StationId, OpenTap>();
   private last = 0;
   readonly counts: TapCounts = { touch: 0, done: 0, fail: { lifted: 0, radio: 0, "not-halo": 0, refused: 0, verify: 0, link: 0 } };
 
@@ -75,6 +80,7 @@ export class TapMachine {
     const entry = this.deps.roster.byUid(uid);
     const t: OpenTap = { tap: ++this.last, seat, line, uid, at, badge: entry ? badgeOf(entry) : null, gone: false, settled: false };
     this.open.set(line.st, t);
+    this.newest.set(line.st, t);
     this.counts.touch++;
     this.emit({ phase: "touch", tap: t.tap, seat, at, badge: t.badge });
     void this.run(t, this.planFor(seat), entry);
@@ -82,7 +88,7 @@ export class TapMachine {
 
   /** A `gone` line: the chip of that tap left the reader. */
   gone(line: Extract<ReceiverEvent, { ev: "gone" }>): void {
-    const t = this.open.get(line.st);
+    const t = this.newest.get(line.st);
     if (t && t.line.id === line.id) t.gone = true;
   }
 
@@ -106,28 +112,44 @@ export class TapMachine {
     }
   }
 
+  /** The tap's chip is still on the reader: no `gone` for it, and no newer tap on its station. */
+  private present(t: OpenTap): boolean {
+    return !t.gone && this.newest.get(t.line.st) === t;
+  }
+
   private async run(t: OpenTap, plan: TapPlan, known: RosterEntry | undefined): Promise<void> {
-    const { st, sak, sel } = t.line;
+    const { st, sak } = t.line;
     const { clock, nfc, aids, stations, roster } = this.deps;
-    const session = new ChipSession(
-      nfc,
-      aids,
-      { st, uid: t.uid, sak, selected: sel === "9000", present: () => !t.gone && this.open.get(st) === t, whenUp: () => stations.whenUp(st) },
-      clock,
-    );
+    const session = new ChipSession(nfc, aids, { st, uid: t.uid, sak, present: () => this.present(t), whenUp: () => stations.whenUp(st) }, clock);
     if (known && plan !== "random") {
       this.done(t, known, null);
       session.select().catch(() => {});
       return;
     }
     try {
-      const entry = known ?? roster.record(t.uid, await readKeys(session.exec), new Date(clock.now()));
+      let entry = known;
+      if (!entry) {
+        const keys = await readKeys(session.exec);
+        if (!this.unchanged(t)) return;
+        entry = roster.record(t.uid, keys, new Date(clock.now()));
+      }
       const roll = plan === "random" ? await rollRandom(session.exec, entry.key2) : null;
+      if (!this.unchanged(t)) return;
       this.done(t, entry, roll?.value ?? null);
     } catch (e) {
       const [code, text] = this.classify(e, t);
       this.fail(t, code, text);
     }
+  }
+
+  /**
+   * After an await: false when the tap already ended (nothing more for it), and throws when its chip left (the
+   * answer just read may not be its chip's).
+   */
+  private unchanged(t: OpenTap): boolean {
+    if (t.settled) return false;
+    if (!this.present(t)) throw new NfcError("no-chip", "the chip left the reader");
+    return true;
   }
 
   private classify(e: unknown, t: OpenTap): [TapErrorCode, string] {
@@ -146,7 +168,7 @@ export class TapMachine {
         case "bad-request":
           return ["radio", `The station refused the request: ${e.message}`];
         default:
-          return t.gone || this.open.get(t.line.st) !== t
+          return !this.present(t)
             ? ["lifted", "Lifted too early. Hold the badge on the station until it buzzes."]
             : ["radio", "Weak connection to the badge. Hold it flat on the station."];
       }

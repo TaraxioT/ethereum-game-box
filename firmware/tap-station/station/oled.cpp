@@ -41,6 +41,13 @@ void frame() {
 
 uint32_t stackLeft() { return task ? uxTaskGetStackHighWaterMark(task) : 0; }
 
+// The Pi's screen changed: redraw, and a result still showing gives way to it (feedback.h).
+static void newScreen(uint32_t now) {
+  specVersion++;
+  feedback.screenMs = now;
+  feedback.screenSet = true;
+}
+
 // Takes the Pi's newest screen, and drops the one shown once its ttl is up or the link has been gone a while (the Pi
 // sends it again on relink). The Pi resends the same screen every few seconds: a repeat only renews its ttl.
 static void takeScreen(uint32_t now) {
@@ -53,7 +60,7 @@ static void takeScreen(uint32_t now) {
     memcpy(specRaw, s.data, s.len);
     specRawLen = s.len;
     haveSpec = true;
-    specVersion++;
+    newScreen(now);
     return;
   }
   if (!haveSpec) return;
@@ -64,7 +71,7 @@ static void takeScreen(uint32_t now) {
   memset(&spec, 0, sizeof spec);
   haveSpec = false;
   specRawLen = 0;
-  specVersion++;
+  newScreen(now);
 }
 
 static ScreenView viewFor(const Snapshot &s, const Shown &v, uint32_t now) {

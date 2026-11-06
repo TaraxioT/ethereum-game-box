@@ -11,6 +11,7 @@ import { Buzzer, type BuzzKind } from "./buzz.ts";
 import { readKeys, rollRandom, type Roll } from "./chip-ops.ts";
 import type { Address } from "./eth.ts";
 import { FakeReceiver, type FakeOptions } from "./fake/fake-receiver.ts";
+import { FreshIds } from "./fresh-ids.ts";
 import { AidMemory, ChipSession } from "./halo-exec.ts";
 import type { ReceiverEvent, StationId, TagLine } from "./lines.ts";
 import { Nfc, type NfcReply } from "./nfc.ts";
@@ -123,6 +124,7 @@ export function createTaps(opts: TapsOptions): Taps {
   const rxClock = new ReceiverClock();
   const acks = new Acks(clock);
   const aids = new AidMemory();
+  const ids = new FreshIds();
   /** Presses in flight: when each was written, and when its c3_press came back (Pi ms after the write). */
   const echoes = new Map<number, { readonly started: number; echoMs: number | null }>();
   const changed = () => opts.onStatus?.();
@@ -164,6 +166,7 @@ export function createTaps(opts: TapsOptions): Taps {
   }
 
   function route(event: ReceiverEvent, now: number): void {
+    if ((event.ev === "tap" || event.ev === "gone" || event.ev === "signed") && !ids.fresh(event.ev, event.st, event.id, now)) return;
     switch (event.ev) {
       case "tap":
         rxClock.observe(event.at_us, now);
@@ -229,7 +232,7 @@ export function createTaps(opts: TapsOptions): Taps {
     const chip = stations.chip(st);
     if (!chip) throw new Error(`no badge on station ${st}`);
     const present = () => stations.chip(st)?.uid === chip.uid;
-    const target = { st, uid: chip.uid, sak: "20", selected: false, present, whenUp: () => stations.whenUp(st) };
+    const target = { st, uid: chip.uid, sak: "20", present, whenUp: () => stations.whenUp(st) };
     return { session: new ChipSession(nfc, aids, target, clock), uid: chip.uid };
   }
 
