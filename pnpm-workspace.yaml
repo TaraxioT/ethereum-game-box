@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - apps/verifier/container
   - packages/*
 allowBuilds:
   esbuild: true
