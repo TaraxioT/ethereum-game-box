@@ -76,7 +76,8 @@ export interface DripRequest {
   badge: Address;
 }
 
-/** `POST /usdc/topup`: mints 100 test USDC to a player holding less than 25. */
+/** `POST /usdc/topup`: mints 100 test USDC to a player holding less than 25. `POST /store/topup` takes the same, and
+ *  mints Store USDC. */
 export interface TopupRequest {
   /** The player: an address, or an ENS name that resolves to one (`nova.gamebox.eth`). */
   player: string;
@@ -98,10 +99,56 @@ export interface StakeRequest {
   s: Hex;
 }
 
-/** `POST /duel/refund`: refunds an open pot nobody settled, from an hour after it opened. */
+/** `POST /duel/refund`: refunds an open pot nobody settled, from an hour after it opened. `POST /store/refund` takes the
+ *  same, for a `StorePot` pot. */
 export interface RefundRequest {
   box: string;
   round: JsonUint;
+}
+
+/** `POST /store/open`: a store game's stakes the Box's P-256 key signed (`storeStakeDigest`). */
+export interface StoreOpenRequest {
+  stake: {
+    box: string;
+    /** The bundle's sha256, which `StorePot` must list. */
+    bundle: Hex;
+    round: JsonUint;
+    /** Each player's badge, in seat order: 2 to 4, no repeats. */
+    players: Address[];
+    /** Each player's stake, in Store USDC base units. */
+    amount: JsonUint;
+    deadline: JsonUint;
+  };
+  r: Hex;
+  s: Hex;
+}
+
+/** `POST /store/settle`: a split a key with `VERIFIER_ROLE` signed (`storeVerdictDigest`). */
+export interface StoreSettleRequest {
+  verdict: {
+    box: string;
+    round: JsonUint;
+    /** What each of the pot's players gets, in their order, adding up to exactly the pot. */
+    payouts: JsonUint[];
+    /** The audit record's keccak256. */
+    record: Hex;
+    deadline: JsonUint;
+  };
+  /** ECDSA, `r ‖ s ‖ v`: 65 bytes, low `s`. */
+  signature: Hex;
+}
+
+/** `POST /store/void`: every stake back, signed by a key with `VERIFIER_ROLE` (`storeVoidDigest`). */
+export interface StoreVoidRequest {
+  void: {
+    box: string;
+    round: JsonUint;
+    /** The audit record's keccak256. */
+    record: Hex;
+    deadline: JsonUint;
+  };
+  /** ECDSA, `r ‖ s ‖ v`: 65 bytes, low `s`. */
+  signature: Hex;
 }
 
 /** `POST /players/box-claim`: a player name for a badge, vouched for by the Box's P-256 key (`seatDigest`). */
@@ -132,7 +179,12 @@ export type TxKind =
   | 'pot-open'
   | 'pot-refund'
   | 'seat'
-  | 'cup-close';
+  | 'cup-close'
+  | 'store-open'
+  | 'store-settle'
+  | 'store-void'
+  | 'store-refund'
+  | 'store-topup';
 export type TxStatus = 'signed' | 'sent' | 'in-block' | 'done' | 'failed';
 
 /** One transaction of a request. */
