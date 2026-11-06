@@ -1,6 +1,9 @@
-// Stake: pick the stake on the light keys, see the game's trust tier, then each player taps to sign the entry. Both
-// signed, the Box opens the match: one transaction moves both stakes into the game.
+// Stake: pick the stake (USDC) on the light keys, see the game's trust tier, then each player taps to sign the entry.
+// Both signed, the match opens at once and one Box-signed transaction moves both stakes into the pot on Sepolia. A
+// seat short of the stake is told to tap: its tap takes it to the lobby to top up. A game that isn't on chain (a
+// built game) plays for nothing.
 import type { BoxState, GameInfo, SeatState } from "../../core/types.ts";
+import { isTeamGame } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
@@ -40,9 +43,11 @@ export function stakeView(ctx: ViewContext): View {
   root.append(plate, keys);
 
   const game = link.state().games.find((g) => g.id === link.state().focus);
-  const amounts = (game?.stakes ?? []).map((amount) => {
+  /** Team games stake USDC on chain; a built game plays for nothing. */
+  const money = game !== undefined && isTeamGame(game.id);
+  const amounts = (money ? game.stakes : []).map((amount) => {
     const key = document.createElement("egb-key") as EgbKey;
-    key.textContent = `${amount} EGB`;
+    key.textContent = `${amount} USDC`;
     key.addEventListener("click", () => {
       sound.play("tap");
       link.send({ type: "stake", amount });
@@ -53,8 +58,10 @@ export function stakeView(ctx: ViewContext): View {
 
   function status(s: SeatState, stake: number): [string, SeatTone] {
     if (s.signed) return ["SIGNED", "done"];
-    if (s.balance + s.pending < stake) return [`NEEDS ${stake} EGB`, "alert"];
-    return [`TAP TO SIGN ${stake} EGB`, "ask"];
+    if (!money) return ["TAP TO START", "ask"];
+    if (s.balance === null) return ["READING BALANCE…", "idle"];
+    if (s.balance < stake) return [`NEEDS ${stake} USDC · TAP TO TOP UP`, "alert"];
+    return [`TAP TO SIGN ${stake} USDC`, "ask"];
   }
 
   function draw(state: BoxState): void {
@@ -70,8 +77,8 @@ export function stakeView(ctx: ViewContext): View {
     back.toggleAttribute("disabled", anySigned);
     const opening = state.seats.every((s) => s.signed);
     plate.textContent = opening
-      ? `OPENING THE MATCH · ${state.stake * 2} EGB INTO ${game?.title ?? "THE GAME"}`
-      : game ? TIER[game.tier] : "";
+      ? money ? `OPENING THE MATCH · ${state.stake * 2} USDC INTO THE POT` : "OPENING THE MATCH"
+      : game ? (money ? TIER[game.tier] : "FREE PLAY · THIS GAME ISN'T ON CHAIN") : "";
   }
 
   return {

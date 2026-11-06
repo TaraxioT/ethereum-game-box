@@ -8,6 +8,7 @@ import { joinView } from "./join.ts";
 import { stakeView } from "./stake.ts";
 import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
+import { lobbyView } from "./lobby.ts";
 import { builderView } from "./builder.ts";
 import { frameView } from "../frame/view.ts";
 import { builtMatch } from "../frame/feed.ts";
@@ -38,5 +39,7 @@ export const routes: Routes = (state) => {
       return { key: "refund", pose: "page", view: refundView };
     case "build":
       return { key: "build", pose: "page", view: builderView };
+    case "lobby":
+      return { key: "lobby", pose: "page", view: lobbyView };
   }
 };

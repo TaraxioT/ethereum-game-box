@@ -54,7 +54,7 @@ export const TWISTS: readonly Option[] = [
   { id: "none", label: "No twist", value: NO_TWIST, words: /^\s*(no twist|none|nothing|no|keep it classic|classic|as it is)\s*$/ },
 ];
 
-/** Stake sets in EGB a seat, ascending: what the game's Stake screen offers (game.json `stakes`, at most four). */
+/** Stake sets in USDC a seat, ascending: what the game's Stake screen offers (game.json `stakes`, at most four). */
 export const STAKE_SETS: readonly (readonly number[])[] = [
   [1, 2, 5],
   [5, 10, 25],
@@ -63,7 +63,7 @@ export const STAKE_SETS: readonly (readonly number[])[] = [
 ];
 
 export const stakeId = (set: readonly number[]): string => set.join("-");
-export const stakeLabel = (set: readonly number[]): string => `${set.join(" · ")} EGB`;
+export const stakeLabel = (set: readonly number[]): string => `${set.join(" · ")} USDC`;
 
 export const VOICES: readonly Option[] = [
   { id: "commentator", label: "Commentator", value: "A sports commentator", words: /\b(commentator|sports|announcer|caster)\b/ },
