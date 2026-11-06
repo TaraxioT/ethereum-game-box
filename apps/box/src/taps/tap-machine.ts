@@ -75,7 +75,10 @@ export class TapMachine {
     const seat = this.deps.stations.seatOf(line.st);
     if (seat === null) return;
     const previous = this.open.get(line.st);
-    if (previous) this.fail(previous, "lifted", "Another tap began on this station before this one finished.");
+    if (previous) {
+      this.deps.log(`taps: tap ${previous.tap} failed lifted: a new tap began on ${line.st} before it finished`);
+      this.fail(previous, "lifted", "Another tap began on this station before this one finished.");
+    }
     const uid = line.uid.toUpperCase();
     const entry = this.deps.roster.byUid(uid);
     const t: OpenTap = { tap: ++this.last, seat, line, uid, at, badge: entry ? badgeOf(entry) : null, gone: false, settled: false };
@@ -121,6 +124,7 @@ export class TapMachine {
     const { st, sak } = t.line;
     const { clock, nfc, aids, stations, roster } = this.deps;
     const session = new ChipSession(nfc, aids, { st, uid: t.uid, sak, present: () => this.present(t), whenUp: () => stations.whenUp(st) }, clock);
+    this.deps.log(`taps: tap ${t.tap} touched ${st} seat ${t.seat} uid ${t.uid} (${t.badge?.name ?? "unknown"}), plan ${plan}`);
     if (known && plan !== "random") {
       this.done(t, known, null);
       session.select().catch(() => {});
@@ -138,6 +142,7 @@ export class TapMachine {
       this.done(t, entry, roll?.value ?? null);
     } catch (e) {
       const [code, text] = this.classify(e, t);
+      this.deps.log(`taps: tap ${t.tap} failed ${code} after ${Math.round(clock.now() - t.at)} ms: ${e instanceof Error ? e.message : String(e)}`);
       this.fail(t, code, text);
     }
   }
@@ -179,6 +184,7 @@ export class TapMachine {
 
   private done(t: OpenTap, entry: RosterEntry, roll: number | null): void {
     if (!this.settle(t)) return;
+    this.deps.log(`taps: tap ${t.tap} done after ${Math.round(this.deps.clock.now() - t.at)} ms${roll === null ? "" : ", rolled"}`);
     this.counts.done++;
     this.emit({ phase: "done", tap: t.tap, seat: t.seat, at: t.at, badge: badgeOf(entry), roll });
   }

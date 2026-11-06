@@ -18,6 +18,7 @@ import { apiRoutes } from "./api.ts";
 import { builderRoutes } from "./builder-api.ts";
 import { forgeProvider, startBuilder, type Builder, type BuilderOptions } from "./builder-host.ts";
 import { createLedgerFile } from "./ledger-file.ts";
+import { createLogFile } from "./log-file.ts";
 import { attachLink } from "./link.ts";
 import { readCommit } from "./release.ts";
 import { createHandler } from "./routes.ts";
@@ -70,14 +71,16 @@ function urlHost(host: string): string {
 
 export async function startBox(options: BoxOptions): Promise<Box> {
   const { settings } = options;
-  const log = options.log ?? ((text: string) => console.log(text));
+  await mkdir(settings.dataDir, { recursive: true });
+  // The Pi keeps no user journal: the Box's lines also go to $EGB_DATA/logs/ (tests pass their own log).
+  const logFile = options.log ? null : createLogFile(settings.dataDir, (text) => console.log(text));
+  const log = options.log ?? ((text: string) => logFile?.log(text));
   // Monotonic: a clock step (NTP after boot) must not move touch times against the game's own timers.
   const clock = options.clock ?? monotonicClock();
   const started = performance.now();
   const builderEnv = options.builder?.env ?? process.env;
   // A bad EGB_FORGE_PROVIDER stops the start before anything listens.
   forgeProvider(builderEnv);
-  await mkdir(settings.dataDir, { recursive: true });
   const ledger = createLedgerFile(join(settings.dataDir, "ledger.json"), log);
   const sessions = createSessionLog(settings.dataDir, log);
   // The library answers with the catalogue until its first scan, which runs after the listen.
@@ -102,6 +105,12 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     log: sessions,
     random: () => randomInt(2 ** 32),
   }, { builder: true });
+  // What the core made of each tap, and every phase it entered: with the taps' own lines, a match can be followed in
+  // the log after the fact.
+  core.subscribe((_, event) => {
+    if (event.type === "phase") log(`core: ${event.from} -> ${event.to}`);
+    else if (event.type === "tap") log(`core: seat ${event.seat} tap ${event.accepted ? "accepted" : "not taken"}`);
+  });
   const token = createLauncherToken();
   let commit: string | null = null;
   let builder: Builder | null = null;
@@ -189,7 +198,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
         core.stop();
         server.closeAllConnections();
         await Promise.all([new Promise<void>((resolve) => server.close(() => resolve())), taps?.close(), builder?.stop()]);
-        await Promise.all([ledger.flush(), sessions.flush()]);
+        await Promise.all([ledger.flush(), sessions.flush(), logFile?.flush()]);
       })();
       return stopping;
     },
