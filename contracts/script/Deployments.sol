@@ -32,19 +32,26 @@ abstract contract Deployments is Script {
             deployBlock = vm.parseJsonUint(json, string.concat(key, ".deployBlock"));
             verified = vm.parseJsonBool(json, string.concat(key, ".verified"));
         }
-        if (txHash == 0) {
-            try vm.getBroadcast(contractName, uint64(block.chainid), VmSafe.BroadcastTxType.Create) returns (
-                VmSafe.BroadcastTxSummary memory b
-            ) {
-                if (b.contractAddress == addr) (txHash, deployBlock) = (b.txHash, b.blockNumber);
-            } catch {}
-        }
+        if (txHash == 0) (txHash, deployBlock) = _broadcast(contractName, addr, VmSafe.BroadcastTxType.Create);
+        if (txHash == 0) (txHash, deployBlock) = _broadcast(contractName, addr, VmSafe.BroadcastTxType.Create2);
 
         string memory entry = string.concat("deployment-", name);
         vm.serializeAddress(entry, "address", addr);
         vm.serializeUint(entry, "deployBlock", deployBlock);
         vm.serializeBytes32(entry, "txHash", txHash);
         vm.writeJson(vm.serializeBool(entry, "verified", verified), PATH, key);
+    }
+
+    /// @notice The transaction and block of the latest broadcast of type `txType` that created `contractName` at
+    ///         `addr`, or zeros.
+    function _broadcast(string memory contractName, address addr, VmSafe.BroadcastTxType txType)
+        private
+        view
+        returns (bytes32 txHash, uint256 deployBlock)
+    {
+        try vm.getBroadcast(contractName, uint64(block.chainid), txType) returns (VmSafe.BroadcastTxSummary memory b) {
+            if (b.contractAddress == addr) (txHash, deployBlock) = (b.txHash, b.blockNumber);
+        } catch {}
     }
 
     /// @notice The recorded address of `.contracts.<name>`, or zero if it is missing or has no code.
