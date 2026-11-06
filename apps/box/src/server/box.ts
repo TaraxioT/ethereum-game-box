@@ -175,6 +175,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       const entry = library.entry(id);
       return entry?.info.kind === "built" && entry.dir ? { dir: entry.dir, ready: entry.info.ready, title: entry.info.title } : null;
     },
+    ...(bundles ? { bundles: bundles.held } : {}),
     assets: createFrameAssets(log),
   });
   const server = http.createServer(createHandler({ routes, games, screenDir: settings.screenDir, token, log }));

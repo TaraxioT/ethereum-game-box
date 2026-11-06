@@ -19,6 +19,7 @@ import { JUDGE_POLL_MS } from "../chain/store.ts";
 import { memoryReads, mockRelayer, mockVerifier } from "../chain/testing.ts";
 import { fallbackIcon } from "../builder/forge/icon.ts";
 import { softwareSigner } from "../signer/software.ts";
+import { BUNDLE_HOST } from "./games/page.ts";
 import { FALLBACK_ICON } from "./games/routes.ts";
 import { STORE_INDEX_MS } from "./library/store-index.ts";
 import { flush, openScreen, post, startTestBox, type TestBox } from "./testing.ts";
@@ -146,6 +147,14 @@ describe("a store game on the Box", () => {
     await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
     expect(core.state().match?.play).toMatchObject({ game: "store", id: "tap-rush", title: "Tap Rush", bundle: store.hash, taps: "identify" });
 
+    // The frame's page comes from the Box itself, from the folder the fetch checked, with the host ahead of the game.
+    const page = await fetch(`${tb.box.url}/store/${store.hash}/index.html`);
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-security-policy")).toContain("connect-src 'none'");
+    const html = await page.text();
+    expect(html).toContain(BUNDLE_HOST);
+    expect(html.indexOf(BUNDLE_HOST)).toBeLessThan(html.indexOf("<title>"));
+
     // Taps from the stations, and the page's words over the link; only `end` closes it.
     const screen = await openScreen(tb.box);
     cleanups.push(() => screen.close());
@@ -161,8 +170,9 @@ describe("a store game on the Box", () => {
     tb.advance(END_HOLD_MS);
     await flush();
     expect(core.state().phase).toBe("judging");
-    // The match is over, so its bundle is gone.
+    // The match is over, so its bundle is gone, and the Box serves none of it.
     await vi.waitFor(() => expect(existsSync(folder)).toBe(false));
+    expect((await fetch(`${tb.box.url}/store/${store.hash}/index.html`)).status).toBe(404);
     await vi.waitFor(() => expect(verifier.requests).toHaveLength(1));
 
     // What the verifier gets is a log its own check passes, with the game's claims labelled apart.

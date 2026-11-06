@@ -12,12 +12,16 @@ import { refundView } from "./refund.ts";
 import { judgingView } from "./judging.ts";
 import { lobbyView } from "./lobby.ts";
 import { builderView } from "./builder.ts";
+import { bundleFrameView } from "../frame/bundle-view.ts";
+import { storeMatch, storePowers } from "../frame/bundle-feed.ts";
 import { frameView } from "../frame/view.ts";
 import { builtMatch } from "../frame/feed.ts";
 import { isTeamGame } from "../../core/catalogue.ts";
 
 /** A built game's screen: its own, in the sandboxed frame. */
 const builtScreen = frameView(builtMatch);
+/** A store game's screen: its bundle's page, in the same frame, behind the kiosk's gate. */
+const storeScreen = bundleFrameView(storeMatch, storePowers);
 
 /** A team game's screen, from the stakes going in to the end of its match. Every match passes through Stake or Home
  * before the next, so the key changes between matches. Stock Duel draws its own top band (players, score, pot); Quick
@@ -49,7 +53,7 @@ export const routes: Routes = (state) => {
     case "playing": {
       const game = state.match?.play.game;
       if (game === "quick-draw" || game === "stock-duel") return teamRoute(game);
-      return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: builtScreen };
+      return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: game === "store" ? storeScreen : builtScreen };
     }
     case "judging":
       return { key: "judging", pose: "page", view: judgingView };

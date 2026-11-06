@@ -7,8 +7,9 @@ A built game's screen runs with no same-origin access, its page under a CSP with
 (`server/games/`). It only draws. The kiosk tells it the state and what happened through a typed `postMessage` channel
 (`@egb/sdk`'s `ToFrame`); it answers only `ready` and `error` (`FromFrame`).
 
-**The kiosk's side.** `frameView(builtMatch)` is the router's view for a built match (`views/routes.ts`); in dev,
-Vite passes `/games`, `/parts…`, `/frame.js`, `/bundle-host.js` and `/store/…` through to the Box server.
+**The kiosk's side.** `frameView(builtMatch)` is the router's view for a built match, and `bundleFrameView(storeMatch,
+storePowers)` for a store match (`views/routes.ts`); in dev, Vite passes `/games`, `/parts…`, `/frame.js`,
+`/bundle-host.js` and `/store/…` through to the Box server.
 
 `frameView(source)` is the `ViewFactory`: the iframe fills the stage below
 the Box's overlay (130 px landscape, 150 px portrait). When the frame says `ready` it gets `init` with the state as it
@@ -73,7 +74,8 @@ the Box's other pages have nothing of the game's in them. Either way the view's 
 still answer: `index.html` again, which is the game, and a built game's frame page, which says `ready` by itself and then
 waits for an `init` that never comes. The match then runs out its time, as with a game that hangs.
 
-**Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
+**Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`, which
+send each word as a `frame` command to the core (`bundle-feed.ts`). The core's `game-tap` events are the taps it hears. A page
 that never says ready, leaves, or keeps sending what the gate can't weigh is lost: the frame goes, and
 `powers.end("lost")` closes the match at once. A stray error only puts up the quiet plate: the taps still count.
 
@@ -96,6 +98,7 @@ preference tried stops the prerender. So nothing else on the Pi's loopback may t
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `errorText`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
 | `bundle-view.ts` | The kiosk's view of a store match. | `bundleFrameView(source, powers): ViewFactory`, `BundleMatch`, `BundleSource`, `BundlePowers`, `BundleEnd` |
+| `bundle-feed.ts` | Where the view meets the core: the store match in BoxState, its taps, and a page's words as `frame` commands. Pure. | `storeMatch`, `storePowers` |
 | `bundle-gate.ts` | What a bundle's page may say, and how much. | `parseFromBundle(data, seats)`, `createBundleGate(seats, now, flooded)` |
 | `bundle-runtime.ts` | `window.egb`, platform-free. | `createBundleRuntime({ post, name })` |
 | `bundle-host.ts` | `/bundle-host.js`: the runtime wired to a bundle's page. A classic script, so it runs first. | entry |
@@ -107,5 +110,6 @@ preference tried stops the prerender. So nothing else on the Pi's loopback may t
 Tests: `frame.test.ts` (the sandbox attribute, the channel dropping anything but ready and error and anything from
 another window or a non-opaque origin, closing for good on the frame's second load, the runtime's mount, updates and capped errors, the feed's events).
 `bundle.test.ts` (what a page may say and how much, what a heavy message costs, `window.egb`, the view of a store match).
+`bundle-feed.test.ts` (a store match gets this view, hears its taps, and its words are commands the link takes).
 `dev-proxy.test.ts` (the dev server passes a frame's paths to the Box, and keeps the Host on its pages). A real browser
 proves the walls: `server/games/sandbox.test.ts`.
