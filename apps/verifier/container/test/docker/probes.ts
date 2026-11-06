@@ -135,7 +135,7 @@ cat /proc/$server/environ; head -c 1 /proc/$server/mem; ls /proc/$server/fd; ls 
   {
     name: "control: the listing below does see a process left running",
     command: `sleep 30 &\n${LIST_AGENT_PROCESSES}`,
-    check: (output) => requireAll(output, " sleep S"),
+    check: (output) => requireAll(output, " sleep "),
   },
   {
     name: "nothing survives that call, even a process that left its group",

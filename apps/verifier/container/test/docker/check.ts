@@ -26,6 +26,7 @@ const IMAGE = `egb-verifier-test:${process.pid}`;
 const NETWORK = `egb-verifier-test-${process.pid}`;
 const VERIFIER = `egb-verifier-test-${process.pid}`;
 const STOPPED = `${VERIFIER}-stop`;
+const REFUSED = `${VERIFIER}-refuse`;
 /** The server's capabilities as `/proc/<pid>/status` writes them: setuid, setgid and setpcap. */
 const SERVER_CAPS = "00000000000001c0";
 const MAX_LINES = 14;
@@ -124,18 +125,16 @@ async function checkDecoyAndStop(): Promise<void> {
   report("the server stops on SIGTERM", elapsed < 5_000 ? null : "it ran until it was killed", `${elapsed} ms`);
 }
 
-/** A broken sandbox must stop the container from serving at all. */
-function checkRefusesRoot(): void {
+/** A broken sandbox must stop the server from serving at all, so it runs here without the image's entry point. */
+function checkRefusesToStart(name: string, user: string, error: string): void {
   const { status, stderr } = spawnSync(
     "docker",
-    ["run", "--rm", ...PLATFORM_ARGS, "--entrypoint", "node", IMAGE, "src/main.ts"],
-    { encoding: "utf8" },
+    ["run", "--rm", ...PLATFORM_ARGS, "--name", REFUSED, "--user", user, "--entrypoint", "node", IMAGE, "src/main.ts"],
+    { encoding: "utf8", timeout: 30_000 },
   );
-  report(
-    "the server refuses to start as root",
-    status !== 0 && stderr.includes("the server is running as root") ? null : "it started",
-    `exit code ${status}`,
-  );
+  spawnSync("docker", ["rm", "-f", REFUSED]);
+  const line = stderr.split("\n").find((text) => text.includes(error)) ?? "";
+  report(name, status !== null && status !== 0 && line !== "" ? null : "it started", `exit code ${status}\n${line}`);
 }
 
 interface DriveResult {
@@ -191,7 +190,8 @@ try {
   checkProcesses();
   checkProbesCanSucceed();
   await checkDecoyAndStop();
-  checkRefusesRoot();
+  checkRefusesToStart("the server refuses to start as root", "root", "the server is running as root");
+  checkRefusesToStart("the server refuses to start without the capabilities to switch user", "judge", "setpriv");
 
   const raw = docker(
     "run",
