@@ -700,6 +700,16 @@ describe('POST /store/topup', () => {
     expect(res).toMatchObject({ status: 429, body: { error: 'rate limit: 300 top-ups per day' } });
     expect(world.chain.sent).toHaveLength(0);
   });
+
+  it('keeps one address from spending the whole day: fresh players get 60 top-ups from it, and the rest are left for others', async () => {
+    const world = new World();
+    for (let i = 0; i < 60; i++) expect((await world.post('/store/topup', { player: newBadge().address })).status).toBe(202);
+    const res = await world.post('/store/topup', { player: newBadge().address });
+    expect(res).toMatchObject({ status: 429, body: { error: 'rate limit: 60 top-ups per day from one address' } });
+    expect(world.chain.sent).toHaveLength(60);
+    const other = await world.post('/store/topup', { player: newBadge().address }, { 'cf-connecting-ip': '203.0.113.8' });
+    expect(other.status).toBe(202);
+  });
 });
 
 describe('before StorePot is deployed', () => {

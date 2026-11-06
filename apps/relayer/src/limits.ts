@@ -16,9 +16,9 @@ const DAY = 86_400;
 /** A pop-up's licence: a pop-up opened within this window is still live. */
 const POPUP_TERM = 600;
 
-/** The limits a request from `ip` counts against. Executes count per account and top-ups per player, each token apart;
- *  results and stakes are bounded by the Box keys, verdicts and voids by the verifier's key, and a refund or a close can
- *  succeed only once. */
+/** The limits a request from `ip` counts against. Executes count per account and top-ups per player and per IP, each
+ *  token apart; results and stakes are bounded by the Box keys, verdicts and voids by the verifier's key, and a refund
+ *  or a close can succeed only once. */
 export function limitsFor({ kind, account }: Pick<Prepared, 'kind' | 'account'>, ip: string): Limit[] {
   switch (kind) {
     case 'claim':
@@ -47,6 +47,7 @@ export function limitsFor({ kind, account }: Pick<Prepared, 'kind' | 'account'>,
     case 'store-topup':
       return [
         { key: `${kind}:player:${account?.toLowerCase()}`, max: 1, windowSeconds: 600, what: 'one top-up per player per 10 minutes' },
+        { key: `${kind}:ip:${ip}`, max: 60, windowSeconds: DAY, what: '60 top-ups per day from one address' },
         { key: `${kind}:all`, max: 300, windowSeconds: DAY, what: '300 top-ups per day' },
       ];
     case 'seat':
