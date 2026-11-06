@@ -1,5 +1,5 @@
 // The relayer and the demo Box over HTTP, with the request and response types from `@egb/shared/names`.
-import type { Address, Hex } from "viem";
+import type { Address } from "viem";
 import type {
   ApiError,
   ClaimRequest,
@@ -35,11 +35,8 @@ async function request<T>(base: string, path: string, body?: unknown): Promise<T
   return json as T;
 }
 
-/** The claim with the badge's primary-name signature. `api.ts` takes this field once the relayer ships it. */
-type ClaimWithPrimary = ClaimRequest & { primaryName?: { expiry: string; signature: Hex } };
-
 export const relayer = {
-  claim: (body: ClaimWithPrimary) => request<TxView>(RELAYER_URL, "/names/claim", body),
+  claim: (body: ClaimRequest) => request<TxView>(RELAYER_URL, "/names/claim", body),
   popup: (body: PopupRequest) => request<TxView>(RELAYER_URL, "/box/popup", body),
   drip: (body: DripRequest) => request<TxView>(RELAYER_URL, "/names/drip", body),
   tx: (id: string) => request<TxView>(RELAYER_URL, `/tx/${encodeURIComponent(id)}`),

@@ -2,7 +2,7 @@
 // decoded error on a failure. A relayed write is followed through the relayer's `/tx/:id`; a direct one (the badge's
 // own transaction) through its receipt.
 import type { Hash, PublicClient } from "viem";
-import type { TxStatus, TxView } from "@egb/shared/names";
+import type { TxStatus, TxStep, TxView } from "@egb/shared/names";
 
 import { errorName } from "./errors.ts";
 import { ApiRefusal, relayer } from "./relayer.ts";
@@ -56,13 +56,13 @@ export class TxFailed extends Error {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Folds a relayer `TxView` into a strip entry. */
-export function fromView(tx: Tx, view: TxView): Partial<Tx> {
+/** Folds a relayer step (a request, or a claim's primary-name transaction) into a strip entry. */
+export function fromView(step: TxStep): Partial<Tx> {
   return {
-    status: view.status,
-    hash: view.hash,
-    block: view.block,
-    error: view.status === "failed" ? (view.revert ?? view.error ?? "failed") : undefined,
+    status: step.status,
+    hash: step.hash,
+    block: step.block,
+    error: step.status === "failed" ? (step.revert ?? step.error ?? "failed") : undefined,
   };
 }
 
@@ -77,12 +77,21 @@ export async function relayed(kind: string, subject: string, send: () => Promise
     update(tx, { status: "failed", error: err instanceof ApiRefusal ? err.message : errorName(err) });
     throw new TxFailed(tx);
   }
-  update(tx, fromView(tx, view));
+  // A claim's primary-name transaction is its own row, under the same request.
+  let primary: Tx | null = null;
+  const show = (v: TxView) => {
+    update(tx, fromView(v));
+    if (v.primaryName) {
+      primary ??= start("PRIMARY NAME", `getEnsName → ${subject}`);
+      update(primary, fromView(v.primaryName));
+    }
+  };
+  show(view);
   while (view.status !== "done" && view.status !== "failed") {
     await sleep(2_000);
     try {
       view = await relayer.tx(view.id);
-      update(tx, fromView(tx, view));
+      show(view);
     } catch {
       // A missed poll; the next one catches up.
     }
