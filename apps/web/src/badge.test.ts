@@ -3,10 +3,10 @@
 import { createWalletClient, http, recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { CLAIM_NAME_VECTOR, claimNameDigest, claimNameTypedData } from "@egb/shared/names";
+import { CLAIM_NAME_VECTOR, PRIMARY_NAME_VECTOR, claimNameDigest, claimNameTypedData } from "@egb/shared/names";
 import { describe, expect, it } from "vitest";
 
-import { signClaimWith } from "./badge.ts";
+import { signClaimWith, signPrimaryNameWith } from "./badge.ts";
 
 describe("the claim signature", () => {
   const account = privateKeyToAccount(CLAIM_NAME_VECTOR.privateKey);
@@ -23,5 +23,11 @@ describe("the claim signature", () => {
     expect(claimNameDigest(message, gameBoxNames, chainId)).toBe(CLAIM_NAME_VECTOR.digest);
     const signer = await recoverTypedDataAddress({ ...claimNameTypedData(message, gameBoxNames, chainId), signature: CLAIM_NAME_VECTOR.signature });
     expect(signer).toBe(message.badge);
+  });
+
+  it("signs the primary-name message as the shared vector", async () => {
+    const signer = privateKeyToAccount(PRIMARY_NAME_VECTOR.privateKey);
+    const signature = await signPrimaryNameWith(wallet, signer, PRIMARY_NAME_VECTOR.message, PRIMARY_NAME_VECTOR.registrar);
+    expect(signature).toBe(PRIMARY_NAME_VECTOR.signature);
   });
 });

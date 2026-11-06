@@ -7,7 +7,7 @@ import { type Account, type RoleRow, type TryCell, readRoleTable, tryAll } from 
 import { revokeStats, tryTransfer } from "../actions.ts";
 import { type Route, dir, render, setFocus, state } from "../app.ts";
 import { client } from "../chain.ts";
-import { readAddress, readText } from "../ens.ts";
+import { readAddress, readPrimaryName, readText } from "../ens.ts";
 import { type NameKind, accountsFor, keysFor, kindOf } from "../model.ts";
 import { FOREVER, type Location, locate } from "../registry.ts";
 import { TxFailed } from "../txs.ts";
@@ -90,7 +90,17 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
       fact("game", game ?? "—", "written by the Box's own account"),
     );
   }
-  if (kind === "player" || kind === "agent") append(facts, fact("stats", (await readText(client, name, "stats")) ?? "—", "written by PlayerStats"));
+  if (kind === "player" || kind === "agent") {
+    const [stats, primary] = await Promise.all([
+      readText(client, name, "stats"),
+      address ? readPrimaryName(client, address).catch(() => null) : Promise.resolve(null),
+    ]);
+    append(
+      facts,
+      fact("stats", stats ?? "—", "written by PlayerStats"),
+      fact("primary name", primary ?? "none set", primary === name ? "getEnsName(addr) gives this name back" : "getEnsName(addr)", primary === name),
+    );
+  }
   append(page, facts, h("p.pull", {}, BRIEF[kind]));
 
   if (!where.resolver) return page;

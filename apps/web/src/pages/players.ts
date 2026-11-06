@@ -31,6 +31,8 @@ function playerCard(view: PlayerView): HTMLElement {
       {},
       h("dt", {}, "addr"),
       h("dd", {}, view.resolves ? addressLink(view.resolves) : h("span.bad", {}, "null")),
+      h("dt", {}, "primary name"),
+      h("dd", {}, view.primary ?? h("span", { style: "color:var(--fg-3)" }, "none set")),
       h("dt", {}, "stats"),
       h("dd", {}, statsLine(view)),
       h("dt", {}, "title"),

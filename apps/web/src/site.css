@@ -239,6 +239,9 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
 
 /* ---- Wide screens without room for margin notes ---- */
 @media (max-width: 1180px) {
+  .top { gap: 22px; padding: 16px 28px 14px; }
+  nav { gap: 18px; }
+  .chain .bal { display: none; }
   .wrap { grid-template-columns: 240px minmax(0, 1fr); gap: 40px; padding: 32px 28px 0; }
   .wide { margin-right: 0; }
   .tr { grid-template-areas: "name res exp" "what res exp" "note note note"; }

@@ -19,7 +19,7 @@ import {
 import { type Account, ADDR } from "./access.ts";
 import { AGENT_LABEL, GAMES } from "./config.ts";
 import { type Crowning, type Directory, playerLabel } from "./directory.ts";
-import { readAddress, readText, readTexts } from "./ens.ts";
+import { readAddress, readPrimaryName, readText, readTexts } from "./ens.ts";
 import { knownRelayer } from "./relayer.ts";
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -77,6 +77,8 @@ export interface PlayerView {
   resolves: Address | null;
   stats: Record<string, { wins: number; losses: number; draws: number }> | null;
   statsText: string | null;
+  /** The badge's primary name (`getEnsName`), or null if it set none. */
+  primary: string | null;
   /** The titles it holds now: game labels. */
   titles: string[];
 }
@@ -95,8 +97,9 @@ export async function readPlayer(client: PublicClient, dir: Directory, label: st
   const name = fullName(label);
   const [resolves, statsText] = await Promise.all([readAddress(client, name), readText(client, name, "stats")]);
   const badge = entry?.badge ?? resolves ?? zeroAddress;
+  const primary = badge === zeroAddress ? null : await readPrimaryName(client, badge).catch(() => null);
   const titles = [...holders].filter(([, holder]) => holder && getAddress(holder) === getAddress(badge)).map(([game]) => game);
-  return { label, name, badge, resolves, stats: parseStats(statsText), statsText, titles };
+  return { label, name, badge, resolves, stats: parseStats(statsText), statsText, primary, titles };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

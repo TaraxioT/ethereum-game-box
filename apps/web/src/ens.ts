@@ -32,3 +32,8 @@ export async function readTexts<K extends string>(
   const values = await Promise.all(keys.map((key) => readText(client, name, key, blockNumber)));
   return Object.fromEntries(keys.map((key, i) => [key, values[i] ?? null])) as Record<K, string | null>;
 }
+
+/** The address's primary name (ENS reverse resolution, checked forward by viem), or null. */
+export async function readPrimaryName(client: PublicClient, address: Address): Promise<string | null> {
+  return (await client.getEnsName({ address, universalResolverAddress })) ?? null;
+}

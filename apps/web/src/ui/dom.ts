@@ -48,12 +48,10 @@ export function nameLink(name: string, text: string = name): HTMLAnchorElement {
   return h("a.nm", { href: `#/name/${name}` }, text);
 }
 
-/** A full name with its parent dimmed: `nova` + `.gamebox.eth`. */
-export function nameParts(name: string): DocumentFragment {
+/** A full name with its parent dimmed: `nova` + `.gamebox.eth`, as one inline element. */
+export function nameParts(name: string): HTMLSpanElement {
   const dot = name.indexOf(".");
-  const frag = document.createDocumentFragment();
-  append(frag, dot < 0 ? name : name.slice(0, dot), dot < 0 ? null : h("span.p", {}, name.slice(dot)));
-  return frag;
+  return h("span", {}, dot < 0 ? name : name.slice(0, dot), dot < 0 ? null : h("span.p", {}, name.slice(dot)));
 }
 
 /** A tag in a word: `active`, `never expires`. */

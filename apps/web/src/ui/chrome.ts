@@ -19,7 +19,7 @@ export function mountChainTag(root: HTMLElement): void {
     try {
       const view = await relayer.health();
       rememberRelayer(view);
-      relay.replaceChildren(h("span.dot"), "relayer ", h("b", {}, "ok"), ` · ${Number(formatEther(BigInt(view.balance))).toFixed(3)} ETH`);
+      relay.replaceChildren(h("span.dot"), "relayer ", h("b", {}, "ok"), h("span.bal", {}, ` · ${Number(formatEther(BigInt(view.balance))).toFixed(3)} ETH`));
       relay.title = `${view.address}: ${view.pending} pending, tip ${view.tipGwei} gwei`;
     } catch {
       relay.replaceChildren(h("span.dot.off"), "relayer ", h("b", {}, "down"));

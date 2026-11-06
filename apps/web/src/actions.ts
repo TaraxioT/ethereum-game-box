@@ -2,6 +2,7 @@
 // drip, for a test badge), open a pop-up Box and report a match. Pages and the Story both call these.
 import { type Address, type Hex, encodeFunctionData, parseEther, zeroAddress } from "viem";
 import {
+  PRIMARY_NAME_MAX_EXPIRY_SECONDS,
   RESOLVER_ROLES,
   contractAddress,
   fullName,
@@ -25,6 +26,8 @@ import { direct, relayed } from "./txs.ts";
 
 /** How long a claim signature stays good. The relayer wants at least 24 s. */
 const CLAIM_WINDOW = 10 * 60;
+/** How long the primary-name signature stays good: inside ENS's one-hour limit. */
+const PRIMARY_NAME_WINDOW = PRIMARY_NAME_MAX_EXPIRY_SECONDS - 10 * 60;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Free or taken
@@ -60,11 +63,23 @@ export function freshLabel(prefix: string): string {
 // ---------------------------------------------------------------------------------------------------------------------
 // Writes
 
-/** The badge signs `ClaimName`; the relayer sends it. No ETH needed. */
+/** The badge signs `ClaimName`, and ENS's primary-name message for the new name; the relayer sends both, so
+ * `getEnsName(badge)` returns the name. No ETH needed. */
 export async function claim(badge: Badge, label: string): Promise<void> {
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + CLAIM_WINDOW);
+  const now = Math.floor(Date.now() / 1000);
+  const deadline = BigInt(now + CLAIM_WINDOW);
   const signature = await badge.signClaim({ label, badge: badge.address, deadline });
-  await relayed("CLAIM", fullName(label), () => relayer.claim({ label, badge: badge.address, deadline: deadline.toString(), signature }));
+  const expiry = BigInt(now + PRIMARY_NAME_WINDOW);
+  const primary = await badge.signPrimaryName({ badge: badge.address, name: fullName(label), expiry });
+  await relayed("CLAIM", fullName(label), () =>
+    relayer.claim({
+      label,
+      badge: badge.address,
+      deadline: deadline.toString(),
+      signature,
+      primaryName: { expiry: expiry.toString(), signature: primary },
+    }),
+  );
 }
 
 /** A little ETH for a badge's own transactions, once. Skipped when the badge already has enough. */

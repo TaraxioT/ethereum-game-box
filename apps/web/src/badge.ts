@@ -15,7 +15,14 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { type ClaimName, claimNameTypedData, contractAddress } from "@egb/shared/names";
+import {
+  type ClaimName,
+  type PrimaryName,
+  claimNameTypedData,
+  contractAddress,
+  ensAddress,
+  primaryNameMessage,
+} from "@egb/shared/names";
 
 import { RPC_URLS } from "./config.ts";
 
@@ -24,8 +31,20 @@ export interface Badge {
   address: Address;
   /** Signs `ClaimName` for `GameBoxNames`. */
   signClaim(message: ClaimName): Promise<Hex>;
+  /** Signs ENS's primary-name message (ERC-191) for the `DefaultReverseRegistrar`. */
+  signPrimaryName(message: PrimaryName): Promise<Hex>;
   /** Sends a transaction from the badge itself (it pays the gas). */
   send(to: Address, data: Hex): Promise<Hash>;
+}
+
+/** Signs the primary-name message with any viem account, as `personal_sign` over its 32 raw bytes. */
+export function signPrimaryNameWith(
+  wallet: WalletClient,
+  account: Account | Address,
+  message: PrimaryName,
+  registrar: Address = ensAddress("DefaultReverseRegistrar"),
+): Promise<Hex> {
+  return wallet.signMessage({ account, message: { raw: primaryNameMessage(message, registrar) } });
 }
 
 /** Signs `ClaimName` with any viem account: what both kinds of badge do underneath. */
@@ -56,6 +75,7 @@ function fromKey(key: Hex): Badge {
     kind: "test",
     address: account.address,
     signClaim: (message) => signClaimWith(wallet, account, message, contractAddress("GameBoxNames")),
+    signPrimaryName: (message) => signPrimaryNameWith(wallet, account, message),
     send: (to, data) => wallet.sendTransaction({ account, chain: sepolia, to, data }),
   };
 }
@@ -95,6 +115,7 @@ export async function connectWallet(): Promise<Badge> {
     kind: "wallet",
     address,
     signClaim: (message) => signClaimWith(wallet, address, message, contractAddress("GameBoxNames")),
+    signPrimaryName: (message) => signPrimaryNameWith(wallet, address, message),
     send: (to, data) => wallet.sendTransaction({ account: address, chain: sepolia, to, data }),
   };
 }
