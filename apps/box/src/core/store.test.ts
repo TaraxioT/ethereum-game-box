@@ -528,6 +528,25 @@ describe("a store game", () => {
     expect(entries.at(-1)).toMatchObject({ t: "end", why: "time" });
   });
 
+  it("keeps the log within its limit when the page times an event just before the tap that fills it", async () => {
+    const r = rig();
+    await toPlaying(r);
+    const half = LOG_LIMITS.entries / 2;
+    const event = (n: number) => r.core.send({ type: "frame", word: { t: "event", name: "score", data: n } });
+    const stationTap = (n: number) => r.core.tap({ phase: "touch", tap: 1_000 + n, seat: 0, at: r.clock.now(), badge: NOVA }, "station");
+    for (let i = 0; i < half - 1; i++) {
+      stationTap(i);
+      event(i);
+    }
+    event(half);
+    stationTap(half);
+    expect(r.core.state().match?.outcome).toEqual({ winner: null });
+    await settle(r, END_HOLD_MS);
+    const entries = r.store.judges[0]?.order.entries ?? [];
+    expect(entries).toHaveLength(LOG_LIMITS.entries);
+    expect(entries.at(-1)).toMatchObject({ t: "end", why: "time" });
+  });
+
   it("leaves the rack with the index: back Home before anyone stakes, on to the end once they have", async () => {
     const before = rig();
     await toJoin(before);

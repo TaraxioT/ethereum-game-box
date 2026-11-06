@@ -116,8 +116,9 @@ keeps the money, the clock and the log, and the verifier says who gets what. It 
   command, once the kiosk's gate has passed it: `event` goes in the log as the game's claim, `station` sets that seat's
   big line, `buzz` buzzes it. Words for a seat the match hasn't, or from outside the match, are dropped.
 - **It closes** on `end` from the page, or `lost` if the page is gone, or when the manifest's time runs out. The log has
-  room for 5,000 entries: game events stop at half, and taps that fill the rest close the match as if time ran out, so
-  the judge never misses one (`store-log.ts`). Nothing the page says can move money: `end` only closes the match.
+  room for 5,000 entries: game events stop at half, or sooner so that one tap and the close always fit, and taps that
+  fill the rest close the match as if time ran out, so the judge never misses one (`store-log.ts`). Nothing the page
+  says can move money: `end` only closes the match.
 - **Judging.** After the end hold the bundle is dropped, and `store.judge` sends the log to the verifier: the Box stays
   on `judging`, with `HOME` free, as `play.judged` follows what it says. Once money moves, a transaction shows on the bar
   with each seat's share pending.
@@ -185,5 +186,6 @@ runner (prepared at Join, opened on the first state, taps at their touch time wi
 stations, played for nothing with no request to the chain, a void mid-game and at start, the child stopped at Home);
 `store.test.ts` plays a store game on fake bundles and a fake store port (a whole match to its split, each way it closes,
 the verifier refunding, failing and never answering, a bad download, the rack losing the game at every step, a rematch's
-fresh download, Store USDC and its top-up, the frame's words and what they can't do, a log filled by taps);
-`store-log.test.ts` runs the logs it makes, the fullest ones too, through the verifier's own `logProblems`.
+fresh download, Store USDC and its top-up, the frame's words and what they can't do, a log filled by taps, an event timed just before the tap that fills it);
+`store-log.test.ts` runs the logs it makes, the fullest ones and every order of taps and events, through the verifier's
+own `logProblems`.

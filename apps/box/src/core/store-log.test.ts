@@ -1,7 +1,7 @@
 // The Box's match log against the checks the verifier runs on it: whatever a game posts and however long the players
 // tap, what the core hands over is a log the verifier will read.
 import { describe, expect, it } from "vitest";
-import { LOG_LIMITS, logProblems, type MatchLog } from "@egb/sdk";
+import { LOG_LIMITS, logProblems, mulberry32, type MatchLog } from "@egb/sdk";
 import { createStoreLog } from "./store-log.ts";
 
 const AT = 1_790_000_000_000;
@@ -62,5 +62,51 @@ describe("a store match's log", () => {
     expect(entries).toHaveLength(LOG_LIMITS.entries);
     expect(taps).toBeGreaterThan(LOG_LIMITS.entries / 2);
     expect(logProblems(whole(entries))).toEqual([]);
+  });
+
+  it("leaves room for the tap that fills the log when an event lands just before it", () => {
+    const log = createStoreLog();
+    const half = LOG_LIMITS.entries / 2;
+    for (let i = 0; i < half - 1; i++) {
+      log.tap(0, AT, null);
+      log.event("score", i, AT);
+    }
+    expect(log.full()).toBe(false);
+    log.event("score", "the last of its budget", AT);
+    log.tap(0, AT, null);
+    expect(log.full()).toBe(true);
+    const entries = log.close("time", AT);
+    expect(entries).toHaveLength(LOG_LIMITS.entries);
+    expect(entries.filter((e) => e.t === "tap")).toHaveLength(half);
+    expect(logProblems(whole(entries))).toEqual([]);
+  });
+
+  it("stops a game spending its held-back events past the limit once the taps are near it", () => {
+    const log = createStoreLog();
+    const taps = LOG_LIMITS.entries / 2 + 100;
+    for (let i = 0; i < taps; i++) log.tap(1, AT, null);
+    for (let i = 0; i < LOG_LIMITS.entries / 2; i++) log.event("late", i, AT);
+    expect(log.full()).toBe(false);
+    const entries = log.close("game", AT);
+    // Room stayed for one more tap, which the game's close didn't need.
+    expect(entries).toHaveLength(LOG_LIMITS.entries - 1);
+    expect(entries.filter((e) => e.t === "tap")).toHaveLength(taps);
+    expect(logProblems(whole(entries))).toEqual([]);
+  });
+
+  it("keeps every order of taps and events within the limit, asked only after a tap as the core asks", () => {
+    const random = mulberry32(11);
+    for (let run = 0; run < 20; run++) {
+      const log = createStoreLog();
+      const tapShare = 0.1 + 0.8 * random();
+      let open = true;
+      while (open) {
+        if (random() < tapShare) {
+          log.tap(0, AT, null);
+          open = !log.full();
+        } else log.event("score", run, AT);
+      }
+      expect(logProblems(whole(log.close("time", AT)))).toEqual([]);
+    }
   });
 });
