@@ -1,6 +1,7 @@
 // The kiosk's end of server/games/sandbox.test.ts, in a real browser: the real view, gate and channel under the Box's
 // real CSP, over a stand-in for the Box's link. It plays each scenario's bundle and reports all the page got through.
 // Nothing in the screen imports this.
+import type { BundlePlayer } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { ViewContext } from "../views/view.ts";
@@ -13,7 +14,7 @@ interface Scenario {
   readonly waits: boolean;
 }
 
-const PLAYERS = [{ name: "NOVA" }, { name: "ORION" }, { name: null }];
+const PLAYERS: readonly BundlePlayer[] = [{ name: "NOVA", boxSeat: 0 }, { name: "ORION", boxSeat: 2 }, { name: "JUNO", boxSeat: 3 }];
 const LAYOUT = { orientation: "landscape", width: 1280, height: 800 } as unknown as Layout;
 const STATE = {} as BoxState;
 const TAP: BoxEvent = { type: "tap", seat: 1, accepted: true, meaning: "play" };

@@ -10,7 +10,7 @@
 // Unlike a built game, the page holds the game. A stray error gets the quiet plate and the taps still count, but a page
 // that never loads, leaves its page or floods the gate is lost: the frame goes, and the Box hears it, so a broken game
 // closes the match at once instead of running out the manifest's time.
-import type { BundleTap, FrameSeat, LogEntry } from "@egb/sdk";
+import type { BundlePlayer, BundleTap, LogEntry } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { View, ViewContext, ViewFactory } from "../views/view.ts";
 import { createBundleGate } from "./bundle-gate.ts";
@@ -23,7 +23,7 @@ export interface BundleMatch {
   readonly hash: string;
   readonly title: string;
   /** The match's players, in seat order. */
-  readonly players: readonly FrameSeat[];
+  readonly players: readonly BundlePlayer[];
 }
 
 export interface BundleSource {

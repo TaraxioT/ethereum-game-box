@@ -270,7 +270,7 @@ peer.createOffer().then((offer) => peer.setLocalDescription(offer));
 /** What a game can do: reads its players on its first line, loads its own files, hears a tap and answers. */
 const GAME = `
 const egb = window.egb;
-const first = { egb: typeof egb, keys: Object.keys(egb).sort(), players: egb.players.map((p) => p.name), script: document.scripts[0].getAttribute("src") };
+const first = { egb: typeof egb, keys: Object.keys(egb).sort(), players: egb.players.map((p) => [p.name, p.boxSeat]), script: document.scripts[0].getAttribute("src") };
 const violations = [];
 document.addEventListener("securitypolicyviolation", (event) => violations.push(event.blockedURI + " " + event.effectiveDirective));
 window.addEventListener("load", async () => {
@@ -515,7 +515,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
 
   it("gives a game its players on its first line, the host ahead of all it wrote, and all its own files", () => {
     const report = reportOf("game");
-    expect(events(report, "first")).toEqual([{ egb: "object", keys: ["buzz", "end", "event", "onTap", "players", "station"], players: ["NOVA", "ORION", null], script: "/bundle-host.js" }]);
+    expect(events(report, "first")).toEqual([{ egb: "object", keys: ["buzz", "end", "event", "onTap", "players", "station"], players: [["NOVA", 0], ["ORION", 2], ["JUNO", 3]], script: "/bundle-host.js" }]);
     expect(events(report, "page")).toEqual([{ mode: "CSS1Compat", lang: "en", title: "probe", head: "/bundle-host.js" }]);
     expect(events(report, "own")).toEqual([{ classic: true, module: true, color: "rgb(1, 2, 3)", image: "loaded", nested: "loaded", data: "loaded", font: "loaded", sound: "loaded" }]);
     expect(events(report, "violations")).toEqual([[]]);

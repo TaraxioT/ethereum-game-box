@@ -12,7 +12,7 @@
 //     for good: nothing more goes out, nothing more comes in. A page that leaves before its own `load` gets past that
 //     count, as the first is then the landing page's: a built game only draws, and a store page must answer the kiosk
 //     after that load (bundle-view.ts).
-import { MAX_MESSAGE, type FrameSeat, type FromFrame, type ToFrame } from "@egb/sdk";
+import { MAX_MESSAGE, type BundlePlayer, type FromFrame, type ToFrame } from "@egb/sdk";
 
 /** Scripts only, no same-origin, no features, no referrer. Set in this order, ahead of the src. */
 const SANDBOX = { sandbox: "allow-scripts", allow: "", referrerpolicy: "no-referrer" } as const;
@@ -26,7 +26,7 @@ export function frameAttributes(id: string, title: string): Readonly<Record<stri
  * The same for a store bundle's page. The frame's name carries the players: a page's first script runs long before a
  * message could reach it, and the name is the one thing the kiosk can hand it sooner.
  */
-export function bundleFrameAttributes(hash: string, title: string, players: readonly FrameSeat[]): Readonly<Record<string, string>> {
+export function bundleFrameAttributes(hash: string, title: string, players: readonly BundlePlayer[]): Readonly<Record<string, string>> {
   return { ...SANDBOX, title, name: JSON.stringify(players), src: `/store/${encodeURIComponent(hash)}/index.html` };
 }
 

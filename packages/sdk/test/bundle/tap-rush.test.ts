@@ -131,12 +131,13 @@ describe("Tap Rush's page", () => {
   let tapped: (tap: { seat: number }) => void;
   const egb = { players: [] as unknown[], onTap: (fn: typeof tapped) => void (tapped = fn), event: vi.fn(), station: vi.fn(), buzz: vi.fn(), end: vi.fn() };
 
-  function load(seats: number) {
+  function loadAt(boxSeats: readonly number[]) {
     document.body.innerHTML = body;
-    egb.players = Array.from({ length: seats }, () => ({}));
+    egb.players = boxSeats.map((boxSeat) => ({ name: "NOVA", boxSeat }));
     Object.assign(window, { egb });
     new Function(script)();
   }
+  const load = (seats: number) => loadAt(Array.from({ length: seats }, (_, seat) => seat));
   const shown = () => [...document.querySelectorAll(".count")].map((count) => count.textContent);
 
   beforeEach(() => {
@@ -154,6 +155,16 @@ describe("Tap Rush's page", () => {
     expect(egb.station.mock.calls).toEqual(Array.from({ length: seats }, (_, seat) => [seat, "TAP!"]));
     vi.advanceTimersByTime(60_000);
     expect(egb.end).not.toHaveBeenCalled();
+  });
+
+  it("names and colours a lane by its player's seat at the Box, and still counts by place", () => {
+    loadAt([0, 2, 3]);
+    const lanes = [...document.querySelectorAll<HTMLElement>(".lane")];
+    expect(lanes.map((lane) => lane.querySelector(".seat")?.textContent)).toEqual(["P1", "P3", "P4"]);
+    expect(lanes.map((lane) => lane.style.getPropertyValue("--seat"))).toEqual(["var(--seat-1)", "var(--seat-3)", "var(--seat-4)"]);
+    tapped({ seat: 2 });
+    expect(shown()).toEqual(["0", "0", "1"]);
+    expect(egb.station).toHaveBeenLastCalledWith(2, "1");
   });
 
   it("starts on the first tap, counts for ten seconds, and leaves the match open a moment more", () => {

@@ -1,5 +1,5 @@
 // What a built game's frame is told, from the Box's state and events. Pure: the view (view.ts) posts what this makes.
-import { isDuelSeat, type FrameEvent, type FrameSeat, type GameManifest, type ToFrame } from "@egb/sdk";
+import { isDuelSeat, type BundlePlayer, type FrameEvent, type FrameSeat, type GameManifest, type Seat, type ToFrame } from "@egb/sdk";
 import { playerLabel } from "../../core/badges.ts";
 import type { BoxEvent, BoxState, SeatState } from "../../core/types.ts";
 
@@ -33,9 +33,9 @@ export function frameSeats(state: BoxState): readonly [FrameSeat, FrameSeat] {
   return [frameSeat(state.seats[0]), frameSeat(state.seats[1])];
 }
 
-/** A store match's players, in seat order. A seat left empty isn't one. */
-export function framePlayers(state: BoxState): readonly FrameSeat[] {
-  return state.seats.filter((seat) => seat.badge).map(frameSeat);
+/** A store match's players, in seat order. A seat left empty isn't one, but each says which it is. */
+export function framePlayers(state: BoxState): readonly BundlePlayer[] {
+  return state.seats.flatMap((seat, boxSeat) => (seat.badge ? [{ ...frameSeat(seat), boxSeat: boxSeat as Seat }] : []));
 }
 
 export function frameInit(match: FrameMatch, state: BoxState, now: number, calm: boolean): Extract<ToFrame, { t: "init" }> {

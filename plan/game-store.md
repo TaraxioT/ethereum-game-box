@@ -199,7 +199,7 @@ seat in use loses its station, it takes over, so a third station is a two-player
 - Team games stay two-player. Their rules use `DuelSeat` and `other(seat)`, and a game's manifest sets its own limits.
 - A store game seats its manifest's max, or the Box's stations if fewer. With every seat full Join moves on. With its
   min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
-  split count players, not seats.
+  split count players, not seats. The page also hears each player's seat at the Box, to name and colour them the same.
 - The firmware already takes four stations (`MAX_STATIONS`). It forgets none until it restarts, so a fifth can't link
   before then.
 - Refunds and results pay a list of players, not a pair.
