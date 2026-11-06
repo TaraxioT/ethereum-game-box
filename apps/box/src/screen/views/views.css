@@ -167,19 +167,19 @@
 /* The board, right of the core on Home and Attract: game by game, its title and its championship, each a line with
    a kind (TITLE, CUP), what (the holder, the championship and its leader) and when (the time left). Lit while live,
    dim once done, faint when there is nothing. */
-.home-board { display: flex; flex-direction: column; gap: 10px; padding: 16px 20px; }
+.home-board { display: flex; flex-direction: column; gap: 12px; padding: 18px 22px; }
 .home-board[hidden] { display: none; }
-.home-board-head { display: flex; justify-content: space-between; align-items: center; font: 700 12px/1 var(--hud-display); letter-spacing: 0.16em; color: var(--fg-3); }
+.home-board-head { display: flex; justify-content: space-between; align-items: center; font: 700 13px/1 var(--hud-display); letter-spacing: 0.16em; color: var(--fg-3); }
 .home-board-live { display: inline-flex; align-items: center; gap: 6px; color: var(--sys); }
 .home-board-live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--sys-glow); box-shadow: 0 0 6px var(--sys-glow); animation: board-live 2s ease-in-out infinite; }
 @keyframes board-live { 50% { opacity: 0.3; } }
-.home-board-games { display: flex; flex-direction: column; gap: 10px; }
-.home-board-game { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid rgb(207 232 246 / 0.1); }
-.home-board-name { font: 700 16px/1.1 var(--hud-display); letter-spacing: 0.08em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
-.home-board-line { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
-.home-board-kind { font: 600 11px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
-.home-board-what { font: 600 15px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.home-board-when { font: 600 14px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
+.home-board-games { display: flex; flex-direction: column; gap: 14px; }
+.home-board-game { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid rgb(207 232 246 / 0.1); }
+.home-board-name { font: 700 19px/1.1 var(--hud-display); letter-spacing: 0.08em; color: var(--sys); text-shadow: 0 0 6px var(--sys-bloom); }
+.home-board-line { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; }
+.home-board-kind { font: 600 12px/1 var(--hud-body); letter-spacing: 0.14em; color: var(--fg-3); }
+.home-board-what { font: 600 17px/1.25 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-board-when { font: 600 15px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
 .home-board-line[data-tone="done"] :is(.home-board-what, .home-board-when) { color: var(--fg-2); }
 .home-board-line[data-tone="none"] :is(.home-board-what, .home-board-when) { color: var(--fg-3); }
 @media (prefers-reduced-motion: reduce) { .home-board-live::before { animation: none; } }

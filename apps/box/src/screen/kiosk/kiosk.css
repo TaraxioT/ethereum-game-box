@@ -71,7 +71,7 @@
 .set-who { font: 600 14px/1.2 var(--hud-body); letter-spacing: 0.06em; color: var(--sys-hot); overflow-wrap: anywhere; }
 .set-when { font: 600 13px/1.2 var(--mono); color: var(--fg-2); }
 .set-empty { display: block; min-height: 0; padding: 8px 0; font: 600 13px/1.2 var(--hud-body); letter-spacing: 0.1em; color: var(--fg-3); }
-.set-sub { margin: 12px 0 0; font: 700 12px/1 var(--hud-display); letter-spacing: 0.14em; color: var(--fg-3); }
+.set-sub { margin: 12px 0 0; font: 700 12px/1 var(--hud-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-3); }
 .set-past .set-item { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) auto; min-height: 36px; }
 
 /* Live now: a card per game, its name and ENS name, then a line for its title and one for its championship: the kind,
