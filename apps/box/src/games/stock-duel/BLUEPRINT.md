@@ -36,10 +36,16 @@ pick, or over → Result.
 
 ## The screen
 
-The team screen is a painted study: two Rolodexes on a walnut desk, a brass astrolabe that spins to the stat, played
-cards that turn over on the blotter. The built screen keeps it in the Box's parts: each hand as a column of cards
-whose front card lifts in the seat's colour, a brass stat plate over the two played cards at the reveal, an LCD
-tally at the top, and a brass plate naming the winner.
+The team screen wears the Slab look: a dark room with each player's colour pooling up from their side, thick
+graphite slabs lit from above, chunky Unbounded type, and the seat colours (orange, cyan) as fills and rims. A
+Rolodex stands down each side, the cards upright on a drum with an index tab each; between them a tray holds the
+stat wheel over two wells, where the played cards land face down and turn over at the reveal, the winner's lifting.
+The game draws the top band itself: each player, their USDC stake and round pips, the round and the pot. The built
+screen keeps it in a frame: each hand as a column of graphite cards whose front card lifts in the seat's colour, a
+white stat chip over the two played cards at the reveal, the score at the top, and a slab naming the winner.
+
+The comps it was built to, at the Pi's 1280×800: [the match](look/slab-match.png) and
+[the reveal](look/slab-reveal.png).
 
 ## Station text
 
