@@ -20,6 +20,8 @@ export interface StationsPort {
   show(seat: Seat, view: StationView): void;
   /** `ok`: one short buzz (an accepted tap). `no`: two short (a refused one). */
   buzz(seat: Seat, kind: "ok" | "no"): void;
+  /** The seats that need a station now, each time that changes: a station on any other seat can cover a lost one. */
+  inUse(seats: readonly Seat[]): void;
 }
 
 /** What the next tap at a seat should ask of the badge. `none`: the tap means nothing now (still identified). */

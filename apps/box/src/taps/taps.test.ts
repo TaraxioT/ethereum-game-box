@@ -321,36 +321,125 @@ describe("the tap state machine", () => {
 });
 
 describe("the seats", () => {
-  const FOUR = [P1, P2, "df3b9c", "0a0b0c"];
+  const THIRD = "df3b9c";
+  const FOURTH = "0a0b0c";
+  const THREE = [P1, P2, THIRD];
+  const FOUR = [...THREE, FOURTH];
   const SPARE = "0a0b0d";
-  const seats = (t: Awaited<ReturnType<typeof boot>>) => t.taps.status().stations.map((s) => [s.st, s.seat]);
+  type Booted = Awaited<ReturnType<typeof boot>>;
+  const seats = (t: Booted) => t.taps.status().stations.map((s) => [s.st, s.seat]);
+  const screen = (t: Booted, st: string) => t.fake.status().stations.find((s) => s.st === st)?.screen;
+  /** The link drops and its grace runs out. */
+  const lose = async (t: Booted, st: string) => {
+    t.fake.linkDown(st);
+    await t.step(LINK_GRACE_MS + 50);
+  };
 
-  it("gives each known station a seat, up to four, in link order, and benches any more", async () => {
-    const t = await boot({ stations: [...FOUR, SPARE] }, undefined, FOUR);
-    expect(seats(t)).toEqual([[P1, 0], [P2, 1], ["df3b9c", 2], ["0a0b0c", 3], [SPARE, null]]);
+  it("gives each known station a seat, in link order, and benches one past them", async () => {
+    const t = await boot({ stations: [...THREE, SPARE] }, undefined, THREE);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 1], [THIRD, 2], [SPARE, null]]);
     await t.step(10);
-    expect(t.fake.status().stations.find((s) => s.st === SPARE)?.screen).toContain("big=NEXT\nsmall=every seat taken - you're next");
+    expect(screen(t, SPARE)).toContain("big=NEXT\nsmall=every seat taken - you're next");
+  });
+
+  it("seats by link order whoever is on the list: a station off it can take a seat from one on it", async () => {
+    const t = await boot({ stations: [SPARE, P1, P2] }, undefined, [P1, P2]);
+    expect(seats(t)).toEqual([[P1, 1], [P2, null], [SPARE, 0]]);
+  });
+
+  it("links four stations and no fifth: the receiver's table holds four", async () => {
+    const t = await boot({ stations: [...FOUR, SPARE] }, undefined, FOUR);
+    await t.step(1000);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 1], [THIRD, 2], [FOURTH, 3]]);
+    expect(t.fake.status().stations.map((s) => s.st)).toEqual(FOUR);
   });
 
   it("hears a tap, shows a view and buzzes on the fourth seat", async () => {
     const t = await boot({}, undefined, FOUR);
-    t.fake.place("ada", "0a0b0c");
+    t.fake.place("ada", FOURTH);
     await flush();
     expect(t.events[0]).toMatchObject({ phase: "touch", seat: 3 });
     t.taps.show(3, stationView("P4", "TAP", "to join"));
     t.taps.buzz(3, "ok");
     await flush();
-    expect(t.fake.status().stations.find((s) => s.st === "0a0b0c")?.screen).toContain("tag=P4");
-    expect(t.fake.heard().filter((l) => l.startsWith("buzz")).map((l) => l.replace(/ \d+ /, " # "))).toEqual(["buzz 0a0b0c # 80"]);
+    expect(screen(t, FOURTH)).toContain("tag=P4");
+    expect(t.fake.heard().filter((l) => l.startsWith("buzz")).map((l) => l.replace(/ \d+ /, " # "))).toEqual([`buzz ${FOURTH} # 80`]);
   });
 
   it("gives a lost station's seat to the bench, with the seat's last view", async () => {
-    const t = await boot({ stations: [...FOUR, SPARE] }, undefined, FOUR);
+    const t = await boot({ stations: [...THREE, SPARE] }, undefined, THREE);
     t.taps.show(2, stationView("P3", "SIGN", "10 USDC"));
-    t.fake.linkDown("df3b9c");
-    await t.step(2500 + LINK_GRACE_MS + 50);
+    await lose(t, THIRD);
     expect(seats(t).find(([st]) => st === SPARE)).toEqual([SPARE, 2]);
-    expect(t.fake.status().stations.find((s) => s.st === SPARE)?.screen).toContain("big=SIGN");
+    expect(screen(t, SPARE)).toContain("big=SIGN");
+  });
+
+  it("covers a lost seat in use from a seat that isn't, and seats the lost station there when it comes back", async () => {
+    const t = await boot({}, undefined, THREE);
+    t.taps.inUse([0, 1]);
+    t.taps.show(0, stationView("P1", "SIGN", "10 USDC"));
+    await lose(t, P1);
+    expect(seats(t)).toEqual([[P1, null], [P2, 1], [THIRD, 0]]);
+    expect(screen(t, THIRD)).toContain("big=SIGN");
+    t.fake.place("ada", THIRD);
+    await flush();
+    expect(t.events[0]).toMatchObject({ phase: "touch", seat: 0 });
+
+    t.fake.linkUp(P1);
+    await t.step(10);
+    expect(seats(t)).toEqual([[P1, 2], [P2, 1], [THIRD, 0]]);
+  });
+
+  it("covers a player from a seat left empty in their match", async () => {
+    const t = await boot({}, undefined, FOUR);
+    t.taps.inUse([0, 2, 3]);
+    await lose(t, THIRD);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 2], [THIRD, null], [FOURTH, 3]]);
+  });
+
+  it("moves no player: with every seat in use, a lost one waits for its station", async () => {
+    const t = await boot({}, undefined, THREE);
+    t.taps.inUse([0, 1, 2]);
+    await lose(t, P1);
+    expect(seats(t)).toEqual([[P1, null], [P2, 1], [THIRD, 2]]);
+    t.fake.linkUp(P1);
+    await t.step(10);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 1], [THIRD, 2]]);
+  });
+
+  it("fills a seat left empty as soon as another stops being in use", async () => {
+    const t = await boot({}, undefined, THREE);
+    t.taps.inUse([0, 1, 2]);
+    t.taps.show(0, stationView("P1", "TAP", "to join"));
+    await lose(t, P1);
+    t.taps.inUse([0, 1]);
+    await t.step(10);
+    expect(seats(t)).toEqual([[P1, null], [P2, 1], [THIRD, 0]]);
+    expect(screen(t, THIRD)).toContain("tag=P1");
+  });
+
+  it("won't take a station whose link is down, until it comes back", async () => {
+    const t = await boot({}, undefined, THREE);
+    t.taps.inUse([0, 1]);
+    t.fake.linkDown(P1);
+    await t.step(LINK_GRACE_MS - 500);
+    t.fake.linkDown(THIRD);
+    await t.step(550);
+    expect(seats(t)).toEqual([[P1, null], [P2, 1], [THIRD, 2]]);
+    t.fake.linkUp(THIRD);
+    await t.step(10);
+    expect(seats(t)).toEqual([[P1, null], [P2, 1], [THIRD, 0]]);
+  });
+
+  it("gives a station that links the empty seat in use, not a lower one that isn't", async () => {
+    const t = await boot({}, undefined, FOUR);
+    t.taps.inUse([0, 2, 3]);
+    t.fake.linkDown(P2);
+    await lose(t, FOURTH);
+    expect(seats(t)).toEqual([[P1, 0], [P2, null], [THIRD, 2], [FOURTH, null]]);
+    t.fake.linkUp(P2);
+    await t.step(10);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 3], [THIRD, 2], [FOURTH, null]]);
   });
 });
 

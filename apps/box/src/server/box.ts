@@ -10,6 +10,7 @@ import { SEATS } from "@egb/sdk";
 import { storePotAddress } from "@egb/shared/store";
 import type { ChainPort, Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
+import { seatsInUse } from "../core/seats.ts";
 import { monotonicClock } from "../core/system-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { badgeOf } from "../taps/roster.ts";
@@ -135,10 +136,11 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   let taps: Taps | null = null;
   const core = createCore({
     clock,
-    // The taps library is the stations port once it has started; the core's views before then are sent on start.
+    // The taps library is the stations port once it has started; what the core said before then is sent on start.
     stations: {
       show: (seat, view) => taps?.show(seat, view),
       buzz: (seat, kind) => taps?.buzz(seat, kind),
+      inUse: (seats) => taps?.inUse(seats),
     },
     chain,
     library,
@@ -229,6 +231,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       const view = stations[seat];
       if (view) taps.show(seat, view);
     }
+    taps.inUse(seatsInUse(core.state()));
   }
   // The builder reads its jobs from the disk: it starts after the listen too, and its routes join the handler's then.
   builder = startBuilder({

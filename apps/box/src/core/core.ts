@@ -76,7 +76,7 @@ import { rematchOpen, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
 import { sameBadge } from "./badges.ts";
 import { startBuilt, type BuiltDriver } from "./built.ts";
-import { allSigned, playerSeats } from "./seats.ts";
+import { allSigned, playerSeats, seatsInUse } from "./seats.ts";
 import { createStoreLog, type StoreLog } from "./store-log.ts";
 
 /** Join waits this long with every seat full before moving on to Stake. */
@@ -346,6 +346,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let lastFronts: readonly [number | null, number | null] = [null, null];
   /** What each station was last sent. */
   const shown = perSeat(() => "");
+  /** The seats the stations were last told are in use. */
+  let shownInUse = "";
 
   const book = createTxBook(
     {
@@ -412,7 +414,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   let state = snapshot();
 
-  /** Sends each station its view when it changed. */
+  /** Sends each station its view when it changed, then the seats in use: a station that moves takes its seat's new view. */
   function showStations(): void {
     for (const seat of SEATS) {
       const view = state.stations[seat];
@@ -422,6 +424,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       shown[seat] = key;
       ports.stations.show(seat, view);
     }
+    const inUse = seatsInUse(state);
+    if (inUse.join() === shownInUse) return;
+    shownInUse = inUse.join();
+    ports.stations.inUse(inUse);
   }
 
   function emit(event: BoxEvent): void {

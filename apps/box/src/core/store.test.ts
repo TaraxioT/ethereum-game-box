@@ -68,6 +68,8 @@ interface Rig {
   readonly logged: Transcript[];
   readonly events: BoxEvent[];
   readonly buzzes: string[];
+  /** Each time the stations were told which seats are in use. */
+  readonly inUse: (readonly Seat[])[];
   /** Replaces the rack, as a store index that changed or vanished would. */
   rack(games: readonly GameInfo[]): void;
 }
@@ -81,6 +83,7 @@ function rig(options: { bundles?: boolean; name?: boolean; stations?: number; ga
   const logged: Transcript[] = [];
   const events: BoxEvent[] = [];
   const buzzes: string[] = [];
+  const inUse: (readonly Seat[])[] = [];
   let games: readonly GameInfo[] = [...TEAM_GAMES, options.game ?? STORE_GAME];
   const listeners = new Set<() => void>();
   const library: LibraryPort = {
@@ -93,7 +96,7 @@ function rig(options: { bundles?: boolean; name?: boolean; stations?: number; ga
   const port: ChainPort = { ...chain, store: store.port, stakeNeedsName: options.name ?? false };
   const core = createCore({
     clock,
-    stations: { show: () => {}, buzz: (seat, kind) => void buzzes.push(`${seat} ${kind}`) },
+    stations: { show: () => {}, buzz: (seat, kind) => void buzzes.push(`${seat} ${kind}`), inUse: (seats) => void inUse.push(seats) },
     chain: port,
     library,
     ...(options.bundles === false ? {} : { bundles: bundles.port }),
@@ -110,6 +113,7 @@ function rig(options: { bundles?: boolean; name?: boolean; stations?: number; ga
     logged,
     events,
     buzzes,
+    inUse,
     rack(next) {
       games = next;
       for (const listener of listeners) listener();
@@ -760,6 +764,18 @@ describe("a store game for more than two", () => {
     // From here the players are fixed: a new badge can't join.
     await tap(r, 1, JUNO);
     expect(r.core.state().seats[1]?.badge).toBeNull();
+  });
+
+  it("tells the stations which seats need one: those on show, the players from Stake on, and two again at Home", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, [[0, NOVA], [2, KITE]]);
+    expect(r.inUse.at(-1)).toEqual([0, 1, 2, 3]);
+    r.core.send({ type: "begin" });
+    expect(r.inUse.at(-1)).toEqual([0, 2]);
+    r.core.reset();
+    expect(r.inUse.at(-1)).toEqual([0, 1]);
+    // Only when they change.
+    expect(r.inUse.map((seats) => seats.join())).toEqual(["0,1", "0,1,2,3", "0,2", "0,1"]);
   });
 
   it("won't START a team game, whose every seat must fill", async () => {

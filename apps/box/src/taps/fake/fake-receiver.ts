@@ -35,6 +35,8 @@ const MS = {
   reselect: 52,
   list: 35,
 } as const;
+/** The receiver's table of stations (`MAX_STATIONS` in the firmware): it never forgets one, so a fifth can't link. */
+const MAX_STATIONS = 4;
 const PING_MS = 250;
 const PRESS_SENDS = 25;
 const PRESS_RESEND_MS = 20;
@@ -87,7 +89,7 @@ export class FakeReceiver {
     this.clock = clock;
     this.scale = opts.timeScale ?? 1;
     this.badges = BADGE_NAMES.map((name, i) => new SimBadge(name, i === BADGE_NAMES.length - 1 ? "legacy" : "arx"));
-    (opts.stations ?? stations).forEach((st, i) => {
+    (opts.stations ?? stations).slice(0, MAX_STATIONS).forEach((st, i) => {
       const s: SimStation = {
         st, up: true, badge: null, tapId: 0, nfcId: 0, busyUntil: 0, aids: new Map(), lastAid: 0, kept: null, screen: "", ping: null,
         rttUs: 2700 + 150 * i, rssi: -40 - 3 * i,

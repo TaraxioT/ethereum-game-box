@@ -5,8 +5,10 @@
 //
 // There's a seat for each known station, up to four, and seats go by link order: the first station to link is Player
 // 1's, the second Player 2's, and one linked with every seat taken waits on the bench. A seat is kept through a dropped
-// link's grace; once its station is lost, the seat goes to the bench's earliest-linked station. The receiver's `state` lists stations in the order they first reached it, so a reopened
-// port seats them as before.
+// link's grace. Once its station is lost, the seat goes to the bench's earliest-linked station, and with the bench empty
+// to a station on a seat not in use: the third station while a two-seat game plays, or a seat left empty in a store
+// match. The receiver's `state` lists stations in the order they first reached it, so a reopened port seats them as
+// before.
 import { SEATS, type Seat } from "@egb/sdk";
 import type { Clock, TimerHandle } from "../core/ports.ts";
 import type { ReceiverEvent, StationId } from "./lines.ts";
@@ -75,6 +77,8 @@ export class Stations {
   private readonly live = new Map<StationId, Live>();
   /** Each seat's station, Player 1's first. */
   private readonly seats: (StationId | null)[];
+  /** The seats that need a station now. Until the core says, all of them: no station moves. */
+  private used: readonly Seat[] = SEATS;
   private linkCount = 0;
 
   /** `known`: stations listed before any links (the fake's), a seat each; seats still go by link order. */
@@ -91,6 +95,12 @@ export class Stations {
 
   stationAt(seat: Seat): StationId | undefined {
     return this.seats[seat] ?? undefined;
+  }
+
+  /** The seats that need a station now. One left without gets another's at once, as when a table shrinks past a gap. */
+  inUse(seats: readonly Seat[]): void {
+    this.used = seats;
+    this.fillSeats();
   }
 
   /** Linked stations no seat uses. */
@@ -273,19 +283,37 @@ export class Stations {
     this.hooks.down(st);
   }
 
-  /** Gives every empty seat to the bench's earliest-linked station. Says whether a seat changed hands. */
+  /**
+   * Gives every empty seat to the bench's earliest-linked station, the seats in use first. With the bench empty, a seat
+   * in use takes a station from a seat that isn't. Says whether a seat changed hands.
+   */
   private fillSeats(): boolean {
     const waiting = this.bench().sort((a, b) => this.station(a).linkedSeq - this.station(b).linkedSeq);
     let moved = false;
-    for (const seat of this.seats.keys()) {
+    for (const seat of [...this.used, ...this.seatsNotInUse()]) {
       if (this.seats[seat] !== null) continue;
-      const st = waiting.shift();
-      if (!st) break;
+      const st = waiting.shift() ?? (this.used.includes(seat) ? this.takeSpare() : undefined);
+      if (!st) continue;
       this.seats[seat] = st;
       moved = true;
     }
     if (moved) this.hooks.seated();
     return moved;
+  }
+
+  private seatsNotInUse(): Seat[] {
+    return SEATS.filter((seat) => !this.used.includes(seat));
+  }
+
+  /** Takes a linked station off a seat not in use, the last seat first. */
+  private takeSpare(): StationId | undefined {
+    for (const seat of this.seatsNotInUse().reverse()) {
+      const st = this.stationAt(seat);
+      if (!st || !this.isUp(st)) continue;
+      this.seats[seat] = null;
+      return st;
+    }
+    return undefined;
   }
 
   private release(s: Live, e: Error): void {

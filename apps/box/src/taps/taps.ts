@@ -279,6 +279,7 @@ export function createTaps(opts: TapsOptions): Taps {
       const st = seatStation(seat);
       if (st) buzzer.buzz(st, kind);
     },
+    inUse: (seats) => stations.inUse(seats),
     status: () => {
       const screenOf = new Map(screens.status().map((s) => [s.st, s]));
       return {

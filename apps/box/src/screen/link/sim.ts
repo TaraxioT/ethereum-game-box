@@ -23,7 +23,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
   const chain = createDemoChain(clock);
   const ports: CorePorts = {
     clock,
-    stations: { show() {}, buzz() {} },
+    stations: { show() {}, buzz() {}, inUse() {} },
     chain,
     library: teamLibrary(),
     // The demo keeps no records.

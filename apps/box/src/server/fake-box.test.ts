@@ -14,6 +14,7 @@ import { fakeTap, flush, post, startTestBox, type TestBox } from "./testing.ts";
 
 const P1 = "e4ba70";
 const P2 = "df3d88";
+const P3 = "df3b9c";
 const GET_PKEYS = "B0510000010200";
 const ARX_SELECT = "00A404000AA0000009490148614C6F00";
 
@@ -32,15 +33,15 @@ interface Rig {
   apdus(): string[];
 }
 
-async function fakeBox(timeScale = 0): Promise<Rig> {
-  const tb = await startTestBox({ receiver: { kind: "fake" }, fake: { timeScale } });
+async function fakeBox(timeScale = 0, stations: readonly string[] = [P1, P2]): Promise<Rig> {
+  const tb = await startTestBox({ receiver: { kind: "fake" }, stations, fake: { timeScale } });
   cleanups.push(() => tb.stop());
   const events: BoxEvent[] = [];
   tb.box.core.subscribe((_, event) => events.push(event));
   const taps = tb.box.taps();
   if (!taps?.fake) throw new Error("no fake receiver");
   const fake = taps.fake;
-  await tb.settle(() => taps.status().receiver.open && taps.probe.linked().length === 2);
+  await tb.settle(() => taps.status().receiver.open && taps.probe.linked().length === stations.length);
   let heard = fake.heard().length;
   return {
     tb,
@@ -172,6 +173,22 @@ describe("the Box on the fake receiver", () => {
     await rig.tap("ada", P1);
     await rig.tb.settle(() => rig.state().phase === "home", 30_000, 50);
     expect(rig.state().seats.map((s) => s.balance)).toEqual([100, 100]);
+  });
+
+  it("moves a lost station's seat to the third station in a staked match, which takes the player's tap", async () => {
+    const rig = await fakeBox(0, [P1, P2, P3]);
+    await staked(rig, "quick-draw");
+    const taps = rig.tb.box.taps();
+    const seatOf = (st: string) => taps?.status().stations.find((s) => s.st === st)?.seat;
+    expect([P1, P2, P3].map(seatOf)).toEqual([0, 1, 2]);
+    taps?.fake?.linkDown(P1);
+    await rig.tb.settle(() => seatOf(P1) === null, 10_000, 50);
+    expect([P2, P3].map(seatOf)).toEqual([1, 0]);
+    // The view follows the seat, so the player sees where to tap, and the tap is theirs.
+    expect(taps?.fake?.status().stations.find((s) => s.st === P3)?.screen).toContain("tag=P1");
+    rig.events.length = 0;
+    await rig.tap("ada", P3);
+    expect(rig.events).toContainEqual(expect.objectContaining({ type: "tap", seat: 0, accepted: true }));
   });
 
   it("ends every touch in done or fail when the receiver is unplugged mid-roll, and lets the held card go", async () => {
