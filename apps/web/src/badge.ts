@@ -66,10 +66,10 @@ export function storedTestBadge(): Badge | null {
   return key && /^0x[0-9a-f]{64}$/i.test(key) ? fromKey(key as Hex) : null;
 }
 
-/** A fresh test badge, kept in this browser in place of the last one. */
-export function newTestBadge(): Badge {
+/** A fresh test badge, kept in this browser in place of the last one (unless `keep` is false). */
+export function newTestBadge(keep = true): Badge {
   const key = generatePrivateKey();
-  storage()?.setItem(KEY, key);
+  if (keep) storage()?.setItem(KEY, key);
   return fromKey(key);
 }
 

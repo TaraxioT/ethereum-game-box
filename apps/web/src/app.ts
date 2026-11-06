@@ -30,9 +30,9 @@ export const state = {
   focus: null as string | null,
 };
 
-/** The directory, read up to the head block (or the latest block when the head isn't known yet). */
+/** The directory, read up to the latest block (asked fresh, so a write that just landed is in it). */
 export async function dir(): Promise<Directory> {
-  const head = headBlock() || (await client.getBlockNumber());
+  const head = await client.getBlockNumber({ cacheTime: 0 }).catch(() => headBlock());
   return directory(client, head);
 }
 

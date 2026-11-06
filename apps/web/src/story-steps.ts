@@ -92,10 +92,17 @@ export const STEPS: Step[] = [
     show: () => show(`#/name/${titleName(LIVE_TITLE_GAME)}`, "transfer"),
     async act() {
       const { label } = needClaim();
-      const d = await dir();
+      let d = await dir();
+      let opponent = [...d.players.values()].reverse().find((p) => p.label !== label && p.label !== AGENT_LABEL);
+      if (!opponent) {
+        // No one else to play: a second test badge claims a rival (it isn't kept as the visitor's badge).
+        const rival = freshLabel("rival");
+        await claim(newTestBadge(false), rival);
+        d = await dir();
+        opponent = d.players.get(rival);
+      }
       const judge = d.players.get(label);
-      const opponent = [...d.players.values()].reverse().find((p) => p.label !== label && p.label !== AGENT_LABEL);
-      if (!judge || !opponent) throw new Error("The story needs a second player name on chain.");
+      if (!judge || !opponent) throw new Error("The story needs two player names on chain.");
       state.story.opponent = opponent.label;
       await show("#/champions", `title-${LIVE_TITLE_GAME}`);
       await reportWin(LIVE_TITLE_GAME, judge, opponent);
