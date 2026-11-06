@@ -195,7 +195,13 @@ interface IPermissionedRegistry is IRegistry, IEnhancedAccessControl {
     function isEmancipated() external view returns (bool);
     /// @notice The owner of `tokenId`, or zero if it is stale or expired.
     function ownerOf(uint256 tokenId) external view returns (address);
-    /// @notice ERC-1155 transfer. Reverts `TransferDisallowed` without `CAN_TRANSFER_ADMIN`.
+    /// @notice ERC-1155 balance of `account` for token `id` (0 or 1).
+    function balanceOf(address account, uint256 id) external view returns (uint256);
+    /// @notice A transfer that skips the emancipation check (`IUnsafeTransferable`). Reverts `TransferDisallowed`
+    ///         without `CAN_TRANSFER_ADMIN`.
+    function unsafeTransfer(address to, uint256 tokenId, bytes calldata data) external;
+    /// @notice ERC-1155 transfer. On a registry that isn't emancipated it reverts
+    ///         `TransferUnsafeUntilRegistryIsEmancipated`; otherwise `TransferDisallowed` without `CAN_TRANSFER_ADMIN`.
     function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes calldata data) external;
 }
 
