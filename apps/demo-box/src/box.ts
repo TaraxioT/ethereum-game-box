@@ -206,23 +206,25 @@ function parseReport(input: unknown): Report | string {
 const HEARTBEAT_MS = 5 * 60_000;
 
 export class DemoBox extends DurableObject<Env> {
-  private readonly box: Box;
+  private made: Box | undefined;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  /** Built on first use, so a missing address or secret is an error on that call, not a broken object. */
+  private get box(): Box {
+    if (this.made) return this.made;
     const contracts = deployedContracts();
-    this.box = new Box({
-      store: ctx.storage,
-      chain: sepoliaChain(env.SEPOLIA_RPC_URL, contracts),
-      signer: p256Signer(env.DEMO_BOX_P256_KEY as Hex),
+    this.made = new Box({
+      store: this.ctx.storage,
+      chain: sepoliaChain(this.env.SEPOLIA_RPC_URL, contracts),
+      signer: p256Signer(this.env.DEMO_BOX_P256_KEY as Hex),
       account: contractAddress('DemoBoxAccount'),
-      label: env.BOX_LABEL,
-      defaultGame: env.DEFAULT_GAME,
+      label: this.env.BOX_LABEL,
+      defaultGame: this.env.DEFAULT_GAME,
       results: contracts.results,
-      post: relayerPost(env),
+      post: relayerPost(this.env),
       now: () => Math.floor(Date.now() / 1000),
       nonce: randomNonce,
     });
+    return this.made;
   }
 
   view(): Promise<DemoBoxView> {
