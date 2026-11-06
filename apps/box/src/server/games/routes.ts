@@ -50,15 +50,6 @@ const SHARED = { ...BASE, "access-control-allow-origin": "*" } as const;
 /** For files a browser could also open by themselves: nothing in them runs. */
 const INERT = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
-/** A URL path's text, or null when it is malformed. */
-function decoded(urlPath: string): string | null {
-  try {
-    return decodeURIComponent(urlPath);
-  } catch {
-    return null;
-  }
-}
-
 export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
   async function icon(res: http.ServerResponse, dir: string): Promise<void> {
     const svg = await readFile(path.join(dir, ICON_FILE), "utf8").catch(() => null);
@@ -66,12 +57,14 @@ export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
     res.writeHead(200, { ...SHARED, "content-type": "image/svg+xml", "content-security-policy": INERT }).end(good);
   }
 
-  /** One file of a store bundle. The bundle's list is the only way in: a path it doesn't name doesn't reach the disk. */
+  /**
+   * One file of a store bundle. The bundle's list is the only way in: a path it doesn't name exactly, as it is in the URL,
+   * never reaches the disk. A bundle's names need no decoding: the reader takes only lower-case ASCII.
+   */
   async function bundleFile(req: http.IncomingMessage, res: http.ServerResponse, urlPath: string): Promise<void> {
-    const [, hash = "", listed = ""] = BUNDLE_FILE.exec(urlPath) ?? [];
+    const [, hash = "", name = ""] = BUNDLE_FILE.exec(urlPath) ?? [];
     const found = options.bundles?.(hash);
-    const name = decoded(listed);
-    if (!found || name === null || !found.files.has(name)) return sendText(res, 404, "not found");
+    if (!found?.files.has(name)) return sendText(res, 404, "not found");
     // index.html is the one page a frame may show: a game can't navigate to another and still be heard as its own page.
     if (name !== BUNDLE_PAGE && req.headers["sec-fetch-mode"] === "navigate") return sendText(res, 404, "not found");
     const origin = boxOrigin(req.headers.host);

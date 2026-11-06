@@ -69,7 +69,7 @@ export function bundleFrameView(source: BundleSource, powers: (ctx: ViewContext)
             ready = true;
             clearTimeout(timeout);
             const { players } = source.match(ctx.link.state()) ?? match;
-            return channel.post({ t: "bundle-init", players, now: ctx.link.now(), calm: ctx.calm });
+            return channel.post({ t: "bundle-init", players });
           }
           case "error":
             return showFault(message.message);

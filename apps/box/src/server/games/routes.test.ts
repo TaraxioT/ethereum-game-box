@@ -26,7 +26,7 @@ const HASH =`0x${"ab".repeat(32)}`;
 const OTHER_HASH = `0x${"cd".repeat(32)}`;
 const bundleDir = tempDir("egb-bundle-routes-");
 const BUNDLE_PAGE = `<!doctype html>\n<html lang="en"><head><title>Tap Rush</title><script>window.mine = 1;</script></head><body></body></html>`;
-const LISTED = ["index.html", "game.js", "game.css", "art/my sprite.png", "font.woff2", "sound.mp3", "logo.svg", "other.html"];
+const LISTED = ["index.html", "game.js", "game.css", "art/my-sprite.png", "font.woff2", "sound.mp3", "logo.svg", "other.html"];
 
 function unpackBundle(): void {
   mkdirSync(path.join(bundleDir, "art"));
@@ -218,7 +218,7 @@ describe("a store bundle's routes", () => {
     for (const [name, type] of [
       ["game.js", "text/javascript"],
       ["game.css", "text/css"],
-      ["art/my%20sprite.png", "image/png"],
+      ["art/my-sprite.png", "image/png"],
       ["font.woff2", "font/woff2"],
       ["sound.mp3", "audio/mpeg"],
       ["logo.svg", "image/svg+xml"],
@@ -229,7 +229,7 @@ describe("a store bundle's routes", () => {
       expect(res.headers.get("access-control-allow-origin"), name).toBe("*");
       expect(res.headers.get("x-content-type-options"), name).toBe("nosniff");
       expect(res.headers.get("content-security-policy"), name).toBe(bundleCsp(base, HASH));
-      expect(await res.text(), name).toBe(`the file ${decodeURIComponent(name)}`);
+      expect(await res.text(), name).toBe(`the file ${name}`);
     }
   });
 

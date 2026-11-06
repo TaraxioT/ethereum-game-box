@@ -28,8 +28,7 @@ async function play(scenario: Scenario): Promise<unknown> {
   const ended = new Promise<string>((done) => (finish = done));
   const ctx = {
     layout: LAYOUT,
-    calm: false,
-    link: { state: () => STATE, now: () => Date.now() },
+    link: { state: () => STATE },
   } as unknown as ViewContext;
   const view = bundleFrameView(
     {

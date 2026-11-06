@@ -59,6 +59,8 @@ in memory (`core/demo-chain.ts`); any other mix stops the start.
 | `GET /api/board` | anyone | The board Attract and Home show: `{ available: false }` without an RPC; else `{ available, board, error }`, every game with its title and open championship and the latest championships with an open one's leader (`board.ts`, read at most every 3 s). |
 | `GET /games/<id>/icon.svg`, `screen.js`, `frame.html` | anyone | A built game's cartridge art, screen module and sandboxed frame page, under the frame's own CSP (`games/`). |
 | `GET /parts.js`, `/parts.css`, `/parts/…`, `/frame.js` | anyone | What every frame loads besides the game: the parts, their look and fonts, the frame's program. |
+| `GET /bundle-host.js` | anyone | A store bundle's first script: its `window.egb`. |
+| `GET /store/<hash>/<file>` | anyone | A file the unpacked store bundle lists, by exact path, under the bundle's own CSP (`games/`). |
 | `GET /`, `/index.html` | anyone | The screen's page, never cached; the launcher token is written into it only for a top-level navigation. |
 | `GET /test` | anyone | The test page (same rules as the screen's page). |
 | `GET /…` | anyone | The built files (`assets/` cached for good). |

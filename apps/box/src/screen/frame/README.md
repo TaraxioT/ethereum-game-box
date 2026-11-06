@@ -1,8 +1,11 @@
-# Built games' frames
+# Games' frames
 
-A built game's screen runs in the kiosk inside `<iframe sandbox="allow-scripts">`: no same-origin access, its page
-under a CSP with `connect-src 'none'` (`server/games/`). It only draws. The kiosk tells it the state and what happened
-through a typed `postMessage` channel (`@egb/sdk`'s `ToFrame`); it answers only `ready` and `error` (`FromFrame`).
+Built games and store bundles both run in the kiosk inside `<iframe sandbox="allow-scripts">`, on one channel. A built
+game only draws; a bundle's page holds the game, and has [a few more words](#store-bundles).
+
+A built game's screen runs with no same-origin access, its page under a CSP with `connect-src 'none'`
+(`server/games/`). It only draws. The kiosk tells it the state and what happened through a typed `postMessage` channel
+(`@egb/sdk`'s `ToFrame`); it answers only `ready` and `error` (`FromFrame`).
 
 **The kiosk's side.** `frameView(builtMatch)` is the router's view for a built match (`views/routes.ts`); in dev,
 Vite passes `/games`, `/parts…` and `/frame.js` through to the Box server.
@@ -25,16 +28,69 @@ mounts the `GameScreen` on `init` (again on a second `init`), hands it each `upd
 update, the window and unhandled rejections, at most 10. It takes messages only from its parent at the Box's origin
 and posts only to it.
 
+## Store bundles
+
+A bundle's `index.html` comes from the store: its code is untrusted and runs only here, never in Node. The Box serves it
+at `/store/<hash>/index.html` under its own CSP (`server/games/`), with `/bundle-host.js` added as its first script.
+
+**What a game gets**, as `window.egb` (`BundleApi` in `@egb/sdk`):
+
+| Member | What it does |
+|---|---|
+| `players` | `[{ name }, …]` in seat order, there from the page's first line. |
+| `onTap(fn)` | `fn({ seat, at, roll })` for each tap: `at` is the Box's clock, `roll` null unless the manifest asks for `random` taps. |
+| `event(name, data)` | For the log, labelled as the game's claim. A name is 1 to 40 printable characters; data is at most 1024 bytes of JSON. |
+| `station(seat, text)` | A line for a seat's station, cut to 40 printable characters. |
+| `buzz(seat)` | The seat's station buzzes. |
+| `end()` | The game is over. That closes the match and nothing else: a game has no say over money. |
+
+**How it starts.** A page's first script runs before any message could reach it, and games read `players` on their
+first line. So the iframe's `name` carries the players as JSON, and the host reads them from there. The host posts `ready`
+on the window's `load`, when the game's scripts have run and its listeners are on; the kiosk answers `bundle-init`, with
+the players' latest names in the same array, then sends each tap.
+
+**The gate** (`bundle-gate.ts`). The host is a convenience, not a wall: a game can post anything by hand. So everything
+is decided on the kiosk's side, before a message goes further:
+
+- A message must be exactly a `FromBundle`. A page has no word for a tap, a badge, the network or money, so nothing it
+  posts can become one. The seat must be the match's.
+- `FRAME_LIMITS` holds the rates: 20 events a second (40 at once), 4 station lines and 2 buzzes a second a seat. Whatever
+  is over a rate is dropped, not queued.
+- Game events get half of `LOG_LIMITS` (2500 entries, 512 KB), so a flood can't crowd out the Box's own taps.
+- One `ready`, at most 10 errors, and nothing at all after `end`.
+
+**The second-load rule stays:** a frame that navigates loses its channel for good. A page that leaves before its own
+`load` is the one way past it, since the landing page's `load` is then the first. The Box answers such a landing with
+a 404, because `index.html` is the only page of a bundle it will show in a frame, so nothing says `ready` and the view's
+timeout loses the page.
+
+**Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
+that never says ready, or leaves, is lost: the frame goes, and `powers.end("lost")` closes the match at once. A stray
+error only puts up the quiet plate: the taps still count.
+
+**What the CSP can't do.** Under `default-src 'none'` and the sandbox, Chromium still lets a page reach the network four
+ways: `<link rel="prerender">` sends a full GET to any URL, `preconnect` opens a connection, `dns-prefetch` looks a name
+up, and WebRTC sends UDP (`webrtc 'block'` isn't enforced). The host can't take those away, because a nested `srcdoc`
+frame gets a fresh window. Only the kiosk's own start can stop them: Chromium needs the flags in `KIOSK_WALLS`
+(`server/games/sandbox.test.ts`).
+
 | Module | What it is | API |
 |---|---|---|
-| `view.ts` | The kiosk's view of a built match. | `frameView(source): ViewFactory`, `READY_TIMEOUT_MS` |
+| `view.ts` | The kiosk's view of a built match, and the glass every frame view stands on. | `frameView(source): ViewFactory`, `frameGlass(layout, attributes)`, `READY_TIMEOUT_MS` |
 | `feed.ts` | What the frame is told, from BoxState and BoxEvents. Pure. | `builtMatch` (the router's source: the built play and its game.json from the library), `FrameMatch`, `FrameSource`, `frameSeats`, `frameInit`, `frameEvent`, `frameUpdate` |
-| `channel.ts` | The kiosk's end of the channel and the iframe's attributes. | `openFrameChannel(host, frame, { message, left })`, `parseFromFrame`, `frameAttributes(id, title)` |
-| `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `MAX_ERRORS` |
+| `channel.ts` | The kiosk's end of the channel and the iframes' attributes. | `openFrameChannel(host, frame, read, { message, left })`, `parseFromFrame`, `frameAttributes(id, title)`, `bundleFrameAttributes(hash, title, players)` |
+| `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `errorText`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
+| `bundle-view.ts` | The kiosk's view of a store match. | `bundleFrameView(source, powers): ViewFactory`, `BundleMatch`, `BundleSource`, `BundlePowers`, `BundleEnd` |
+| `bundle-gate.ts` | What a bundle's page may say, and how much. | `parseFromBundle(data, seats)`, `createBundleGate(seats, now)` |
+| `bundle-runtime.ts` | `window.egb`, platform-free. | `createBundleRuntime({ post, name })` |
+| `bundle-host.ts` | `/bundle-host.js`: the runtime wired to a bundle's page. A classic script, so it runs first. | entry |
+| `sandbox-kiosk.ts` | The kiosk's end of `server/games/sandbox.test.ts`. Nothing in the screen imports it. | entry |
 | `parts.ts` | `/parts.js`: defines the parts a built screen may use by tag (`<egb-key>`, `<egb-fact>`, `<egb-seg>`, and `<egb-plate>`, a panel lit unless `metal`), in the Grid look; games written before the Grid keep working. | entry |
 | `parts.css` | `/parts.css`: the Grid tokens, the faces, the frame's one element. | entry |
 | `frame.css` | The view's iframe and fault panel. | |
 
 Tests: `frame.test.ts` (the sandbox attribute, the channel dropping anything but ready and error and anything from
 another window or a non-opaque origin, closing for good on the frame's second load, the runtime's mount, updates and capped errors, the feed's events).
+`bundle.test.ts` (what a page may say and how much, `window.egb`, the view of a store match). A real browser proves the
+walls: `server/games/sandbox.test.ts`.

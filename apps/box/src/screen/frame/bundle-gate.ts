@@ -2,7 +2,7 @@
 // host script in it is only a convenience, so a game can post anything by hand. Everything is decided here, on the
 // kiosk's side: a message that isn't exactly a FromBundle, or that a rate or the log's budget doesn't cover, is dropped.
 // Nothing a page can say makes a tap, reads a badge or moves money: the words for those don't exist.
-import { BUNDLE_LIMITS, LOG_LIMITS, SMALL_CHARS, printable, type FromBundle } from "@egb/sdk";
+import { FRAME_LIMITS, LOG_LIMITS, SMALL_CHARS, printable, type FromBundle } from "@egb/sdk";
 import { parseFromFrame } from "./channel.ts";
 import { MAX_ERRORS } from "./runtime.ts";
 
@@ -64,7 +64,7 @@ export type BundleGate = (data: unknown) => FromBundle | null;
 
 /** A gate for one match. `now` is in ms, from a clock that only moves forward. */
 export function createBundleGate(seats: number, now: () => number): BundleGate {
-  const { eventRate, eventBurst, stationRate, stationBurst, buzzRate, buzzBurst, eventEntries, eventBytes } = BUNDLE_LIMITS;
+  const { eventRate, eventBurst, stationRate, stationBurst, buzzRate, buzzBurst, eventEntries, eventBytes } = FRAME_LIMITS;
   const eventRoom = bucket(eventRate, eventBurst, now);
   const stationRoom = Array.from({ length: seats }, () => bucket(stationRate, stationBurst, now));
   const buzzRoom = Array.from({ length: seats }, () => bucket(buzzRate, buzzBurst, now));

@@ -42,8 +42,8 @@ export type ToFrame =
       readonly calm: boolean;
     }
   | { readonly t: "update"; readonly state: unknown; readonly event: FrameEvent; readonly now: number }
-  /** A bundle's page, once it says ready: the match's players in seat order, the Box's clock, prefers-reduced-motion. */
-  | { readonly t: "bundle-init"; readonly players: readonly FrameSeat[]; readonly now: number; readonly calm: boolean }
+  /** A bundle's page, once it says ready: the match's players in seat order, as the Box knows them by then. */
+  | { readonly t: "bundle-init"; readonly players: readonly FrameSeat[] }
   | ({ readonly t: "tap" } & BundleTap);
 
 /** An error's message is at most MAX_MESSAGE characters (runner.ts). */
@@ -76,7 +76,7 @@ export interface BundleApi {
  * land at once; stations and buzzes count per seat. Game events get half the log, so a flood can't crowd out the Box's
  * own taps.
  */
-export const BUNDLE_LIMITS = {
+export const FRAME_LIMITS = {
   eventRate: 20,
   eventBurst: 40,
   stationRate: 4,

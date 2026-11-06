@@ -1,7 +1,7 @@
 // A store bundle's frame, both ends: what the kiosk's gate lets a page say and how much of it, the host's `window.egb`,
 // and the kiosk's view of the match. server/games/sandbox.test.ts proves the walls in a real browser.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BUNDLE_LIMITS, LOG_LIMITS, SMALL_CHARS, type FromBundle } from "@egb/sdk";
+import { FRAME_LIMITS, LOG_LIMITS, SMALL_CHARS, type FromBundle } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { ViewContext } from "../views/view.ts";
@@ -107,25 +107,25 @@ describe("the kiosk's gate", () => {
   it("holds each page to its rates, and refills them with time", () => {
     const g = gate();
     const event = { t: "event", name: "x", data: null };
-    expect(g.count(event, 100)).toBe(BUNDLE_LIMITS.eventBurst);
+    expect(g.count(event, 100)).toBe(FRAME_LIMITS.eventBurst);
     g.pass(1000);
-    expect(g.count(event, 100)).toBe(BUNDLE_LIMITS.eventRate);
-    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(BUNDLE_LIMITS.buzzBurst);
-    expect(g.count({ t: "station", seat: 0, text: "x" }, 10)).toBe(BUNDLE_LIMITS.stationBurst);
+    expect(g.count(event, 100)).toBe(FRAME_LIMITS.eventRate);
+    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(FRAME_LIMITS.buzzBurst);
+    expect(g.count({ t: "station", seat: 0, text: "x" }, 10)).toBe(FRAME_LIMITS.stationBurst);
     g.pass(1000);
-    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(BUNDLE_LIMITS.buzzRate);
+    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(FRAME_LIMITS.buzzRate);
   });
 
   it("counts stations and buzzes per seat", () => {
     const g = gate();
-    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(BUNDLE_LIMITS.buzzBurst);
-    expect(g.count({ t: "buzz", seat: 1 }, 10)).toBe(BUNDLE_LIMITS.buzzBurst);
-    expect(g.count({ t: "station", seat: 1, text: "x" }, 10)).toBe(BUNDLE_LIMITS.stationBurst);
+    expect(g.count({ t: "buzz", seat: 0 }, 10)).toBe(FRAME_LIMITS.buzzBurst);
+    expect(g.count({ t: "buzz", seat: 1 }, 10)).toBe(FRAME_LIMITS.buzzBurst);
+    expect(g.count({ t: "station", seat: 1, text: "x" }, 10)).toBe(FRAME_LIMITS.stationBurst);
   });
 
   it("charges a flood of bad events to the same rate", () => {
     const g = gate();
-    expect(g.count({ t: "event", name: "", data: null }, BUNDLE_LIMITS.eventBurst)).toBe(0);
+    expect(g.count({ t: "event", name: "", data: null }, FRAME_LIMITS.eventBurst)).toBe(0);
     expect(g.admit({ t: "event", name: "x", data: null })).toBeNull();
   });
 
@@ -133,20 +133,20 @@ describe("the kiosk's gate", () => {
     const small = gate();
     let passed = 0;
     for (let s = 0; s < 400; s++) {
-      passed += small.count({ t: "event", name: "x", data: null }, BUNDLE_LIMITS.eventRate);
+      passed += small.count({ t: "event", name: "x", data: null }, FRAME_LIMITS.eventRate);
       small.pass(1000);
     }
-    expect(passed).toBe(BUNDLE_LIMITS.eventEntries);
+    expect(passed).toBe(FRAME_LIMITS.eventEntries);
 
     const large = gate();
     let bytes = 0;
     const data = "d".repeat(LOG_LIMITS.eventDataBytes - 2);
     for (let s = 0; s < 100; s++) {
-      bytes += large.count({ t: "event", name: "x", data }, BUNDLE_LIMITS.eventRate) * LOG_LIMITS.eventDataBytes;
+      bytes += large.count({ t: "event", name: "x", data }, FRAME_LIMITS.eventRate) * LOG_LIMITS.eventDataBytes;
       large.pass(1000);
     }
-    expect(bytes).toBeLessThanOrEqual(BUNDLE_LIMITS.eventBytes);
-    expect(bytes).toBeGreaterThan(BUNDLE_LIMITS.eventBytes * 0.9);
+    expect(bytes).toBeLessThanOrEqual(FRAME_LIMITS.eventBytes);
+    expect(bytes).toBeGreaterThan(FRAME_LIMITS.eventBytes * 0.9);
   });
 
   it("takes one ready and at most MAX_ERRORS errors", () => {
@@ -174,7 +174,7 @@ describe("window.egb", () => {
     const { runtime } = page();
     const { players } = runtime.egb;
     expect(players).toEqual(PLAYERS);
-    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth" }, { name: "ORION" }], now: 1, calm: false });
+    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth" }, { name: "ORION" }] });
     expect(players).toEqual([{ name: "nova.eth" }, { name: "ORION" }]);
   });
 
@@ -266,7 +266,7 @@ describe("the kiosk's view of a store match", () => {
     const s = stage();
     const powers: BundlePowers = { event: vi.fn(), station: vi.fn(), buzz: vi.fn(), end: vi.fn() };
     const fullSource: BundleSource = { match: () => ({ hash: HASH, title: "Tap Rush", players: PLAYERS }), tap: () => ({ seat: 1, at: 7, roll: null }), ...source };
-    const ctx = { layout: LAYOUT, calm: true, link: { state: () => state, now: () => 42 } } as unknown as ViewContext;
+    const ctx = { layout: LAYOUT, link: { state: () => state } } as unknown as ViewContext;
     return { ...s, powers, view: bundleFrameView(fullSource, () => powers)(ctx) };
   }
 
@@ -288,7 +288,7 @@ describe("the kiosk's view of a store match", () => {
     m.view.update(state, TAP); // before ready: the page can't hear it yet
     expect(FRAME_WINDOW.postMessage).not.toHaveBeenCalled();
     m.say({ t: "ready" });
-    expect(FRAME_WINDOW.postMessage).toHaveBeenCalledWith({ t: "bundle-init", players: PLAYERS, now: 42, calm: true }, "*");
+    expect(FRAME_WINDOW.postMessage).toHaveBeenCalledWith({ t: "bundle-init", players: PLAYERS }, "*");
     m.view.update(state, TAP);
     expect(FRAME_WINDOW.postMessage).toHaveBeenLastCalledWith({ t: "tap", seat: 1, at: 7, roll: null }, "*");
     expect(FRAME_WINDOW.postMessage).toHaveBeenCalledTimes(2);

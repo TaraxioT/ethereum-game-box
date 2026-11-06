@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BUNDLE_LIMITS, SMALL_CHARS } from "@egb/sdk";
+import { FRAME_LIMITS, SMALL_CHARS } from "@egb/sdk";
 import { tempDir } from "../../builder/forge/test-helpers.ts";
 import { readJson, sendJson } from "../http.ts";
 import { createHandler } from "../routes.ts";
@@ -249,7 +249,7 @@ window.addEventListener("load", async () => {
     module: window.ownModule,
     color: getComputedStyle(document.body).color,
     image: await loads(make("img", { src: "own.png" })).catch(() => "failed"),
-    spaced: await loads(make("img", { src: "art/own%20art.png" })).catch(() => "failed"),
+    nested: await loads(make("img", { src: "art/own-art.png" })).catch(() => "failed"),
     data: await loads(make("img", { src: "data:image/png;base64,${PNG.toString("base64")}" })).catch(() => "failed"),
     font: await new FontFace("own", "url(own.woff2)").load().then(() => "loaded", () => "failed"),
     sound: await new Promise((yes) => {
@@ -343,7 +343,7 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
       "own.js": "window.ownClassic = true;",
       "own-module.js": "window.ownModule = true;",
       "own.png": PNG,
-      "art/own art.png": PNG,
+      "art/own-art.png": PNG,
       "own.woff2": "",
       "own.mp3": "",
     });
@@ -448,7 +448,7 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
     const report = reportOf("game");
     expect(events(report, "first")).toEqual([{ egb: "object", keys: ["buzz", "end", "event", "onTap", "players", "station"], players: ["NOVA", "ORION", null], script: "/bundle-host.js" }]);
     expect(events(report, "page")).toEqual([{ mode: "CSS1Compat", lang: "en", title: "probe", head: "/bundle-host.js" }]);
-    expect(events(report, "own")).toEqual([{ classic: true, module: true, color: "rgb(1, 2, 3)", image: "loaded", spaced: "loaded", data: "loaded", font: "loaded", sound: "loaded" }]);
+    expect(events(report, "own")).toEqual([{ classic: true, module: true, color: "rgb(1, 2, 3)", image: "loaded", nested: "loaded", data: "loaded", font: "loaded", sound: "loaded" }]);
     expect(events(report, "violations")).toEqual([[]]);
   });
 
@@ -477,7 +477,7 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
 
   it("reaches nothing on the Box beyond its own listed files", () => {
     const paths = new Set(boxRequests.map((url) => url.replace(/^\/store\/0x[0-9a-f]{64}\//, "/store/<hash>/")));
-    const ownFiles = ["index.html", "own.css", "own.js", "own-module.js", "own.png", "art/own%20art.png", "own.woff2", "own.mp3", "second.html"].map((name) => `/store/<hash>/${name}`);
+    const ownFiles = ["index.html", "own.css", "own.js", "own-module.js", "own.png", "art/own-art.png", "own.woff2", "own.mp3", "second.html"].map((name) => `/store/<hash>/${name}`);
     // /api/state is the frame leaving for it, which only loses it the frame.
     expect([...paths].sort()).toEqual([...ownFiles, "/", "/kiosk.js", "/favicon.ico", "/bundle-host.js", "/api/state"].sort());
   });
@@ -488,9 +488,9 @@ describe.skipIf(!CHROMIUM)("a bundle's page in a real browser", () => {
     const words = new Set(report.said.map((s) => s.event ?? Object.keys(s)[0]));
     expect([...words].sort()).toEqual(["buzz", "flood", "station"]);
     const counts = (word: string) => report.said.filter((s) => (s.event ?? Object.keys(s)[0]) === word).length;
-    expect(counts("flood")).toBeLessThanOrEqual(BUNDLE_LIMITS.eventBurst + 2 * BUNDLE_LIMITS.eventRate);
-    expect(counts("buzz")).toBeLessThanOrEqual(BUNDLE_LIMITS.buzzBurst + 2 * BUNDLE_LIMITS.buzzRate);
-    expect(counts("station")).toBeLessThanOrEqual(BUNDLE_LIMITS.stationBurst + 2 * BUNDLE_LIMITS.stationRate);
+    expect(counts("flood")).toBeLessThanOrEqual(FRAME_LIMITS.eventBurst + 2 * FRAME_LIMITS.eventRate);
+    expect(counts("buzz")).toBeLessThanOrEqual(FRAME_LIMITS.buzzBurst + 2 * FRAME_LIMITS.buzzRate);
+    expect(counts("station")).toBeLessThanOrEqual(FRAME_LIMITS.stationBurst + 2 * FRAME_LIMITS.stationRate);
     expect(report.said.find((s) => "station" in s)?.text).toBe("x".repeat(SMALL_CHARS));
   });
 
