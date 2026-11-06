@@ -51,15 +51,15 @@ const LANDSCAPE: Geometry = {
   rolodex: [{ x: 22, y: 128, scale: 1 }, { x: 874, y: 128, scale: 1 }],
   dial: { centre: { x: 640, y: 224 }, radius: 74 },
   reveal: {
-    rests: [{ x: 436, y: 352, w: 200, h: 292 }, { x: 644, y: 352, w: 200, h: 292 }],
-    call: { x: 452, y: 674, w: 376, h: 68 },
+    rests: [{ x: 436, y: 352, w: 200, h: 324 }, { x: 644, y: 352, w: 200, h: 324 }],
+    call: { x: 452, y: 694, w: 376, h: 64 },
   },
   standing: {
     plates: [{ x: 24, y: 20, w: 392, h: 84 }, { x: 864, y: 20, w: 392, h: 84 }],
     mid: { x: 440, y: 20, w: 400, h: 84 },
     banner: { x: 444, y: 140, w: 392, h: 166 },
   },
-  premarket: { x: 444, y: 344, w: 392, h: 300 },
+  premarket: { x: 444, y: 358, w: 392, h: 326 },
 };
 
 // Portrait: the players across the top, the two Rolodexes side by side under them, and the tray along the bottom
@@ -72,7 +72,7 @@ const PORTRAIT: Geometry = {
     glows: [{ x: 120, y: 640 }, { x: 600, y: 640 }],
     reach: { rx: 420, ry: 420 },
   },
-  rolodex: [{ x: 46, y: 146, scale: 0.72 }, { x: 398, y: 146, scale: 0.72 }],
+  rolodex: [{ x: 53, y: 146, scale: 0.68 }, { x: 405, y: 146, scale: 0.68 }],
   dial: { centre: { x: 360, y: 640 }, radius: 48 },
   reveal: {
     rests: [{ x: 152, y: 744, w: 200, h: 292 }, { x: 368, y: 744, w: 200, h: 292 }],
@@ -83,7 +83,7 @@ const PORTRAIT: Geometry = {
     mid: { x: 110, y: 96, w: 500, h: 44 },
     banner: { x: 130, y: 590, w: 460, h: 112 },
   },
-  premarket: { x: 130, y: 716, w: 460, h: 300 },
+  premarket: { x: 130, y: 740, w: 460, h: 300 },
 };
 
 /** Each seat's player as the band shows them: its ENS name (the badge's own until read), or PLAYER n before one sits. */
@@ -202,7 +202,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       for (const seat of SEATS) if (s.played[seat] !== null) reveal.place(seat, s.auto[seat], null);
       reveal.recall(record ?? null, s.history.length);
     }
-    if (s.phase === "dial" && s.stat !== null) void dial.spin(s.stat, now - s.phaseAt);
+    if (s.phase === "dial" && s.stat !== null) void dial.spin(s.stat, now - s.phaseAt, s.rolls);
     else if ((s.phase === "reveal" || s.phase === "over") && record) {
       dial.show(record.stat);
       void reveal.flip(record, false);
@@ -239,7 +239,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
         standing.set(s.score, s.round, false);
         return;
       case "dial":
-        if (s.stat !== null) void dial.spin(s.stat, now - s.phaseAt);
+        if (s.stat !== null) void dial.spin(s.stat, now - s.phaseAt, s.rolls);
         return;
       case "reveal": {
         const record = s.history[s.history.length - 1];
@@ -286,6 +286,8 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       if (prev === null || match.id !== matchId) draw(s);
       else step(prev, s);
       matchId = match.id;
+      // While the wheel picks the stat, the rest of the room dims.
+      root.classList.toggle("rolling", s.phase === "dial");
       notes(s);
       if (s.phase === "pick") run();
     },
