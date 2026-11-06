@@ -48,7 +48,7 @@ describe("the steps", () => {
       title: "Space Draw",
     });
     expect(readBack(d, SHELF)).toBe(
-      "“Space Draw”: Quick Draw set in deep space, and decoy signals flash before the real one. Closest to zero. 5, 10 or 25 EGB a seat, called by a robot. Shall I build it?",
+      "“Space Draw”: Quick Draw set in deep space, and decoy signals flash before the real one. Closest to zero. 5, 10 or 25 USDC a seat, called by a robot. Shall I build it?",
     );
   });
 
@@ -97,7 +97,7 @@ describe("the keys", () => {
       { id: "quick-draw", label: "Quick Draw" },
       { id: "stock-duel", label: "Stock Duel" },
     ]);
-    expect(choices("stakes", d, SHELF).map((c) => c.label)).toEqual(["1 · 2 · 5 EGB", "5 · 10 · 25 EGB", "10 · 25 · 50 EGB", "25 · 50 · 100 EGB"]);
+    expect(choices("stakes", d, SHELF).map((c) => c.label)).toEqual(["1 · 2 · 5 USDC", "5 · 10 · 25 USDC", "10 · 25 · 50 USDC", "25 · 50 · 100 USDC"]);
     expect(choices("twist", d, SHELF).map((c) => c.id)).toContain("none");
     expect(choices("confirm", d, SHELF)).toEqual([{ id: "build", label: "Build it" }]);
     for (const step of ["template", "mechanic", "theme", "twist", "stakes", "voice", "title"] as const) {
@@ -121,7 +121,7 @@ describe("the keys", () => {
 
   it("patches are checked and tidied", () => {
     const r = applyPatch(emptyDraft(SHELF), { template: "nope", stakes: [5, 5], title: "x".repeat(40), theme: "  “Space”  ", twist: "No twist" }, SHELF);
-    expect(r.errors).toEqual(["there's no template “nope” on the shelf", "stakes are 1 to 4 whole amounts of EGB"]);
+    expect(r.errors).toEqual(["there's no template “nope” on the shelf", "stakes are 1 to 4 whole amounts of USDC"]);
     expect(r.draft.brief.title).toHaveLength(24);
     expect(r.draft.brief.theme).toBe("Space");
     expect(r.draft.brief.twist).toBe(NO_TWIST);
@@ -141,7 +141,7 @@ describe("the keyword fallback", () => {
 
   it("reads numbers and stakes", () => {
     expect(numbersIn(normal("five, ten or twenty-five"))).toEqual([5, 10, 25]);
-    expect(numbersIn(normal("$10 and 25 EGB"))).toEqual([10, 25]);
+    expect(numbersIn(normal("$10 and 25 USDC"))).toEqual([10, 25]);
     expect(stakesIn(normal("keep it low"))).toEqual([1, 2, 5]);
     expect(stakesIn(normal("high rollers"))).toEqual([25, 50, 100]);
     expect(stakesIn(normal("whatever"))).toBeNull();
@@ -154,7 +154,7 @@ describe("the keyword fallback", () => {
     expect(keywordAnswer("you tap when the lights go out", mech, SHELF).patch.mechanic).toBe("you tap when the lights go out");
     const theme = at("template", "mechanic");
     expect(keywordAnswer("Um, I think it's a haunted kitchen", theme, SHELF).patch).toEqual({ theme: "a haunted kitchen" });
-    expect(keywordAnswer("pirates, for 5 or 10 EGB", theme, SHELF).patch).toEqual({ theme: "pirates", stakes: [5, 10] });
+    expect(keywordAnswer("pirates, for 5 or 10 USDC", theme, SHELF).patch).toEqual({ theme: "pirates", stakes: [5, 10] });
     const twist = at("template", "mechanic", "theme");
     expect(keywordAnswer("no twist", twist, SHELF).patch.twist).toBe(NO_TWIST);
     expect(keywordAnswer("decoys!", twist, SHELF).patch.twist).toBe("Decoy signals flash before the real one.");
