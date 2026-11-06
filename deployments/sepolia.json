@@ -1,7 +1,10 @@
 {
   "chainId": 11155111,
   "external": {
-    "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    "PoolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "PoolSwapTest": "0x9B6b46e2c869aa39918Db7f52f5557FE577B6eEe",
+    "PoolModifyLiquidityTest": "0x0C478023803a644c94c4CE1C1e7b9A087e411B0A"
   },
   "contracts": {
     "GameBoxNames": {
@@ -44,6 +47,12 @@
       "address": "0xEABdE4D7b969bdAF524C9E7A55082A51c5Eee513",
       "deployBlock": 12075736,
       "txHash": "0xfe943ba4267ea2abc7d092b10635bf26baa3104ebd1107f526933f707f03ece9",
+      "verified": false
+    },
+    "GameBoxHook": {
+      "address": "0x431eb36860D411cCF2c78969a55bc1D33B9f9080",
+      "deployBlock": 12075998,
+      "txHash": "0x98d7a5356eae976451b1465af291813106df5198e210fa0d5ed559d4b197e72a",
       "verified": false
     }
   },
@@ -96,6 +105,16 @@
     "titles": {
       "stockduel": "0xee271396124CE5FD69E8D57A4ee93B543Ffb6Ba2",
       "quickdraw": "0x4211D4aD598Fa488966a71035f6cFb274426201c"
+    }
+  },
+  "pools": {
+    "GBX_USDC": {
+      "currency0": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "currency1": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
+      "fee": 8388608,
+      "hooks": "0x431eb36860D411cCF2c78969a55bc1D33B9f9080",
+      "id": "0x4cfdd38f71a8dd367a0202151ea2f510bc3a6dc0aa6f75e64b9daf735edd8d85",
+      "tickSpacing": 60
     }
   }
 }
