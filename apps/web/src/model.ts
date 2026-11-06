@@ -6,7 +6,9 @@ import {
   AGENT_PROTOCOLS,
   BOX_KEYS,
   BOX_STATUS,
+  DEFAULT_KEYS,
   PARENT_NAME,
+  POPUP_PREFIX,
   TITLE_KEYS,
   agentEndpointKey,
   contractAddress,
@@ -37,33 +39,43 @@ export interface BoxView {
   resolver: Address;
   lastSeen: number | null;
   game: string | null;
+  /** Every Box key, read through ENS on this name. A lapsed pop-up reads `gamebox.eth`'s default record here. */
   records: Record<(typeof BOX_KEYS)[keyof typeof BOX_KEYS], string | null>;
-  popup: boolean;
+  /** For a pop-up: the Box it is linked to (`mumbai-01`). Null for a Box. */
+  ofBox: string | null;
+  /** For a lapsed pop-up: what `gamebox.eth`'s default record says instead (wildcard). */
+  fallback: { url: string | null; description: string | null } | null;
 }
 
 const BOX_STATUS_NAMES = ["none", ...BOX_STATUS] as const;
 
+/** A Box or a pop-up Box. A pop-up has no Box of its own: its operator, account and resolver are its Box's. */
 export async function readBox(client: PublicClient, label: string): Promise<BoxView> {
   const name = fullName(label);
+  const at = { address: contractAddress("GameBoxNames"), abi: gameBoxNamesAbi } as const;
+  const popup = label.startsWith(POPUP_PREFIX) ? await client.readContract({ ...at, functionName: "getPopup", args: [label] }) : null;
+  const ofBox = popup && popup.ofBox !== "" ? popup.ofBox : null;
   const [box, resolves, records] = await Promise.all([
-    client.readContract({ address: contractAddress("GameBoxNames"), abi: gameBoxNamesAbi, functionName: "getBox", args: [label] }),
+    client.readContract({ ...at, functionName: "getBox", args: [ofBox ?? label] }),
     readAddress(client, name),
     readTexts(client, name, Object.values(BOX_KEYS)),
   ]);
   const lastSeen = records.lastSeen ? Number(records.lastSeen) : null;
+  const lapsedPopup = ofBox !== null && resolves === null;
   return {
     label,
     name,
     resolves,
-    status: records.status ?? (resolves ? (BOX_STATUS_NAMES[box.status] ?? null) : null),
-    expiry: BigInt(box.expiry),
+    status: records.status ?? (resolves && !ofBox ? (BOX_STATUS_NAMES[box.status] ?? null) : null),
+    expiry: BigInt(popup && ofBox ? popup.expiry : box.expiry),
     operator: box.operator,
     account: box.account,
     resolver: box.resolver,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : null,
     game: records.game,
     records,
-    popup: label.startsWith("popup-"),
+    ofBox,
+    fallback: lapsedPopup ? { url: await readText(client, name, DEFAULT_KEYS.url), description: records.description } : null,
   };
 }
 
@@ -176,7 +188,7 @@ export async function readAgent(client: PublicClient): Promise<AgentView> {
 // ---------------------------------------------------------------------------------------------------------------------
 // What a name is, and who and what its inspector shows
 
-export type NameKind = "parent" | "box" | "player" | "agent" | "game" | "title" | "other";
+export type NameKind = "parent" | "box" | "popup" | "player" | "agent" | "game" | "title" | "other";
 
 export function kindOf(dir: Directory, name: string): NameKind {
   if (name === PARENT_NAME) return "parent";
@@ -186,6 +198,7 @@ export function kindOf(dir: Directory, name: string): NameKind {
   const label = labels[0] ?? "";
   if (label === AGENT_LABEL) return "agent";
   if (dir.boxes.has(label)) return "box";
+  if (dir.popups.has(label) || label.startsWith(POPUP_PREFIX)) return "popup";
   if (dir.players.has(label)) return "player";
   if (dir.games.has(label) || (GAMES as readonly string[]).includes(label)) return "game";
   return "other";
@@ -195,6 +208,7 @@ export function kindOf(dir: Directory, name: string): NameKind {
 export function keysFor(kind: NameKind): string[] {
   switch (kind) {
     case "box":
+    case "popup":
       return [ADDR, ...Object.values(BOX_KEYS)];
     case "player":
       return [ADDR, "stats", "avatar", "url", "description"];
@@ -209,9 +223,11 @@ export function keysFor(kind: NameKind): string[] {
   }
 }
 
-/** The demo Box's `BoxAccount`, which runs every pop-up. */
-export function demoBoxAccount(client: PublicClient): Promise<Address> {
-  return client.readContract({ address: contractAddress("DemoLicences"), abi: demoLicencesAbi, functionName: "BOX" });
+/** The demo Box (`DemoLicences.BOX()`, the Box every pop-up links to) and its `P256Account`. */
+export async function demoBox(client: PublicClient): Promise<{ label: string; account: Address }> {
+  const label = await client.readContract({ address: contractAddress("DemoLicences"), abi: demoLicencesAbi, functionName: "BOX" });
+  const box = await client.readContract({ address: contractAddress("GameBoxNames"), abi: gameBoxNamesAbi, functionName: "getBox", args: [label] });
+  return { label, account: box.account };
 }
 
 /** The accounts a name's role table and Try grid show: everyone with a stake in it, and a stranger or two. */
@@ -232,13 +248,13 @@ export async function accountsFor(client: PublicClient, dir: Directory, name: st
     if (badge) add({ label, role: kind === "agent" ? "the agent" : "badge", address: badge });
     add({ label: "PlayerStats", role: "the game's stats writer", address: stats });
     add({ label: "GameBoxNames", role: "registrar", address: names });
-    add({ label: "demo Box", role: "a Box", address: await demoBoxAccount(client) });
+    add({ label: "demo Box", role: "a Box", address: (await demoBox(client)).account });
     add(otherPlayer(badge));
-  } else if (kind === "box") {
+  } else if (kind === "box" || kind === "popup") {
     const box = await readBox(client, label);
     add({ label: "GameBoxNames", role: "registrar", address: names });
-    add({ label: "operator", role: "owns the licence", address: box.operator });
-    add({ label: "Box", role: "its BoxAccount", address: box.account });
+    add({ label: "operator", role: box.ofBox ? `owns ${box.ofBox} and this pop-up` : "owns the licence", address: box.operator });
+    add({ label: box.ofBox ? `${box.ofBox}` : "Box", role: box.ofBox ? "the Box it is linked to" : "the Box's own account", address: box.account });
     add({ label: "PlayerStats", role: "the game's stats writer", address: stats });
     add(otherPlayer(null));
   } else if (kind === "title") {

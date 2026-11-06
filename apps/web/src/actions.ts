@@ -1,10 +1,13 @@
-// The site's writes, each through the transaction strip: claim a name, revoke PlayerStats' `stats` role (after a
+// The site's writes, each through the transaction strip: claim a name, make it the badge's primary name, revoke PlayerStats' `stats` role (after a
 // drip, for a test badge), open a pop-up Box and report a match. Pages and the Story both call these.
 import { type Address, type Hex, encodeFunctionData, parseEther, zeroAddress } from "viem";
 import {
+  DEFAULT_KEYS,
   PRIMARY_NAME_MAX_EXPIRY_SECONDS,
   RESOLVER_ROLES,
   contractAddress,
+  defaultReverseRegistrarAbi,
+  ensAddress,
   fullName,
   gameBoxNamesAbi,
   labelProblem,
@@ -17,9 +20,11 @@ import {
 } from "@egb/shared/names";
 
 import { type CallOutcome, type TryCell, callOutcome, tryCell } from "./access.ts";
+import { type Answer, readAnswer } from "./answer.ts";
 import type { Badge } from "./badge.ts";
 import { client } from "./chain.ts";
 import { DEMO_BOX_LABEL } from "./config.ts";
+import { readAddress, readTexts } from "./ens.ts";
 import { locate } from "./registry.ts";
 import { demoBox, relayer } from "./relayer.ts";
 import { direct, relayed } from "./txs.ts";
@@ -47,6 +52,25 @@ export async function availability(label: string): Promise<Availability> {
   return { free: true };
 }
 
+/** What a free name resolves to already: `gamebox.eth`'s default record, by wildcard, read through ENS. */
+export interface FreeAnswer {
+  name: string;
+  answer: Answer;
+  addr: Address | null;
+  url: string | null;
+  description: string | null;
+}
+
+export async function freeAnswer(label: string): Promise<FreeAnswer> {
+  const name = fullName(label);
+  const [answer, addr, texts] = await Promise.all([
+    readAnswer(client, name),
+    readAddress(client, name),
+    readTexts(client, name, [DEFAULT_KEYS.url, DEFAULT_KEYS.description]),
+  ]);
+  return { name, answer, addr, url: texts.url, description: texts.description };
+}
+
 /** Whether `popup-<label>` is free to open. */
 export async function popupAvailability(label: string): Promise<Availability> {
   const problem = popupLabelProblem(label);
@@ -63,22 +87,32 @@ export function freshLabel(prefix: string): string {
 // ---------------------------------------------------------------------------------------------------------------------
 // Writes
 
-/** The badge signs `ClaimName`, and ENS's primary-name message for the new name; the relayer sends both, so
- * `getEnsName(badge)` returns the name. No ETH needed. */
-export async function claim(badge: Badge, label: string): Promise<void> {
+/** The badge signs `ClaimName` and, when `primary`, ENS's primary-name message for the new name; the relayer sends
+ * both, so `getEnsName(badge)` returns the name. No ETH needed. */
+export async function claim(badge: Badge, label: string, primary = true): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const deadline = BigInt(now + CLAIM_WINDOW);
   const signature = await badge.signClaim({ label, badge: badge.address, deadline });
   const expiry = BigInt(now + PRIMARY_NAME_WINDOW);
-  const primary = await badge.signPrimaryName({ badge: badge.address, name: fullName(label), expiry });
+  const consent = primary ? await badge.signPrimaryName({ badge: badge.address, name: fullName(label), expiry }) : null;
   await relayed("CLAIM", fullName(label), () =>
     relayer.claim({
       label,
       badge: badge.address,
       deadline: deadline.toString(),
       signature,
-      primaryName: { expiry: expiry.toString(), signature: primary },
+      ...(consent ? { primaryName: { expiry: expiry.toString(), signature: consent } } : {}),
     }),
+  );
+}
+
+/** The badge makes `name` its primary name itself: `setName` on ENS's reverse registrar, a direct transaction from
+ * the badge (after a drip, if it has no ETH). */
+export async function setPrimaryName(badge: Badge, name: string): Promise<void> {
+  await dripIfNeeded(badge);
+  const data = encodeFunctionData({ abi: defaultReverseRegistrarAbi, functionName: "setName", args: [name] });
+  await direct(client, "PRIMARY", `${name} ← ${badge.kind === "test" ? "test badge" : "badge"}`, () =>
+    badge.send(ensAddress("DefaultReverseRegistrar"), data),
   );
 }
 

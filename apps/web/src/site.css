@@ -223,6 +223,48 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
 .callout code { color: #ffb3b9; }
 .callout.sys code { color: var(--fg); }
 
+/* ---- Which resolver answered ---- */
+.answer { margin-top: 18px; padding: 16px 20px; border: 1px solid rgb(207 232 246 / 0.18); border-left: 2px solid var(--sys); background: linear-gradient(90deg, rgb(74 168 232 / 0.09), transparent 70%); max-width: 900px; }
+.answer.linked { border-left-color: var(--p2); background: linear-gradient(90deg, rgb(61 232 255 / 0.08), transparent 70%); }
+.answer.wild { border-left-color: var(--p1); background: linear-gradient(90deg, rgb(255 155 61 / 0.08), transparent 70%); }
+.answer.none { border-left-color: var(--alert); background: linear-gradient(90deg, rgb(255 45 61 / 0.08), transparent 70%); }
+.answer .ah { display: flex; flex-direction: column; gap: 8px; }
+.answer .ah b { font: 700 19px/1.3 var(--mono); color: var(--fg); text-shadow: var(--glow-text); overflow-wrap: anywhere; }
+.answer.linked .ah b { color: var(--p2); } .answer.wild .ah b { color: var(--p1); }
+.answer p { margin: 8px 0 0; font-size: 15.5px; max-width: 760px; }
+.answer .af { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 12px; font: 500 14px/1.4 var(--mono); color: var(--fg); }
+.answer .af em { font: 600 10.5px/1 var(--hud-body); font-style: normal; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-4); margin-right: 4px; }
+.answer .af a.nm { color: var(--sys); text-decoration: none; }
+.already:empty { display: none; }
+.already .answer { margin-top: 14px; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--fg-2); margin: 4px 0 0; cursor: pointer; }
+.check input { accent-color: var(--sys); margin-top: 5px; }
+
+/* ---- Account kinds ---- */
+.kt { display: inline-block; margin-top: 5px; padding: 3px 6px; font: 700 9.5px/1 var(--hud-body); letter-spacing: 0.14em; text-transform: uppercase; border: 1px solid currentColor; color: var(--fg-3); }
+.kt.p256 { color: var(--sys); box-shadow: 0 0 6px rgb(74 168 232 / 0.35); }
+.kt.eoa { color: var(--p1); }
+
+/* ---- Pop-ups and the record watch ---- */
+.card .linked { margin: 6px 0 0; font-size: 14px; color: var(--p2); }
+.card .linked a { color: var(--p2); }
+.panel.wide-panel { max-width: 900px; }
+.watch { border-top: 1px solid rgb(207 232 246 / 0.12); margin-top: 6px; }
+.wr { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto auto; gap: 6px 18px; align-items: center; padding: 10px 0; border-bottom: 1px solid rgb(207 232 246 / 0.08); font: 500 14px/1.35 var(--mono); }
+.wr a.nm { color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+.wr .wv { color: var(--fg); font-weight: 700; overflow-wrap: anywhere; }
+.wr .wid { color: var(--fg-3); font-size: 12.5px; white-space: nowrap; }
+.wr .wc { color: var(--sys); font-size: 12.5px; white-space: nowrap; }
+.wr.changed .wv { color: #fff; text-shadow: var(--glow-text); }
+.wr.changed { background: linear-gradient(90deg, rgb(74 168 232 / 0.12), transparent); }
+.wr.lapsed .wv, .wr.lapsed a.nm { color: var(--fg-3); }
+.wr.lapsed .wid { color: var(--p1); }
+
+/* ---- A badge's own name: QR and primary name ---- */
+.panel.yours { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: start; max-width: 900px; border-color: var(--sys); box-shadow: inset 0 0 14px rgb(74 168 232 / 0.18); }
+.qrlink { display: block; line-height: 0; }
+.qr { display: block; box-shadow: 0 0 0 1px #fff, 0 0 16px rgb(74 168 232 / 0.55); }
+
 /* ---- Transaction strip ---- */
 .txs { position: sticky; bottom: 0; z-index: 5; padding: 0 0 16px; background: linear-gradient(180deg, transparent, var(--void) 22px); }
 .txs:empty { display: none; }
@@ -282,4 +324,7 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
   .tx .st { margin-left: 0; }
   .callout { grid-template-columns: 1fr; }
   .cards { grid-template-columns: 1fr; }
+  .wr { grid-template-columns: minmax(0, 1fr) auto; }
+  .wr .wid, .wr .wc { grid-column: span 1; }
+  .panel.yours { grid-template-columns: 1fr; justify-items: start; }
 }

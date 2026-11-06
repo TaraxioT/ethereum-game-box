@@ -1,16 +1,17 @@
-// Home: the tree. gamebox.eth, then its own registry, then every Box, player, game and title name with its resolver.
+// Home: the tree. gamebox.eth, then its own registry, then every Box (with its pop-ups), player, game and title name
+// with its resolver.
 // Each part of the ENS brief sits in the margin next to the row that shows it.
 import { type Address, zeroAddress } from "viem";
 import { PARENT_NAME, contractAddress, fullName, gameBoxNamesAbi, permissionedRegistryAbi, titleName } from "@egb/shared/names";
 
 import { dir, go, state } from "../app.ts";
 import { client } from "../chain.ts";
-import { AGENT_LABEL, GAMES } from "../config.ts";
-import { readAddress } from "../ens.ts";
+import { AGENT_LABEL, DEMO_BOX_LABEL, GAMES } from "../config.ts";
 import { locate } from "../registry.ts";
 import { addressLink, h, key, nameParts, note, short } from "../ui/dom.ts";
 import { countdownEl } from "../ui/live.ts";
 import { readHolders } from "../model.ts";
+import { nowSeconds } from "../time.ts";
 
 interface Row {
   depth: 0 | 1 | 2 | 3;
@@ -47,7 +48,15 @@ export async function treePage(): Promise<HTMLElement> {
 
   const rows: HTMLElement[] = [
     h("div.tr.hd", {}, h("span.nm", {}, "name"), h("span.res", {}, "resolver"), h("span.exp", {}, "expiry")),
-    row({ depth: 0, name: PARENT_NAME, what: ".eth name, in ENSv2's .eth registry", resolver: parent.resolver, expiry: expiryCell(parent.expiry), focus: "parent" }),
+    row({
+      depth: 0,
+      name: PARENT_NAME,
+      what: ".eth name, in ENSv2's .eth registry. Its own resolver holds the default record every free name resolves to",
+      resolver: parent.resolver,
+      expiry: expiryCell(parent.expiry),
+      note: "Resolve subnames off a parent's resolver (wildcard)",
+      focus: "parent",
+    }),
     row({
       depth: 1,
       name: null,
@@ -60,31 +69,51 @@ export async function treePage(): Promise<HTMLElement> {
     }),
   ];
 
-  // Boxes, newest licence first; lapsed pop-ups read as such.
-  const boxes = [...d.boxes.values()].sort((a, b) => Number(b.block - a.block)).slice(0, 8);
-  const boxStates = await Promise.all(
-    boxes.map(async (box) => ({ box, where: await locate(client, fullName(box.label)), resolves: await readAddress(client, fullName(box.label)) })),
-  );
-  let firstPopup = true;
+  // Boxes, newest licence first, each with its newest pop-ups under it (linked to its record).
+  const now = BigInt(nowSeconds());
+  const boxes = [...d.boxes.values()].sort((a, b) => Number(b.block - a.block)).slice(0, 6);
   let firstBox = true;
-  for (const { box, where, resolves } of boxStates) {
-    const popup = box.label.startsWith("popup-");
-    const dead = resolves === null;
+  let firstLive = true;
+  let firstLapsed = true;
+  for (const box of boxes) {
+    const where = await locate(client, fullName(box.label));
+    const dead = where.status !== "registered";
     rows.push(
       row({
         depth: 2,
         name: fullName(box.label),
-        label: nameParts(fullName(box.label)),
-        what: dead ? h("span.expired-note", {}, `${popup ? "pop-up Box" : "Box"} · expired: no longer resolves`) : `${popup ? "pop-up Box · 10-minute licence" : "Box · licensed to an operator"}`,
+        what: dead ? h("span.expired-note", {}, "Box · expired: no longer resolves") : "Box · licensed to an operator, who manages it on the operator site",
         resolver: where.resolver ?? box.resolver,
         expiry: dead ? h("span.expired-note", {}, "expired") : expiryCell(where.expiry),
         dead,
-        note: popup && !dead && firstPopup ? "Expiring names" : !popup && firstBox ? "Revocable names: the registrar alone writes status" : undefined,
-        focus: popup ? `popup ${box.label === state.story.popup ? "story-popup" : ""}` : "box",
+        note: firstBox ? "Revocable names: the registrar alone writes status" : undefined,
+        focus: box.label === DEMO_BOX_LABEL ? "box mumbai" : "box",
       }),
     );
-    if (popup && !dead) firstPopup = false;
-    if (!popup) firstBox = false;
+    firstBox = false;
+    const popups = [...d.popups.values()]
+      .filter((p) => p.ofBox === box.label)
+      .sort((a, b) => Number(b.block - a.block))
+      .slice(0, 4);
+    for (const popup of popups) {
+      const lapsed = popup.expiry <= now;
+      rows.push(
+        row({
+          depth: 3,
+          name: fullName(popup.label),
+          what: lapsed
+            ? h("span.expired-note", {}, "pop-up · expired: no address; gamebox.eth's default record answers")
+            : h("span", {}, "pop-up · linked to ", h("b", {}, box.label), "'s record · 10-minute licence"),
+          resolver: lapsed ? null : box.resolver,
+          expiry: lapsed ? h("span.expired-note", {}, "expired") : expiryCell(popup.expiry),
+          dead: lapsed,
+          note: !lapsed && firstLive ? "Record aliasing at the resolver level · Expiring names" : lapsed && firstLapsed ? "Resolve subnames off a parent's resolver (wildcard)" : undefined,
+          focus: `popup${popup.label === state.story.popup ? " story-popup" : ""}`,
+        }),
+      );
+      if (lapsed) firstLapsed = false;
+      else firstLive = false;
+    }
   }
 
   // Players (the agent has its own row below), newest first.
@@ -98,7 +127,7 @@ export async function treePage(): Promise<HTMLElement> {
         what: h("span", {}, "player · ", short(p.badge), held.length ? h("span.p1t", {}, ` · holds ${held.join(", ")}`) : ""),
         resolver: p.resolver,
         expiry: "never",
-        note: i === 0 ? "Forever names with no parent control" : i === 1 ? "Subnames get their own Permissioned Resolver" : undefined,
+        note: i === 0 ? "Forever names with no parent control" : i === 1 ? "Subnames get their own Permissioned Resolver and fully own their data" : undefined,
         focus: `player${p.label === state.story.label ? " story-player" : ""}`,
       }),
     );

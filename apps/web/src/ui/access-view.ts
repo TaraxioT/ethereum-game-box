@@ -1,7 +1,19 @@
 // Draws the role table and the Try grid. The grid lights the cells the chain allows; a refusal is a quiet ✕ with
 // the decoded error in its tooltip; a cell whose answer changed since the last try is outlined in red.
 import type { Account, RoleRow, TryCell } from "../access.ts";
+import type { AccountKind } from "../kinds.ts";
 import { addressLink, append, h, short } from "./dom.ts";
+
+const KIND_NOTE: Record<AccountKind, string> = {
+  P256Account: "moved only by a P-256 signature (a passkey, the Box's token or a Worker key)",
+  EOA: "an ECDSA key",
+  contract: "a contract",
+};
+
+/** The account's kind, as a small tag: P256Account, EOA or contract. */
+function kindTag(account: Account): HTMLElement | null {
+  return account.kind ? h(`span.kt.${account.kind === "P256Account" ? "p256" : account.kind.toLowerCase()}` as "span", { title: KIND_NOTE[account.kind] }, account.kind) : null;
+}
 
 /** The role table: for each account, the roles it holds and the keys it may write. */
 export function roleTable(rows: readonly RoleRow[]): HTMLElement {
@@ -23,7 +35,7 @@ export function roleTable(rows: readonly RoleRow[]): HTMLElement {
       h(
         "tr",
         {},
-        h("td", {}, row.account.label, h("small", {}, `${row.account.role} · ${short(row.account.address)}`)),
+        h("td", {}, row.account.label, h("small", {}, `${row.account.role} · ${short(row.account.address)}`), kindTag(row.account)),
         h("td", {}, ...(writes.length ? writes.map((key) => h("span.rc.key", {}, key)) : [h("span.none", {}, "no key")])),
         held,
       ),
@@ -39,7 +51,7 @@ export function tryGrid(accounts: readonly Account[], keys: readonly string[], c
   const grid = h("div.try", { style: `grid-template-columns: minmax(130px, 200px) repeat(${keys.length}, minmax(52px, 1fr))` });
   append(grid, h("div.corner", {}, "account ↓ · key →"), ...keys.map((key) => h("div.kh", {}, key)));
   accounts.forEach((account, row) => {
-    append(grid, h("div.ah", {}, h("b", {}, account.label), h("em", {}, account.role), addressLink(account.address)));
+    append(grid, h("div.ah", {}, h("b", {}, account.label), h("em", {}, account.role, account.kind ? ` · ${account.kind}` : ""), addressLink(account.address)));
     keys.forEach((key, col) => {
       const cell = cells?.[row]?.[col];
       if (!cell) {

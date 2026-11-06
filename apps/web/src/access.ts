@@ -13,6 +13,7 @@ import {
 } from "@egb/shared/names";
 
 import { decodeRevert, revertData } from "./errors.ts";
+import type { AccountKind } from "./kinds.ts";
 
 /** An account the site knows, as a row of the table. */
 export interface Account {
@@ -21,6 +22,8 @@ export interface Account {
   /** What it is to this name: `badge`, `registrar`, `Box`. */
   role: string;
   address: Address;
+  /** `P256Account`, `EOA` or `contract`, once read (`kinds.ts`). */
+  kind?: AccountKind;
 }
 
 /** The `addr` column: the ETH address record. Every other column is a text key. */

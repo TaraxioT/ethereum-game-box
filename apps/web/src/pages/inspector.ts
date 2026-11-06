@@ -1,24 +1,32 @@
-// The inspector, on any name: where it lives (registry, resolver, expiry, emancipation), who may write what (the role
-// table), and Try: every known account tries every key with an `eth_call`, and the chain answers each cell.
+// The inspector, on any name: where it lives (registry, resolver, expiry, emancipation), which resolver answered it
+// and why, who may write what (the role table, with each account's kind), and Try: every known account tries every
+// key with an `eth_call`, and the chain answers each cell. A badge's own name shows its QR code and its primary name.
 import { type Address, getAddress } from "viem";
-import { PARENT_NAME } from "@egb/shared/names";
+import { BOX_KEYS, PARENT_NAME } from "@egb/shared/names";
 
 import { type Account, type RoleRow, type TryCell, readRoleTable, tryAll } from "../access.ts";
-import { revokeStats, tryTransfer } from "../actions.ts";
+import { revokeStats, setPrimaryName, tryTransfer } from "../actions.ts";
+import { readAnswer } from "../answer.ts";
 import { type Route, dir, render, setFocus, state } from "../app.ts";
 import { client } from "../chain.ts";
+import { ensAppLink } from "../config.ts";
+import { readAccountKinds } from "../kinds.ts";
 import { readAddress, readPrimaryName, readText } from "../ens.ts";
 import { type NameKind, accountsFor, keysFor, kindOf } from "../model.ts";
 import { FOREVER, type Location, locate } from "../registry.ts";
 import { TxFailed } from "../txs.ts";
 import { type TryMemory, roleTable, tryGrid, tryLegend } from "../ui/access-view.ts";
+import { answerView } from "../ui/answer-view.ts";
 import { addressLink, append, h, key, short } from "../ui/dom.ts";
+import { qrCode } from "../ui/qr.ts";
+import { operatorSiteKey, recordWatch } from "../ui/watch-view.ts";
 import { agoEl, countdownEl } from "../ui/live.ts";
 import { when } from "../time.ts";
 
 const LEDE: Record<NameKind, string> = {
   parent: "The .eth name everything hangs from. Its subregistry is a UserRegistry we deployed, so every name below lives in our own registry.",
-  box: "A Box name. Its licence is its expiry. GameBoxNames writes boxKey and status, the operator writes its four keys, and the Box itself writes lastSeen and game: each on its own keys and nothing else.",
+  box: "A Box name. Its licence is its expiry. GameBoxNames writes boxKey and status, the operator writes its four keys from the operator site, and the Box itself writes lastSeen and game: each on its own keys and nothing else.",
+  popup: "A pop-up Box. It has no resolver or record of its own: it is linked to its Box's record on its Box's resolver, so it serves exactly the Box's records while its 10-minute licence lasts. Then it falls back to gamebox.eth's default record.",
   player: "A player name. The badge that claimed it holds every role on its own resolver, and the parent kept none. The game's PlayerStats may write stats, and nothing else, until the badge takes that away.",
   agent: "The practice opponent's name. The agent holds every role on its own resolver and keeps its ENSIP-26 records there; the game may write its stats and nothing else.",
   game: "A game name, with its own title registry. Only GameBoxNames writes it.",
@@ -29,11 +37,12 @@ const LEDE: Record<NameKind, string> = {
 const BRIEF: Record<NameKind, string> = {
   parent: "Deploy your own subname registry",
   box: "Expiring names · Revocable names · Edit only certain text records",
+  popup: "Record aliasing at the resolver level · Expiring names · Wildcard resolution",
   player: "Forever names with no parent control",
   agent: "Agents as namespaces",
   game: "Deploy your own subname registry: one per game",
   title: "Non-transferable names",
-  other: "Subnames get their own Permissioned Resolver",
+  other: "Resolve subnames off a parent's resolver (wildcard)",
 };
 
 /** Each name's Try answers from its last draw, so a cell that changed shows it. */
@@ -53,7 +62,7 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
   const name = route.arg.toLowerCase();
   const d = await dir();
   const kind = kindOf(d, name);
-  const [where, address] = await Promise.all([locate(client, name), readAddress(client, name)]);
+  const [where, address, answer] = await Promise.all([locate(client, name), readAddress(client, name), readAnswer(client, name)]);
   // `eth / gamebox.eth / nova`: each parent links to its own inspector.
   const parts = name.split(".");
   const crumb = h("div.crumb");
@@ -75,13 +84,13 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
     "dl.dl",
     {},
     fact("registry", where.registry ? addressLink(where.registry) : "—", name === PARENT_NAME ? "ENSv2's .eth registry" : `${name.split(".").slice(1).join(".")}'s registry`),
-    fact("resolver", where.resolver ? addressLink(where.resolver) : "none", where.resolver ? "its own PermissionedResolver" : undefined),
+    fact("resolver", where.resolver ? addressLink(where.resolver) : "none", where.resolver ? (kind === "popup" ? "its Box's PermissionedResolver" : "its own PermissionedResolver") : "none of its own"),
     fact("addr", address ? addressLink(address) : h("span.bad", {}, "null"), address ? (state.badge && getAddress(address) === getAddress(state.badge.address) ? `your ${state.badge.kind === "test" ? "test badge" : "wallet"}` : undefined) : "getEnsAddress: does not resolve"),
     expiryFact(where),
     fact("registry emancipated", where.emancipated ? "yes" : "no", where.emancipated ? "the parent holds no role in it" : "the parent can still act on it", where.emancipated),
     fact("token", where.owner ? addressLink(where.owner, short(where.owner)) : "—", where.tokenId ? `id ${short(where.tokenId.toString(16))}` : undefined),
   );
-  if (kind === "box") {
+  if (kind === "box" || kind === "popup") {
     const [status, lastSeen, game] = await Promise.all(["status", "lastSeen", "game"].map((k) => readText(client, name, k)));
     append(
       facts,
@@ -101,12 +110,32 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
       fact("primary name", primary ?? "none set", primary === name ? "getEnsName(addr) gives this name back" : "getEnsName(addr)", primary === name),
     );
   }
-  append(page, facts, h("p.pull", {}, BRIEF[kind]));
+  append(page, facts, answerView(answer), h("p.pull", {}, BRIEF[kind]));
+
+  if (kind === "player" && state.badge && address && getAddress(address) === getAddress(state.badge.address)) {
+    const primary = await readPrimaryName(client, address).catch(() => null);
+    append(page, yourName(name, primary));
+  }
+  if (kind === "box" || kind === "popup") {
+    append(
+      page,
+      h(
+        "div.callout.sys",
+        {},
+        h("span", {}, h("b", {}, "Operators work on the operator site. "), "They sign in with a passkey, and their P256Account writes ", h("code", {}, "commission"), ", ", h("code", {}, "location"), ", ", h("code", {}, "description"), " and ", h("code", {}, "games"), ". Nothing the operator does happens on the Box."),
+        operatorSiteKey(),
+      ),
+    );
+  }
+  if (kind === "box") append(page, recordWatch(name.split(".")[0]!, BOX_KEYS.location));
 
   if (!where.resolver) return page;
   const resolver = where.resolver;
   const accounts = await accountsFor(client, d, name, kind);
   const keys = keysFor(kind);
+  // Each account's kind (P256Account, EOA or contract), for the role table and the grid.
+  const kinds = await readAccountKinds(client, accounts.map((a) => a.address));
+  for (const account of accounts) account.kind = kinds.get(getAddress(account.address));
 
   // Who may write what.
   const roles = h("div", { "data-focus": "roles" }, h("p.reading", {}, "Reading roles…"));
@@ -154,6 +183,49 @@ export async function inspectorPage(route: Route): Promise<HTMLElement> {
   }
   if (kind === "title") append(page, await transferPanel(name, accounts));
   return page;
+}
+
+/** The badge's own name: a QR code to it in the ENS app, and its primary name, set here if it isn't yet. */
+function yourName(name: string, primary: string | null): HTMLElement {
+  const badge = state.badge!;
+  const link = ensAppLink(name);
+  const isPrimary = primary === name;
+  const status = h(
+    `span.hint.${isPrimary ? "ok" : "wait"}` as "span",
+    {},
+    isPrimary
+      ? `It is your primary name: getEnsName(${short(badge.address)}) gives ${name} back.`
+      : primary
+        ? `Your primary name is ${primary}.`
+        : "No primary name yet.",
+  );
+  const run = async () => {
+    button.disabled = true;
+    status.className = "hint wait";
+    status.textContent = badge.kind === "test" ? "The relayer drips the test badge a little ETH first…" : "Confirm in your wallet…";
+    try {
+      await setPrimaryName(badge, name);
+      await render(true);
+    } catch (err) {
+      status.className = "hint bad";
+      status.textContent = err instanceof TxFailed ? `Failed: ${err.message}` : err instanceof Error ? err.message.split("\n")[0]! : String(err);
+      button.disabled = false;
+    }
+  };
+  const button = key("Make it your primary name", () => void run(), true);
+  return h(
+    "div.panel.yours",
+    { "data-focus": "yours" },
+    h("a.qrlink", { href: link, target: "_blank", rel: "noopener", title: link }, qrCode(link)),
+    h(
+      "div",
+      {},
+      h("h3", {}, "YOUR NAME, ON YOUR PHONE"),
+      h("p", {}, "Scan it to open ", h("b", {}, name), " in the ENS app on Sepolia: the same registry, resolver and records, read by ENS's own app. ", h("a.ext", { href: link, target: "_blank", rel: "noopener" }, "sepolia.app.ens.domains ↗")),
+      h("p", {}, "A primary name is the reverse record: it lets apps show ", h("b", {}, name), " for your address. ", isPrimary ? "" : "Setting it is a transaction from the badge itself, on ENS's reverse registrar."),
+      h("div.actions", { style: "margin-top:8px;align-items:center" }, isPrimary ? null : button, status),
+    ),
+  );
 }
 
 function revokePanel(name: string, again: () => Promise<void>): HTMLElement {

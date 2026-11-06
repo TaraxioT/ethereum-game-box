@@ -24,7 +24,7 @@ function popupLine(): HTMLElement | null {
       // The chain's answer, a block after the expiry.
       const check = async () => {
         const address = await readAddress(client, name);
-        if (address === null) line.replaceChildren(`${name}: `, h("b", { style: "color:#ff8a94" }, "expired: no longer resolves"));
+        if (address === null) line.replaceChildren(`${name}: `, h("b", { style: "color:#ff8a94" }, "expired: gamebox.eth's default answers"));
         else setTimeout(check, 6_000);
       };
       setTimeout(check, 2_000);

@@ -1,7 +1,7 @@
 // The seven steps of the Story, about two minutes at the ENS booth. Each shows a page and points at the part that
 // proves the brief's words; the steps that write do it for real on Sepolia, on fresh labels, so the story runs again
 // and again. Reset only resets the walkthrough: the chain keeps everything.
-import { fullName, titleName } from "@egb/shared/names";
+import { fullName, popupLabel, titleName } from "@egb/shared/names";
 
 import { claim, freshLabel, openPopup, reportWin, revokeStats, tokenGone } from "./actions.ts";
 import { dir, go, render, setFocus, state } from "./app.ts";
@@ -17,6 +17,19 @@ export const outcome = { text: null as string | null };
 async function show(hash: string, focus: string | null): Promise<void> {
   await go(hash);
   setFocus(focus);
+}
+
+/** The story's pop-up Box: the one this run opened while it is live, or a new one. */
+async function ensureStoryPopup(): Promise<string> {
+  const current = state.story.popup;
+  if (current) {
+    const where = await locate(client, fullName(current));
+    if (where.status === "registered") return current;
+  }
+  const label = freshLabel("demo").replace("demo-", "story");
+  await openPopup(label);
+  state.story.popup = popupLabel(label);
+  return state.story.popup;
 }
 
 function needClaim(): { label: string } {
@@ -66,22 +79,23 @@ export const STEPS: Step[] = [
   {
     id: "licence",
     title: "A Box licence",
-    brief: "Scoped keys for operator and Box",
-    caption: "mumbai-01: the operator writes its four keys, the demo Box writes lastSeen (ticking) and game, and status is written by the registrar alone.",
-    show: () => show(`#/name/${fullName(DEMO_BOX_LABEL)}`, "try"),
+    brief: "Edit only certain text records",
+    caption: "mumbai-01: status is the registrar's alone, the demo Box writes lastSeen (ticking) and game, and the operator writes its four keys from the operator site with a passkey. A pop-up opens for this story; change location on the operator site and watch it land on mumbai-01 and its pop-up in the same block.",
+    show: () => show(`#/name/${fullName(DEMO_BOX_LABEL)}`, "operator-watch"),
+    async act() {
+      await ensureStoryPopup();
+      await show(`#/name/${fullName(DEMO_BOX_LABEL)}`, "operator-watch");
+    },
   },
   {
-    id: "expiry",
-    title: "Expiry",
-    brief: "Expiring names",
-    caption: "Open a pop-up Box: its licence is 10 minutes. It counts down here while the rest of the story runs, and once it lapses it no longer resolves: expiring names.",
-    show: () => show("#/boxes", state.story.popup ? "story-popup" : "popup"),
+    id: "aliasing",
+    title: "Aliasing and expiry",
+    brief: "Record aliasing · Expiring names · Wildcard",
+    caption: "The pop-up has no record of its own: it is linked to mumbai-01's record, so it serves exactly its records (record aliasing). Its 10-minute licence counts down while the story runs; then it has no address, and gamebox.eth's default record answers by wildcard.",
+    show: () => (state.story.popup ? show(`#/name/${fullName(state.story.popup)}`, "answer") : show("#/boxes", "popup")),
     async act() {
-      const label = freshLabel("demo").replace("demo-", "story");
-      await openPopup(label);
-      state.story.popup = `popup-${label}`;
-      await render(true);
-      setFocus("story-popup");
+      const popup = await ensureStoryPopup();
+      await show(`#/name/${fullName(popup)}`, "answer");
     },
   },
   {

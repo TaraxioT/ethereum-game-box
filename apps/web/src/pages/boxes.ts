@@ -1,15 +1,19 @@
-// Boxes: every Box licence under gamebox.eth. Each shows its status, its licence counting down, when it was last
-// seen, its current game and its operator's records. A lapsed pop-up reads "expired: no longer resolves", because
-// `getEnsAddress` returned null for it. "Open a pop-up Box" asks the relayer for a 10-minute licence.
-import { BOX_OPERATOR_KEYS } from "@egb/shared/names";
+// Boxes: every Box licence and pop-up Box under gamebox.eth. Each shows its status, its licence counting down, when it
+// was last seen, its current game and its operator's records. A pop-up is linked to its Box's record and shows the
+// same values; once it lapses, `getEnsAddress` returns null and gamebox.eth's default record answers for it (wildcard).
+// "Open a pop-up Box" asks the relayer for a 10-minute licence. The record watch shows the operator's `location` on
+// mumbai-01 and its pop-ups, block by block.
+import { BOX_KEYS, BOX_OPERATOR_KEYS, fullName } from "@egb/shared/names";
 
 import { freshLabel, openPopup, popupAvailability } from "../actions.ts";
 import { dir, render, state } from "../app.ts";
 import { client } from "../chain.ts";
+import { DEMO_BOX_LABEL } from "../config.ts";
 import { type BoxView, readBox } from "../model.ts";
 import { TxFailed } from "../txs.ts";
 import { addressLink, h, key, nameParts, tag } from "../ui/dom.ts";
 import { agoEl, countdownEl } from "../ui/live.ts";
+import { recordWatch } from "../ui/watch-view.ts";
 
 function statusTag(status: string | null): HTMLElement {
   return status === "active" ? tag("active", "ok") : status ? tag(status, "bad") : tag("none", "warn");
@@ -17,23 +21,36 @@ function statusTag(status: string | null): HTMLElement {
 
 export function boxCard(box: BoxView): HTMLElement {
   const dead = box.resolves === null;
-  const focus = [box.popup ? "popup" : "box", box.label === state.story.popup ? "story-popup" : "", box.label === "mumbai-01" ? "mumbai" : ""].join(" ");
+  const popup = box.ofBox !== null;
+  const focus = [popup ? "popup" : "box", box.label === state.story.popup ? "story-popup" : "", box.label === DEMO_BOX_LABEL ? "mumbai" : ""].join(" ");
   if (dead) {
     return h(
       "div.card.dead",
       { "data-focus": focus },
-      h("div.kind", {}, box.popup ? "pop-up Box" : "Box"),
+      h("div.kind", {}, popup ? "pop-up Box" : "Box"),
       h("a.cn", { href: `#/name/${box.name}` }, nameParts(box.name)),
-      h("p.expired-note", { style: "margin:8px 0 0" }, "expired: no longer resolves"),
-      h("dl", {}, h("dt", {}, "getEnsAddress"), h("dd.mono", {}, "null"), h("dt", {}, "licence ended"), h("dd", {}, countdownEl(box.expiry))),
+      h("p.expired-note", { style: "margin:8px 0 0" }, popup ? "expired: no address, and gamebox.eth's default record answers (wildcard)" : "expired: no longer resolves"),
+      h(
+        "dl",
+        {},
+        h("dt", {}, "getEnsAddress"),
+        h("dd.mono", {}, "null"),
+        box.fallback ? h("dt", {}, "description") : null,
+        box.fallback ? h("dd", {}, box.fallback.description ?? "—") : null,
+        box.fallback ? h("dt", {}, "url") : null,
+        box.fallback ? h("dd", {}, box.fallback.url ?? "—") : null,
+        h("dt", {}, "licence ended"),
+        h("dd", {}, countdownEl(box.expiry)),
+      ),
     );
   }
   const operatorRecords = BOX_OPERATOR_KEYS.flatMap((k) => [h("dt", {}, k), h("dd", {}, box.records[k] ?? "—")]);
   return h(
     "div.card",
     { "data-focus": focus },
-    h("div.kind", {}, box.popup ? "pop-up Box" : "Box", statusTag(box.status)),
+    h("div.kind", {}, popup ? "pop-up Box" : "Box", statusTag(box.status)),
     h("a.cn", { href: `#/name/${box.name}` }, nameParts(box.name)),
+    popup ? h("p.linked", {}, "linked to ", h("a", { href: `#/name/${fullName(box.ofBox!)}` }, fullName(box.ofBox!)), "'s record: the same values") : null,
     h("span.big", {}, countdownEl(box.expiry)),
     h(
       "dl",
@@ -86,15 +103,25 @@ function popupPanel(): HTMLElement {
     "div.panel",
     {},
     h("h3", {}, "OPEN A POP-UP BOX"),
-    h("p", {}, "Anyone may open one. ", h("code", {}, "DemoLicences"), " registers it to the demo Box for 10 minutes; the relayer pays the gas. Then it lapses, and from that block on it no longer resolves."),
+    h(
+      "p",
+      {},
+      "Anyone may open one. ",
+      h("code", {}, "DemoLicences"),
+      " registers it for 10 minutes and links it to ",
+      h("b", {}, fullName(DEMO_BOX_LABEL)),
+      "'s record, so it serves exactly the same records; the relayer pays the gas. Then it lapses: it has no address, and ",
+      h("b", {}, "gamebox.eth"),
+      "'s default record answers for it.",
+    ),
     h("div.field", {}, h("span.suffix", {}, "popup-"), input, h("span.suffix", {}, ".gamebox.eth"), button, hint),
   );
 }
 
 export async function boxesPage(): Promise<HTMLElement> {
   const d = await dir();
-  const labels = [...d.boxes.values()].sort((a, b) => Number(b.block - a.block)).map((b) => b.label);
-  const boxes = await Promise.all(labels.slice(0, 12).map((label) => readBox(client, label)));
+  const entries = [...d.boxes.values(), ...d.popups.values()].sort((a, b) => Number(b.block - a.block));
+  const boxes = await Promise.all(entries.slice(0, 12).map((entry) => readBox(client, entry.label)));
   // Live licences first, then the lapsed, each newest first.
   boxes.sort((a, b) => Number(a.resolves === null) - Number(b.resolves === null));
   return h(
@@ -111,9 +138,10 @@ export async function boxesPage(): Promise<HTMLElement> {
       h("code", {}, "lastSeen"),
       " and ",
       h("code", {}, "game"),
-      " are written by the Box's own account; the operator writes its four keys.",
+      " are written by the Box's own account; the operator writes its four keys on the operator site. A pop-up Box borrows its Box's record for 10 minutes.",
     ),
     popupPanel(),
+    recordWatch(DEMO_BOX_LABEL, BOX_KEYS.location),
     h("h2", {}, "EVERY LICENCE"),
     boxes.length ? h("div.cards", {}, ...boxes.map(boxCard)) : h("p", {}, "No Box licences yet."),
   );

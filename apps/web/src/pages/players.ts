@@ -3,7 +3,8 @@
 // relayer sends it. Afterwards the badge sees what it controls and can take `stats` away from the game.
 import { fullName } from "@egb/shared/names";
 
-import { availability, claim, freshLabel } from "../actions.ts";
+import { type FreeAnswer, availability, claim, freeAnswer, freshLabel } from "../actions.ts";
+import { explainAnswer } from "../answer.ts";
 import { dir, go, render, state } from "../app.ts";
 import { connectWallet, hasInjectedWallet, newTestBadge } from "../badge.ts";
 import { client } from "../chain.ts";
@@ -41,6 +42,24 @@ function playerCard(view: PlayerView): HTMLElement {
   );
 }
 
+/** A free name already resolves: `gamebox.eth`'s resolver answers it by wildcard, with its default record. */
+function freePreview(free: FreeAnswer): HTMLElement {
+  const { headline, why } = explainAnswer(free.answer);
+  return h(
+    "div.answer.wild",
+    {},
+    h("div.ah", {}, h("span.eyebrow", {}, "IT RESOLVES ALREADY"), h("b", {}, `${free.name}: ${headline}`)),
+    h("p", {}, why),
+    h(
+      "div.af",
+      {},
+      h("span", {}, h("em", {}, "addr "), free.addr ?? h("span.bad", {}, "null")),
+      h("span", {}, h("em", {}, "description "), free.description ?? "—"),
+      h("span", {}, h("em", {}, "url "), free.url ? h("a.ext", { href: free.url }, free.url) : "—"),
+    ),
+  );
+}
+
 /** The badge picker and the claim form. */
 function claimPanel(): HTMLElement {
   const panel = h("div.panel", { "data-focus": "claim" });
@@ -73,6 +92,8 @@ function claimPanel(): HTMLElement {
 
     const input = h("input", { type: "text", value: freshLabel("judge"), maxlength: 32, "aria-label": "label", spellcheck: "false", autocomplete: "off" });
     const hint = h("span.hint.wait", {}, "");
+    const already = h("div.already", { "data-focus": "wildcard" });
+    const primary = h("input", { type: "checkbox", checked: true, id: "primary" });
     const button = key("Sign and claim", () => void submit(), true);
     let checking = 0;
     const check = async () => {
@@ -86,6 +107,11 @@ function claimPanel(): HTMLElement {
       hint.className = free.free ? "hint ok" : "hint bad";
       hint.textContent = free.free ? "free" : free.why;
       button.disabled = !free.free;
+      already.replaceChildren();
+      if (!free.free) return;
+      const preview = await freeAnswer(label).catch(() => null);
+      if (id !== checking || !preview) return;
+      already.replaceChildren(freePreview(preview));
     };
     const submit = async () => {
       button.disabled = true;
@@ -93,7 +119,7 @@ function claimPanel(): HTMLElement {
       try {
         hint.className = "hint wait";
         hint.textContent = "sign with the badge…";
-        await claim(badge, label);
+        await claim(badge, label, primary.checked);
         await go(`#/name/${fullName(label)}`);
       } catch (err) {
         hint.className = "hint bad";
@@ -104,8 +130,10 @@ function claimPanel(): HTMLElement {
     input.addEventListener("input", () => void check());
     append(
       panel,
-      h("p", {}, "The badge signs ", h("code", {}, "ClaimName"), " (EIP-712); the relayer sends it and pays the gas. The name never expires, and the badge holds every role on its own resolver."),
+      h("p", {}, "The badge signs ", h("code", {}, "ClaimName"), " (EIP-712); the relayer sends it and pays the gas. The name never expires, and the badge holds every role on its own resolver. Until then, the free name is answered by gamebox.eth's resolver."),
       h("div.field", {}, input, h("span.suffix", {}, ".gamebox.eth"), button, hint),
+      h("label.check", { for: "primary" }, primary, " Make it my primary name too (the badge signs ENS's reverse-record message; the relayer sends it after the claim)"),
+      already,
     );
     void check();
   };

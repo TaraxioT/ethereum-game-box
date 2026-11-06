@@ -1,4 +1,4 @@
-// Every name under gamebox.eth, listed from `GameBoxNames`' events: read from its deploy block in chunks, then
+// Every name under gamebox.eth (Boxes, pop-ups, players, games, crownings), listed from `GameBoxNames`' events: read from its deploy block in chunks, then
 // topped up from where the last read stopped. There is no index server; the chain is the list.
 import { type Address, type Hex, type Log, type PublicClient, getAbiItem, getAddress } from "viem";
 import { contractAddress, gameBoxNamesAbi, ourContract } from "@egb/shared/names";
@@ -11,6 +11,17 @@ export interface BoxEntry {
   account: Address;
   resolver: Address;
   /** The block of its latest licence. */
+  block: bigint;
+}
+
+/** A pop-up Box: no resolver or record of its own, linked to its Box's record on its Box's resolver. */
+export interface PopupEntry {
+  /** The full label, `popup-<x>`. */
+  label: string;
+  /** The Box it is linked to: `mumbai-01`. */
+  ofBox: string;
+  operator: Address;
+  expiry: bigint;
   block: bigint;
 }
 
@@ -42,6 +53,7 @@ export interface Crowning {
 
 export interface Directory {
   boxes: Map<string, BoxEntry>;
+  popups: Map<string, PopupEntry>;
   players: Map<string, PlayerEntry>;
   /** A badge's player label, lower-cased address to label. */
   labelOf: Map<string, string>;
@@ -54,13 +66,15 @@ export interface Directory {
 
 const EVENTS = [
   getAbiItem({ abi: gameBoxNamesAbi, name: "BoxRegistered" }),
+  getAbiItem({ abi: gameBoxNamesAbi, name: "BoxKeyChanged" }),
+  getAbiItem({ abi: gameBoxNamesAbi, name: "PopupRegistered" }),
   getAbiItem({ abi: gameBoxNamesAbi, name: "PlayerClaimed" }),
   getAbiItem({ abi: gameBoxNamesAbi, name: "GameAdded" }),
   getAbiItem({ abi: gameBoxNamesAbi, name: "Crowned" }),
 ];
 
 export function emptyDirectory(from: bigint): Directory {
-  return { boxes: new Map(), players: new Map(), labelOf: new Map(), games: new Map(), crowns: [], through: from - 1n };
+  return { boxes: new Map(), popups: new Map(), players: new Map(), labelOf: new Map(), games: new Map(), crowns: [], through: from - 1n };
 }
 
 type NamesLog = Log<bigint, number, false, (typeof EVENTS)[number], true>;
@@ -72,6 +86,16 @@ export function apply(dir: Directory, log: NamesLog): void {
     case "BoxRegistered": {
       const { label, operator, account, resolver } = log.args;
       dir.boxes.set(label, { label, operator, account, resolver, block });
+      break;
+    }
+    case "BoxKeyChanged": {
+      const box = dir.boxes.get(log.args.label);
+      if (box) box.account = log.args.account;
+      break;
+    }
+    case "PopupRegistered": {
+      const { label, ofBox, operator, expiry } = log.args;
+      dir.popups.set(label, { label, ofBox, operator, expiry, block });
       break;
     }
     case "PlayerClaimed": {
