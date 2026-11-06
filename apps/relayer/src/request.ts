@@ -14,6 +14,14 @@ export interface Addresses {
   names: Address;
   results: Address;
   licences: Address;
+  /** The demo's test USDC (`FakeUSDC`): top-ups are minted from it, and stakes are paid in it. */
+  usdc: Address;
+  /** `DuelPot`: a match's USDC pot. */
+  pot: Address;
+  /** `Championships`. */
+  cups: Address;
+  /** `BoxSeats`: player names a Box vouched for. */
+  seats: Address;
   /** `P256AccountFactory`, and the block it was deployed in. */
   factory: Address;
   factoryBlock: bigint;
@@ -32,6 +40,10 @@ export function deployedAddresses(): Addresses {
     names: contractAddress('GameBoxNames'),
     results: contractAddress('BoxResults'),
     licences: contractAddress('DemoLicences'),
+    usdc: contractAddress('FakeUSDC'),
+    pot: contractAddress('DuelPot'),
+    cups: contractAddress('Championships'),
+    seats: contractAddress('BoxSeats'),
     factory: factory.address,
     factoryBlock: BigInt(factory.deployBlock),
     registry: namesProxies().registry,
@@ -64,7 +76,7 @@ export interface Call {
 
 export interface Prepared extends Call {
   kind: TxKind;
-  /** The `P256Account` an `execute` is for: its rate limits are per account. */
+  /** Whom the per-address rate limits count: an `execute`'s `P256Account`, a top-up's player. */
   account?: Address;
   /** Refused while a request holding any of these is pending (a label, a badge, a Box nonce or round). */
   locks: string[];
@@ -98,9 +110,10 @@ export async function estimatedGas(ctx: Context, call: { to: Address; data: Hex;
 /** An estimate above this means the call creates a resolver or a registry (1.3 to 4M gas), which it underestimates. */
 export const CREATES_STORAGE_ESTIMATE = 1_000_000n;
 
-/** The limit for a call whose effect isn't known in advance (an account's `execute`): the estimate plus 50%, or at
- *  least `CREATES_STORAGE_GAS` if the estimate says it creates storage. */
-export async function accountCallGas(ctx: Context, call: { to: Address; data: Hex }): Promise<bigint> {
+/** The limit for a call whose effect isn't fixed in advance (an account's `execute`, a result that may settle a pot
+ *  and score a championship): the estimate plus 50%, or at least `CREATES_STORAGE_GAS` if the estimate says it creates
+ *  storage. */
+export async function callGas(ctx: Context, call: { to: Address; data: Hex }): Promise<bigint> {
   const gas = await estimatedGas(ctx, call);
   return gas >= CREATES_STORAGE_ESTIMATE + CREATES_STORAGE_ESTIMATE / 2n && gas < CREATES_STORAGE_GAS
     ? CREATES_STORAGE_GAS
