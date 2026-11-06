@@ -6,7 +6,7 @@
 import { type Stake, duelPotAbi, fakeUsdcAbi, formatUsdc, gameBoxNamesAbi, stakeDigest } from '@egb/shared/names';
 import { type Address, encodeFunctionData } from 'viem';
 
-import { requireBoxSigned, requireLabel } from '../box.ts';
+import { potLock, requireBoxSigned, requireLabel } from '../box.ts';
 import * as field from '../parse.ts';
 import { Refusal } from '../refusal.ts';
 import { type Context, type Prepared, estimatedGas, requireDeadline, simulate } from '../request.ts';
@@ -31,8 +31,6 @@ function parseStake(input: unknown): Stake {
   if (stake.amount === 0n) throw new Refusal(400, 'stake.amount: a stake of zero', 'ZeroAmount');
   return stake;
 }
-
-const lock = (box: string, round: bigint) => `pot:${box}:${round}`;
 
 /** Throws unless `player` holds a player name (a result needs both players to have one, or the pot can only be
  *  refunded) and at least `amount` USDC. */
@@ -71,7 +69,7 @@ export async function prepareDuelOpen(ctx: Context, input: unknown): Promise<Pre
     value: 0n,
     gas: await estimatedGas(ctx, call),
     replay: { key: digest, until: Number(stake.deadline) },
-    locks: [lock(stake.box, stake.round)],
+    locks: [potLock(stake.box, stake.round)],
   };
 }
 
@@ -96,5 +94,5 @@ export async function prepareDuelRefund(ctx: Context, input: unknown): Promise<P
 
   const call = { to: pot.address, data: encodeFunctionData({ ...pot, functionName: 'refund', args: [box, round] }) };
   await simulate(ctx, call);
-  return { kind: 'pot-refund', ...call, value: 0n, gas: await estimatedGas(ctx, call), locks: [lock(box, round)] };
+  return { kind: 'pot-refund', ...call, value: 0n, gas: await estimatedGas(ctx, call), locks: [potLock(box, round)] };
 }

@@ -5,7 +5,7 @@
 import { boxResultsAbi, resultDigest, type Result } from '@egb/shared/names';
 import { encodeFunctionData } from 'viem';
 
-import { requireBoxSigned, requireLabel } from '../box.ts';
+import { potLock, requireBoxSigned, requireLabel } from '../box.ts';
 import * as field from '../parse.ts';
 import { Refusal } from '../refusal.ts';
 import { type Context, type Prepared, callGas, requireDeadline, simulate } from '../request.ts';
@@ -50,6 +50,8 @@ export async function prepareResult(ctx: Context, input: unknown): Promise<Prepa
     // the state-gas reservoir.
     gas: await callGas(ctx, call),
     replay: { key: digest, until: Number(result.deadline) },
-    locks: [`round:${result.box}:${result.round}`],
+    // A result sent before its round's `/duel/open` is mined would leave the pot open for good (only a refund then):
+    // it waits for the pot's request, which holds the same lock.
+    locks: [`round:${result.box}:${result.round}`, potLock(result.box, result.round)],
   };
 }

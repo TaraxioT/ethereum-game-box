@@ -373,6 +373,12 @@ describe('the Game Box names, live on Sepolia', () => {
     const before = await client.getBlockNumber();
     const titleBefore = await client.readContract({ ...names, functionName: 'getTitle', args: [GAME], blockNumber: before });
     const standingsBefore = cup ? await standingsAt(before) : undefined;
+    // demo-01 is the site's Box too, so others may report this badge's matches: compare with the state just before.
+    const resolver = await registryRead('getResolver', label, before);
+    const statsAt = async (blockNumber: bigint) =>
+      (JSON.parse((await record(resolver, fullName(label), 'stats', blockNumber)) || '{}') as Record<string, { wins: number; losses: number }>)[GAME] ??
+      { wins: 0, losses: 0 };
+    const statsBefore = await statsAt(before);
 
     const res = await call<ReportResponse>(urls.demoBox, '/result', {
       box: DEMO_BOX,
@@ -398,8 +404,7 @@ describe('the Game Box names, live on Sepolia', () => {
     const title = await client.readContract({ ...names, functionName: 'getTitle', args: [GAME], blockNumber });
     expect(title.holder).toBe(badge.address);
     report.push(`${titleName(GAME)}: ${titleBefore.holder} -> ${title.holder}, streak ${title.streak}`);
-    const resolver = await registryRead('getResolver', label, blockNumber);
-    expect(JSON.parse(await record(resolver, fullName(label), 'stats', blockNumber))).toMatchObject({ [GAME]: { wins: 1, losses: 0 } });
+    expect(await statsAt(blockNumber)).toMatchObject({ wins: statsBefore.wins + 1, losses: statsBefore.losses });
     if (resolvable) expect(await client.getEnsAddress({ name: titleName(GAME), blockNumber })).toBe(badge.address);
 
     // The championship scored it, if one is open.
@@ -414,7 +419,12 @@ describe('the Game Box names, live on Sepolia', () => {
     const standingsAfter = await standingsAt(blockNumber);
     expect(standingsAfter).not.toBe(standingsBefore);
     const rows = parseStandings(standingsAfter);
-    expect(rows.find((row) => row.addr === badge.address)).toMatchObject({ name: fullName(label), points: 3, wins: 1 });
+    const was = parseStandings(standingsBefore!).find((row) => row.addr === badge.address);
+    expect(rows.find((row) => row.addr === badge.address)).toMatchObject({
+      name: fullName(label),
+      points: (was?.points ?? 0) + 3,
+      wins: (was?.wins ?? 0) + 1,
+    });
     expect(await record(cup.resolver, cupName!, CUP_KEYS.leader, blockNumber)).toBe(rows[0]!.name);
     report.push(`${cupName} standings: ${standingsBefore} -> ${standingsAfter}`);
   });

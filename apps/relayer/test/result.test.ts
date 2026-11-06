@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CREATES_STORAGE_GAS } from '../src/request.ts';
 import { BOX, NOW, World, addresses, boxKey } from './world.ts';
-import { newBadge, resultBody } from './bodies.ts';
+import { newBadge, resultBody, stakeBody } from './bodies.ts';
 
 describe('POST /box/result', () => {
   const winner = newBadge().address;
@@ -106,6 +106,23 @@ describe('POST /box/result', () => {
       hash,
       etherscan: `https://sepolia.etherscan.io/tx/${hash}`,
     });
+  });
+
+  it("waits for its round's pot: refused, with no gas, while the pot's /duel/open is pending", async () => {
+    const world = new World();
+    for (const player of [winner, loser]) {
+      world.players.set(player.toLowerCase(), player === winner ? 'nova' : 'kite');
+      world.usdc.set(player.toLowerCase(), 100_000_000n);
+    }
+    expect((await world.post('/duel/open', stakeBody(world, winner, loser))).status).toBe(202);
+    const early = await world.post('/box/result', resultBody(world, winner, loser, { game: 'stockduel' }));
+    expect(early).toMatchObject({ status: 409, body: { error: `a request for pot:${BOX}:1 is already pending` } });
+    expect(world.chain.sent).toHaveLength(1);
+
+    world.chain.receipts.set(world.chain.sent[0]!.hash, { status: 'success', block: 100 });
+    world.chain.head = 101;
+    await world.relay.poll();
+    expect((await world.post('/box/result', resultBody(world, winner, loser, { game: 'stockduel' }))).status).toBe(202);
   });
 
   it('refuses a replayed result and sends it once', async () => {

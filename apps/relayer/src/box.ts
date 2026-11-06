@@ -13,6 +13,9 @@ import { requireP256 } from './verify.ts';
 const NONE = 0;
 const ACTIVE = 1;
 
+/** The lock a round's pot requests (open, refund) and its result share: one of them is pending at a time. */
+export const potLock = (box: string, round: bigint) => `pot:${box}:${round}`;
+
 /** Throws a 400 naming `<field>` unless `value` follows the label rule. */
 export function requireLabel(value: string, field: string): void {
   const problem = labelProblem(value);
