@@ -121,6 +121,23 @@ export interface RelayerHealth {
   tipGwei: string;
 }
 
+/** The agent's setup step it needs next, or `done`. */
+export type AgentStep = 'deploy' | 'claim' | 'records' | 'done';
+
+/** `GET /agent` on the demo Box: `bot.gamebox.eth`, the practice opponent. */
+export interface AgentView {
+  label: string;
+  name: string;
+  /** Its `P256Account`: `P256AccountFactory.accountOf(qx, qy)`. */
+  account: Address;
+  qx: Hex;
+  qy: Hex;
+  /** The ENSIP-26 records it publishes. */
+  records: Record<string, string>;
+  /** The setup step it needs next, or `done`. */
+  next: AgentStep;
+}
+
 /** `POST /result` on the demo Box. */
 export interface ReportRequest {
   box: string;

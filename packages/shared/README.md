@@ -27,8 +27,8 @@
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
 | `vectors.json` | Written by `contracts/test/names/Vectors.t.sol`; `vectors.test.ts` checks `messages.ts`, `webauthn.ts`, `primaryName.ts` and `roles.ts` against it |
 | `primaryName.ts` | A badge's primary name: the ERC-191 message it signs for ENS's `DefaultReverseRegistrar`, so `getEnsName(badge)` returns its player name |
-| `api.ts` | The relayer's and the demo Box's HTTP request and response types |
-| `deployments.ts` | `ensAddress(name)`, `contractAddress(name)` and `namesProxies()` (with `gamebox.eth`'s own resolver) from `deployments/sepolia.json` |
+| `api.ts` | The relayer's and the demo Box's HTTP request and response types, including the agent's `GET /agent` (`AgentView`, `AgentStep`) |
+| `deployments.ts` | `ensAddress(name)`, `contractAddress(name)`, `namesProxies()` (with `gamebox.eth`'s own resolver) and `deployedAddresses()` (every contract address, for the relayer's allowlist) from `deployments/sepolia.json` |
 | `vectors.ts` | Fixed inputs with the digests and signatures the contracts produced (`vectors.json`, written by the forge test `Vectors.t.sol`), including a batch and a passkey signature the account ran; every key in it is a throwaway test key |
 
 `scripts/abis.ts` writes `abis.ts` (`pnpm names:abis`). `scripts/names/verify.ts` and `scripts/names/check.ts` are
