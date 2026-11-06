@@ -19,7 +19,7 @@
     "BOX_LABEL": "mumbai-01",
     "DEFAULT_GAME": "stockduel",
     "AGENT_LABEL": "bot",
-    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev"
+    "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev"
   },
   "observability": { "enabled": true }
 }

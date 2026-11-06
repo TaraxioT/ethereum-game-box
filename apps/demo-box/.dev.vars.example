@@ -4,4 +4,4 @@ AGENT_P256_KEY=
 SEPOLIA_RPC_URL=
 RELAYER_URL=http://localhost:8787
 PUBLIC_URL=http://localhost:8788
-ALLOWED_ORIGINS=https://gamebox-names.pages.dev,http://localhost:*
+ALLOWED_ORIGINS=https://gamebox-names.pages.dev,https://gamebox-operator.pages.dev,http://localhost:*

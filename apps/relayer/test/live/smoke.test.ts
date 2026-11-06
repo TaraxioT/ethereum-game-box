@@ -4,7 +4,7 @@
 // own resolver, and, once `gamebox.eth` points at our registry, through the Universal Resolver with stock viem. It
 // prints the Etherscan links and the gas, and spends real Sepolia ETH from the relayer (about 0.02 ETH at 2 gwei).
 //
-// Needs SEPOLIA_RPC_URL (and for LIVE_DEV, DEMO_BOX_P256_KEY and the `sepolia-relayer` keystore).
+// Needs SEPOLIA_RPC_URL (and for LIVE_DEV, DEMO_BOX_P256_KEY, AGENT_P256_KEY and the `sepolia-deployer` keystore).
 
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -123,7 +123,7 @@ function startDev(dir: string, port: number, env: Record<string, string>) {
 beforeAll(async () => {
   if (!process.env.LIVE_DEV) return;
   secrets = mkdtempSync(join(tmpdir(), 'egb-smoke-'));
-  const relayerKey = execFileSync('cast', ['wallet', 'private-key', '--account', 'sepolia-relayer', '--password', ''], {
+  const relayerKey = execFileSync('cast', ['wallet', 'private-key', '--account', 'sepolia-deployer', '--password', ''], {
     encoding: 'utf8',
   }).trim();
   const origins = 'https://gamebox-names.pages.dev,http://localhost:*';
@@ -131,8 +131,10 @@ beforeAll(async () => {
   await waitFor('http://localhost:8917/health', relayerLog);
   const demoBoxLog = startDev('../../../demo-box/', 8918, {
     DEMO_BOX_P256_KEY: process.env.DEMO_BOX_P256_KEY ?? '',
+    AGENT_P256_KEY: process.env.AGENT_P256_KEY ?? '',
     SEPOLIA_RPC_URL: rpcUrl,
     RELAYER_URL: 'http://localhost:8917',
+    PUBLIC_URL: 'http://localhost:8918',
     ALLOWED_ORIGINS: origins,
   });
   await waitFor('http://localhost:8918/box', demoBoxLog);
@@ -259,7 +261,7 @@ describe('the Game Box names, live on Sepolia', () => {
     }
   });
 
-  it('opens a pop-up Box', async () => {
+  it("opens a pop-up Box that serves mumbai-01's records", async () => {
     const popup = `s${Date.now().toString(36).slice(-6)}`;
     const res = await call<TxView>(urls.relayer, '/box/popup', { label: popup });
     expect(res.status, JSON.stringify(res.body)).toBe(202);
@@ -267,14 +269,14 @@ describe('the Game Box names, live on Sepolia', () => {
     const boxLabel = popupLabel(popup);
     const name = fullName(boxLabel);
     const blockNumber = BigInt(tx.block!);
-    const box = await client.readContract({ ...names, functionName: 'getBox', args: [boxLabel], blockNumber });
-    expect(isAddressEqual(box.account, contractAddress('DemoBoxAccount'))).toBe(true);
-    expect(Number(box.expiry) - start).toBeLessThanOrEqual(15 * 60);
-    expect(await record(box.resolver, name, 'status', blockNumber)).toBe('active');
-    if (resolvable) {
-      expect(isAddressEqual((await client.getEnsAddress({ name, blockNumber }))!, box.account)).toBe(true);
-      expect(await client.getEnsText({ name, key: 'status', blockNumber })).toBe('active');
-    }
+    const entry = await client.readContract({ ...names, functionName: 'getPopup', args: [boxLabel], blockNumber });
+    expect(entry.ofBox).toBe('mumbai-01');
+    expect(Number(entry.expiry) - start).toBeLessThanOrEqual(15 * 60);
+    const box = await client.readContract({ ...names, functionName: 'getBox', args: ['mumbai-01'], blockNumber });
+    expect(await registryRead('getResolver', boxLabel, blockNumber)).toBe(box.resolver);
+    const status = await record(box.resolver, fullName('mumbai-01'), 'status', blockNumber);
+    expect(await record(box.resolver, name, 'status', blockNumber)).toBe(status);
+    if (resolvable) expect(await client.getEnsText({ name, key: 'status', blockNumber })).toBe(status);
   });
 
   it('reports a result: the stats and the title move', async () => {
