@@ -57,10 +57,10 @@ describe("bundling a built game", () => {
     expect(await checkRulesBundle(path.join(g.out, BUNDLE_FILES.rules), "identify")).toEqual([]);
 
     const rules = readFileSync(path.join(g.dir, "rules.ts"), "utf8");
-    writeFileSync(path.join(g.dir, "rules.ts"), rules.replace('return stationView(seat === 0 ? "P1" : "P2", String(state.taps[seat]), small);', 'return { tag: "P1", big: "A VERY LONG LINE", small };'));
+    writeFileSync(path.join(g.dir, "rules.ts"), rules.replace('return stationView(seat === 0 ? "P1" : "P2", String(state.taps[seat]), small);', 'return { tag: "P1", big: "A VERY VERY LONG LINE INDEED", small };'));
     await bundleGame(g.dir, g.out, sdk);
     const long = await checkRulesBundle(path.join(g.out, BUNDLE_FILES.rules), "identify");
-    expect(long[0]).toMatch(/after start: stations\(state\)\[0\]\.big "A VERY LONG LINE" must be at most 10/);
+    expect(long[0]).toMatch(/after start: stations\(state\)\[0\]\.big "A VERY VERY LONG LINE IN" must be at most 24/);
 
     writeFileSync(path.join(g.dir, "rules.ts"), rules.replace("if (state.winner !== null", 'if (event.type === "tap") throw new Error("no taps yet");\n    if (state.winner !== null'));
     await bundleGame(g.dir, g.out, sdk);

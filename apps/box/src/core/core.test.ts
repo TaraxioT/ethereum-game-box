@@ -324,8 +324,8 @@ describe("the core on its ports", () => {
     const r = rig();
     const { core } = r;
     expect(r.shows).toEqual([
-      [0, { tag: "", big: "", small: "" }],
-      [1, { tag: "", big: "", small: "" }],
+      [0, { tag: "", big: "", small: "", mode: "shut" }],
+      [1, { tag: "", big: "", small: "", mode: "shut" }],
     ]);
     core.send({ type: "booted" });
     const count = r.shows.length;
@@ -350,7 +350,7 @@ describe("the core on its ports", () => {
     expect(r.core.state().stations[0].small).toBe("... USDC");
     await flush();
     expect(r.core.state().seats[0]).toMatchObject({ balance: 40, ens: "nova.gamebox.eth" });
-    expect(r.core.state().stations[0].small).toBe("40 USDC");
+    expect(r.core.state().stations[0].small).toBe("nova.gamebox.eth  40 USDC");
     // Nothing is sent to the chain for a seat: no faucet, no top-up.
     expect(r.chain.sent).toEqual([]);
   });

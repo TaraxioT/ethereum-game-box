@@ -33,8 +33,9 @@ export interface Settings {
   /** The built screen (`pnpm --filter @egb/box build:box`). */
   readonly screenDir: string;
   readonly receiver: ReceiverSetting;
-  /** The station ids at Player 1's and Player 2's seats: the last three bytes of each MAC, lower-case hex. */
-  readonly stations: readonly [string, string];
+  /** The stations this Box knows (the last three bytes of each MAC, lower-case hex), which the fake simulates. Seats
+   *  go by link order, not by this list: the first to link is Player 1's. */
+  readonly stations: readonly string[];
   readonly chain: ChainSetting;
   readonly admin: AdminSetting | null;
 }
@@ -43,7 +44,7 @@ export const DEFAULTS = {
   port: 8790,
   host: "127.0.0.1",
   receiver: "auto",
-  stations: "df3b9c,df3d88",
+  stations: "df3b9c,df3d88,e4ba70",
   box: "mumbai-01",
 } as const;
 
@@ -95,9 +96,8 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
   else problems.push(`EGB_RECEIVER must be a serial port's path, auto, fake or none, not "${receiverText}"`);
 
   const stationIds = (get("EGB_STATIONS") ?? DEFAULTS.stations).split(",").map((id) => id.trim().toLowerCase());
-  const [one = "", two = ""] = stationIds;
-  if (stationIds.length !== 2 || !STATION.test(one) || !STATION.test(two) || one === two) {
-    problems.push("EGB_STATIONS must be two different station ids, P1 then P2 (six hex digits each: df3b9c,df3d88)");
+  if (stationIds.length < 1 || !stationIds.every((id) => STATION.test(id)) || new Set(stationIds).size !== stationIds.length) {
+    problems.push("EGB_STATIONS must be different station ids, six hex digits each (df3b9c,df3d88,e4ba70)");
   }
 
   // Never put a chain setting's value in a problem: the RPC URL holds the node's key.
@@ -133,7 +133,7 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     dataDir: place(get("EGB_DATA") ?? "~/.local/share/egb", home, repoRoot),
     screenDir: place(get("EGB_SCREEN_DIR") ?? "apps/box/dist/screen", home, repoRoot),
     receiver,
-    stations: [one, two],
+    stations: stationIds,
     chain,
     admin,
   };

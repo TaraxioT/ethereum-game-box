@@ -14,7 +14,7 @@ describe("settings", () => {
       dataDir: "/home/pi/.local/share/egb",
       screenDir: "/opt/egb/apps/box/dist/screen",
       receiver: { kind: "auto" },
-      stations: ["df3b9c", "df3d88"],
+      stations: ["df3b9c", "df3d88", "e4ba70"],
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "mumbai-01" },
       admin: null,
     });
@@ -50,14 +50,14 @@ describe("settings", () => {
   });
 
   it("names every bad value at once", () => {
-    const read = () => readSettings({ EGB_PORT: "80a", EGB_RECEIVER: "ttyACM0", EGB_STATIONS: "e4ba70", ...CHAIN }, HOME, REPO);
+    const read = () => readSettings({ EGB_PORT: "80a", EGB_RECEIVER: "ttyACM0", EGB_STATIONS: "e4ba7", ...CHAIN }, HOME, REPO);
     expect(read).toThrow(SettingsError);
     try {
       read();
     } catch (error) {
       expect((error as SettingsError).problems).toHaveLength(3);
     }
-    expect(() => readSettings({ EGB_STATIONS: "e4ba70,e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/two different/);
+    expect(() => readSettings({ EGB_STATIONS: "e4ba70,e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/different station ids/);
     expect(() => readSettings({ EGB_PORT: "70000", ...CHAIN }, HOME, REPO)).toThrow(/EGB_PORT/);
   });
 

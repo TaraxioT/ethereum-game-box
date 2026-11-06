@@ -69,7 +69,7 @@ describe("station views", () => {
   const both = [seat(NOVA), seat(KITE)] as const;
 
   it("is blank while the Box boots", () => {
-    expect(stationView(input("boot"), 0, NOW)).toEqual({ tag: "", big: "", small: "" });
+    expect(stationView(input("boot"), 0, NOW)).toEqual({ tag: "", big: "", small: "", mode: "shut" });
   });
 
   it("invites a tap on attract and on an empty seat", () => {
@@ -79,11 +79,18 @@ describe("station views", () => {
 
   it("shows the seated badge and its balance, and names it when a tap is done", () => {
     const view = stationView(input("join", both), 0, NOW);
-    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 USDC", done: "DONE|NOVA" });
+    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 USDC", done: "DONE|nova", mode: "open" });
     expect(stationView(input("home"), 0, NOW).done).toBeUndefined();
     // Before its balance is read from chain, and a fraction cut to whole USDC.
     expect(stationView(input("join", [seat(NOVA, false, null), EMPTY]), 0, NOW).small).toBe("... USDC");
     expect(stationView(input("join", [seat(NOVA, false, 12.5), EMPTY]), 0, NOW).small).toBe("12 USDC");
+  });
+
+  it("names a seated player by the whole ENS name, and says what a tap means now", () => {
+    const named = { ...seat(NOVA, false, 20), ens: "nova.gamebox.eth" };
+    const view = stationView(input("join", [named, EMPTY]), 0, NOW);
+    expect(view).toMatchObject({ big: "NOVA", small: "nova.gamebox.eth  20 USDC", done: "DONE|nova.gamebox.eth", mode: "open" });
+    expect(stationView(input("build"), 0, NOW).mode).toBe("shut");
   });
 
   it("asks for a tap in the lobby at every station", () => {

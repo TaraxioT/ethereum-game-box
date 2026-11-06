@@ -19,7 +19,7 @@ named.
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
 | `EGB_DATA` | `~/.local/share/egb` | The data folder: `rounds.json` (the next round and the pots still open), `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games), `forge/` and `logs/` (the Box's log, `YYYY-MM-DD.log`). |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
-| `EGB_STATIONS` | `df3b9c,df3d88` | The station ids at Player 1's and Player 2's seats. |
+| `EGB_STATIONS` | `df3b9c,df3d88,e4ba70` | The stations this Box knows (the fake simulates them). Seats go by link order: the first station to link is Player 1's, the second Player 2's, a third waits for a free seat. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
 | `P256_SIGNER_CMD` | | The Box key's signer daemon, run with no shell (`deploy/p256-signer/`): `python3 /home/pi/egb/current/deploy/p256-signer/hyp2003_signer.py --serve`. |
 | `RELAYER_URL` | | The relayer that sends the Box's signed requests and pays the gas: `https://gamebox-relayer.mathew.workers.dev`. |

@@ -63,11 +63,11 @@ describe("the rules host", () => {
   });
 
   it("cuts station views to what a station shows", async () => {
-    const wide = child("wide", 'send({ t: "state", seq: req.seq, state: 1, outcome: { winner: 1 }, stations: [{ tag: "PLAYER", big: "a very long line", small: "é".repeat(30), done: "X".repeat(50) }, views[1]], ms: 0 });');
+    const wide = child("wide", 'send({ t: "state", seq: req.seq, state: 1, outcome: { winner: 1 }, stations: [{ tag: "PLAYER", big: "a very very long line indeed", small: "é".repeat(50), done: "X".repeat(80) }, views[1]], ms: 0 });');
     const { host } = makeHost({ wide });
     const snap = await host.start("wide", 1, 0);
     expect(snap.outcome).toEqual({ winner: 1 });
-    expect(snap.stations[0]).toEqual({ tag: "PLA", big: "A VERY LON", small: "?".repeat(20), done: "X".repeat(31) });
+    expect(snap.stations[0]).toEqual({ tag: "PLA", big: "A VERY VERY LONG LINE IN", small: "?".repeat(40), done: "X".repeat(65) });
   });
 
   it("rejects a step over its budget, kills the child, and rejects what was queued behind it", async () => {

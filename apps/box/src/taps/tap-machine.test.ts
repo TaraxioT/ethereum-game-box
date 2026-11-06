@@ -33,7 +33,8 @@ function machine() {
     },
   });
   const roster = Roster.load(join(mkdtempSync(join(tmpdir(), "egb-tap-machine-")), "badges.json"), () => {});
-  const stations = new Stations([P1, "df3d88"], clock, { up() {}, down() {}, lost() {}, changed() {} });
+  const stations = new Stations([P1, "df3d88"], clock, { up() {}, down() {}, lost() {}, changed() {}, seated() {} });
+  stations.apply({ ev: "link", st: P1, up: true }, 0); // the first to link: Player 1's
   const events: TapEvent[] = [];
   const m = new TapMachine({ clock, roster, stations, nfc, aids: new AidMemory(), plan: () => "identify", emit: (e) => events.push(e), log: () => {} });
   const badge = new SimBadge("ada");

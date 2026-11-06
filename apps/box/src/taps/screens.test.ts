@@ -15,8 +15,8 @@ describe("screenPayload", () => {
   });
 
   it("cuts every value to its line and keeps to printable ASCII", () => {
-    const payload = screenPayload({ tag: "P12345", big: "WINNER WINNER", small: "naïve and very long name", hold: "a|b|c\nd" }, 0);
-    expect(payload).toBe("tag=P12\nbig=WINNER WIN\nsmall=na?ve and very long \nhold=a|b/c?d");
+    const payload = screenPayload({ tag: "P12345", big: "WINNER WINNER WINNER WINNER", small: "naïve and a very long name, much too long for it", hold: "a|b|c\nd", mode: "shut" }, 0);
+    expect(payload).toBe("tag=P12\nbig=WINNER WINNER WINNER WIN\nsmall=na?ve and a very long name, much too lon\nmode=shut\nhold=a|b/c?d");
     expect(payload).toMatch(/^[\x20-\x7e\n]*$/);
   });
 

@@ -149,7 +149,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       building: () => builder?.building() ?? false,
       exitScreen: options.exitScreen ?? stopKiosk,
     }),
-    ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, stations: settings.stations }),
+    ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind }),
     ...adminRoutes(settings.admin ? adminOnSepolia(settings.admin, log) : null),
     ...boardRoutes(settings.chain.kind === "sepolia" ? settings.chain.rpcUrl : (settings.admin?.rpcUrl ?? null)),
   ];

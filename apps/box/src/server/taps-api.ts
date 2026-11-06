@@ -18,7 +18,6 @@ const FAKE_OPS: readonly FakeOp[] = ["place", "lift", "linkDown", "linkUp", "unp
 interface Options {
   readonly taps: () => Taps | null;
   readonly receiver: ReceiverSetting["kind"];
-  readonly stations: readonly [string, string];
 }
 
 /** A failed chip read or radio request is the station's answer, not the server's fault. */
@@ -37,14 +36,15 @@ async function body(req: Parameters<Route["handle"]>[0]): Promise<Record<string,
   return value as Record<string, unknown>;
 }
 
-export function tapsRoutes({ taps, receiver, stations }: Options): Route[] {
+export function tapsRoutes({ taps, receiver }: Options): Route[] {
   const need = (): Taps => {
     const t = taps();
     if (!t) throw new HttpError(409, "this Box has no receiver (EGB_RECEIVER=none)");
     return t;
   };
   const stationOf = (value: unknown): StationId => {
-    if (typeof value !== "string" || !stations.includes(value)) throw new HttpError(400, `st must be one of ${stations.join(", ")}`);
+    const known = taps()?.status().stations.map((s) => s.st) ?? [];
+    if (typeof value !== "string" || !known.includes(value)) throw new HttpError(400, `st must be one of ${known.join(", ") || "the linked stations"}`);
     return value;
   };
   const seatOf = (value: unknown): Seat => {
@@ -59,10 +59,12 @@ export function tapsRoutes({ taps, receiver, stations }: Options): Route[] {
       handle(_req, res) {
         // Everything the Stations and Badges tabs draw, in one poll.
         const t = taps();
+        const status = t?.status() ?? null;
+        const at = (seat: Seat) => status?.stations.find((s) => s.seat === seat)?.st ?? "";
         sendJson(res, {
           receiver,
-          stations,
-          status: t?.status() ?? null,
+          stations: [at(0), at(1)],
+          status,
           stats: t?.stats() ?? null,
           roster: t?.roster() ?? [],
           fake: t?.fake?.status() ?? null,

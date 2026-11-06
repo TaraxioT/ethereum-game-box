@@ -26,7 +26,7 @@ export interface RosterRow {
 /** GET /api/taps */
 export interface TapsReply {
   readonly receiver: "serial" | "auto" | "fake" | "none";
-  /** Station ids by seat. */
+  /** Station ids by seat, as they linked (empty: no station has that seat). */
   readonly stations: readonly [string, string];
   readonly status: {
     readonly receiver: { readonly open: boolean; readonly path: string | null; readonly lastError: string | null };

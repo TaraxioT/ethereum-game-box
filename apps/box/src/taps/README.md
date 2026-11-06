@@ -17,7 +17,7 @@ receiver port ─bytes─▶ scanner ─lines─▶ events (parse) ─▶ taps f
 ```ts
 const taps = createTaps({
   receiver: "auto",                // a /dev/serial/by-id path, auto, or fake (EGB_RECEIVER)
-  stations: ["df3b9c", "df3d88"],  // P1's station, P2's (EGB_STATIONS)
+  stations: ["df3b9c", "df3d88", "e4ba70"],  // the known stations (EGB_STATIONS); seats go by link order
   dataDir,                         // $EGB_DATA: badges.json (badges.fake.json for the fake)
   clock,                           // the core's Clock
   plan: (seat) => core.plan(seat), // asked after each touch
@@ -61,6 +61,13 @@ Every tap logs its station, seat, badge and plan at the touch, then its end and 
 server keeps these lines in `$EGB_DATA/logs/`).
 Taps on a station no seat uses are ignored, though the station's status shows the chip.
 
+7. **Seats go by link order.** The first station to link is Player 1's, the second Player 2's; a third waits on the
+   bench (`NEXT`, `both seats taken - you're next`, `mode=shut`). A seat is kept through a dropped link's grace; once
+   its station is lost the bench's earliest-linked station takes it, with the seat's last view. The receiver's
+   `state` lists stations in the order they first reached it, so a reopened port seats them the same way.
+8. **The station knows what a tap means.** Every view carries a `mode` from the seat's tap plan: `shut` when the plan
+   is `none` (the station answers a tap with NOT NOW itself, at once), `play` in a game, `open` otherwise.
+
 ## Timing that matters
 
 - **Touch time** (`receiver-clock.ts`): `at_us` is mapped onto the Pi's clock by a running minimum of (Pi receive
@@ -98,7 +105,7 @@ Taps on a station no seat uses are ignored, though the station's status shows th
 | `serial.ts` | `serialOpener(path)`: a /dev/serial/by-id path, or `auto` (the receiver's by-id entry, by its USB serial `7C:DF:A1:D5:04:CC`), read through Node's own tty handle in the event loop (raw mode, no DTR/RTS toggling) and written with non-blocking writes on a second descriptor (`ttyWriter`: bounded retries, a `drop` event for a command given up). No native addon. |
 | `fresh-ids.ts` | `FreshIds`: each station's latest `tap`, `gone` and `signed` id; `fresh(kind, st, id, now)` says whether a line is new or a resend of an older one. |
 | `receiver-clock.ts` | `ReceiverClock`: `at_us` onto Pi ms, and the touch time of a tap line. |
-| `stations.ts` | `Stations`: seats ↔ station ids, each station's link, signal, ping, reader and chip; the 2 s link grace (`lost`), `whenUp(st)`; ping and press-report samples. |
+| `stations.ts` | `Stations`: seats by link order (`seated` when one changes hands, `bench()`), each station's link, signal, ping, reader and chip; the 2 s link grace (`lost`), `whenUp(st)`; ping and press-report samples. |
 | `samples.ts` | `Samples`: a fixed ring of the latest numbers. |
 | `acks.ts` | `Acks`: commands waiting on their answer by id (buzz, screen, press), with timeouts and Pi-side times. |
 | `screen-payload.ts` | `screenPayload(view, ttl)`: a `StationView` as the station's `key=value` payload, each value cut to its line, at most 200 bytes. |

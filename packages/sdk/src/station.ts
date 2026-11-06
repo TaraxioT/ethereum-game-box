@@ -1,18 +1,24 @@
 // What a tap station's OLED can show: the station's own screen model (firmware/tap-station/protocol.md, Screens).
 
-/** Most characters each line holds; longer text is cut. */
+/** Most characters each line holds; longer text is cut. Ten big characters and about twenty small ones fit the OLED at
+ *  once; a longer line scrolls across it (an ENS name). */
 export const TAG_CHARS = 3;
-export const BIG_CHARS = 10;
-export const SMALL_CHARS = 20;
+export const BIG_CHARS = 24;
+export const SMALL_CHARS = 40;
 /** An override (`hold`, `sign`, `done`, `fail`) is `BIG|small`: both lines and the bar between them. */
 export const OVERRIDE_CHARS = BIG_CHARS + 1 + SMALL_CHARS;
+
+/** What a tap means now, which the station shows on its LED and decides itself: `open` (taps welcome outside a game:
+ *  cyan breathing), `play` (a game waits for this tap: green breathing), `shut` (not welcome: dim amber, and a tap gets
+ *  NOT NOW on the station at once). */
+export type StationMode = "open" | "play" | "shut";
 
 export interface StationView {
   /** Up to 3 characters in the top-left badge (`P1`); empty: none. */
   readonly tag: string;
-  /** The idle big line, up to 10 characters, upper case (`TAP`, `WAIT`, `WIN`). */
+  /** The idle big line, up to 24 characters, upper case (`TAP`, `WAIT`, `WIN`); over 10 it scrolls. */
   readonly big: string;
-  /** The idle small line, up to 20 characters (a name, `10 EGB`). */
+  /** The idle small line, up to 40 characters (a name, `10 EGB`); one too wide for the OLED scrolls. */
   readonly small: string;
   /** `BIG|small` while the chip is held and the Box reads it. Absent: the station's `HOLD|reading`. */
   readonly hold?: string;
@@ -22,6 +28,10 @@ export interface StationView {
   readonly done?: string;
   /** Sign failed or lifted mid-sign. Absent: `AGAIN|tap again`. */
   readonly fail?: string;
+  /** A tap while `mode` is `shut`. Absent: `NOT NOW|not your turn`. */
+  readonly nope?: string;
+  /** What a tap means now (the LED, and whether the station refuses a tap itself). Absent: the LED stays off. */
+  readonly mode?: StationMode;
 }
 
 const UNPRINTABLE = /[^\x20-\x7e]/g;

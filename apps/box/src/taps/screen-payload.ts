@@ -4,7 +4,7 @@ import { BIG_CHARS, printable as clip, SMALL_CHARS, TAG_CHARS, type StationView 
 
 /** The most payload bytes one `screen` carries. Every value is printable ASCII (`clip`): a newline would break it. */
 export const PAYLOAD_MAX = 200;
-const OVERRIDES = ["hold", "sign", "done", "fail"] as const;
+const OVERRIDES = ["hold", "sign", "done", "fail", "nope"] as const;
 
 /** An override's `BIG|small`, each side cut to its line; the small side can't carry another `|`. */
 function override(value: string): string {
@@ -16,8 +16,8 @@ function override(value: string): string {
 
 /**
  * The payload for a view. `big` always goes (empty blanks the line; left out, the station would show `TAP`); `tag`
- * and `small` only when they have text; then `ttl` (seconds, 0 = none); then the overrides, each left out if it would
- * take the payload past 200 bytes.
+ * and `small` only when they have text; then `ttl` (seconds, 0 = none) and the `mode`; then the overrides, each left
+ * out if it would take the payload past 200 bytes.
  */
 export function screenPayload(view: StationView, ttl: number): string {
   const lines: string[] = [];
@@ -33,6 +33,7 @@ export function screenPayload(view: StationView, ttl: number): string {
   const small = clip(view.small, SMALL_CHARS);
   if (small) add(`small=${small}`);
   if (ttl > 0) add(`ttl=${Math.round(ttl)}`);
+  if (view.mode) add(`mode=${view.mode}`);
   for (const key of OVERRIDES) {
     const value = view[key];
     if (value) add(`${key}=${override(value)}`);

@@ -2,6 +2,11 @@
 // ping round trip, reader, the chip on it) from `state`, `link`, `ping`, `nfc`, `tap` and `gone` lines. A dropped link
 // gets LINK_GRACE_MS before it counts as lost: on a lossy radio the receiver can miss a few packets in a row, and
 // failing a tap then would throw away a chip that is still being read.
+//
+// Seats go by link order: the first station to link is Player 1's, the second Player 2's, any later one waits on the
+// bench. A seat is kept through a dropped link's grace; once its station is lost, the seat goes to the bench's
+// earliest-linked station. The receiver's `state` lists stations in the order they first reached it, so a reopened
+// port seats them as before.
 import type { Seat } from "@egb/sdk";
 import type { Clock, TimerHandle } from "../core/ports.ts";
 import type { ReceiverEvent, StationId } from "./lines.ts";
@@ -21,7 +26,7 @@ export interface StationChip {
 
 export interface StationStatus {
   readonly st: StationId;
-  /** Its seat from EGB_STATIONS, or null for a station no seat uses (its taps are ignored). */
+  /** Its seat, by link order; null for a station on the bench (its taps are ignored). */
   readonly seat: Seat | null;
   readonly up: boolean;
   readonly rssi: number | null;
@@ -42,6 +47,8 @@ export interface StationHooks {
   lost(st: StationId): void;
   /** Something a status page shows changed (not pings). */
   changed(): void;
+  /** A seat changed hands: a station took it, or gave it up. */
+  seated(): void;
 }
 
 /** The link stayed down past its grace (or the receiver closed). */
@@ -54,6 +61,8 @@ interface Live {
   reader: boolean | null;
   chip: StationChip | null;
   heardAt: number | null;
+  /** When it last linked, as a count: the seats go to the lowest. */
+  linkedSeq: number;
   grace: TimerHandle | null;
   waiters: { resolve(): void; reject(e: Error): void }[];
   readonly pings: Samples;
@@ -61,26 +70,32 @@ interface Live {
 }
 
 export class Stations {
-  private readonly order: readonly StationId[];
   private readonly clock: Clock;
   private readonly hooks: StationHooks;
   private readonly live = new Map<StationId, Live>();
+  /** Player 1's station, then Player 2's. */
+  private readonly seats: [StationId | null, StationId | null] = [null, null];
+  private linkCount = 0;
 
-  /** `order[0]` is Player 1's station, `order[1]` Player 2's. */
-  constructor(order: readonly StationId[], clock: Clock, hooks: StationHooks) {
-    this.order = order;
+  /** `known`: stations listed before any links (the fake's); seats still go by link order. */
+  constructor(known: readonly StationId[], clock: Clock, hooks: StationHooks) {
     this.clock = clock;
     this.hooks = hooks;
-    for (const st of order) this.station(st);
+    for (const st of known) this.station(st);
   }
 
   seatOf(st: StationId): Seat | null {
-    const i = this.order.indexOf(st);
+    const i = this.seats.indexOf(st);
     return i === 0 || i === 1 ? i : null;
   }
 
   stationAt(seat: Seat): StationId | undefined {
-    return this.order[seat];
+    return this.seats[seat] ?? undefined;
+  }
+
+  /** Linked stations no seat uses. */
+  bench(): StationId[] {
+    return [...this.live].filter(([st, s]) => s.up && this.seatOf(st) === null).map(([st]) => st);
   }
 
   isUp(st: StationId): boolean {
@@ -182,6 +197,8 @@ export class Stations {
 
   /** The receiver's port closed: every link is gone, at once (the taps fail without grace). */
   closed(): void {
+    const hadSeats = this.seats.some((st) => st !== null);
+    this.seats.fill(null);
     for (const [st, s] of this.live) {
       this.clock.cancel(s.grace);
       s.grace = null;
@@ -191,6 +208,7 @@ export class Stations {
       this.release(s, new LinkLostError("the receiver closed"));
       if (wasUp) this.hooks.down(st);
     }
+    if (hadSeats) this.hooks.seated();
     this.hooks.changed();
   }
 
@@ -219,7 +237,7 @@ export class Stations {
   private station(st: StationId): Live {
     let s = this.live.get(st);
     if (!s) {
-      s = { up: false, rssi: null, rttUs: null, reader: null, chip: null, heardAt: null, grace: null, waiters: [], pings: new Samples(), reports: new Samples() };
+      s = { up: false, rssi: null, rttUs: null, reader: null, chip: null, heardAt: null, linkedSeq: 0, grace: null, waiters: [], pings: new Samples(), reports: new Samples() };
       this.live.set(st, s);
     }
     return s;
@@ -230,9 +248,12 @@ export class Stations {
     if (s.up === up) return;
     s.up = up;
     if (up) {
+      // Back within its grace, it keeps its seat and its place in the line; otherwise it joins the end.
+      if (!s.grace) s.linkedSeq = ++this.linkCount;
       this.clock.cancel(s.grace);
       s.grace = null;
       for (const w of s.waiters.splice(0)) w.resolve();
+      this.fillSeats();
       this.hooks.up(st);
       return;
     }
@@ -242,9 +263,29 @@ export class Stations {
       s.chip = null;
       this.release(s, new LinkLostError(`station ${st} lost its link`));
       this.hooks.lost(st);
+      const seat = this.seatOf(st);
+      if (seat !== null) {
+        this.seats[seat] = null;
+        if (!this.fillSeats()) this.hooks.seated();
+      }
       this.hooks.changed();
     });
     this.hooks.down(st);
+  }
+
+  /** Gives every empty seat to the bench's earliest-linked station. Says whether a seat changed hands. */
+  private fillSeats(): boolean {
+    const waiting = this.bench().sort((a, b) => this.station(a).linkedSeq - this.station(b).linkedSeq);
+    let moved = false;
+    for (const seat of [0, 1] as const) {
+      if (this.seats[seat] !== null) continue;
+      const st = waiting.shift();
+      if (!st) break;
+      this.seats[seat] = st;
+      moved = true;
+    }
+    if (moved) this.hooks.seated();
+    return moved;
   }
 
   private release(s: Live, e: Error): void {
