@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-motion="on">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070d12">
+  <meta name="description" content="A playable Gamebox interface concept. Find a game, meet your rivals, and discover the arcade.">
+  <title>Gamebox — Enter the grid</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2076%22%3E%3Cpath%20d%3D%22M32%204%2060%2020v34L32%2071%204%2054V20Z%22%20fill%3D%22%23101f2d%22%20stroke%3D%22%238cebf4%22%20stroke-width%3D%222%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M32%2013%2018%2036l14-6Z%22%20fill%3D%22%23f0fcff%22%2F%3E%3Cpath%20d%3D%22m32%2013%2014%2023-14-6Z%22%20fill%3D%22%238cebf4%22%2F%3E%3Cpath%20d%3D%22m18%2036%2014%208V30Z%22%20fill%3D%22%23c2e3ec%22%2F%3E%3Cpath%20d%3D%22m46%2036-14%208V30Z%22%20fill%3D%22%235ab4cb%22%2F%3E%3Cpath%20d%3D%22m18%2040%2014%209v12Z%22%20fill%3D%22%23edfaff%22%2F%3E%3Cpath%20d%3D%22m46%2040-14%209v12Z%22%20fill%3D%22%2392e2ef%22%2F%3E%3C%2Fsvg%3E">
+  <link rel="stylesheet" href="theme.css">
+  <script defer src="assets/vendor/gsap.min.js"></script>
+  <script defer src="art.js"></script>
+  <script defer src="motion.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the arcade</a>
+  <div class="ambient-grid" aria-hidden="true"></div>
+  <header class="header">
+    <a href="#arcade" data-nav="arcade" class="brand" aria-label="Gamebox — Ethereum Game Box arcade"><svg class="brand-icon" viewBox="0 0 64 76" aria-hidden="true"><path d="M32 4 60 20v34L32 71 4 54V20Z" fill="#101f2d" stroke="#8cebf4" stroke-width="2" stroke-linejoin="round"/><path d="M32 13 18 36l14-6Z" fill="#f0fcff"/><path d="m32 13 14 23-14-6Z" fill="#8cebf4"/><path d="m18 36 14 8V30Z" fill="#c2e3ec"/><path d="m46 36-14 8V30Z" fill="#5ab4cb"/><path d="m18 40 14 9v12Z" fill="#edfaff"/><path d="m46 40-14 9v12Z" fill="#92e2ef"/></svg><span class="brand-wordmark"><strong>GAMEBOX<span class="brand-dot">.</span></strong><small>ETHEREUM GAME BOX</small></span></a>
+    <nav aria-label="Main navigation">
+      <a class="active" href="#arcade" data-nav="arcade">Arcade</a>
+      <button data-action="catalog">Games</button>
+      <a href="#rankings" data-nav="rankings">Rankings</a>
+      <a href="#boxes" data-nav="boxes">Find a box</a>
+    </nav>
+    <div class="header-actions"><button class="search-trigger" data-action="search" aria-label="Search games, players and boxes"><span aria-hidden="true">⌕</span><kbd>⌘ K</kbd></button><button class="profile-trigger" data-action="identity"><span class="mini-avatar" aria-hidden="true">Y</span><span id="identity-label">Your player</span><span aria-hidden="true">↗</span></button></div>
+  </header>
+  <main id="main">
+    <section class="page-heading" aria-labelledby="page-title"><div><p class="overline"><span class="status-dot"></span> ETHGLOBAL MUMBAI · THE ARCADE IS OPEN</p><h1 id="page-title">Your next move starts here.</h1></div><div class="heading-controls"><div class="scope-controls"><label class="select-wrap"><span class="sr-only">Filter the arcade by box</span><select id="box-scope"><option value="all">All boxes</option><option value="mumbai-01">Mumbai · Main stage</option><option value="mumbai-02">Mumbai · The lounge</option><option value="demo-01">Online · Practice box</option></select><span aria-hidden="true">⌄</span></label><button class="refresh" data-action="refresh" aria-label="Refresh sample snapshot"><span aria-hidden="true">↻</span></button></div><span class="snapshot-label" id="snapshot-label">Interactive concept · sample snapshot</span></div></section>
+
+    <div class="bento stage" id="games" aria-label="Explore the Gamebox arcade">
+      <article data-card class="tile featured featured-stock" aria-labelledby="stock-title">
+        <canvas id="stock-canvas" aria-hidden="true"></canvas><div class="feature-vignette" aria-hidden="true"></div>
+        <div class="tile-top"><span class="game-index">01</span><span class="tag orange">STRATEGY DUEL</span></div>
+        <div class="feature-copy"><span class="micro-label">Your instinct. Your edge.</span><h2 id="stock-title">STOCK<br>DUEL<span>.</span></h2><p>Read the market.<br>Read your rival.</p></div>
+        <div class="feature-bottom"><button class="text-button" data-card-primary data-entity="game/stockduel">Explore Stock Duel <span aria-hidden="true">↗</span></button><span class="ready-note"><i class="status-dot"></i> READY AT <b id="ready-count">3 BOXES</b></span></div>
+      </article>
+
+      <article data-card class="tile hero-tile" aria-labelledby="hero-title"><div class="hero-brand"><svg class="hero-logo" viewBox="0 0 64 76" aria-hidden="true"><path d="M32 4 60 20v34L32 71 4 54V20Z" fill="#101f2d" stroke="#8cebf4" stroke-width="2" stroke-linejoin="round"/><path d="M32 13 18 36l14-6Z" fill="#f0fcff"/><path d="m32 13 14 23-14-6Z" fill="#8cebf4"/><path d="m18 36 14 8V30Z" fill="#c2e3ec"/><path d="m46 36-14 8V30Z" fill="#5ab4cb"/><path d="m18 40 14 9v12Z" fill="#edfaff"/><path d="m46 40-14 9v12Z" fill="#92e2ef"/></svg><span class="hero-wordmark"><strong>GAMEBOX<span>.</span></strong><small>ETHEREUM GAME BOX</small></span></div><h2 id="hero-title">Every game.<br>Leaves a mark.</h2><p>A real rival. One more round.</p><button class="hero-mantra" data-card-primary data-action="about" aria-label="How Gamebox works">PLAY <span>·</span> COMPETE <span>·</span> MAKE A NAME</button></article>
+
+      <article data-card class="tile identity-tile" aria-labelledby="identity-title"><button class="identity-prompt" data-card-primary data-action="identity" aria-label="Make a name — your Gamebox player identity"><span class="identity-badge" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 3 27 9v14l-11 6L5 23V9Z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="16" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 22v-1a6 6 0 0 1 12 0v1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span><span id="identity-title">Make a name.</span><small>YOUR PLAYER. EVERY GAME. <span aria-hidden="true">↗</span></small></button></article>
+
+      <article data-card class="tile rounds-tile" aria-labelledby="rounds-title"><span class="overline">THE GRID KEEPS SCORE</span><h2 id="rounds-title"><span id="network-rounds">84</span><span class="stat-period">.</span></h2><button class="stat-link" data-card-primary data-action="all-results">rounds. names. rivalries. <span aria-hidden="true">↗</span></button><span class="sample-note">FROM THE SAMPLE MATCH HISTORY</span></article>
+
+      <article data-card class="tile community-tile" aria-labelledby="community-title"><div><span class="community-count" id="network-players">06</span><h2 id="community-title">players. infinite rematches.</h2></div><div class="community-bottom"><div class="avatar-stack" aria-hidden="true"><span class="avatar avatar-nova">N</span><span class="avatar avatar-echo">E</span><span class="avatar avatar-iris">I</span></div><button class="round-button" data-card-primary data-action="all-ranks" aria-label="Explore the players">↗</button></div></article>
+
+      <article data-card class="tile find-tile"><span class="overline">LESS SCROLLING. MORE PLAYING.</span><a class="find-button" data-card-primary href="#boxes" data-nav="boxes"><span class="find-symbol" aria-hidden="true">⌖</span> Find your box <span aria-hidden="true">↗</span></a></article>
+
+      <article data-card class="tile secondary-game" aria-labelledby="quickdraw-title"><canvas id="disc-canvas" aria-hidden="true"></canvas><div class="tile-top"><span class="game-index">02</span><span class="tag cyan">REACTION DUEL</span></div><div class="secondary-copy"><span class="mini-orbit" aria-hidden="true">↯</span><h2 id="quickdraw-title">Quick Draw<span>.</span></h2><p>A split second.<br>Everything.</p><button class="text-button" data-card-primary data-entity="game/quickdraw">Make your move <span aria-hidden="true">↗</span></button></div></article>
+
+      <article data-card class="tile cup" aria-labelledby="cup-title"><div class="tile-top"><span class="overline">THE CHASE IS ON</span><span class="tag">OPEN CUP</span></div><div class="cup-content"><span class="cup-symbol" aria-hidden="true">◇</span><span class="micro-label">Quick Draw · Mumbai</span><h2 id="cup-title">The midnight<br>circuit<span>.</span></h2><div class="countdown" aria-label="Cup time remaining"><span id="cup-countdown">02:14:38</span><small>TIME TO MAKE YOUR MARK</small></div><button class="text-button" data-card-primary data-entity="cup/midnight">Follow the chase <span aria-hidden="true">↗</span></button></div></article>
+
+      <section data-card class="tile rankings" id="rankings" aria-labelledby="rank-title"><div class="tile-top"><span class="overline">THE ONES TO BEAT</span><button class="round-button" data-card-primary data-action="all-ranks" aria-label="Full rankings">↗</button></div><h2 id="rank-title">Top of the grid<span>.</span></h2><div class="segmented" role="group" aria-label="Leaderboard game"><button data-game="stockduel" aria-pressed="true">Stock Duel</button><button data-game="quickdraw" aria-pressed="false">Quick Draw</button></div><div id="rank-list" class="rank-list"></div><span class="ranking-note">RANKED BY WINS · SAMPLE DATA</span></section>
+
+
+    </div>
+
+    <section class="support-heading" aria-label="Discover the arcade"><div><p class="overline">BEYOND THE SCOREBOARD</p><h2>Find the place. Meet the players.</h2></div><span class="support-note">Fictional identities. Real interactions to explore.</span></section>
+    <div class="support-grid">
+      <section data-card class="tile boxes" id="boxes" aria-labelledby="box-title"><div class="tile-top"><span class="overline">A REAL BOX. A REAL OPPONENT.</span><button class="tag cyan" data-card-primary data-entity="boxes/all" aria-label="Browse available boxes">3 AVAILABLE</button></div><div class="box-heading"><h2 id="box-title">A seat at the arcade<span>.</span></h2><p>Find your table.<br>One tap to start.</p></div><div class="box-list" id="box-list"></div></section>
+      <section data-card class="tile results" aria-labelledby="results-title"><div class="tile-top"><span class="overline">AFTER THE DUST SETTLES</span><span class="mono subtle">RECENT RESULTS</span></div><h2 id="results-title">Names made here<span>.</span></h2><div id="result-list" class="result-list"></div><button class="text-button" data-card-primary data-action="all-results">View match history <span aria-hidden="true">↗</span></button></section>
+    </div>
+    <section class="closing" aria-label="About Gamebox"><span class="brand-small">GAMEBOX<span>.</span></span><p>The arcade belongs to everyone.<br><span>All you need is a rival.</span></p><button class="text-button" data-action="about">How it works <span aria-hidden="true">↗</span></button></section>
+  </main>
+  <footer><span>DESIGNED FOR THE HUMAN ON THE OTHER SIDE.</span><div><span>Sample data · no funds move</span></div></footer>
+
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title"><div class="dialog-top"><button class="text-button" id="detail-back" hidden>← Back</button><span class="overline" id="detail-kind">GAME DETAILS</span><button class="close-button" data-action="close" aria-label="Close details">×</button></div><div id="detail-content"></div></dialog>
+  <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="search-input-wrap"><span aria-hidden="true">⌕</span><label class="sr-only" id="search-title" for="search-input">Search the grid</label><input id="search-input" type="search" placeholder="Find a game, player or box…" autocomplete="off"><button class="close-button" data-action="close-search" aria-label="Close search">×</button></div><div id="search-results" class="search-results"></div><div class="search-footer"><span>GAMES · PLAYERS · BOXES</span><span>ESC TO CLOSE</span></div></dialog>
+  <div class="toast" role="status" aria-live="polite" id="toast"></div>
+  <noscript><p class="noscript">Enable JavaScript to explore this interactive concept. All figures shown are sample data.</p></noscript>
+</body>
+</html>
