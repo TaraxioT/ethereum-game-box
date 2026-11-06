@@ -6,6 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {P256Account} from "../../src/box/P256Account.sol";
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
+import {IBoxSigned} from "../../src/names/IBoxSigned.sol";
 import {
     IEnhancedAccessControl,
     IPermissionedRegistry,
@@ -197,7 +198,7 @@ contract BoxesTest is NamesFork {
         _rotate();
         IBoxResults.Result memory r = result(BOX, "stockduel", 1, alice, bob, false);
         (bytes32 sr, bytes32 ss) = p256Sign(boxKey, results.resultDigest(r));
-        vm.expectRevert(IBoxResults.InvalidSignature.selector);
+        vm.expectRevert(IBoxSigned.InvalidSignature.selector);
         results.submit(r, sr, ss);
         (sr, ss) = p256Sign(newKey, results.resultDigest(r));
         results.submit(r, sr, ss);
@@ -358,14 +359,14 @@ contract BoxesTest is NamesFork {
         assertEq(resolveAddr(BOX_NAME), address(demoBox));
         IBoxResults.Result memory r = result(BOX, "stockduel", 1, alice, bob, false);
         (bytes32 sr, bytes32 ss) = p256Sign(boxKey, results.resultDigest(r));
-        vm.expectRevert(abi.encodeWithSelector(IBoxResults.BoxNotActive.selector, BOX));
+        vm.expectRevert(abi.encodeWithSelector(IBoxSigned.BoxNotActive.selector, BOX));
         results.submit(r, sr, ss);
 
         vm.prank(admin);
         names.setBoxStatus(BOX, IGameBoxNames.BoxStatus.Revoked);
         assertEq(resolveText(BOX_NAME, "status"), "revoked");
         assertEq(resolveAddr(BOX_NAME), address(demoBox));
-        vm.expectRevert(abi.encodeWithSelector(IBoxResults.BoxNotActive.selector, BOX));
+        vm.expectRevert(abi.encodeWithSelector(IBoxSigned.BoxNotActive.selector, BOX));
         results.submit(r, sr, ss);
 
         vm.prank(admin);

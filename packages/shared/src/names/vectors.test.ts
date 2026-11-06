@@ -13,6 +13,8 @@ import {
   executeBatchDigest,
   executeDigest,
   resultDigest,
+  seatDigest,
+  stakeDigest,
 } from './messages.ts';
 import { primaryNameDigest, primaryNameMessage } from './primaryName.ts';
 import { REGISTRY_ROLES, RESOLVER_ROLES } from './roles.ts';
@@ -24,6 +26,8 @@ import {
   PRIMARY_NAME_VECTOR,
   RESULT_VECTOR,
   ROLE_VECTORS,
+  SEAT_VECTOR,
+  STAKE_VECTOR,
   WEBAUTHN_VECTOR,
 } from './vectors.ts';
 import { encodeWebAuthnSignature, parseDerSignature, rawSignature } from './webauthn.ts';
@@ -124,6 +128,30 @@ describe('WebAuthn', () => {
     ).toBytes('der');
     expect(parseDerSignature(high)).toEqual({ r: BigInt(r), s: BigInt(s) });
     expect(() => parseDerSignature(new Uint8Array([0x30, 0x00]))).toThrow();
+  });
+});
+
+describe('Stake', () => {
+  it('matches DuelPot.stakeDigest', () => {
+    const { stake, duelPot, chainId, digest } = STAKE_VECTOR;
+    expect(stakeDigest(stake, duelPot, chainId)).toBe(digest);
+  });
+
+  it('is a P-256 signature over the raw digest, low s', () => {
+    const { digest, r, s } = STAKE_VECTOR;
+    expect(verifiesLowS(digest, r, s)).toBe(true);
+  });
+});
+
+describe('Seat', () => {
+  it('matches BoxSeats.seatDigest', () => {
+    const { seat, boxSeats, chainId, digest } = SEAT_VECTOR;
+    expect(seatDigest(seat, boxSeats, chainId)).toBe(digest);
+  });
+
+  it('is a P-256 signature over the raw digest, low s', () => {
+    const { digest, r, s } = SEAT_VECTOR;
+    expect(verifiesLowS(digest, r, s)).toBe(true);
   });
 });
 

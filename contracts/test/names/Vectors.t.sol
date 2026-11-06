@@ -7,12 +7,15 @@ import {WebAuthn} from "@openzeppelin/contracts/utils/cryptography/WebAuthn.sol"
 import {IP256Account} from "../../src/box/IP256Account.sol";
 import {P256Account} from "../../src/box/P256Account.sol";
 
+import {IDuelPot} from "../../src/game/IDuelPot.sol";
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
+import {IBoxSeats} from "../../src/names/IBoxSeats.sol";
 import {RegistryRoles, ResolverRoles} from "../../src/names/IENSv2.sol";
 import {NamesFork} from "./NamesFork.sol";
 
 /// @notice Writes `packages/shared/src/names/vectors.json`: the digests for fixed inputs, as the contracts compute
-///         them, with an ECDSA signature of the claim, P-256 signatures (raw digest, low `s`) of the others, a passkey
+///         them, with an ECDSA signature of the claim, P-256 signatures (raw digest, low `s`) of the others (`Execute`,
+///         `Result`, `Stake`, `Seat`), a passkey
 ///         (WebAuthn) signature of the `Execute`, and the role table. Every signature here is also run through the
 ///         contract that checks it. `vectors.test.ts` checks `messages.ts`, `webauthn.ts` and `roles.ts` against it
 ///         byte for byte.
@@ -39,6 +42,8 @@ contract VectorsTest is NamesFork {
         vm.serializeString(json, "batch", _batch(vectorAccount, p256Key_));
         vm.serializeString(json, "webAuthn", _webAuthn(vectorAccount, p256Key_));
         vm.serializeString(json, "result", _result(p256Key_));
+        vm.serializeString(json, "stake", _stake(p256Key_));
+        vm.serializeString(json, "seat", _seat(p256Key_));
         vm.serializeString(json, "primaryName", _primaryName());
         string memory p = "p256";
         vm.serializeString(p, "privateKey", vm.toString(bytes32(p256Key_)));
@@ -142,6 +147,39 @@ contract VectorsTest is NamesFork {
         vm.serializeAddress(o, "winner", WINNER);
         vm.serializeAddress(o, "loser", LOSER);
         vm.serializeBool(o, "draw", false);
+        vm.serializeString(o, "deadline", vm.toString(DEADLINE));
+        vm.serializeBytes32(o, "digest", digest);
+        vm.serializeBytes32(o, "r", r);
+        return vm.serializeBytes32(o, "s", s);
+    }
+
+    function _stake(uint256 key) internal returns (string memory) {
+        IDuelPot.Stake memory stake = IDuelPot.Stake("mumbai-01", "stockduel", 3, WINNER, LOSER, 10_000_000, DEADLINE);
+        bytes32 digest = pot.stakeDigest(stake);
+        (bytes32 r, bytes32 s) = p256Sign(key, digest);
+        string memory o = "stake";
+        vm.serializeAddress(o, "duelPot", address(pot));
+        vm.serializeString(o, "box", stake.box);
+        vm.serializeString(o, "game", stake.game);
+        vm.serializeString(o, "round", vm.toString(stake.round));
+        vm.serializeAddress(o, "a", stake.a);
+        vm.serializeAddress(o, "b", stake.b);
+        vm.serializeString(o, "amount", vm.toString(stake.amount));
+        vm.serializeString(o, "deadline", vm.toString(DEADLINE));
+        vm.serializeBytes32(o, "digest", digest);
+        vm.serializeBytes32(o, "r", r);
+        return vm.serializeBytes32(o, "s", s);
+    }
+
+    function _seat(uint256 key) internal returns (string memory) {
+        IBoxSeats.Seat memory seat = IBoxSeats.Seat("nova", WINNER, "mumbai-01", DEADLINE);
+        bytes32 digest = seats.seatDigest(seat);
+        (bytes32 r, bytes32 s) = p256Sign(key, digest);
+        string memory o = "seat";
+        vm.serializeAddress(o, "boxSeats", address(seats));
+        vm.serializeString(o, "label", seat.label);
+        vm.serializeAddress(o, "badge", seat.badge);
+        vm.serializeString(o, "box", seat.box);
         vm.serializeString(o, "deadline", vm.toString(DEADLINE));
         vm.serializeBytes32(o, "digest", digest);
         vm.serializeBytes32(o, "r", r);

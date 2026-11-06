@@ -31,7 +31,12 @@ library NameLib {
 
     /// @notice `champion.<game>.gamebox.eth`, DNS-encoded.
     function dnsTitleName(string memory game) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(bytes(TITLE_LABEL).length), TITLE_LABEL, dnsName(game));
+        return dnsGameName(TITLE_LABEL, game);
+    }
+
+    /// @notice `<label>.<game>.gamebox.eth`, a name in a game's registry (its title or a championship), DNS-encoded.
+    function dnsGameName(string memory label, string memory game) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(bytes(label).length), label, dnsName(game));
     }
 
     /// @notice `<label>.gamebox.eth`.
