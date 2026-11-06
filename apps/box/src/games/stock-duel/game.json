@@ -1,0 +1,13 @@
+{
+  "id": "stock-duel",
+  "title": "Stock Duel",
+  "blurb": "Play a stock off your spinning Rolodex; both badges' rolls pick the stat, and the higher number takes the round.",
+  "players": 2,
+  "minutes": 3,
+  "stakes": [5, 10, 25],
+  "tier": "refereed",
+  "taps": "random",
+  "kind": "team",
+  "budgetMs": 50,
+  "forge": { "template": true, "label": "Stock Duel" }
+}

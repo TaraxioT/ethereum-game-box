@@ -1,9 +1,9 @@
 // <egb-cart game="…">: a game's cartridge in the rack. A chunky gunmetal keycap set in a wider, clipped housing: a
 // bevelled metal face round a big dark glass screen, the title in arcade caps across the top of the glass and the
 // game's art standing on it. A game with no art yet (Bet on X, B17) is sealed: no screen, a riveted metal cover with
-// the title engraved and a SOON plate.
+// the title engraved and a SOON plate. `new-game` is the blank cartridge that opens the game builder.
 //
-// Size: it fills its box (designed at 176 × 186). Attributes: `game`, `title` (the printed title), `focused` (the
+// Size: it fills its box (designed at 176 × 186). Attributes: `game` (or `new-game`), `title` (the printed title), `focused` (the
 // keycap rises out of its housing on a spring, and only then a thin lavender strip lights at its foot and round the
 // housing's rim; an idle cartridge has no light at all), `pressed` (the keycap seats 8 px down: the launch).
 import { pick, shadow, sheet } from "./part.ts";
@@ -37,6 +37,12 @@ const ART: Record<string, string> = {
           `<g class="${seat}"><path class="wick" d="M${x} ${wickTop}V${wickBottom}"/><rect class="candle" x="${x - 5}" y="${top}" width="10" height="${bottom - top}" rx="1.6"/><rect class="lit" x="${x - 4}" y="${top + 1}" width="2.2" height="${bottom - top - 2}" rx="1"/></g>`,
       )
       .join("")}
+  </svg>`,
+  // The blank cartridge (NEW GAME on the Box): nothing on its glass yet but a frame waiting for art and a plus.
+  "new-game": `<svg viewBox="0 0 120 64" aria-hidden="true">
+    <ellipse class="floor" cx="60" cy="62" rx="30" ry="2.4"/>
+    <rect class="blank" x="34" y="6" width="52" height="50" rx="7"/>
+    <path class="plus" d="M60 18v26M47 31h26"/>
   </svg>`,
 };
 
@@ -131,6 +137,8 @@ const styles = sheet(`
 .wick { stroke: var(--tone); stroke-width: 2; stroke-linecap: round; }
 .candle { fill: var(--tone); stroke: #0b0914; stroke-width: 1; }
 .lit { fill: var(--tone-hi); opacity: 0.85; }
+.blank { fill: none; stroke: #ad8fff; stroke-opacity: 0.45; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.plus { fill: none; stroke: #e6dcff; stroke-width: 4.4; stroke-linecap: round; }
 /* A reflection across the glass's top, and a veil that dims an idle screen a little. */
 .glass::after { content: ""; position: absolute; z-index: 3; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(165deg, rgb(255 255 255 / 0.1), transparent 32%); }
 .veil { position: absolute; z-index: 3; inset: 0; background: #0a0814; opacity: 0.2; transition: opacity 160ms linear; pointer-events: none; }

@@ -1,6 +1,6 @@
 // The test page (/test): four tabs to check the Box on the Pi. Stations, Badges and Box poll the server twice a
-// second; Builder is the slot the game builder fills once it mounts. Plain DOM, served by the Box server; every write
-// goes to a route that needs this machine's origin.
+// second; Builder follows the game builder's event stream. Plain DOM, served by the Box server; every write goes to a
+// route that needs this machine's origin (and the builder's, the launcher token).
 import "../screen/fonts.css";
 import "../screen/tokens.css";
 import "./test-page.css";

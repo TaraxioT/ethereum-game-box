@@ -6,6 +6,7 @@ import { EgbCore } from "./core.ts";
 import { EgbFact } from "./fact.ts";
 import { EgbGauge } from "./gauge.ts";
 import { EgbKey } from "./key.ts";
+import { EgbLcd } from "./lcd.ts";
 import { EgbPlate } from "./plate.ts";
 import { EgbPort } from "./port.ts";
 import { EgbSeg } from "./seg.ts";
@@ -22,6 +23,7 @@ const PARTS: readonly (readonly [string, CustomElementConstructor])[] = [
   ["egb-key", EgbKey],
   ["egb-cart", EgbCart],
   ["egb-txbar", EgbTxbar],
+  ["egb-lcd", EgbLcd],
 ];
 
 export function registerParts(): void {
@@ -40,5 +42,6 @@ declare global {
     "egb-key": EgbKey;
     "egb-cart": EgbCart;
     "egb-txbar": EgbTxbar;
+    "egb-lcd": EgbLcd;
   }
 }

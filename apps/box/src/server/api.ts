@@ -1,10 +1,11 @@
-// The Box's API routes. /api/state's fields are the deploy's contract: its updater switches releases only while
-// `busy` is false, so nobody's game or money is cut off. The /api/box routes are the test page's Box tab.
+// The Box's API routes (the game builder's are in builder-api.ts). /api/state's fields are the deploy's contract: its
+// updater switches releases only while `busy` is false, so nobody's game, money or build is cut off. The /api/box
+// routes are the test page's Box tab.
 import type { Badge, BoxState } from "../core/types.ts";
 import type { Core } from "../core/core.ts";
 import type { Route } from "./routes.ts";
 import type { BadgeRecord } from "./sessions.ts";
-import { HttpError, readJson, sendJson, sendText } from "./http.ts";
+import { HttpError, readJson, sendJson } from "./http.ts";
 import { injectTap, parseInjection, resolveBadge } from "./inject.ts";
 import type { BoxReply, InjectReply } from "../test-page/wire.ts";
 
@@ -18,10 +19,13 @@ export interface StateReply {
   readonly now: number;
 }
 
-/** Players are seated past Home, a match is open, or a transaction hasn't been paid yet. */
-export function busy(state: BoxState): boolean {
-  const seatedPhase = state.phase !== "boot" && state.phase !== "attract" && state.phase !== "home";
-  return seatedPhase || state.match !== null || state.txs.some((tx) => tx.step !== "paid");
+/**
+ * Players are past Home (seated, or designing a game), a match is open, a transaction hasn't been paid yet, or a game
+ * is being built: the builder's child would be killed mid-build.
+ */
+export function busy(state: BoxState, building = false): boolean {
+  const pastHome = state.phase !== "boot" && state.phase !== "attract" && state.phase !== "home";
+  return pastHome || building || state.match !== null || state.txs.some((tx) => tx.step !== "paid");
 }
 
 export interface ApiOptions {
@@ -33,11 +37,13 @@ export interface ApiOptions {
   /** The badges the roster knows, for injected taps by label. */
   readonly roster: () => readonly Badge[];
   readonly records: () => Readonly<Record<string, BadgeRecord>>;
+  /** A game is queued or being built. */
+  readonly building: () => boolean;
 }
 
 const noContent = (res: Parameters<Route["handle"]>[1]): void => void res.writeHead(204).end();
 
-export function apiRoutes({ core, commit, uptimeMs, roster, records }: ApiOptions): Route[] {
+export function apiRoutes({ core, commit, uptimeMs, roster, records, building }: ApiOptions): Route[] {
   return [
     {
       method: "GET",
@@ -49,7 +55,7 @@ export function apiRoutes({ core, commit, uptimeMs, roster, records }: ApiOption
       path: "/api/state",
       handle(_req, res) {
         const state = core.state();
-        sendJson(res, { phase: state.phase, match: state.match !== null, busy: busy(state), now: core.now() } satisfies StateReply);
+        sendJson(res, { phase: state.phase, match: state.match !== null, busy: busy(state, building()), now: core.now() } satisfies StateReply);
       },
     },
     {
@@ -83,13 +89,6 @@ export function apiRoutes({ core, commit, uptimeMs, roster, records }: ApiOption
         core.setPower(body.on);
         noContent(res);
       },
-    },
-    {
-      // The game builder mounts here (steps 7 and 8); until then the route only proves the launcher-token guard.
-      method: "GET",
-      path: "/api/builder",
-      launcher: true,
-      handle: (_req, res) => sendText(res, 501, "the game builder isn't on this Box yet"),
     },
   ];
 }

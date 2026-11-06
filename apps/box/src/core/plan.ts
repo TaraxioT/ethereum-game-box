@@ -27,6 +27,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
   const mine = state.seats[seat];
   switch (state.phase) {
     case "boot":
+    case "build":
       return "none";
     case "result": {
       const endedAt = state.match?.endedAt ?? null;

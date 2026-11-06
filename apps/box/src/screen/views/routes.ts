@@ -8,6 +8,7 @@ import { joinView } from "./join.ts";
 import { stakeView } from "./stake.ts";
 import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
+import { builderView } from "./builder.ts";
 
 export const routes: Routes = (state) => {
   switch (state.phase) {
@@ -29,5 +30,7 @@ export const routes: Routes = (state) => {
       return { key: "result", pose: "page", view: resultView };
     case "refund":
       return { key: "refund", pose: "page", view: refundView };
+    case "build":
+      return { key: "build", pose: "page", view: builderView };
   }
 };
