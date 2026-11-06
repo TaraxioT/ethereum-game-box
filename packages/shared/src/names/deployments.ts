@@ -3,7 +3,7 @@
 // the proxies `GameBoxNames` created (its registry, the shared resolvers and the title registries) and `gamebox.eth`'s
 // own resolver.
 
-import { type Address, type Hex, getAddress } from 'viem';
+import { type Address, type Hex, getAddress, isAddress } from 'viem';
 
 import sepolia from '../../../../deployments/sepolia.json' with { type: 'json' };
 
@@ -91,4 +91,17 @@ export function contractAddress(name: ContractName): Address {
 export function namesProxies(): NamesProxies {
   if (!file.names) throw new Error('names is not in deployments/sepolia.json');
   return file.names;
+}
+
+function addressesIn(value: unknown): Address[] {
+  if (typeof value === 'string') return isAddress(value, { strict: false }) ? [getAddress(value)] : [];
+  if (typeof value === 'object' && value !== null) return Object.values(value).flatMap(addressesIn);
+  return [];
+}
+
+/** Every contract address in `deployments/sepolia.json`: ours (`contracts`), ENS's (`ens`) and the proxies
+ *  `GameBoxNames` created (`names`), checksummed, once each. The external tokens (`external`) are not ours and are
+ *  left out. */
+export function deployedAddresses(): Address[] {
+  return [...new Set(addressesIn([file.contracts, file.ens, file.names]))];
 }
