@@ -10,7 +10,7 @@ import type { Transcript } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../core/types.ts";
 import { STATS } from "../games/stock-duel/deck.ts";
 import type { BoxReply } from "../test-page/wire.ts";
-import { flush, post, startTestBox, type TestBox } from "./testing.ts";
+import { fakeTap, flush, post, startTestBox, type TestBox } from "./testing.ts";
 
 const P1 = "e4ba70";
 const P2 = "df3d88";
@@ -46,20 +46,7 @@ async function fakeBox(timeScale = 0): Promise<Rig> {
     tb,
     events,
     state: () => tb.box.core.state(),
-    async tap(badge, st) {
-      // stats() hands out the live counters: keep a copy.
-      const before = structuredClone(taps.stats().taps);
-      const ended = () => {
-        const now = taps.stats().taps;
-        const fails = Object.values(now.fail).reduce((a, b) => a + b, 0) - Object.values(before.fail).reduce((a, b) => a + b, 0);
-        return now.touch > before.touch && now.done - before.done + fails === now.touch - before.touch && taps.status().running === 0;
-      };
-      fake.lift(badge);
-      fake.place(badge, st);
-      await tb.settle(ended, 5_000, 5);
-      fake.lift(badge);
-      await tb.settle(() => fake.status().badges.every((b) => b.name !== badge || b.station === null), 1_000, 5);
-    },
+    tap: (badge, st) => fakeTap(tb, badge, st),
     apdus() {
       const all = fake.heard();
       const fresh = all.slice(heard).filter((line) => line.startsWith("nfc ") && line.includes(" apdu "));

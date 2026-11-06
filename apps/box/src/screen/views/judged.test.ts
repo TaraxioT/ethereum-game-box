@@ -25,6 +25,12 @@ describe("the verifier's word on screen", () => {
     expect(splitWords(said("paid", { payouts: [20, 0] }), 10, ["a", "b"]).seats[1]).toEqual({ status: "+0 USDC", tone: "lose" });
   });
 
+  it("leaves a split of more than two to the players' panels", () => {
+    const words = splitWords(said("paid", { payouts: [25, 5, 5, 5] }), 10, ["a", "b", "c", "d"]);
+    expect(words.seats.map((s) => [s.status, s.tone])).toEqual([["+25 USDC", "win"], ["+5 USDC", "lose"], ["+5 USDC", "lose"], ["+5 USDC", "lose"]]);
+    expect(words.lines).toEqual([]);
+  });
+
   it("shows a refund as a refund, with why", () => {
     const words = splitWords(said("refunded", { reason: "the agent couldn't judge" }), 10, ["a", "b"]);
     expect(words).toEqual({

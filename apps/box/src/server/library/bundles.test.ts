@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { BUNDLE_LIMITS, packBundle, readBundle } from "@egb/sdk/bundle";
 import { describe, expect, it, vi } from "vitest";
-import { createBundles } from "./bundles.ts";
+import { createBundles, type BundlesOptions } from "./bundles.ts";
 
 const manifest = (over: Record<string, unknown> = {}) => ({
   format: 1,
@@ -36,7 +36,7 @@ async function hashOf(zip: Uint8Array): Promise<`0x${string}`> {
   return (await readBundle(zip)).hash;
 }
 
-function rig(answer: (url: string, init: RequestInit | undefined) => Promise<Response>) {
+function rig(answer: (url: string, init: RequestInit | undefined) => Promise<Response>, more: Pick<BundlesOptions, "seats" | "listed"> = {}) {
   const dir = path.join(mkdtempSync(path.join(tmpdir(), "egb-bundles-")), "store-bundles");
   const seals: [string, string, boolean][] = [];
   const asked: string[] = [];
@@ -45,6 +45,7 @@ function rig(answer: (url: string, init: RequestInit | undefined) => Promise<Res
     dir,
     log: () => {},
     seal: (id, reason, passing) => void seals.push([id, reason, passing]),
+    ...more,
     fetcher: (url, init) => {
       asked.push(String(url));
       return answer(String(url), init);
@@ -131,6 +132,17 @@ describe("the downloader", () => {
     const tooMany = rig(serving(big));
     await expect(tooMany.bundles.fetch("tap-rush", await hashOf(big))).rejects.toThrow(/needs 3 players/);
     expect(tooMany.seals[0]?.[2]).toBe(false);
+  });
+
+  it("takes a game for as many as the Box's stations, and refuses a zip that seats other numbers than the store lists", async () => {
+    const big = zipOf({ players: { min: 3, max: 4 } });
+    const hash = await hashOf(big);
+    expect(await rig(serving(big), { seats: 3 }).bundles.fetch("tap-rush", hash)).toEqual({ minutes: 1, taps: "random" });
+    const listed = { min: 3, max: 4 };
+    expect(await rig(serving(big), { seats: 4, listed: () => listed }).bundles.fetch("tap-rush", hash)).toEqual({ minutes: 1, taps: "random" });
+    const wrong = rig(serving(big), { seats: 4, listed: () => ({ min: 2, max: 4 }) });
+    await expect(wrong.bundles.fetch("tap-rush", hash)).rejects.toThrow(/other numbers than the store lists/);
+    expect(wrong.seals[0]?.[2]).toBe(false);
   });
 
   it("stops reading a zip past the format's limit", async () => {

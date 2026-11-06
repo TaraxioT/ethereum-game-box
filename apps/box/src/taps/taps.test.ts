@@ -9,6 +9,7 @@ import { createFakeClock } from "../core/fake-clock.ts";
 import type { TapEvent, TapPlan } from "../core/ports.ts";
 import { VerifyError } from "./errors.ts";
 import type { FakeOptions } from "./fake/fake-receiver.ts";
+import { LINK_GRACE_MS } from "./stations.ts";
 import { createTaps, type Taps } from "./taps.ts";
 
 const P1 = "e4ba70";
@@ -25,13 +26,13 @@ const flush = async (rounds = 8) => {
   for (let i = 0; i < rounds; i++) await new Promise<void>((r) => setImmediate(r));
 };
 
-async function boot(fake: FakeOptions = {}, dataDir = mkdtempSync(join(tmpdir(), "egb-taps-"))) {
+async function boot(fake: FakeOptions = {}, dataDir = mkdtempSync(join(tmpdir(), "egb-taps-")), stations: readonly string[] = [P1, P2]) {
   const clock = createFakeClock(1_700_000_000_000);
   const events: TapEvent[] = [];
   const env = { plan: "identify" as TapPlan, events, clock, dataDir };
   const taps = createTaps({
     receiver: "fake",
-    stations: [P1, P2],
+    stations,
     dataDir,
     clock,
     plan: () => env.plan,
@@ -316,6 +317,40 @@ describe("the tap state machine", () => {
     await flush();
     expect(t.events).toEqual([]);
     expect(t.taps.status().stations.find((s) => s.st === "0a0b0c")).toMatchObject({ seat: null, chip: { uid: t.fake.badge("ada").uid } });
+  });
+});
+
+describe("the seats", () => {
+  const FOUR = [P1, P2, "df3b9c", "0a0b0c"];
+  const SPARE = "0a0b0d";
+  const seats = (t: Awaited<ReturnType<typeof boot>>) => t.taps.status().stations.map((s) => [s.st, s.seat]);
+
+  it("gives each known station a seat, up to four, in link order, and benches any more", async () => {
+    const t = await boot({ stations: [...FOUR, SPARE] }, undefined, FOUR);
+    expect(seats(t)).toEqual([[P1, 0], [P2, 1], ["df3b9c", 2], ["0a0b0c", 3], [SPARE, null]]);
+    await t.step(10);
+    expect(t.fake.status().stations.find((s) => s.st === SPARE)?.screen).toContain("big=NEXT\nsmall=every seat taken - you're next");
+  });
+
+  it("hears a tap, shows a view and buzzes on the fourth seat", async () => {
+    const t = await boot({}, undefined, FOUR);
+    t.fake.place("ada", "0a0b0c");
+    await flush();
+    expect(t.events[0]).toMatchObject({ phase: "touch", seat: 3 });
+    t.taps.show(3, stationView("P4", "TAP", "to join"));
+    t.taps.buzz(3, "ok");
+    await flush();
+    expect(t.fake.status().stations.find((s) => s.st === "0a0b0c")?.screen).toContain("tag=P4");
+    expect(t.fake.heard().filter((l) => l.startsWith("buzz")).map((l) => l.replace(/ \d+ /, " # "))).toEqual(["buzz 0a0b0c # 80"]);
+  });
+
+  it("gives a lost station's seat to the bench, with the seat's last view", async () => {
+    const t = await boot({ stations: [...FOUR, SPARE] }, undefined, FOUR);
+    t.taps.show(2, stationView("P3", "SIGN", "10 USDC"));
+    t.fake.linkDown("df3b9c");
+    await t.step(2500 + LINK_GRACE_MS + 50);
+    expect(seats(t).find(([st]) => st === SPARE)).toEqual([SPARE, 2]);
+    expect(t.fake.status().stations.find((s) => s.st === SPARE)?.screen).toContain("big=SIGN");
   });
 });
 

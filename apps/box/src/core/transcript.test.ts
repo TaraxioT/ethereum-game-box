@@ -14,6 +14,12 @@ describe("whether a result counts", () => {
     expect(counts({ ...record, seen: [END - 40_000, null] }, none)).toBe(false);
   });
 
+  it("needs every player's, however many played", () => {
+    const three = { ...record, badges: ["0xa", "0xb", "0xc"], seen: [END - 40_000, END - 39_000, END - 38_000] };
+    expect(counts(three, none)).toBe(true);
+    expect(counts({ ...three, seen: [END - 40_000, END - 39_000, null] }, none)).toBe(false);
+  });
+
   it("needs FREE_MIN_MATCH_MS since the first of them", () => {
     expect(counts({ ...record, seen: [END - FREE_MIN_MATCH_MS, END - 1_000] }, none)).toBe(true);
     expect(counts({ ...record, seen: [END - FREE_MIN_MATCH_MS + 1, END - 1_000] }, none)).toBe(false);

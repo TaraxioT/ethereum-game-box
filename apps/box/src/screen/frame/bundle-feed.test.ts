@@ -35,6 +35,11 @@ describe("a store match on the kiosk", () => {
     expect(storeMatch.match(stateOf({ game: "built", id: "x", state: null, stations: [{}, {}] } as unknown as Match["play"]))).toBeNull();
   });
 
+  it("counts players, not seats: one left empty isn't on the page's list", () => {
+    const state = { ...stateOf(play), seats: [seat("nova"), seat(null), seat("juno"), seat("orion")] } as unknown as BoxState;
+    expect(storeMatch.match(state)?.players).toEqual([{ name: "NOVA" }, { name: "JUNO" }, { name: "ORION" }]);
+  });
+
   it("hears a finished tap and no other moment", () => {
     expect(storeMatch.tap({ type: "game-tap", seat: 1, at: 1234, roll: 77 })).toEqual({ seat: 1, at: 1234, roll: 77 });
     const others: BoxEvent[] = [{ type: "init" }, { type: "touch", seat: 0 }, { type: "tap", seat: 0, accepted: true, meaning: "play" }, { type: "game" }];

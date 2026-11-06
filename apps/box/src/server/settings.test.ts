@@ -62,6 +62,9 @@ describe("settings", () => {
       expect((error as SettingsError).problems).toHaveLength(3);
     }
     expect(() => readSettings({ EGB_STATIONS: "e4ba70,e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/different station ids/);
+    expect(() => readSettings({ EGB_STATIONS: "e4ba70", ...CHAIN }, HOME, REPO)).toThrow(/EGB_STATIONS must be 2 to 4/);
+    expect(() => readSettings({ EGB_STATIONS: "e4ba70,df3d88,df3b9c,0a0b0c,0a0b0d", ...CHAIN }, HOME, REPO)).toThrow(/EGB_STATIONS must be 2 to 4/);
+    expect(readSettings({ EGB_STATIONS: "e4ba70,df3d88,df3b9c,0a0b0c", ...CHAIN }, HOME, REPO).stations).toHaveLength(4);
     expect(() => readSettings({ EGB_PORT: "70000", ...CHAIN }, HOME, REPO)).toThrow(/EGB_PORT/);
   });
 

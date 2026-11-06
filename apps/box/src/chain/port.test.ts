@@ -86,6 +86,12 @@ describe("the messages the Box signs", () => {
     expect(resultOf("b", { ...order, winner: null }, 1n)).toMatchObject({ winner: A, loser: B, draw: true });
     expect(() => stakeOf("b", { ...order, game: "lantern-race", amount: 5 }, 1n)).toThrow(/isn't on chain/);
   });
+
+  it("holds a team game's orders to two: DuelPot and BoxResults have no third seat", () => {
+    const order = { round: 1, game: "stock-duel", badges: [A, B, A] };
+    expect(() => stakeOf("b", { ...order, amount: 5 }, 1n)).toThrow(/two players/);
+    expect(() => resultOf("b", { ...order, winner: 0 }, 1n)).toThrow(/two players/);
+  });
 });
 
 describe("the Sepolia port on a mocked relayer", () => {
