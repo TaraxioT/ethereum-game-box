@@ -76,6 +76,19 @@ function transcripts(): Transcript[] {
     .map((line) => JSON.parse(line) as Transcript);
 }
 
+/** The last transcript of `game`, once the session log has it: it is written after the end hold, off the tap path. */
+async function transcriptOf(game: string): Promise<Transcript | undefined> {
+  const of = () => {
+    try {
+      return transcripts().filter((t) => t.game === game);
+    } catch {
+      return [];
+    }
+  };
+  await waitFor(() => of().length > 0, 10_000);
+  return of().at(-1);
+}
+
 beforeAll(async () => {
   tb = await startTestBox();
   screen = await openScreen(tb.box);
@@ -130,7 +143,7 @@ describe("a built game on the Box", () => {
     await play((s) => s.phase === "result");
     expect(tb.box.core.state().txs).toEqual([]);
     expect(tb.box.core.state().seats.map((s) => s.balance)).toEqual(before);
-    const last = transcripts().at(-1);
+    const last = await transcriptOf(built);
     expect(last).toMatchObject({ game: built, result: { winner: 0 }, stake: 0 });
     expect(last?.taps.filter((t) => t.seat === 0)).toHaveLength(7);
   }, 60_000);
@@ -167,6 +180,6 @@ process.stdin.on("end", () => process.exit(0));
     await play((s) => s.phase === "result");
     // Nobody gained or lost.
     expect(tb.box.core.state().seats.map((s) => s.balance)).toEqual(before);
-    expect(transcripts().at(-1)).toMatchObject({ game: hung, result: "void", counts: false });
+    expect(await transcriptOf(hung)).toMatchObject({ game: hung, result: "void", counts: false });
   }, 60_000);
 });
