@@ -1,0 +1,99 @@
+/* The Box's design tokens: World Computer, skeuomorphic. Devcon 8's night with the lights dimmed; one key light from
+   the top left; glows stay on their edges (1–3 px lines, at most 10 px of glow). Only transform and opacity animate. */
+:root {
+  /* Room and plates */
+  --room: #120c24;
+  --ink-0: #07040f;
+  --ink-1: #0e0820;
+  --ink-2: #160b2b;
+  --plate-hi: #2d2356;
+  --plate-lo: #211943;
+  --groove: #120c24;
+  --metal-hi: #5a4f8a;
+  --metal: #3a3166;
+  --metal-lo: #1b1436;
+
+  /* Neon (pastel-cored) and Devcon accents */
+  --neon-lav: #ad8fff;
+  --neon-gold: #ffc46b;
+  --neon-mint: #86eec4;
+  --violet: #7235ed;
+  --lavender: #c4aaf7;
+  --eth: #8c8dfc;
+  --pink: #f7a8d8;
+
+  /* Seats */
+  --p1: #ff9b3d;
+  --p1-hi: #ffd2a3;
+  --p2: #3fd9ff;
+  --p2-hi: #b5f1ff;
+
+  /* Text */
+  --fg: #f5f1ff;
+  --fg-2: #d2c9ef;
+  --fg-3: #9d92c4;
+  --fg-4: #6b6194;
+
+  /* LCDs */
+  --lcd-amber: #ffb547;
+  --lcd-amber-bg: #1a0f04;
+  --lcd-mint: #8ff0d8;
+  --lcd-mint-bg: #06201c;
+
+  /* Money and outcomes */
+  --gold: #e7c46a;
+  --win: #7ee08a;
+  --lose: #ff6b6b;
+
+  /* Brass (Play and every primary key) */
+  --brass-hi: #f6e3a4;
+  --brass: #d2b261;
+  --brass-mid: #bf9a47;
+  --brass-lo: #a9843a;
+  --brass-edge: #6c4c14;
+  --brass-ink: #4a3708;
+
+  /* Type */
+  --display: "Unbounded", system-ui, sans-serif;
+  --body: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Light: a lit top edge, a dark bottom edge, an inner shadow (the key light is top left) */
+  --lit-edge: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 0 rgb(0 0 0 / 0.45);
+  --plate-shadow: 0 2px 0 #0a0616, 0 8px 18px rgb(3 1 10 / 0.55);
+  --well: inset 0 2px 6px rgb(0 0 0 / 0.65), inset 0 -1px 0 rgb(255 255 255 / 0.08);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --t-press: 90ms;
+  --t-move: 420ms;
+  --t-page: 560ms;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--room);
+  color: var(--fg);
+  font: 18px/1.4 var(--body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+button { font: inherit; color: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 160ms !important;
+  }
+}

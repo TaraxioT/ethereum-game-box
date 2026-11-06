@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethereum Game Box · Box server plan</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #141413; --muted: #6F6E68; --line: #DEDCD2; --panel: #F0EEE6;
+    --accent: #3B5BDB; --accent-soft: #E3E8FB; --good: #2F7D4F;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1B1B1A; --ink: #EDEBE4; --muted: #A09E96; --line: #3A3936; --panel: #252523;
+            --accent: #8FA6FF; --accent-soft: #263055; --good: #7CC79A; }
+  }
+  * { box-sizing: border-box }
+  html { scroll-behavior: smooth }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 16px 120px }
+  header .kicker { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent) }
+  h1 { font: 500 44px/1.1 var(--serif); letter-spacing: -.015em; margin: 14px 0 12px }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 620px }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 48px }
+  nav a { font: 13px/1 var(--mono); color: var(--ink); text-decoration: none; padding: 8px 12px;
+          border: 1px solid var(--line); border-radius: 999px }
+  nav a:hover { border-color: var(--accent); color: var(--accent) }
+  section { border-top: 1px solid var(--line); padding-top: 36px; margin-top: 52px }
+  h2 { font: 500 30px/1.2 var(--serif); margin: 0 0 6px }
+  h2 .n { font: 600 13px/1 var(--mono); color: var(--accent); vertical-align: middle; margin-right: 10px }
+  h3 { font-size: 17px; margin: 30px 0 8px }
+  p, li { max-width: 680px }
+  ul, ol { padding-left: 22px }
+  li { margin: 4px 0 }
+  .sub { color: var(--muted); margin-top: 0 }
+  .callout { background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; margin: 22px 0 }
+  .callout p { margin: 0 }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0 }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px }
+  .card h4 { margin: 0 0 4px; font-size: 15px }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted) }
+  .steps { counter-reset: s; list-style: none; padding: 0 }
+  .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 12px 0 }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px;
+                      border-radius: 50%; background: var(--accent); color: var(--bg);
+                      font: 600 13px/26px var(--mono); text-align: center }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 15px }
+  th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 9px 10px; vertical-align: top }
+  th { font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+  .table-scroll { overflow-x: auto }
+  code { font: 13.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+         padding: 1px 5px; overflow-wrap: anywhere }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 20px 0; padding: 0; list-style: none }
+  .flow li { flex: 1 1 120px; max-width: none; margin: 0; background: var(--panel); border: 1px solid var(--line);
+             border-radius: 10px; padding: 10px 12px; font-size: 14px; position: relative }
+  .flow li strong { display: block; font-size: 15px }
+  .flow li span { color: var(--muted) }
+  .flow li:not(:last-child)::after { content: "→"; position: absolute; right: -6px; top: 50%;
+             transform: translate(50%, -50%); color: var(--accent); font-weight: 700; z-index: 1 }
+  footer { margin-top: 72px; color: var(--muted); font-size: 14px }
+  @media (max-width: 560px) {
+    h1 { font-size: 34px } .lede { font-size: 17px } h2 { font-size: 25px }
+    .flow { flex-direction: column; gap: 14px }
+    .flow li { flex: none }
+    .flow li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -7px;
+             transform: translate(-50%, 50%) }
+  }
+  li.todo, li.done { list-style: none; margin-left: -22px }
+  li.done { color: var(--good) }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto }
+  pre code { background: none; border: 0; padding: 0 }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">ETHGlobal Mumbai · Box server plan</div>
+  <h1>The Box server, the tap stations and the game builder</h1>
+  <div class="lede"><p>The plan for the Game Box&#39;s own server on the Raspberry Pi, the tap stations that feed it, and the game builder that
+makes new games on the Box. No blockchain yet: money, blocks and transactions stay simulated behind the interface the
+chain plugs into later. Plan live at <a href="https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/</a>.</p>
+</div>
+  <nav>
+    <a href="#s1">Goal</a>
+    <a href="#s2">What exists today</a>
+    <a href="#s3">Architecture</a>
+    <a href="#s4">The Box core</a>
+    <a href="#s5">Taps and badges</a>
+    <a href="#s6">Games on the Box</a>
+    <a href="#s7">The game builder</a>
+    <a href="#s8">Firmware</a>
+    <a href="#s9">Performance</a>
+    <a href="#s10">Real and simulated</a>
+    <a href="#s11">Constraints</a>
+    <a href="#s12">Steps</a>
+    <a href="#s13">On the Pi</a>
+    <a href="#s14">Done when</a>
+  </nav>
+</header>
+
+<section id="s1">
+<h2><span class="n">01</span>Goal</h2>
+<ul>
+<li>The games work on the real Box: badges tap real tap stations, the Box server on the Pi runs the match, and the
+screen from the UI pass draws it.</li>
+<li>A player can build a new game on the Box with the game builder, then play it.</li>
+<li><strong>Every game runs on the Pi:</strong> its rules in the Box server, and its screen in the Pi&#39;s kiosk browser. The demo
+build is the only exception: it runs in any visitor&#39;s browser.</li>
+</ul>
+<p>Priorities, in order:</p>
+<ol>
+<li><strong>Hardware performance</strong>, above all the link between the ESP boards and the Pi.</li>
+<li>Generated games run.</li>
+<li>Code quality at least as high as the UI pass.</li>
+</ol>
+<p><strong>No blockchain yet.</strong> No contracts, RPC, relayer, Box signer or ENS. Money, blocks and transactions stay simulated,
+behind the interface the chain plugs into later. Only what has to wait for the chain is simulated; everything else
+(stations, badges, randomness, the server, the builder) is real.</p>
+</section>
+
+<section id="s2">
+<h2><span class="n">02</span>What exists today</h2>
+<p><strong>In this repo</strong> (the UI pass, branch <code>game-ui</code>):</p>
+<ul>
+<li><code>@egb/box</code> with the screen (<code>apps/box/src/screen/</code>): Vite and TypeScript, custom-element parts, a router of views
+(attract, Home, Join, Stake, Result, Refund) and two game screens (Quick Draw, Stock Duel).</li>
+<li>The screen talks only to <code>BoxLink</code> (<code>state()</code>, <code>subscribe()</code>, <code>send()</code>), with <code>BoxState</code>, <code>BoxEvent</code>,
+<code>ScreenCommand</code> and <code>StationView</code> in <code>screen/link/types.ts</code>.</li>
+<li><code>SimLink</code> (<code>screen/link/sim/engine.ts</code>) is the whole Box in the browser: the phase machine
+(boot → attract → home → join → stake → playing → result | refund), a pure ledger with a faucet and escrow, a block
+clock at Sepolia&#39;s pace, simulated transactions (<code>SIGNED → SENT → IN BLOCK n → PAID</code>, no hash, shown <code>SIMULATED</code>),
+the station OLED text, and a bot on Player 2. It reads <code>Date.now()</code> and timers directly.</li>
+<li>Pure, tested rules for Quick Draw and Stock Duel (<code>games/*/rules.ts</code>), <code>GameRules&lt;S, E&gt;</code>, <code>Seat</code>, seeded
+randomness (<code>hash32</code>, <code>mulberry32</code>, <code>shuffle</code>).</li>
+<li>Demo mode draws the missing hardware on a desk: pucks with 128×64 OLEDs, draggable badges, the <code>DEMO</code> plate. It is
+live at <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a>.</li>
+<li>The server, taps, firmware, deploy and builder folders hold only READMEs. No <code>@egb/sdk</code>, no <code>@egb/shared</code> code.</li>
+</ul>
+<p><strong>What this pass builds on</strong>, as plain facts about the hardware and the way the Box must behave:</p>
+<ul>
+<li><strong>The boards.</strong> Each tap station is a 01Space ESP32-S3 0.42″ board: SSD1306 72×40 OLED on SDA 41 / SCL 40, WS2812
+LED on GPIO39, BOOT on GPIO0, a vibration motor on GPIO16, and a PN532 in I²C mode on the second bus (<code>Wire1</code>,
+SDA 35 / SCL 36, 400 kHz, address 0x24, firmware 1.6, optional IRQ on 37). The receiver is an ESP32-C3 on the Pi&#39;s
+USB (LED A GPIO12, BOOT GPIO9); its flash only reads back correctly at 40 MHz in DIO mode.</li>
+<li><strong>The radio.</strong> ESP-NOW on channel 1, no power save, unicast at 24 Mbps. A press round trip C3 ↔ S3 has a median
+of 2.4–2.8 ms; pings between station and receiver a median of 3.1 ms, 96–98 % under 6 ms. USB serial writes must
+never wait (<code>setTxTimeoutMs(0)</code>): an unread port otherwise stalls a loop for up to 100 ms a write.</li>
+<li><strong>The reader.</strong> A chip read takes 27.4–29.4 ms; listing the chips ~35 ms; each APDU ~9 ms of station I²C plus
+3–15 ms of radio. Reading 16 bytes of each PN532 answer and NACKing for the rest saves ~6 ms an exchange. A read
+leaves the chip halted, so a resting chip needs a presence check: every 20 ms, the PN532&#39;s Diagnose first, then an
+ISO-DEP R(NAK) (Diagnose alone fails on HaLos); non-ISO-DEP chips get a 5 ms RF-field cycle. A fresh HaLo answers
+neither until something talks to it, so it gets 800 ms of grace; and there are no checks for 150 ms after a Pi
+request. A PN532 cut off mid-transfer can hold SCL low after the S3 resets; only a power cycle frees it.</li>
+<li><strong>The chip.</strong> HaLo key 2 signs <code>sign_random</code> (a counter plus 28 random bytes) in 700–900 ms; selecting the HaLo
+applet costs 40–75 ms; an applet ID the chip doesn&#39;t answer (status <code>6D00</code>) wastes ~50 ms. Identity is the UID,
+tied to the keys by a roster after the first <code>get_pkeys</code>. Six rules govern chip use (key 1 only for money, UID for
+identity, roll only when the outcome is decided, time from the touch, tell the player how long to hold, always read
+an unknown chip); this pass uses all but the first, and never touches key 1.</li>
+<li><strong>The station&#39;s own feedback.</strong> The LED, OLED and buzz follow what the Pi asks of the chip (blue blinking <code>HOLD</code>,
+fast <code>HOLD STILL</code> while signing, green <code>DONE</code>, red <code>AGAIN</code> / <code>TOO SOON</code>), with the Pi able to reword each. Screens
+are <code>key=value</code> lines (<code>tag</code>, <code>big</code>, <code>small</code>, <code>hold</code>, <code>sign</code>, <code>done</code>, <code>fail</code>, <code>ttl</code>), dropped by the station when
+their <code>ttl</code> runs out or 3 s after the link drops. The Pi resends on change, on relink, and every 5 s with
+<code>ttl=15</code>. A link times out after 2.5 s of silence (any packet counts, compared signed).</li>
+<li><strong>The receiver&#39;s serial lines.</strong> One JSON object per line at 115200 (<code>ready</code>, <code>tap</code>, <code>gone</code>, <code>nfc</code>, <code>ping</code>, <code>link</code>,
+<code>buzz</code> / <code>buzz_ok</code> / <code>buzz_fail</code>, <code>nfc_res</code> / <code>nfc_fail</code>, <code>screen_ok</code> / <code>screen_fail</code>, <code>signed</code>, presses); commands
+in (<code>press</code>, <code>buzz</code>, <code>nfc &lt;st&gt; &lt;id&gt; …</code>, <code>screen &lt;st|all&gt; &lt;hex&gt;</code>). A known bug: the first command after the receiver
+starts produces no event.</li>
+<li><strong>Bridge timings that work:</strong> a request waits 4.0 s, a re-select 3.0 s, a dropped link 2.0 s of grace, and a sign
+result is reported 0.4 s after the chip answers.</li>
+<li><strong>Games.</strong> Quick Draw judges by touch time, waits 450 ms after the first touch for the other station, reads for up
+to 1.5 s, calls a player too slow after 4 s, and takes a rematch tap within 4 s; it never says GO on the speaker
+(the speaker lags). Stock Duel freezes a seat&#39;s front card on <code>touch</code>, plays it at the touch time on <code>done</code>, and
+releases it on <code>fail</code>.</li>
+<li><strong>The builder.</strong> A one-question-at-a-time Designer produces a brief; a Forge copies a template into a confined
+folder and runs a Claude agent on it with five file tools and one <code>build_game</code> tool, then bundles, checks and
+installs the game. Agent file access is checked by one confinement function from both <code>canUseTool</code> and a
+<code>PreToolUse</code> hook. Free results count only when the Box saw both badges tap, 12 s passed, and the pair has had
+fewer than 12 results that hour.</li>
+<li><strong>Deploying to the Pi.</strong> Build a release, smoke-test it, wait for an idle Box, switch a symlink atomically, roll
+back on failure, prune old releases.</li>
+</ul>
+</section>
+
+<section id="s3">
+<h2><span class="n">03</span>Architecture</h2>
+<pre><code>  badge ─NFC─▶ tap station (ESP32-S3) ─ESP-NOW─▶ receiver (ESP32-C3) ─USB serial─▶ ┌──────────── Box server (Node, Pi) ────────────┐
+  badge ─NFC─▶ tap station (ESP32-S3) ─ESP-NOW─▶          ▲                           │ taps/: receiver port, stations, libhalo,      │
+                                                          └───── commands ◀──────────│        roster, the tap state machine          │
+                                                                                      │ core/: the phase machine (ledger, chain clock,│
+                                                                                      │        txs, station views, bot), behind ports │
+                                                                                      │ server/: HTTP, WebSocket link, data, records  │
+                                                                                      │ builder/: Designer; Forge in a child process  │
+                                                                                      └──────┬──────────────────────┬─────────────────┘
+                                                                                             │ stdio (JSON lines)   │ WebSocket (state, event)
+                                                                                             ▼                      ▼
+                                                                   built game&#39;s rules: one child process     kiosk screen (Chromium):
+                                                                   per game, Node --permission (reads only   LiveLink → the UI pass&#39;s views;
+                                                                   its own bundle; no fs writes, net,        built game&#39;s screen in
+                                                                   workers, children or addons)              &lt;iframe sandbox=&quot;allow-scripts&quot;&gt;
+                                                                                                             fed by a typed postMessage channel
+</code></pre>
+<ul>
+<li><strong>One process owns the serial port</strong>: the Box server. No helper process, bridge or monitor sits between the
+receiver and the server.</li>
+<li><strong>The core</strong> (<code>apps/box/src/core/</code>) has no DOM and no Node APIs. It reaches the world through ports: clock and
+timers, stations, badges (tap events in), chain (simulated today), and a rules runner (built games).</li>
+<li><strong>Two hosts run the core:</strong> <code>SimLink</code> in the browser for the demo build, and the Box server on the Pi.</li>
+<li><strong>Built games</strong> are refereed by the server: their rules run in a sandboxed child, their screens in a sandboxed
+frame that only draws.</li>
+</ul>
+<pre><code>apps/box/src/
+  core/        phase machine, ledger, chain clock, txs, station views, bot, catalogue; ports.ts; no DOM, no Node
+  server/      main.ts, env, data dir, http (CSP, local origin, launcher token), ws link, ledger store,
+               sessions/records, rules runner host, test page API; tsconfig with Node types, no DOM
+  taps/        receiver (serialport), protocol parser, stations + screens, libhalo over nfc, roster, tap machine,
+               fake receiver, simulated badges, bench
+  builder/     designer/, forge/ (child process), voice/
+  games/       quick-draw/, stock-duel/ in the module shape (game.json, rules.ts, screen.ts, icon.svg, BLUEPRINT.md)
+  screen/      the UI pass&#39;s screen; link/live.ts (LiveLink), link/sim.ts (SimLink); the Build and Designer views
+  test-page/   /test: Stations, Badges, Box, Builder
+packages/sdk/  @egb/sdk: GameRules, Seat, randomness, transcripts, the rules-runner and frame protocols, manifest
+firmware/tap-station/  protocol.md, lib/ (EgbLink), station/, receiver/, test/ (host tests), scripts
+deploy/pi/     setup.sh, release.sh, activate.sh, update.sh, push.sh, lib.sh, units/, env.example
+</code></pre>
+</section>
+
+<section id="s4">
+<h2><span class="n">04</span>The Box core</h2>
+<p><strong>Lift the phase machine out of the browser.</strong> <code>screen/link/sim/engine.ts</code> becomes <code>apps/box/src/core/</code>:</p>
+<ul>
+<li>It holds the phase machine with its ledger, chain clock, transactions, station views and bot.</li>
+<li>It has no DOM and no Node APIs, and reads no global clock. It reaches the world through ports:</li>
+</ul>
+<pre><code class="language-ts">interface CorePorts {
+  clock: Clock;                 // now(), after(ms, fn), every(ms, fn), cancel(handle)
+  stations: StationsPort;       // show(seat, view), buzz(seat, kind: &quot;ok&quot; | &quot;no&quot;)
+  chain: ChainPort;             // the simulated chain today: blocks, gas, transactions
+  ledger: LedgerStore;          // load() / save(ledger): in memory in the browser, $EGB_DATA/ledger.json on the Pi
+  rules: RulesRunnerPort;       // built games&#39; rules (the server&#39;s child processes); absent in the demo
+  log: MatchLog;                // transcripts; a no-op in the demo
+}
+// in: core.tap(event: TapEvent), core.send(command: ScreenCommand); out: BoxLink&#39;s state() and subscribe()
+</code></pre>
+<ul>
+<li><strong>Two hosts run it.</strong> <code>SimLink</code>, in the browser, for the demo build: the user sees no change, and the live demo
+keeps working. The Box server, on the Pi.</li>
+<li><strong>The ledger.</strong> The server keeps the simulated ledger in <code>$EGB_DATA/ledger.json</code>, written atomically (write a temp
+file, fsync, rename). Transactions still have no hash and show <code>SIMULATED</code>.</li>
+<li><strong><code>StationView</code></strong> becomes what a real station can show: <code>tag</code> (≤ 3 characters), <code>big</code> (≤ 10) and <code>small</code> (≤ 20),
+with the optional overrides <code>hold</code> / <code>sign</code> / <code>done</code> / <code>fail</code>. The drawn puck draws the same model.</li>
+<li><strong>Taps carry their phase.</strong> The core takes <code>touch</code>, then <code>done</code> or <code>fail</code>, for each tap. A game that judges by time
+uses the touch time; a game that needs the chip&#39;s number waits for <code>done</code>.</li>
+<li><strong><code>LiveLink</code></strong> implements <code>BoxLink</code> over a WebSocket (<code>ws</code> on the server, the browser&#39;s own on the screen):<ul>
+<li>The whole state goes out on connect, then <code>(state, event)</code> messages.</li>
+<li>Events are never coalesced. State changes with no event (the Rolodex turning) coalesce at 100 ms.</li>
+<li>Every message carries the server&#39;s <code>now</code>, and the screen draws with the link&#39;s clock offset (the screen&#39;s
+<code>Date.now()</code> is never trusted against the server&#39;s times).</li>
+<li>It reconnects with backoff (250 ms doubling to 4 s), and a reconnect gets the whole state again.</li>
+<li><code>VITE_EGB_MODE=box</code> uses <code>LiveLink</code>; <code>demo</code> uses <code>SimLink</code>.</li>
+</ul>
+</li>
+<li><strong>The server:</strong><ul>
+<li>Binds <code>127.0.0.1:8790</code>, and binds before the library scan, so the kiosk never waits on a slow disk.</li>
+<li>Serves the built screen, the test page and built games.</li>
+<li>Requires a local origin for every non-GET request and for the WebSocket upgrade.</li>
+<li>Injects a per-boot launcher token into the screen&#39;s HTML for top-level navigations only
+(<code>Sec-Fetch-Dest: document</code>). The builder routes require it, compared with <code>timingSafeEqual</code>.</li>
+<li>Sends a strict CSP: <code>default-src &#39;self&#39;</code>, <code>connect-src &#39;self&#39;</code>, <code>frame-src &#39;self&#39;</code>, <code>object-src &#39;none&#39;</code>,
+<code>base-uri &#39;none&#39;</code>, <code>frame-ancestors &#39;none&#39;</code>; built games&#39; frames get their own CSP with <code>connect-src &#39;none&#39;</code>.</li>
+<li>Caps JSON bodies at 64 KB. Contains uncaught errors (logged, never fatal) and caps shutdown at 10 s.</li>
+<li>Its env loader never overrides a key that is already set.</li>
+</ul>
+</li>
+<li><strong>Node runs the TypeScript directly</strong> (<code>node apps/box/src/server/main.ts</code>). Erasable syntax only
+(<code>erasableSyntaxOnly</code>), and the server has its own tsconfig with Node types and no DOM.</li>
+</ul>
+</section>
+
+<section id="s5">
+<h2><span class="n">05</span>Taps and badges</h2>
+<p><strong>No middlemen.</strong> The server owns the receiver&#39;s port (<code>serialport</code>) and speaks <code>firmware/tap-station/protocol.md</code>.
+HaLo commands go through libhalo&#39;s <code>execHaloCmd</code> (<code>@arx-research/libhalo/api/custom</code>), over <code>nfc &lt;st&gt; &lt;id&gt; …</code> lines.
+There is no C helper, no Python bridge and no monitor process.</p>
+<p><strong>The tap state machine.</strong> For each <code>tap</code> line from the receiver:</p>
+<ol>
+<li><code>touch</code> goes out at once, with the touch time.</li>
+<li>The tap&#39;s plan runs: <code>identify</code> | <code>random</code> | <code>none</code>.</li>
+<li>Then <code>done</code>, or <code>fail</code> with a reason (<code>lifted</code>, <code>radio</code>, <code>not-halo</code>, <code>refused</code>, <code>verify</code>, <code>link</code>).</li>
+</ol>
+<p><strong>Every <code>touch</code> ends in <code>done</code> or <code>fail</code></strong>, even when the receiver drops: a closed port fails every open tap at once.</p>
+<p><strong>Identity is the UID</strong>, kept in a roster at <code>$EGB_DATA/badges.json</code>:</p>
+<ul>
+<li>An unknown chip is read with <code>get_pkeys</code>, whatever the plan, so a stranger&#39;s chip can never pass as a seated player.</li>
+<li>After that, <code>identify</code> reads nothing.</li>
+<li>After an <code>identify</code> or <code>none</code> tap, the server selects the applet, so the station&#39;s presence check doesn&#39;t see the
+chip flicker. Errors there are dropped: the tap is already done.</li>
+<li>Until ENS, a badge&#39;s name is a local label (<code>NOVA</code>), shown without <code>.gamebox.eth</code>.</li>
+</ul>
+<p><strong>Randomness</strong> comes from key 2&#39;s <code>sign_random</code>, verified on the Pi against the roster&#39;s identity, and only on taps
+whose number the game uses. <strong>Key 1 is never used in this pass.</strong></p>
+<p><strong>Time comes from the touch</strong>, estimated from the receiver&#39;s <code>at_us</code> and the station&#39;s <code>read_us</code>, mapped onto the
+Pi&#39;s clock by a running minimum of (Pi receive time − <code>at_us</code>). It is never the time the reply arrived.</p>
+<p><strong>Stations:</strong></p>
+<ul>
+<li>Seats map to station ids from <code>EGB_STATIONS</code> (default <code>e4ba70,df3d88</code>: Player 1, Player 2).</li>
+<li>Screens go out on change, on relink, and every 5 s with <code>ttl=15</code>.</li>
+<li>A station buzzes on an accepted tap (one short), and gives a &quot;no&quot; buzz (two short) on a refused one.</li>
+<li>A dropped link gets 2 s of grace before an open tap on it fails.</li>
+</ul>
+<p><strong>Fakes.</strong> A fake receiver speaks the exact serial lines (the protocol&#39;s example lines are its test vectors), and
+simulated badges with real secp256k1 keys answer real APDUs, including signed <code>sign_random</code>. <code>EGB_RECEIVER=fake</code>
+uses both, so the whole Box runs on a laptop.</p>
+<p><strong>Injected taps.</strong> The server can inject taps for a named badge at a seat, straight into the core. This tests games
+on the Pi while the real stations show the screens and buzz.</p>
+<p><strong>The test page</strong> (<code>/test</code>) has four tabs:</p>
+<ul>
+<li><strong>Stations:</strong> link, RSSI, ping, reader, chip on the reader, Buzz, screen text, press round trip, and the live
+benchmark.</li>
+<li><strong>Badges:</strong> identify, roll, the roster, and injected taps.</li>
+<li><strong>Box:</strong> state, phase, reset, and the power switch that makes the Box miss its settle, for Refund.</li>
+<li><strong>Builder:</strong> jobs, events, and removing a built game.</li>
+</ul>
+</section>
+
+<section id="s6">
+<h2><span class="n">06</span>Games on the Box</h2>
+<p>Every game&#39;s rules run on the Pi, in the server, and the server referees every game.</p>
+<p><strong>Team games</strong> run in the core, in-process.</p>
+<ul>
+<li><strong>Quick Draw</strong> judges by touch time. After the first touch it waits <code>SETTLE_MS</code> (450 ms) for the other station&#39;s
+touch, reads for up to <code>READ_WAIT_MS</code> (1500 ms), calls <code>TOO_SLOW_MS</code> (4000 ms) after the draw, and takes a rematch
+tap within <code>REMATCH_TAP_MS</code> (4000 ms). It never says GO on the speaker. Its taps are <code>identify</code>.</li>
+<li><strong>Stock Duel.</strong> Its taps are <code>random</code>. <code>touch</code> freezes that seat&#39;s Rolodex front card; <code>done</code> plays it at the touch
+time with the chip&#39;s roll; <code>fail</code> releases it. New rule events (<code>touch</code>, <code>done</code>, <code>fail</code>) with tests.</li>
+</ul>
+<p><strong>Built games run their rules in a child process per game</strong>, started with Node&#39;s permission model:</p>
+<ul>
+<li><code>node --permission --allow-fs-read=&lt;its bundle&gt;</code> and nothing else: no writes, child processes, workers, addons,
+WASI, inspector or network.</li>
+<li>It talks over stdio in JSON lines (<code>start</code>, <code>step</code>, <code>state</code>, <code>error</code>).</li>
+<li>It starts at Join, so the first step pays no start-up cost.</li>
+<li>A step over its time budget (50 ms to start with) or a crash voids the match and refunds both stakes.</li>
+<li>A test proves every refusal on the Node version the Pi runs. A refusal that version can&#39;t enforce is closed another
+way before generated rules run on the Pi.</li>
+</ul>
+<p><strong>Built games&#39; screens run in the kiosk</strong>, inside <code>&lt;iframe sandbox=&quot;allow-scripts&quot;&gt;</code>:</p>
+<ul>
+<li>No same-origin access, and CSP <code>connect-src &#39;none&#39;</code>.</li>
+<li>Their assets are served with <code>Access-Control-Allow-Origin: *</code> (the frame&#39;s origin is opaque).</li>
+<li>The frame only draws. It gets the state and events through a typed <code>postMessage</code> channel and sends back only
+readiness and errors.</li>
+</ul>
+<p><strong>One module shape for every game:</strong></p>
+<pre><code>games/&lt;id&gt;/
+  game.json     manifest: id, title, players, minutes, stakes, taps (identify | random), template, budgetMs
+  rules.ts      pure GameRules plus stations(state): [StationView, StationView]
+  screen.ts     draws from state + events (a team game: a ViewFactory; a built game: the frame&#39;s draw module)
+  icon.svg      the cartridge art
+  BLUEPRINT.md  how it plays, its constants, its station text
+</code></pre>
+<p>The bundler (esbuild) makes <code>rules.js</code> for Node and <code>screen.js</code> for the browser.</p>
+<p><strong>The shared contract moves to <code>packages/sdk</code> (<code>@egb/sdk</code>):</strong> <code>GameRules</code>, <code>Seat</code>, seeded randomness, transcripts,
+the rules-runner protocol and the frame channel, and the manifest type. Built games use the screen&#39;s parts by tag
+(<code>&lt;egb-key&gt;</code>, <code>&lt;egb-plate&gt;</code> …) from a parts bundle the server serves.</p>
+<p><strong>Transcripts.</strong> Every match writes one line to <code>$EGB_DATA/sessions/YYYY-MM-DD.jsonl</code>: the seed, each tap with its
+touch time and roll, and the result. Records rebuild from the log.</p>
+<p><strong>Free results</strong> count only for taps the Box saw: both seated badges tapped, at least 12 s passed, and at most 12
+results per pair per hour.</p>
+</section>
+
+<section id="s7">
+<h2><span class="n">07</span>The game builder</h2>
+<p>It runs on the Pi, with the Pi&#39;s Claude login.</p>
+<ul>
+<li><strong>Entry.</strong> A blank <code>NEW GAME</code> cartridge at the end of Home&#39;s rack opens the Designer (box build only).</li>
+<li><strong>The Designer</strong> asks one question at a time:<ul>
+<li>The steps are template, mechanic, theme, twist, stakes, voice, title, confirm. Settled steps are skipped.</li>
+<li>Choices are brass keys.</li>
+<li>Typed or spoken answers are read by <code>claude-haiku-5-5</code>, with a 5 s timeout and a keyword fallback.</li>
+<li>Edits are locked while a build runs.</li>
+<li>A late model reply applies to the brief as it is by then, never to the brief it was asked about.</li>
+<li>The result is a <code>GameBrief</code>.</li>
+</ul>
+</li>
+<li><strong>The Forge</strong> runs one build at a time, in a child process, so a build never stalls the tap path:<ol>
+<li>It copies the template into <code>$EGB_DATA/forge/work/&lt;id&gt;/</code>, with a read-only <code>.reference/</code> folder.</li>
+<li>It runs the Claude Agent SDK (<code>@anthropic-ai/claude-agent-sdk</code>, lazy-imported): tools Read, Write, Edit, Glob
+and Grep; one MCP tool, <code>build_game</code>, deliberately not in <code>allowedTools</code>; <code>settingSources: []</code>;
+<code>permissionMode: &quot;default&quot;</code>; <code>canUseTool</code> and a <code>PreToolUse</code> hook, both calling one confinement check; a minimal
+child environment; <code>claude-sonnet-5-5</code>, 40 turns, 8 minutes.</li>
+<li><code>build_game</code> runs the manifest check, a typecheck and esbuild in parallel, then the icon check.</li>
+<li>The bundle is written outside the folder.</li>
+<li>A failed build gets one resumed fix-up turn. A bad icon falls back to a plain one.</li>
+<li>It installs by renaming the game into <code>$EGB_DATA/games/&lt;id&gt;/</code>, and the cartridge slides into the rack. A game
+whose bundle fails shows sealed.</li>
+</ol>
+</li>
+<li><strong>Confinement:</strong> symlinks are resolved; reads only inside the folder, outside <code>dist/</code> and <code>node_modules/</code>; no
+writes to <code>.reference</code>, <code>dist</code>, <code>node_modules</code> or <code>.claude</code>; no <code>..</code>, <code>~</code> or outside paths in globs; unknown tools
+are denied.</li>
+<li><strong>The bundler guard</strong> allows imports only from the game and <code>@egb/sdk</code>. It refuses import attributes and odd file
+extensions.</li>
+<li><strong>The build on screen.</strong> Events stream to the screen: <code>status</code>, <code>say</code>, <code>tool</code>, <code>tool_done</code>, <code>compile</code>, <code>result</code>.
+The screen shows the World Computer at work: packets on the traces, the agent&#39;s words on an LCD, and compile
+plates, in the parts and look of <code>plan/game-ui.md</code>.</li>
+<li><strong>Providers:</strong> <code>claude</code> is live. <code>sim</code> replays a recorded run; it is labelled SIMULATED and is never a fallback.</li>
+<li><strong>Built games are refereed.</strong> Their text claims no proof.</li>
+<li><strong>The shelf</strong> of templates is discovered from <code>forge.template</code> in each game&#39;s manifest. It ships Quick Draw (the
+default) and Stock Duel.</li>
+<li><strong>Voice is a port.</strong> It defaults to <code>mock</code>; <code>elevenlabs</code> needs <code>ELEVENLABS_API_KEY</code>. The Designer works fully by
+touch.</li>
+<li>Bet on X and B17 stay sealed.</li>
+</ul>
+</section>
+
+<section id="s8">
+<h2><span class="n">08</span>Firmware</h2>
+<p><code>firmware/tap-station/</code>, Arduino, esp32 core 3.3.x.</p>
+<p><strong>The boards.</strong> The station is the 01Space ESP32-S3 0.42″ board: SSD1306 72×40 OLED on SDA 41 / SCL 40; WS2812 LED
+on GPIO39, BOOT on GPIO0, motor on GPIO16; PN532 in I²C mode on <code>Wire1</code>, SDA 35 / SCL 36, at 400 kHz, with an optional
+IRQ on 37. The receiver is an ESP32-C3: LED A on GPIO12, BOOT on GPIO9.</p>
+<p><strong>Keep every documented behaviour:</strong></p>
+<ul>
+<li><strong>Radio:</strong> ESP-NOW on channel 1, <code>WIFI_PS_NONE</code>, unicast at 24 Mbps; <code>Serial.setTxTimeoutMs(0)</code>.</li>
+<li><strong>Press and resend:</strong> the press is an interrupt that wakes a high-priority task; the LED switches in the receive
+callback, before the ack; resends every 20 ms, 25 tries, each id counted once; the link times out after 2.5 s of
+silence (any packet counts), compared signed.</li>
+<li><strong>Presence checks:</strong> every 20 ms, Diagnose first, then R(NAK); cycle the RF field for chips that aren&#39;t ISO-DEP;
+800 ms of grace for a fresh chip; 150 ms of quiet after a Pi request.</li>
+<li><strong>The reader:</strong> read 16 bytes of each answer, then NACK for the rest; clock the bus clear; send the sign reply
+before the LED and the log.</li>
+<li><strong>Interfaces:</strong> the LED / OLED / buzz table; the screen payload keys; the serial protocol.</li>
+</ul>
+<p><strong>Fix what was left:</strong></p>
+<ul>
+<li><strong>Structure.</strong> Station modules: link, NFC driver, presence, screen model, OLED render, LED, motor, CLI; no file over
+~300 lines. One library (<code>EgbLink</code>) shared by both sketches: packets, reliable send, station table, hex, line
+reader, JSON writer, constants.</li>
+<li><strong>Wire format.</strong> Small tagged packets per type, not one 67-byte union; only <code>tap</code>, <code>gone</code> and <code>signed</code> carry the
+chip. One generic resend slot for packets, NFC requests and screens. No HaLo parsing in the link: the Pi sends
+signing APDUs as a <code>sign</code> op.</li>
+<li><strong>Timing.</strong> NFC waits use IRQ plus a task notification when pin 37 is wired, otherwise a yielding wait; no busy
+spin, under 1 ms added to a read. The station loop is event-driven, and the OLED draws in its own low-priority task.</li>
+<li><strong>Memory.</strong> No heap on hot paths: no <code>String</code>, no <code>Serial.printf</code> of 64 or more characters, <code>esp_read_mac</code> only,
+one static JSON writer. State shared across tasks is owned by one task, or atomic.</li>
+<li><strong>Smaller fixes.</strong> Press state per station; <code>buzz_fail</code> carries <code>st</code> and <code>id</code>; a failed ESP-NOW start shows on the
+OLED; a <code>stats</code> command reports stack high-water marks; the first-command bug is found and fixed.</li>
+</ul>
+<p><strong>Host tests</strong> with the host C++ compiler (<code>pnpm firmware:test</code>): packets; the screen parser and font fit; the JSON
+writer and hex; resend timing on a fake clock.</p>
+<p><strong><code>pnpm firmware:build</code></strong> compiles both sketches with <code>--warnings all</code>: S3 <code>esp32:esp32:esp32s3:CDCOnBoot=cdc</code>; C3
+<code>esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashFreq=40,FlashMode=dio</code> (at 80 MHz its flash reads garbage). Each <code>.ino</code>
+stays a one-line stub. On Apple Silicon it adds <code>--build-property tools.ctags.path=/opt/homebrew/bin</code>.</p>
+<p><strong><code>pnpm firmware:flash</code></strong> copies the merged bins to the Pi and flashes them there with <code>esptool</code>, by <code>by-id</code> path,
+with nothing holding the ports.</p>
+<p><strong><code>protocol.md</code> is the one spec.</strong> The TypeScript tests use its example lines verbatim.</p>
+</section>
+
+<section id="s9">
+<h2><span class="n">09</span>Performance</h2>
+<p>ESP ↔ Pi speed is the first requirement.</p>
+<p><strong>The budget per hop</strong> (target for a known chip&#39;s <code>identify</code> tap):</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th align="center">#</th>
+<th>Hop</th>
+<th>Budget</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td>chip lands → station sends <code>tap</code></td>
+<td>≤ 30 ms (the read); the UID before the wake-up step if that measures faster</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td>radio, station → receiver</td>
+<td>≤ 2 ms median</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td>receiver → USB line</td>
+<td>≤ 0.5 ms</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td>Pi read and parse</td>
+<td>≤ 0.1 ms an event</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td>core</td>
+<td>≤ 1 ms</td>
+</tr>
+<tr>
+<td align="center">6</td>
+<td>command back (Pi → receiver → station)</td>
+<td>≤ 3 ms median</td>
+</tr>
+<tr>
+<td align="center">7</td>
+<td>station acts (buzz, LED, OLED row)</td>
+<td>≤ 1 ms to start</td>
+</tr>
+<tr>
+<td align="center">8</td>
+<td>screen paint</td>
+<td>one frame + 10 ms after the event reaches the Pi</td>
+</tr>
+</tbody></table></div>
+<p><strong>Station speed-ups</strong>, each measured and kept only if it wins:</p>
+<ul>
+<li>The station selects the HaLo applet itself as soon as it detects an ISO-DEP chip, and puts the answer in the <code>tap</code>.
+This saves a round trip.</li>
+<li>It tries the applet ID that chip answered last first. This saves a <code>6D00</code> miss.</li>
+<li>It reports the UID before the wake-up step.</li>
+</ul>
+<p><strong>Pi side:</strong></p>
+<ul>
+<li>Read the serial port with no line-buffering delay and few allocations (one byte scanner, no stream parser chain).</li>
+<li>Taps are handled before anything else.</li>
+<li>Builds and built-game rules never run on the main event loop.</li>
+<li>The server unit runs at a higher priority (<code>Nice=-5</code>).</li>
+<li>Keep JSON lines unless the Pi bench shows parsing costs more than 0.1 ms an event; then switch to compact binary
+framing.</li>
+</ul>
+<p><strong>The bench.</strong> <code>pnpm taps:bench</code> on the Pi runs at least 200 of each and reports median, p95 and max: pings; press
+round trips both ways; <code>buzz</code> → <code>buzz_ok</code>; <code>screen</code> → <code>screen_ok</code>; <code>nfc list</code>; Pi serial write → reply; event-loop
+delay, idle and during a game build. Run once with the Bluetooth speaker playing, its volume untouched.</p>
+<p><strong>Targets:</strong> match or beat every number in §2; the event loop stays under 5 ms at p99 during a build; a tap shows on
+the kiosk within one frame plus 10 ms of reaching the Pi.</p>
+<p><strong>Measured results:</strong> in §13.</p>
+</section>
+
+<section id="s10">
+<h2><span class="n">10</span>Real and simulated</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>This pass</th>
+<th>Later</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tap stations, receiver, radio</td>
+<td>Real</td>
+<td></td>
+</tr>
+<tr>
+<td>Badge identity (UID + roster, <code>get_pkeys</code>)</td>
+<td>Real</td>
+<td>ENS names</td>
+</tr>
+<tr>
+<td>Randomness (<code>sign_random</code>, verified)</td>
+<td>Real</td>
+<td></td>
+</tr>
+<tr>
+<td>Stake signatures (key 1)</td>
+<td>Not used: a stake is accepted on a tap</td>
+<td>Permit2 entry signed by key 1</td>
+</tr>
+<tr>
+<td>Ledger (balances, faucet, escrow)</td>
+<td>Simulated, persisted in <code>$EGB_DATA/ledger.json</code></td>
+<td>The token on Sepolia</td>
+</tr>
+<tr>
+<td>Blocks and gas</td>
+<td>Simulated clock at Sepolia&#39;s pace</td>
+<td>Sepolia reads</td>
+</tr>
+<tr>
+<td>Transactions</td>
+<td>Simulated, no hash, shown <code>SIMULATED</code></td>
+<td>Relayer and the Box key</td>
+</tr>
+<tr>
+<td>Rules and refereeing</td>
+<td>Real, on the Pi</td>
+<td>Results signed by the Box key</td>
+</tr>
+<tr>
+<td>Game builder (Claude)</td>
+<td>Real, on the Pi</td>
+<td></td>
+</tr>
+<tr>
+<td>Voice</td>
+<td>Mock by default; ElevenLabs behind a key</td>
+<td></td>
+</tr>
+<tr>
+<td>Demo build</td>
+<td>Fully simulated in the browser (<code>SimLink</code>)</td>
+<td></td>
+</tr>
+</tbody></table></div>
+</section>
+
+<section id="s11">
+<h2><span class="n">11</span>Constraints</h2>
+<ul>
+<li>One process owns the serial port.</li>
+<li>The kiosk screen holds 60 fps on the Pi while the server runs.</li>
+<li>Vitest for every test.</li>
+<li><code>pnpm typecheck</code>, <code>pnpm test</code>, <code>pnpm build</code> and <code>pnpm firmware:test</code> pass, and <code>pnpm firmware:build</code> compiles
+clean.</li>
+<li>Every module is documented in its README, and the root README layout is updated.</li>
+<li>Keys only in <code>.env</code> and the Pi&#39;s env file; never committed, printed or logged.</li>
+<li>Never change the Pi&#39;s speaker, volume or audio sink.</li>
+</ul>
+</section>
+
+<section id="s12">
+<h2><span class="n">12</span>Steps</h2>
+<p>One or more commits each, in this order. If time runs out, cut from the end.</p>
+<ol>
+<li><strong>Lift the core.</strong> Every UI test still passes, and the demo is unchanged.</li>
+<li><strong>Server and link.</strong> Env, data folder, HTTP, WebSocket, <code>LiveLink</code>, checks, CSP, <code>main.ts</code>.</li>
+<li><strong>Protocol and taps.</strong> <code>protocol.md</code>, the receiver module, stations, screens, buzz, the fakes, injected taps,
+libhalo over <code>nfc</code>, the roster, the tap state machine, and the Stations and Badges tabs.</li>
+<li><strong>Games on the server.</strong> Quick Draw and Stock Duel on real taps, transcripts, the session log, records, the
+ledger.</li>
+<li><strong>Firmware.</strong> The library, station, receiver, host tests, a clean compile, and the flash script.</li>
+<li><strong>SDK, library, rules runner and frames.</strong> Both games reshaped into the module shape, with a <code>BLUEPRINT.md</code> each.</li>
+<li><strong>The Forge.</strong></li>
+<li><strong>The Designer</strong>, plus the Build screen and the new cartridge.</li>
+<li><strong>Voice.</strong></li>
+<li><strong>Pi deploy</strong> (<code>deploy/pi/</code>): <code>setup.sh</code> (Node, <code>uhubctl</code>, the <code>dialout</code> group, a udev rule naming the receiver
+by USB id); an updater that builds, smoke-tests, waits for an idle Box, switches the symlink, rolls back on
+failure and follows <code>EGB_DEPLOY_BRANCH</code> (default <code>main</code>); a push-to-Pi path that rsyncs a branch through the same
+release and activate steps; systemd units for the server (<code>Nice=-5</code>), the kiosk and the updater timer;
+<code>env.example</code>.</li>
+<li><strong>Pi bring-up.</strong> Flash, deploy, bench, and run games on the hardware.</li>
+</ol>
+</section>
+
+<section id="s13">
+<h2><span class="n">13</span>On the Pi</h2>
+<p><em>Filled in after the bring-up.</em></p>
+</section>
+
+<section id="s14">
+<h2><span class="n">14</span>Done when</h2>
+<p><strong>Builds</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> The <code>box</code> build runs on the Pi through <code>LiveLink</code>.</li>
+<li><input disabled="" type="checkbox"> The demo build still runs on <code>SimLink</code> and is live.</li>
+</ul>
+<p><strong>Firmware and the bench</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Both stations and the receiver run the new firmware.</li>
+<li><input disabled="" type="checkbox"> The bench meets the targets, and its results are in this plan.</li>
+</ul>
+<p><strong>Hardware behaviour</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Station OLEDs follow the game (shown with <code>frame</code> screenshots).</li>
+<li><input disabled="" type="checkbox"> Buzz and press work on both stations.</li>
+</ul>
+<p><strong>Games</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Quick Draw and Stock Duel play end to end on the Pi with injected taps: join, simulated stake, play, result,
+refund.</li>
+<li><input disabled="" type="checkbox"> They do the same on the laptop with <code>EGB_RECEIVER=fake</code>.</li>
+<li><input disabled="" type="checkbox"> Quick Draw judges by touch time.</li>
+<li><input disabled="" type="checkbox"> Stock Duel&#39;s stat comes from both badges&#39; verified rolls.</li>
+</ul>
+<p><strong>Taps</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> An unknown badge is read whatever the plan, and a known one costs no chip command.</li>
+<li><input disabled="" type="checkbox"> Every <code>touch</code> ends in <code>done</code> or <code>fail</code>, even when the receiver drops.</li>
+</ul>
+<p><strong>Built games</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> A game built on the Pi with the <code>claude</code> provider installs, shows as a cartridge and plays end to end on the Pi.</li>
+<li><input disabled="" type="checkbox"> Its rules run in the sandboxed child.</li>
+<li><input disabled="" type="checkbox"> Tests prove every refusal for the rules child and the frame.</li>
+<li><input disabled="" type="checkbox"> The confinement and bundler-guard tests pass.</li>
+<li><input disabled="" type="checkbox"> Mock voice drives a Designer session.</li>
+</ul>
+<p><strong>Pi state</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> The old units are disabled, and how to re-enable them is noted.</li>
+<li><input disabled="" type="checkbox"> The new units are enabled, so the Pi boots into the new Box.</li>
+</ul>
+<p><strong>Firmware code</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Host tests pass, and no <code>String</code>, heap printf or busy wait sits on a hot path.</li>
+</ul>
+<p><strong>Repo</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> <code>pnpm typecheck</code>, <code>pnpm test</code>, <code>pnpm build</code>, <code>pnpm firmware:test</code> pass; <code>pnpm firmware:build</code> compiles clean.</li>
+<li><input disabled="" type="checkbox"> The deploy scripts pass <code>shellcheck</code>.</li>
+<li><input disabled="" type="checkbox"> Every module is documented in its README, and the root README layout is updated.</li>
+<li><input disabled="" type="checkbox"> Nothing in the repo or its history points at an outside workspace or carries borrowed names.</li>
+</ul>
+</section>
+
+<footer>Ethereum Game Box · ETHGlobal Mumbai 2026 · <a href="https://plans.georgekm.com/ethereum-game-box-2026-11-05/">Project plan</a></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "name": "@egb/box",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:box": "VITE_EGB_MODE=box vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json && tsc -p tsconfig.server.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.318",
+    "@arx-research/libhalo": "1.21.0",
+    "@egb/sdk": "workspace:*",
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/unbounded": "5.3.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "esbuild": "0.28.2",
+    "serialport": "13.0.0",
+    "ws": "8.22.1"
+  }
+}

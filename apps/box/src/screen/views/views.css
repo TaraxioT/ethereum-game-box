@@ -1,0 +1,63 @@
+/* Home and attract. */
+.home-title { overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.home-title-text {
+  margin: 0; width: max-content; font: 900 64px/1 var(--display); letter-spacing: 0.01em; text-transform: uppercase; white-space: nowrap;
+  color: #fbf8ff;
+  /* Lit from the top left: a bright top edge, a violet edge glow kept tight to the letters, a dark drop. */
+  text-shadow: 0 -1px 0 #ffffff, 0 0 2px rgb(196 170 247 / 0.9), 0 0 8px rgb(173 143 255 / 0.55), 0 3px 0 #2a1d58, 0 5px 6px rgb(4 2 12 / 0.6);
+}
+[data-orientation="portrait"] .home-title { align-items: center; }
+[data-orientation="portrait"] .home-title-text { font-size: 52px; }
+.home-facts { display: flex; gap: 10px; align-items: center; transform-origin: left center; }
+[data-orientation="portrait"] .home-facts { justify-content: center; transform-origin: center; }
+.home-facts egb-fact { height: 44px; }
+.home-play, .attract-start { font: 900 30px/1 var(--display); letter-spacing: 0.04em; }
+
+.attract-kicker { font: 700 22px/1 var(--display); letter-spacing: 0.3em; color: var(--lavender); margin-bottom: 8px; }
+.attract-start { font-size: 24px; }
+
+/* Pages round the core: Join, Stake, Result, Refund. */
+.seat-panel {
+  --seat: var(--p1); --seat-hi: var(--p1-hi);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, var(--plate-hi), var(--plate-lo));
+  box-shadow: var(--lit-edge), inset 0 0 0 1.5px rgb(196 170 247 / 0.14), 0 0 0 2px #0b0618, var(--plate-shadow);
+}
+.seat-panel.seat-1 { --seat: var(--p2); --seat-hi: var(--p2-hi); }
+.seat-panel-label { font: 700 16px/1 var(--display); letter-spacing: 0.22em; color: var(--seat); }
+.seat-panel-socket {
+  width: 124px; height: 124px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 40% 35%, #1d1540, #0a0618 70%);
+  box-shadow: var(--well), 0 0 0 6px #2a2150, 0 0 0 8px #120c24, 0 0 0 10px rgb(255 255 255 / 0.06);
+}
+.seat-panel[seated] .seat-panel-socket { box-shadow: var(--well), 0 0 0 6px #2a2150, 0 0 0 8.5px var(--seat), 0 0 8px var(--seat); }
+.seat-panel-tile { width: 72px; height: 72px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 2px #0b0618, 0 0 0 3.5px rgb(255 255 255 / 0.12); }
+.seat-panel-tile:empty { box-shadow: none; }
+.seat-panel-tile svg { display: block; width: 100%; height: 100%; }
+.seat-panel-name { font: 700 26px/1.1 var(--body); color: var(--fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-panel:not([seated]) .seat-panel-name { font: 700 18px/1 var(--display); letter-spacing: 0.12em; color: var(--fg-4); }
+.seat-panel-status { font: 700 17px/1.2 var(--display); letter-spacing: 0.06em; color: var(--fg-3); text-align: center; }
+.seat-panel[data-tone="ask"] .seat-panel-status { color: var(--seat-hi); animation: ask-breathe 2.4s ease-in-out infinite; }
+.seat-panel[data-tone="done"] .seat-panel-status { color: var(--neon-mint); }
+.seat-panel[data-tone="win"] { box-shadow: var(--lit-edge), inset 0 0 0 2px var(--neon-gold), 0 0 0 2px #0b0618, 0 0 10px rgb(255 196 107 / 0.45), var(--plate-shadow); }
+.seat-panel[data-tone="win"] .seat-panel-status { color: var(--neon-gold); font-size: 20px; }
+.seat-panel[data-tone="lose"] > * { opacity: 0.6; }
+.seat-panel[data-tone="lose"] .seat-panel-status { color: var(--lose); }
+@keyframes ask-breathe { 50% { opacity: 0.55; } }
+[data-orientation="portrait"] .seat-panel-socket { width: 100px; height: 100px; }
+[data-orientation="portrait"] .seat-panel-tile { width: 58px; height: 58px; }
+[data-orientation="portrait"] .seat-panel-status { font-size: 15px; }
+
+.page-plate { display: grid; place-items: center; text-align: center; padding: 0 28px; font: 700 18px/1.35 var(--display); letter-spacing: 0.06em; }
+.result-banner { font: 900 40px/1 var(--display); letter-spacing: 0.04em; }
+.refund-plate { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.refund-head { font: 900 30px/1 var(--display); color: var(--lose); letter-spacing: 0.06em; }
+.refund-line { font: 700 18px/1.2 var(--mono); color: var(--lcd-amber); }
+.page-keys { display: flex; gap: 16px; justify-content: center; align-items: stretch; }
+.page-keys egb-key { flex: 0 0 auto; width: 200px; height: auto; }
+.page-note { display: grid; place-items: center; text-align: center; font: 600 16px/1.4 var(--display); letter-spacing: 0.06em; color: var(--fg-3); }
+.refund-keys { align-items: center; gap: 24px; }
+.refund-keys .page-note { flex: 1 1 auto; justify-items: start; text-align: left; }
+.refund-keys egb-key { flex: none; width: 280px; height: 72px; }
+[data-orientation="portrait"] .refund-keys .page-note { font-size: 14px; }

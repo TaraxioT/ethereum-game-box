@@ -2,13 +2,19 @@
   "name": "ethereum-game-box",
   "private": true,
   "packageManager": "pnpm@12.3.4",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts",
-    "plan:publish": "plans publish plan/index.html --name ethereum-game-box --date 2026-11-05"
+    "plan:publish": "plans publish plan/index.html --name ethereum-game-box --date 2026-11-05",
+    "firmware:test": "sh firmware/tap-station/scripts/test.sh",
+    "firmware:build": "sh firmware/tap-station/scripts/build.sh",
+    "firmware:flash": "sh firmware/tap-station/scripts/flash.sh",
+    "taps:bench": "node apps/box/src/taps/bench-cli.ts"
   }
 }
