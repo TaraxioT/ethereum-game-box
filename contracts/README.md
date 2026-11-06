@@ -29,7 +29,7 @@ forge script script/DeployGBX.s.sol --rpc-url sepolia --account sepolia-deployer
 ```
 
 Scripts write each address into `deployments/sepolia.json` and refuse to on any chain but Sepolia. Addresses we use
-but don't deploy (USDC) sit under `external`.
+but don't deploy (the v4 `PoolManager` and its test routers) sit under `external`.
 
 ## Names
 
@@ -52,7 +52,7 @@ from the source the Sepolia deployment was built from (`ensdomains/contracts-v2`
 | `names/Championships.sol` | Time-boxed championships, each a name in its game's registry: `<label>.<game>.gamebox.eth`, one open per game. `open` (admin) registers it to the contract until `ends + 1 day` with its own resolver, writes `ends`, `prize` and `standings`, and takes the USDC prize. `score` (a referee: `BoxResults`) adds win 3, draw 1, loss 0 and rewrites `standings` (top 5, JSON), `leader` and `addr`. `close` (anyone, after `ends`) pays the winner (most points, then most wins, then who reached that score first), registers the name to the winner with no expiry and token roles 0, writes `standings`, `winner` and `addr`, and revokes every role it holds on the resolver: nobody holds one after that, so the records are frozen. With no players the prize goes back and the name is unregistered |
 | `names/BoxCheck.sol`, `names/IBoxSigned.sol` | What every Box-signed message shares (`BoxResults`, `DuelPot`, `BoxSeats`): a registered, unexpired, `Active` Box's key, a low-`s` P-256 signature, a deadline, and their errors |
 | `game/DuelPot.sol` | One USDC pot per match. `open(stake, r, s)` checks EIP-712 `Stake(box, game, round, a, b, amount, deadline)` (domain `Game Box Stakes`) signed by a live, `Active` Box's P-256 key and pulls `amount` from each player as USDC's game spender. `settle` (a referee: `BoxResults`) pays the winner both stakes or refunds both on a draw; the result's game and players must be the pot's. `refund` is open to anyone an hour after `open` if the pot is unsettled. The round number is the shared key: a match's `Stake` and `Result` carry the same `(box, round)`. It refuses `a == b`, a zero amount and a `(box, round)` that had a pot |
-| `token/FakeUSDC.sol` | The demo's stake token: 6 decimals, "USD Coin (Game Box test)", `USDC`. `MINTER_ROLE` (the deployer, which is the relayer) mints. One game spender, set once to `DuelPot`, moves balances with no allowance, because a badge can't sign an approval or a permit. Circle's USDC stays `external.USDC` |
+| `token/FakeUSDC.sol` | The demo's stake token: 6 decimals, "USD Coin (Game Box test)", `USDC`. `MINTER_ROLE` (the deployer, which is the relayer) mints. One game spender, set once to `DuelPot`, moves balances with no allowance, because a badge can't sign an approval or a permit. Every USDC in the project is this token: stakes, prizes, staking fees and the GBX/USDC pool |
 | `names/DemoLicences.sol` | A licensor for now. `openPopup(label)` calls `registerPopup(label, "mumbai-01", now + 10 minutes)`, for anyone |
 | `names/DefaultRecord.sol` | `gamebox.eth`'s own `PermissionedResolver` set-up: the default record (on the empty name `0x00`) with `url` and `description` and no `addr`, which every free `*.gamebox.eth` name resolves to |
 | `names/NameLib.sol` | The label rule (3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the DNS-encoded names and namehashes |
@@ -274,5 +274,29 @@ forge script script/DeployStaking.s.sol --rpc-url sepolia --account sepolia-depl
   --skip-simulation -g 150
 ```
 
-`test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against real USDC and a fresh
-`GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.
+`test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against the fork's `FakeUSDC` and a
+fresh `GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.
+
+## Swap hook
+
+`hook/GameBoxHook.sol` is the Uniswap v4 hook of the GBX/USDC pool (dynamic fee, tick spacing 60). It is the only
+pool it serves: `afterInitialize` refuses any other key, and only once.
+
+| Rule | |
+|---|---|
+| Fee | 1% on a plain swap. 0.25% on a tap swap. 0% for a router with `FEE_EXEMPT_ROLE` (the lobby and the buyback, later) |
+| Tap swap | The swap's hook data is a `TapSwapData`: a Box, a badge, a nonce, a deadline and the Box's P-256 signature over the EIP-712 `TapSwap` (`tapSwapDigest`). The signature covers the router, direction and amount, so it can't be reused on another swap. The Box must be `Active` and unexpired in `GameBoxNames`, and each nonce works once per Box. A bad tap reverts the swap rather than falling back to 1% |
+| Price | `PriceOracle` keeps 512 observations of the pool's tick, written before the first swap of each second, so a price moved inside one block counts for nothing. `observe` and `meanTick(window)` give the time-weighted price for the buyback and the dynamic floor |
+
+The hook's address must carry its permission bits (`afterInitialize`, `beforeSwap`), so `DeployHook.s.sol` mines a
+CREATE2 salt (`HookMiner.sol`) and deploys through the CREATE2 factory. It records the hook and the pool key
+(`.pools.GBX_USDC`) but doesn't initialize the pool: the launch auction does, at its clearing price.
+
+```sh
+forge script script/DeployHook.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+`test/hook/` runs against Sepolia's real v4 `PoolManager` and test routers on the names fork, with the fork's
+`FakeUSDC`.
+`SwapVectors.t.sol` writes `packages/shared/src/swap/vectors.json`.
