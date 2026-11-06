@@ -5,7 +5,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { leftBehind, removeAgents } from '../src/agents.ts';
 
@@ -35,6 +35,7 @@ const up = (run: ChildProcess) =>
     run.once('exit', () => reject(new Error('the run stopped before it was up')));
   });
 
+beforeEach(removeAgents);
 afterEach(removeAgents);
 
 it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('leaves no process or container behind on %s', async (signal) => {

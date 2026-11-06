@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-// One run, one world: a single file, in order, printing each step as it happens. It isn't part of `pnpm test`.
+// One run, one world: a file at a time, in order, printing each step as it happens. It isn't part of `pnpm test`.
 export default defineConfig({
   test: {
     include: ['test/**/*.e2e.ts'],
