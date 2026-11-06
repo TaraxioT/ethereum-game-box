@@ -7,11 +7,11 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 | Folder | Holds |
 |---|---|
 | `src/box/` | The P-256 account every role-holder uses (`P256Account`), its factory (`P256AccountFactory`), and P-256 verification through the EIP-7951 precompile with low `s` enforced. Box licences and key rotation live in `names/GameBoxNames.sol` |
-| `src/games/` | The game interface and escrow (open, settle, refund), then one contract per game |
-| `src/token/` | The Game Box token and its launch through Uniswap's auction |
+| `src/game/` | Match escrow: `DuelPot`, one USDC pot per match (open, settle, refund) |
+| `src/token/` | The Game Box token and its launch through Uniswap's auction, and the demo's test USDC (`FakeUSDC`) |
 | `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
 | `src/staking/` | Staking to a Box, rewards, commission, and the operator auction |
-| `src/names/` | ENS names under `gamebox.eth`: Boxes, players, titles |
+| `src/names/` | ENS names under `gamebox.eth`: Boxes, players, titles, championships |
 | `test/` | Forge tests: every rule and every refusal |
 | `script/` | Deploy scripts; each writes its addresses to `deployments/sepolia.json` |
 
@@ -47,7 +47,12 @@ from the source the Sepolia deployment was built from (`ensdomains/contracts-v2`
 | `box/P256AccountFactory.sol` | Deploys `P256Account`s with CREATE2 salted by the key, so `accountOf(qx, qy)` gives a passkey's account before it exists. `deploy` is open to anyone |
 | `names/GameBoxNames.sol` | The registrar of `gamebox.eth`. Its constructor creates `gamebox.eth`'s `UserRegistry`, the shared title resolver and the shared game resolver. It registers Box licences (`registerBox`, `renewBox`, `setBoxStatus`, `setBoxKey`), pop-up Boxes linked to their Box's record (`registerPopup`), player names (`claimPlayer`, with the badge's EIP-712 `ClaimName` consent, ECDSA or ERC-1271), games with their title registries (`addGame`) and champion titles (`crown`). It locks the canonical parent of every registry it creates, and `handOverRegistrar` moves its registry roles to a successor |
 | `names/PlayerStats.sol` | Counts wins, losses and draws per player and game, and writes each player's `stats` record. It takes results only from `GameBoxNames`' `REFEREE_ROLE`. A player who revoked its `stats` role (or whose resolver fails) is skipped with `StatsSkipped`, and the opponent's result still settles |
-| `names/BoxResults.sol` | The referee for now. `submit(result, r, s)` checks a result signed by a Box's P-256 key over EIP-712 `Result` (domain `Game Box Results`), then crowns the winner and records stats. It refuses an unknown Box, an expired Box, a Box that isn't `active`, a used `(box, round)`, an expired deadline, a player without a name, and `winner == loser` |
+| `names/BoxResults.sol` | The referee for now. `submit(result, r, s)` checks a result signed by a Box's P-256 key over EIP-712 `Result` (domain `Game Box Results`), then crowns the winner, records stats, settles the match's open `DuelPot` pot (which must succeed) and scores the game's open championship (in a `try` capped at `SCORE_GAS`, 3M: a failure emits `ScoreSkipped` and the result stands). One Box signature settles everything. It refuses an unknown Box, an expired Box, a Box that isn't `active`, a used `(box, round)`, an expired deadline, a player without a name, `winner == loser`, and too little gas left to give `score` its full cap (`InsufficientGas`) |
+| `names/BoxSeats.sol` | Box-vouched player names. A HaLo badge can't sign a `ClaimName`, so the Box it tapped signs EIP-712 `Seat(label, badge, box, deadline)` (domain `Game Box Seats`) with its P-256 key, and `claim(seat, r, s)` calls `GameBoxNames.claimPlayerFor` (it holds `SEATER_ROLE`). The name, resolver and roles are exactly `claimPlayer`'s. It refuses an unknown, expired or not-`active` Box, a bad signature and an expired deadline; a second name for the badge reverts `BadgeHasName` |
+| `names/Championships.sol` | Time-boxed championships, each a name in its game's registry: `<label>.<game>.gamebox.eth`, one open per game. `open` (admin) registers it to the contract until `ends + 1 day` with its own resolver, writes `ends`, `prize` and `standings`, and takes the USDC prize. `score` (a referee: `BoxResults`) adds win 3, draw 1, loss 0 and rewrites `standings` (top 5, JSON), `leader` and `addr`. `close` (anyone, after `ends`) pays the winner (most points, then most wins, then who reached that score first), registers the name to the winner with no expiry and token roles 0, writes `standings`, `winner` and `addr`, and revokes every role it holds on the resolver: nobody holds one after that, so the records are frozen. With no players the prize goes back and the name is unregistered |
+| `names/BoxCheck.sol`, `names/IBoxSigned.sol` | What every Box-signed message shares (`BoxResults`, `DuelPot`, `BoxSeats`): a registered, unexpired, `Active` Box's key, a low-`s` P-256 signature, a deadline, and their errors |
+| `game/DuelPot.sol` | One USDC pot per match. `open(stake, r, s)` checks EIP-712 `Stake(box, game, round, a, b, amount, deadline)` (domain `Game Box Stakes`) signed by a live, `Active` Box's P-256 key and pulls `amount` from each player as USDC's game spender. `settle` (a referee: `BoxResults`) pays the winner both stakes or refunds both on a draw; the result's game and players must be the pot's. `refund` is open to anyone an hour after `open` if the pot is unsettled. The round number is the shared key: a match's `Stake` and `Result` carry the same `(box, round)`. It refuses `a == b`, a zero amount and a `(box, round)` that had a pot |
+| `token/FakeUSDC.sol` | The demo's stake token: 6 decimals, "USD Coin (Game Box test)", `USDC`. `MINTER_ROLE` (the deployer, which is the relayer) mints. One game spender, set once to `DuelPot`, moves balances with no allowance, because a badge can't sign an approval or a permit. Circle's USDC stays `external.USDC` |
 | `names/DemoLicences.sol` | A licensor for now. `openPopup(label)` calls `registerPopup(label, "mumbai-01", now + 10 minutes)`, for anyone |
 | `names/DefaultRecord.sol` | `gamebox.eth`'s own `PermissionedResolver` set-up: the default record (on the empty name `0x00`) with `url` and `description` and no `addr`, which every free `*.gamebox.eth` name resolves to |
 | `names/NameLib.sol` | The label rule (3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the DNS-encoded names and namehashes |
@@ -64,6 +69,7 @@ from the source the Sepolia deployment was built from (`ensdomains/contracts-v2`
 | `bot.gamebox.eth` | never | its own | the agent's `P256Account`: every role, and its ENSIP-26 records. `PlayerStats`: `stats` |
 | `<game>.gamebox.eth` | never: it lasts as long as `gamebox.eth` | the shared game resolver | `GameBoxNames`: `title`, `titleTerm` |
 | `champion.<game>.gamebox.eth` | the term after the last win (7 days for Stock Duel, 15 minutes for Quick Draw) | the shared title resolver | `GameBoxNames`: `addr`, `holder`, `start`, `streak`, `round` |
+| `<label>.<game>.gamebox.eth` (a championship, such as `mumbai-cup.stockduel.gamebox.eth`) | `ends + 1 day` while open; never once closed (`2^64 − 1`, the winner's) | its own | `Championships` while open: `ends`, `prize` (USDC base units), `standings`, `leader`, `addr` (the leader). At close it writes `standings`, `winner` and `addr` (the winner), then revokes its roles: nobody, the contract and the deployer included, can write it again |
 
 Each Box and each player has its own resolver, because a `PermissionedResolver` role covers a key on every name the
 resolver serves. Game names and titles have separate shared resolvers: when a name has no resolver, the Universal
@@ -77,9 +83,17 @@ resolver: it has no record for that name, so it answers with its default record.
 |---|---|---|
 | `GameBoxNames` (OpenZeppelin `AccessControl`) | deployer, until the admin hand-over | `DEFAULT_ADMIN_ROLE` (adds games, sets the stats writer, hands the registry roles over) and `LICENSOR_ROLE` |
 | | `DemoLicences` | `LICENSOR_ROLE`: issues and manages Box licences and pop-ups |
-| | `BoxResults` | `REFEREE_ROLE`: crowns, and is the role `PlayerStats` takes results from |
+| | `BoxResults` | `REFEREE_ROLE`: crowns, and is the role `PlayerStats`, `DuelPot.settle` and `Championships.score` take results from |
+| | `BoxSeats` | `SEATER_ROLE`: `claimPlayerFor`, a player name for a badge a Box vouched for |
+| `GameBoxNames.championships` | `Championships` | set once (`setChampionships`); `addGame` grants it its title-registry roles |
+| `FakeUSDC` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE` (sets the game spender once) and `MINTER_ROLE` |
+| | `DuelPot` | the game spender: `transferFrom` with no allowance |
+| `Championships` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE`: opens championships |
 | `gamebox.eth`'s registry, root | `GameBoxNames` | `REGISTRAR \| RENEW` and their admins, and nobody else holds a root role, so it is emancipated. Nobody holds `SET_PARENT` |
 | a title registry, root | `GameBoxNames` | `REGISTRAR \| UNREGISTER \| RENEW` and their admins. Moving a title is unregister + register, so it isn't emancipated. Nobody holds `SET_PARENT` |
+| | `Championships` | `REGISTRAR \| UNREGISTER \| RENEW`, no admin bit, so it can grant nothing on. It needs them to open the next championship; no function of it touches a closed one |
+| a championship's token | `Championships` while open, then the winner | nothing: it can't be transferred or re-pointed |
+| a championship's resolver, root | `Championships` while open | `SET_TEXT \| SET_ADDRESS` and their admins. At close it revokes all four, so nobody holds any role and the records are frozen. Nobody ever holds `UPGRADE` |
 | a Box or pop-up name's token | operator | nothing: it can't transfer the name or re-point its resolver or subregistry |
 | a player name's token | badge | `UNREGISTER`, `RENEW`, `SET_SUBREGISTRY` and `SET_RESOLVER` with their admins, and `CAN_TRANSFER_ADMIN` |
 | a title's token | holder | nothing: a transfer reverts `TransferDisallowed` |
@@ -106,6 +120,17 @@ Choices the design left open, made here:
   `keccak256(abi.encode(calls))`. That encoding starts with four zero bytes, which match no function, so a batch
   signature never runs as a single call. `rotateKey` is a signed `execute` to the account itself.
 - **The Box resolver roles** and **the player roles** in the table above.
+- **`DuelPot.settle` and `Championships.score` check `REFEREE_ROLE` on `GameBoxNames` too**, like `PlayerStats`, so
+  `BoxResults` is granted in one place and nothing has to know its address at deploy. `settle` takes the result's
+  game and loser as well as the winner, and refuses a result for other players or another game (`PotMismatch`).
+- **A refunded pot doesn't block its result**: `BoxResults` settles only an open pot, so a result that arrives after
+  the hour's refund still crowns and scores.
+- **Championship records**: `prize` is in USDC base units, `leader` and `winner` are player names, and `standings` is
+  a JSON array in rank order of `{"name","addr","points","wins","draws","losses"}` (`parseStandings` in
+  `@egb/shared/names`). `close` on a name nobody closed within the day's grace (lapsed) registers it to the winner all
+  the same.
+- **A Box is its own operator for now**: `mumbai-01` and `demo-01` are registered to their own `P256Account`s, since
+  the operator passkey is parked. `RegisterBox` takes `OPERATOR_ACCOUNT` once there is one.
 - **`PlayerStats` checks `REFEREE_ROLE` on `GameBoxNames`**, so referees are granted in one place. It keeps counting a
   revoked player on chain, and writes `stats` in a caught call capped at 400k gas: a badge controls its resolver and
   could upgrade it to one that burns all its gas. It refuses to start a write without gas for the full cap
@@ -150,8 +175,27 @@ reservoir for state gas. Measured on Sepolia:
 | `setSubregistry`, `setResolver` on `gamebox.eth` | | 41,680, 41,668 | `0xaefc1183…b73d40`, `0xbad1032f…0b001b` |
 | `grantRole` | | 133,505 | `0xddbccb29…ba0f2a` |
 
-`registerBox`, `registerPopup` and `claimPlayer` are measured when `mumbai-01`, its first pop-up and `bot.gamebox.eth`
-are registered.
+v3 (2026-11-06), the same flags:
+
+| Action | Creates | Gas | Transaction |
+|---|---|---|---|
+| deploy `GameBoxNames` | `gamebox.eth`'s registry, the title resolver, the game resolver | 38,907,207 | `0xfc47ce3c…` |
+| deploy `PlayerStats` | | 8,601,955 | `0xb63495ad…` |
+| deploy `FakeUSDC` | | 5,498,546 | `0x39e792da…` |
+| deploy `DuelPot` | | 10,170,127 | `0x9c6e2e0d…` |
+| deploy `Championships` | | 23,312,613 | `0x12069035…` |
+| deploy `BoxResults` | | 9,469,822 | `0xc86763b0…` |
+| deploy `DemoLicences` | | 1,952,202 | `0xd685fbff…` |
+| deploy `BoxSeats` | | 5,081,690 | `0xe28732cf…` |
+| `addGame` | a title registry, with `Championships`' roles | 2,455,094 (Stock Duel), 2,259,027 (Quick Draw) | `0x0d79d330…`, `0x2400bab2…` |
+| `P256AccountFactory.deploy` | `mumbai-01`'s `P256Account` | 15,416,997 | `0x66c937e2…` |
+| `registerBox` | a Box resolver | 4,651,555 (`mumbai-01`), 4,761,702 (`demo-01`) | `0xe5b74913…`, `0x1960d224…` |
+| `Championships.open` | a championship's resolver | 2,667,938 | `0x2bc879d4…` |
+| `Championships.score` (`eth_estimateGas` from `BoxResults`, the first result) | | 1,735,304 | |
+
+`score` costs most of its gas in new storage (the `standings` text grows with each new row), so `BoxResults` caps it
+at 3M (`SCORE_GAS`), and a result needs that much left when it reaches it. The whole v3 deploy spent 0.137 ETH at a
+1 gwei tip.
 
 ### Deploy
 
@@ -164,14 +208,22 @@ while a script broadcasts.
 ```sh
 F="--rpc-url sepolia --account sepolia-deployer --password '' --broadcast --skip-simulation --slow -g 150 \
   --with-gas-price 2gwei --priority-gas-price 1gwei"
-forge script script/names/DeployNames.s.sol $F       # factory, contracts, roles, stats writer, the demo Box's account
+forge script script/names/DeployNames.s.sol $F       # factory, names, stats, USDC, pots, championships, results,
+                                                     # licences, seats; roles, stats writer, championships, spender
 forge script script/names/DeployNames.s.sol --rpc-url sepolia --account sepolia-deployer --password ''   # record
 forge script script/names/AddGames.s.sol $F          # stockduel (7 days), quickdraw (15 minutes)
 forge script script/names/PointGameBox.s.sol $F      # gamebox.eth -> our registry, and its default-record resolver
-forge script script/names/RegisterBox.s.sol $F       # mumbai-01 for 30 days to OPERATOR_ACCOUNT (a P256Account)
+BOX_LABEL=mumbai-01 BOX_QX=0x… BOX_QY=0x… BOX_ACCOUNT=MumbaiBoxAccount \
+  forge script script/names/RegisterBox.s.sol $F     # 30 days, the Box's account made if missing
+CUP_LABEL=mumbai-cup forge script script/names/OpenChampionship.s.sol $F   # CUP_GAME, CUP_MINUTES, CUP_PRIZE
 ```
 
-`PointGameBox` needs the `.eth` owner of `gamebox.eth`. The operator's first records and the Box's heartbeat go through
+The Pi's HYP2003 public key is `python3 /home/pi/gamebox/current/deploy/p256-signer/hyp2003_signer.py --pubkey` on the
+Pi; the demo-box Worker's is `qx`/`qy` in its `GET /box`. `RegisterBox` makes the Box its own operator unless
+`OPERATOR_ACCOUNT` is set. `OpenChampionship` closes the game's ended championship first, mints the deployer what the
+prize needs and approves it; pick a fresh label each time, since a closed championship's name is its winner's for
+good. A new `GameBoxNames` means deleting its entry in `deployments/sepolia.json` before `DeployNames`: every contract
+bound to the old one is then deployed again, and the factory and USDC stay. `PointGameBox` needs the `.eth` owner of `gamebox.eth`. The operator's first records and the Box's heartbeat go through
 their `P256Account`s and the relayer, never from a key on disk.
 
 ### Verify and check
@@ -186,12 +238,41 @@ their `P256Account`s and the relayer, never from a key on disk.
   the clones as `Proxy = 2` (a minimal proxy of the logic contract), not `1`. Sourcify wasn't needed. Run it again
   after new claims and licences.
 - `pnpm names:check` reads the live deployment and fails on any mismatch: every address has code, every contract and
-  proxy is verified, each role table is as above (holders and assignee counts), and every name resolves through the
-  Universal Resolver with stock viem: players, Boxes, live pop-ups as their Box, games, titles, and a free label as the
-  default record.
+  proxy is verified, each role table is as above (holders and assignee counts, championship resolvers included: only
+  `Championships` while open, nobody once closed), and every name resolves through the Universal Resolver with stock
+  viem: players, Boxes, live pop-ups as their Box, games, titles, championships (standings and leader or winner), and
+  a free label as the default record.
 
 ### Tests
 
 `pnpm contracts:test` runs the names tests on a fork of Sepolia pinned to a block (`SEPOLIA_RPC_URL`), against the live
 ENSv2 contracts. Test accounts and labels carry an `egb-test-` or `egbt-` prefix, so they can't collide with live state.
 `Vectors.t.sol` writes `packages/shared/src/names/vectors.json`, which the shared package's tests check byte for byte.
+
+## Staking
+
+`staking/BoxStaking.sol` holds GBX staked behind a Box and pays the Box's USDC game fees out to it. A Box is a label in
+`GameBoxNames`, so staking reads the Box's operator, status and expiry from there and keeps no registry of its own.
+
+| Rule | |
+|---|---|
+| Open | The Box is `Active` in `GameBoxNames` and its licence hasn't lapsed. New stake and fees need an open Box; unstaking, withdrawing and claiming always work |
+| Bonded | Open, and the operator's own stake is at least `MIN_OPERATOR_STAKE`. Only the operator may stake on a Box that isn't bonded, and only a bonded Box takes fees |
+| Shares | Stake is held as shares (with a virtual share and a virtual GBX, so the first staker can't inflate the price), so a slash lowers every staker by the same fraction |
+| Unbonding | `requestUnstake` moves stake into a second pool that earns nothing and is still slashed, until `UNSTAKE_DELAY` passes; a second request restarts the delay. While the Box is open the operator can't go below the minimum |
+| Rewards | `notifyFees(label, amount)` pulls USDC from the caller: the commission goes to the operator at once, the rest to stakers by a USDC-per-share counter. `claim` pays it out |
+| Commission | 10% to 90%, starting at 10%. A cut is immediate; a raise waits `COMMISSION_DELAY`, unless the operator is the only staker |
+| Slashing | `slash(label, bps, to)` takes `bps` of the active and the unbonding pool and sends it to `to`. `SLASHER_ROLE` only; nobody holds it until the dispute contract exists |
+
+`stakeFor` lets the lobby and the operator auction stake bought GBX for a player or an operator in one transaction.
+
+Deployed with `MIN_OPERATOR_STAKE` 10,000 GBX and both delays at 1 hour, short enough to show in a demo. The deployer
+holds `DEFAULT_ADMIN_ROLE`.
+
+```sh
+forge script script/DeployStaking.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+`test/staking/BoxStaking.t.sol` runs on the same Sepolia fork as the names tests, against real USDC and a fresh
+`GameBoxNames`. Any archive RPC works as `SEPOLIA_RPC_URL`; the public `https://sepolia.gateway.tenderly.co` does.

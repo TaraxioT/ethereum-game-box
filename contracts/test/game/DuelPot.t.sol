@@ -21,8 +21,8 @@ contract DuelPotTest is NamesFork {
         (alice,) = claim("egbt-alice");
         (bob,) = claim("egbt-bob");
         vm.startPrank(admin);
-        usdc.mint(alice, 100e6);
-        usdc.mint(bob, 100e6);
+        fakeUsdc.mint(alice, 100e6);
+        fakeUsdc.mint(bob, 100e6);
         vm.stopPrank();
     }
 
@@ -45,9 +45,9 @@ contract DuelPotTest is NamesFork {
         vm.expectEmit(address(pot));
         emit IDuelPot.PotOpened(BOX, "stockduel", 1, alice, bob, STAKE);
         _open(_stake(1));
-        assertEq(usdc.balanceOf(address(pot)), 2 * STAKE);
-        assertEq(usdc.balanceOf(alice), 90e6);
-        assertEq(usdc.balanceOf(bob), 90e6);
+        assertEq(fakeUsdc.balanceOf(address(pot)), 2 * STAKE);
+        assertEq(fakeUsdc.balanceOf(alice), 90e6);
+        assertEq(fakeUsdc.balanceOf(bob), 90e6);
         IDuelPot.Pot memory p = pot.getPot(BOX, 1);
         assertEq(p.a, alice);
         assertEq(p.b, bob);
@@ -63,9 +63,9 @@ contract DuelPotTest is NamesFork {
         vm.expectEmit(address(pot));
         emit IDuelPot.PotSettled(BOX, 1, bob, false, STAKE);
         submit(result(BOX, "stockduel", 1, bob, alice, false));
-        assertEq(usdc.balanceOf(bob), 110e6);
-        assertEq(usdc.balanceOf(alice), 90e6);
-        assertEq(usdc.balanceOf(address(pot)), 0);
+        assertEq(fakeUsdc.balanceOf(bob), 110e6);
+        assertEq(fakeUsdc.balanceOf(alice), 90e6);
+        assertEq(fakeUsdc.balanceOf(address(pot)), 0);
         assertEq(uint8(pot.getPot(BOX, 1).state), uint8(IDuelPot.State.Settled));
         // The same signature crowned and counted.
         assertEq(names.getTitle("stockduel").holder, bob);
@@ -75,8 +75,8 @@ contract DuelPotTest is NamesFork {
     function test_aDrawRefundsBoth() public {
         _open(_stake(1));
         submit(result(BOX, "stockduel", 1, alice, bob, true));
-        assertEq(usdc.balanceOf(alice), 100e6);
-        assertEq(usdc.balanceOf(bob), 100e6);
+        assertEq(fakeUsdc.balanceOf(alice), 100e6);
+        assertEq(fakeUsdc.balanceOf(bob), 100e6);
         assertEq(uint8(pot.getPot(BOX, 1).state), uint8(IDuelPot.State.Settled));
     }
 
@@ -111,8 +111,8 @@ contract DuelPotTest is NamesFork {
         emit IDuelPot.PotRefunded(BOX, 1, STAKE);
         vm.prank(account("anyone"));
         pot.refund(BOX, 1);
-        assertEq(usdc.balanceOf(alice), 100e6);
-        assertEq(usdc.balanceOf(bob), 100e6);
+        assertEq(fakeUsdc.balanceOf(alice), 100e6);
+        assertEq(fakeUsdc.balanceOf(bob), 100e6);
         assertEq(uint8(pot.getPot(BOX, 1).state), uint8(IDuelPot.State.Refunded));
 
         vm.expectRevert(abi.encodeWithSelector(IDuelPot.PotNotOpen.selector, BOX, 1));
@@ -135,7 +135,7 @@ contract DuelPotTest is NamesFork {
         pot.refund(BOX, 1);
         submit(result(BOX, "stockduel", 1, alice, bob, false));
         assertEq(names.getTitle("stockduel").holder, alice);
-        assertEq(usdc.balanceOf(alice), 100e6);
+        assertEq(fakeUsdc.balanceOf(alice), 100e6);
     }
 
     function test_replay() public {

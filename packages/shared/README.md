@@ -18,30 +18,32 @@
 
 | Module | Holds |
 |---|---|
-| `keys.ts` | Every record key, grouped by who may write it (Box, player, game and title names, and `gamebox.eth`'s default record), the Box `status` values, the operator's commission bounds (`COMMISSION_MIN_BPS`, `COMMISSION_MAX_BPS`), and the ENSIP-26 agent keys (`agent-context`, `agent-endpoint[<protocol>]`) |
-| `labels.ts` | The label rule (`labelProblem`: 3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the same one `GameBoxNames` checks, the pop-up, full and title names, and a name DNS-encoded for a resolver (`dnsName`) |
-| `messages.ts` | The three EIP-712 messages (`ClaimName`, `Execute`, `Result`): the typed data a wallet signs and the digest the contract checks, for a single `execute` and for `executeBatch` (`encodeCalls`) |
+| `keys.ts` | Every record key, grouped by who may write it (Box, player, game, title and championship names, and `gamebox.eth`'s default record), the Box `status` values, the operator's commission bounds (`COMMISSION_MIN_BPS`, `COMMISSION_MAX_BPS`), a championship's `standings` JSON (`Standing`, `parseStandings`, `STANDINGS_SIZE`), and the ENSIP-26 agent keys (`agent-context`, `agent-endpoint[<protocol>]`) |
+| `labels.ts` | The label rule (`labelProblem`: 3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the same one `GameBoxNames` checks, the pop-up, full, title (`TITLE_LABEL`) and championship names (`championshipName`, `championshipLabelProblem`), and a name DNS-encoded for a resolver (`dnsName`) |
+| `messages.ts` | The five EIP-712 messages (`ClaimName`, `Execute`, `Result`, `Stake`, `Seat`): the typed data a wallet signs and the digest the contract checks, for a single `execute` and for `executeBatch` (`encodeCalls`). The Box signs `Result`, `Stake` (domain `Game Box Stakes`, for `DuelPot`) and `Seat` (domain `Game Box Seats`, for `BoxSeats`) with P-256 |
+| `usdc.ts` | The demo's test USDC: `USDC_DECIMALS` (6), `usdc(10)` to base units and `formatUsdc` back |
 | `webauthn.ts` | The two signature forms a `P256Account` takes: raw (`rawSignature`) and a passkey's assertion (`webAuthnChallenge`, `parseDerSignature`, `encodeWebAuthnSignature`), low `s` always; a passkey's public key from its SPKI (`p256PublicKeyFromSpki`); an assertion checked the way the account checks it (`checkAssertion`, `assertionSignature`); and `base64url` |
 | `p256.ts` | P-256 without WebAuthn's help: the hash an authenticator signs (`assertionHash`), the keys a signature recovers to (`recoverP256Keys`), `verifyP256`, and a public key read from or written as `0x04` + x + y (`parseP256PublicKey`, `p256PublicKeyHex`) |
-| `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, and `GameBoxNames`' own roles |
+| `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, `GameBoxNames`' own roles (with `SEATER_ROLE`) and `FakeUSDC`'s (`USDC_ROLES`) |
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
 | `vectors.json` | Written by `contracts/test/names/Vectors.t.sol`; `vectors.test.ts` checks `messages.ts`, `webauthn.ts`, `primaryName.ts` and `roles.ts` against it |
 | `primaryName.ts` | A badge's primary name: the ERC-191 message it signs for ENS's `DefaultReverseRegistrar`, so `getEnsName(badge)` returns its player name |
 | `api.ts` | The relayer's and the demo Box's HTTP request and response types, including the agent's `GET /agent` (`AgentView`, `AgentStep`) |
-| `deployments.ts` | `ensAddress(name)`, `contractAddress(name)`, `namesProxies()` (with `gamebox.eth`'s own resolver) and `deployedAddresses()` (every contract address, for the relayer's allowlist) from `deployments/sepolia.json` |
+| `deployments.ts` | `ensAddress(name)`, `contractAddress(name)`, `namesProxies()` (with `gamebox.eth`'s own resolver) and `deployedAddresses()` (every contract address, for the relayer's allowlist) from `deployments/sepolia.json`. A zero-address placeholder counts as not deployed |
 | `vectors.ts` | Fixed inputs with the digests and signatures the contracts produced (`vectors.json`, written by the forge test `Vectors.t.sol`), including a batch and a passkey signature the account ran; every key in it is a throwaway test key |
 
 `scripts/abis.ts` writes `abis.ts` (`pnpm names:abis`). `scripts/names/verify.ts` and `scripts/names/check.ts` are
 `pnpm names:verify` and `pnpm names:check`, which verify and check the live deployment (see `contracts/README.md`).
 
-### P-256 signatures (`Execute`, `Result`)
+### P-256 signatures (`Execute`, `Result`, `Stake`, `Seat`)
 
 Every account with a role is a `P256Account`, bound to one P-256 key. Its `execute` and `executeBatch` take a
 signature over the `Execute` digest in one of two forms (`webauthn.ts`):
 
 - **Raw**, `r ‖ s` (64 bytes): ECDSA P-256 over the raw 32-byte digest with no prehash. The contracts pass the digest
   itself to the EIP-7951 precompile as `h`, never its SHA-256. That is what the HYP2003 does with `CKM_ECDSA`, and what
-  `@noble/curves` does with `prehash: false`. `Result` is always signed this way, by the Box. A software key (the demo
+  `@noble/curves` does with `prehash: false`. `Result`, `Stake` and `Seat` are always signed this way, by the Box, and
+  sent as `(r, s)`. A software key (the demo
   Box's, the agent's) is a `0x`-prefixed 32-byte hex scalar.
 - **WebAuthn**, from a passkey: call `navigator.credentials.get` with `webAuthnChallenge(digest)` as the challenge and
   `userVerification: 'required'`, read `r` and `s` with `parseDerSignature(response.signature)`, and encode with
