@@ -4,7 +4,6 @@
 //                                check is replaced by the Box's plain icon
 //   GET /games/<id>/screen.js    the game's screen module (playable games only)
 //   GET /games/<id>/frame.html   the frame page, with its own CSP (page.ts) (playable games only)
-//   GET /games/icon.svg          the Box's plain icon, on every store game's cartridge
 //   GET /parts.js, /parts.css, /parts/<font>, /frame.js    the frame's shared assets (assets.ts)
 //
 // The frame's origin is opaque, so everything it loads is a cross-origin request from `null`: module scripts, fonts
@@ -32,9 +31,6 @@ export interface GameRoutesOptions {
 /** Handles the request if it is one of these routes (true), or leaves it to the next handler (false). */
 export type GameRoutes = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<boolean>;
 
-/** Where a store game's cartridge finds its art: a bundle brings none in this pass. */
-export const FALLBACK_ICON = "/games/icon.svg";
-
 const ASSET_PATHS = new Set(["/parts.js", "/parts.css", "/frame.js"]);
 const GAME_FILE = /^\/games\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(icon\.svg|screen\.js|frame\.html)$/;
 
@@ -43,6 +39,8 @@ const BASE = { "x-content-type-options": "nosniff", "cache-control": "no-cache" 
 const SHARED = { ...BASE, "access-control-allow-origin": "*" } as const;
 /** For files a browser could also open by themselves: nothing in them runs. */
 const INERT = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+/** Where a store game's cartridge finds its art, the Box's plain icon: a bundle brings none in this pass. */
+export const FALLBACK_ICON = "/games/icon.svg";
 
 export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
   async function icon(res: http.ServerResponse, dir: string): Promise<void> {
@@ -60,12 +58,11 @@ export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
       return true;
     }
 
-    if (p === FALLBACK_ICON) {
-      res.writeHead(200, { ...SHARED, "content-type": "image/svg+xml", "content-security-policy": INERT }).end(fallbackIcon());
-      return true;
-    }
-
     if (!game) {
+      if (p === FALLBACK_ICON) {
+        res.writeHead(200, { ...SHARED, "content-type": "image/svg+xml", "content-security-policy": INERT }).end(fallbackIcon());
+        return true;
+      }
       const asset = p.startsWith("/games/") ? null : await options.assets.get(p);
       if (!asset) sendText(res, 404, "not found");
       else res.writeHead(200, { ...SHARED, "content-type": asset.type, "content-length": String(asset.body.byteLength) }).end(asset.body);

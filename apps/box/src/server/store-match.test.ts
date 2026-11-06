@@ -17,6 +17,7 @@ import { POLL_MS } from "../chain/requests.ts";
 import { roundsFile } from "../chain/rounds.ts";
 import { JUDGE_POLL_MS } from "../chain/store.ts";
 import { memoryReads, mockRelayer, mockVerifier } from "../chain/testing.ts";
+import { fallbackIcon } from "../builder/forge/icon.ts";
 import { softwareSigner } from "../signer/software.ts";
 import { FALLBACK_ICON } from "./games/routes.ts";
 import { STORE_INDEX_MS } from "./library/store-index.ts";
@@ -123,6 +124,9 @@ describe("a store game on the Box", () => {
     const icon = await fetch(`${tb.box.url}${FALLBACK_ICON}`);
     expect(icon.status).toBe(200);
     expect(icon.headers.get("content-type")).toBe("image/svg+xml");
+    expect(icon.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(await icon.text()).toBe(fallbackIcon());
+    expect((await fetch(`${tb.box.url}/games/no-such-thing`)).status).toBe(404);
 
     await seatAndPlay(tb);
     await vi.waitFor(() => expect(core.state().fetching).toBe(false));
