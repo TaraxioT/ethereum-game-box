@@ -82,7 +82,6 @@ stats e4ba70
 
 ```
 {"ev":"tap","st":"e4ba70","id":5,"uid":"04A1B2C3D4E5F6","atqa":"0044","sak":"20","ats":"78807002","read_us":27400,"gap_us":20500,"tries":1,"at_us":4012345678}
-{"ev":"tap","st":"e4ba70","id":6,"uid":"04A1B2C3D4E5F6","atqa":"0044","sak":"20","ats":"78807002","read_us":27400,"gap_us":20500,"sel":"9000","sel_us":41000,"tries":1,"at_us":4012399000}
 {"ev":"gone","st":"e4ba70","id":5,"uid":"04A1B2C3D4E5F6","at_us":4013345678}
 {"ev":"signed","st":"e4ba70","id":12,"tap":5,"uid":"04A1B2C3D4E5F6","ok":true,"chip_us":402000,"total_us":560000,"at_us":4013000000}
 ```
@@ -92,8 +91,9 @@ stats e4ba70
   - `read_us`: the station's µs from the start of the detection that found the chip until the packet left.
   - `gap_us`: how long the detection before it took. The chip landed in that window, so the Pi takes the touch as
     `at_us − radio − read_us − gap_us / 2`.
-  - `sel` and `sel_us`, when present: the station selected the HaLo applet itself on detection, and this is the
-    chip's answer (`9000` = selected) and how long it took. Without them the Pi selects the applet itself.
+  - The station selects the HaLo applet itself right after an ISO-DEP chip's `tap` has gone out (the SELECT that
+    chip answered last first) and keeps the chip's answer: the Pi's own SELECT with the same bytes (`nfc … apdu`),
+    sent while nothing else has gone to the chip, is answered from it at once.
   - `tries`: radio sends until the receiver's ack.
 - `gone` after two reads in a row without the chip.
 - `signed` after every `sign` request: `chip_us` is that exchange on the reader alone, `total_us` the time since the
@@ -188,6 +188,7 @@ Example: `tag=P1\nbig=TAP\nsmall=NOVA` is `7461673d50310a6269673d5441500a736d616
 
 ## The station's own serial port
 
-Each station also answers on its own USB port, for bring-up and screenshots: `press`, `buzz [ms]`, `stats`, and
-`frame`, which prints the OLED as `frame 72 40 <hex>` (row-major, one bit a pixel, most significant bit first; read
-by `tools/frame.py`). It prints `tag uid=… read_us=…` and `tag gone` as chips come and go.
+Each station also answers on its own USB port, for bring-up and screenshots: `press`, `buzz [ms]`, `stats`,
+`bench <what> [n]` (timing runs on the chip on the reader), and `frame`, which prints the OLED as `frame 72 40 <hex>`
+(row-major, one bit a pixel, most significant bit first; read by `tools/frame.py`). It prints `tag uid=… read_us=…`
+and `tag gone` as chips come and go.
