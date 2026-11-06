@@ -11,7 +11,7 @@
 namespace st {
 
 constexpr size_t TAG_MAX = 3;
-constexpr size_t BIG_MAX = 24;    // ten fit the screen at once; a longer line scrolls (screen_draw.h)
+constexpr size_t BIG_MAX = 32;    // ten fit the screen at once; a longer line scrolls (screen_draw.h)
 constexpr size_t SMALL_MAX = 40;  // the same: an ENS name scrolls past
 constexpr uint32_t TTL_MAX_S = 1000000;  // ~11 days is as good as for ever (and still fits in ms)
 

@@ -65,6 +65,7 @@ static const uint8_t *const BIG_FONTS[] = {
 constexpr int BIG_FONT_COUNT = sizeof BIG_FONTS / sizeof BIG_FONTS[0];
 #define ST_SMALL_FONT u8g2_font_NokiaSmallBold_tr  // bold, proportional, one-row descenders: fits under the big line
 #define ST_SMALL_FALLBACK u8g2_font_5x7_tr
+#define ST_SMALL_SCROLL_FONT u8g2_font_fub11_tr  // a small line that scrolls: big, bold letters (11 px caps)
 #define ST_TAG_FONT u8g2_font_5x7_tr
 constexpr int TOP = 9;       // the big line starts below the tag and the indicators (rows 0-7)
 constexpr int BAR_ROWS = 2;  // the sweep along the bottom
@@ -116,21 +117,17 @@ inline int setBigFont(u8g2_t *d, const char *s, int w, int h, bool &scroll) {
   return u8g2_GetStrWidth(d, s);
 }
 
-// The small line with its baseline at `y`: centred in the bold font if it fits, else in the narrow one, else the bold
-// font scrolls. Returns whether it scrolls.
-inline bool drawSmall(u8g2_t *d, const char *s, int y, uint32_t tick) {
+// Whether the small line is too wide for the screen even in the narrow font: then it scrolls, in big letters.
+inline bool smallScrolls(u8g2_t *d, const char *s) {
   u8g2_SetFont(d, ST_SMALL_FALLBACK);
-  bool narrowFits = u8g2_GetStrWidth(d, s) <= SCREEN_W;
+  return u8g2_GetStrWidth(d, s) > SCREEN_W;
+}
+
+// The small line with its baseline at `y`, centred: the bold font if it fits, else the narrow one.
+inline void drawSmall(u8g2_t *d, const char *s, int y) {
   u8g2_SetFont(d, ST_SMALL_FONT);
-  if (u8g2_GetStrWidth(d, s) > SCREEN_W) {
-    if (!narrowFits) {
-      drawMarquee(d, s, 0, SCREEN_W, y, y - 8, y + 1, tick);
-      return true;
-    }
-    u8g2_SetFont(d, ST_SMALL_FALLBACK);
-  }
+  if (u8g2_GetStrWidth(d, s) > SCREEN_W) u8g2_SetFont(d, ST_SMALL_FALLBACK);
   u8g2_DrawStr(d, (SCREEN_W - u8g2_GetStrWidth(d, s)) / 2, y, s);
-  return false;
 }
 
 // A padlock (taps not welcome) or a play triangle (a game waits for this station), 6 x 7 at (x, 0).
@@ -184,8 +181,18 @@ inline bool drawScreen(u8g2_t *d, const ScreenView &v) {
   int bigBottom = bottom;
   if (*small) {
     int base = bottom - 1;
-    scrolls = drawSmall(d, small, base, v.tick);
-    bigBottom = base - 7 - 1;  // its caps are 7 rows, with one blank row above them
+    if (smallScrolls(d, small)) {  // in big letters, the big line giving up the rows
+      u8g2_SetFont(d, ST_SMALL_SCROLL_FONT);
+      u8g2_SetFontRefHeightText(d);
+      int cap = u8g2_GetAscent(d);
+      base = bottom + u8g2_GetDescent(d);  // its descenders on the last row
+      drawMarquee(d, small, 0, SCREEN_W, base, base - cap, bottom, v.tick);
+      bigBottom = base - cap - 2;
+      scrolls = true;
+    } else {
+      drawSmall(d, small, base);
+      bigBottom = base - 7 - 1;  // its caps are 7 rows, with one blank row above them
+    }
   }
   int left = icon ? ICON + ICON_GAP : 0;
   int areaH = bigBottom - TOP + 1;

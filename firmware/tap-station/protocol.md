@@ -174,8 +174,8 @@ whole (a key left out goes back to its default).
 | Key | Shows | Default |
 |---|---|---|
 | `tag` | up to 3 characters in the top-left badge (`P1`, `P2`); empty = none | none |
-| `big` | the idle big line, up to 24 characters, upper-cased (`TAP`, `WAIT`, `SIGN`, `WIN`); empty = none. Up to 10 always fit (the font shrinks); a longer one that would need a font under 14 px scrolls | `TAP` |
-| `small` | the idle small line, up to 40 characters as given (an ENS name, `10 EGB`, `to join`); one too wide for the screen scrolls | none |
+| `big` | the idle big line, up to 32 characters, upper-cased (a player's whole ENS name scrolls here, in the largest letters the height takes) (`TAP`, `WAIT`, `SIGN`, `WIN`); empty = none. Up to 10 always fit (the font shrinks); a longer one that would need a font under 14 px scrolls | `TAP` |
+| `small` | the idle small line, up to 40 characters as given (an ENS name, `10 EGB`, `to join`); one too wide for the screen scrolls, in 11 px bold letters (the big line gives up the rows) | none |
 | `mode` | what a tap means now: `open` (welcome, no game: cyan breathing LED), `play` (a game waits for it: green breathing, a play triangle), `shut` (not welcome: dim amber, a padlock, and a chip that lands gets `nope` and two short buzzes from the station itself, no round trip; the tap still goes to the Pi) | none: the LED stays off |
 | `hold` | `BIG\|small` while the chip is held and the app reads it (no `\|`: no small line) | `HOLD\|reading` |
 | `sign` | the same while a `sign` request runs | `HOLD STILL\|signing` |

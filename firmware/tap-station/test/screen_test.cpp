@@ -24,7 +24,7 @@ TEST(screen_limits_and_odd_bytes) {
   const char p[] = "tag=ABCD\nbig=abcdefghijklmnopqrstuvwxyz\nhold=WAIT\nfail=\nttl=99999999999\nsmall=a\x01" "b";
   screenParse(p, sizeof p - 1, s);
   CHECK_STR(s.tag, "ABC");
-  CHECK_STR(s.idle.big, "ABCDEFGHIJKLMNOPQRSTUVWX");  // 24: longer than the screen, so it scrolls
+  CHECK_STR(s.idle.big, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");  // longer than the screen, so it scrolls
   CHECK_STR(s.feedback[FB_HOLD].big, "WAIT");
   CHECK_STR(s.feedback[FB_HOLD].small, "");  // no bar: no small line
   CHECK(!s.feedback[FB_FAIL].given);           // empty: the default

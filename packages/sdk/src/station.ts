@@ -3,7 +3,7 @@
 /** Most characters each line holds; longer text is cut. Ten big characters and about twenty small ones fit the OLED at
  *  once; a longer line scrolls across it (an ENS name). */
 export const TAG_CHARS = 3;
-export const BIG_CHARS = 24;
+export const BIG_CHARS = 32;
 export const SMALL_CHARS = 40;
 /** An override (`hold`, `sign`, `done`, `fail`) is `BIG|small`: both lines and the bar between them. */
 export const OVERRIDE_CHARS = BIG_CHARS + 1 + SMALL_CHARS;
@@ -16,7 +16,7 @@ export type StationMode = "open" | "play" | "shut";
 export interface StationView {
   /** Up to 3 characters in the top-left badge (`P1`); empty: none. */
   readonly tag: string;
-  /** The idle big line, up to 24 characters, upper case (`TAP`, `WAIT`, `WIN`); over 10 it scrolls. */
+  /** The idle big line, up to 32 characters, upper case (`TAP`, `WAIT`, `WIN`); over 10 it scrolls. */
   readonly big: string;
   /** The idle small line, up to 40 characters (a name, `10 EGB`); one too wide for the OLED scrolls. */
   readonly small: string;

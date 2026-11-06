@@ -12,7 +12,7 @@ for either platform. The one browser-only piece, the screen contract, is its own
 | `seat.ts` | `Seat` (0 is Player 1, 1 is Player 2), `SEATS`, `other()` |
 | `random.ts` | Seeded randomness for rules: `hash32`, `mulberry32`, `shuffle`. Tested in `random.test.ts` |
 | `rules.ts` | `GameRules<S, E>` (pure `start` / `step` / `outcome`), `Outcome`, and a built game's `BuiltRules<S>` with `stations(state)` and its events, `BuiltEvent` (`tick`, and `tap` at its touch time with the verified roll) |
-| `station.ts` | `StationView`, what a tap station's OLED shows (`tag` ≤ 3, `big` ≤ 24 and `small` ≤ 40, scrolling when too wide, the `hold` / `sign` / `done` / `fail` / `nope` overrides, and the `mode`: `open`, `play` or `shut`), `stationView()` to build one cut to fit, and `printable()` |
+| `station.ts` | `StationView`, what a tap station's OLED shows (`tag` ≤ 3, `big` ≤ 32 and `small` ≤ 40, scrolling when too wide, the `hold` / `sign` / `done` / `fail` / `nope` overrides, and the `mode`: `open`, `play` or `shut`), `stationView()` to build one cut to fit, and `printable()` |
 | `manifest.ts` | `GameManifest`, the shape of `game.json`, and `manifestProblems()` to check one |
 | `runner.ts` | The rules-runner protocol: JSON lines over a built game's child's stdio (`start`, `step`; `ready`, `state`, `error`), and `MAX_MESSAGE` |
 | `frame.ts` | The frame channel: what the kiosk posts a built game's screen (`init`, `update`) and the only things it may post back (`ready`, `error`) |

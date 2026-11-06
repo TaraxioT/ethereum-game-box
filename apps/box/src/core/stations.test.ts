@@ -79,7 +79,7 @@ describe("station views", () => {
 
   it("shows the seated badge and its balance, and names it when a tap is done", () => {
     const view = stationView(input("join", both), 0, NOW);
-    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 USDC", done: "DONE|nova", mode: "open" });
+    expect(view).toEqual({ tag: "P1", big: "NOVA", small: "100 USDC", done: "nova", mode: "open" });
     expect(stationView(input("home"), 0, NOW).done).toBeUndefined();
     // Before its balance is read from chain, and a fraction cut to whole USDC.
     expect(stationView(input("join", [seat(NOVA, false, null), EMPTY]), 0, NOW).small).toBe("... USDC");
@@ -89,7 +89,7 @@ describe("station views", () => {
   it("names a seated player by the whole ENS name, and says what a tap means now", () => {
     const named = { ...seat(NOVA, false, 20), ens: "nova.gamebox.eth" };
     const view = stationView(input("join", [named, EMPTY]), 0, NOW);
-    expect(view).toMatchObject({ big: "NOVA", small: "nova.gamebox.eth  20 USDC", done: "DONE|nova.gamebox.eth", mode: "open" });
+    expect(view).toMatchObject({ big: "NOVA.GAMEBOX.ETH", small: "20 USDC", done: "nova.gamebox.eth", mode: "open" });
     expect(stationView(input("build"), 0, NOW).mode).toBe("shut");
   });
 

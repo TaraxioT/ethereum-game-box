@@ -350,7 +350,8 @@ describe("the core on its ports", () => {
     expect(r.core.state().stations[0].small).toBe("... USDC");
     await flush();
     expect(r.core.state().seats[0]).toMatchObject({ balance: 40, ens: "nova.gamebox.eth" });
-    expect(r.core.state().stations[0].small).toBe("nova.gamebox.eth  40 USDC");
+    expect(r.core.state().stations[0].small).toBe("40 USDC");
+    expect(r.core.state().stations[0].big).toBe("NOVA.GAMEBOX.ETH");
     // Nothing is sent to the chain for a seat: no faucet, no top-up.
     expect(r.chain.sent).toEqual([]);
   });

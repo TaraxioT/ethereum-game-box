@@ -1,5 +1,5 @@
 // What each tap station's OLED shows, from the Box's state. Pure. A station shows its seat's tag (`P1`), a big line
-// (≤ 24 characters) and a small one (≤ 40), scrolling when too wide, the overrides for a tap in progress, and its mode:
+// (≤ 32 characters) and a small one (≤ 40), scrolling when too wide, the overrides for a tap in progress, and its mode:
 // what a tap means now, from the seat's tap plan. `@egb/sdk`'s `stationView` cuts each line to what the station holds.
 import type { Seat, StationMode, StationView } from "@egb/sdk";
 import { stationView as fitView } from "@egb/sdk";
@@ -9,7 +9,7 @@ import type { StockDuelState } from "../games/stock-duel/types.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { formatStat, STAT_LABEL } from "../games/stock-duel/deck.ts";
-import { playerLabel, playerName } from "./badges.ts";
+import { playerName } from "./badges.ts";
 import { stakeOf } from "./catalogue.ts";
 import { tapPlan, type PlanInput } from "./plan.ts";
 
@@ -35,10 +35,9 @@ function wait(ms: number): string {
 /** Whole USDC as a station prints it, or `...` before the first read. */
 const usdc = (amount: number | null): string => (amount === null ? "... USDC" : `${Math.floor(amount)} USDC`);
 
-/** A seated player: the ENS label big, and the whole ENS name with the balance under it (it scrolls past). */
+/** A seated player: their whole ENS name on the big line (it scrolls past in big letters), the balance under it. */
 function seated(state: SeatState): Lines {
-  if (!state.badge) return lines("TAP", "to join");
-  return lines(playerLabel(state.badge, state.ens), state.ens ? `${state.ens}  ${usdc(state.balance)}` : usdc(state.balance));
+  return state.badge ? lines(playerName(state.badge, state.ens), usdc(state.balance)) : lines("TAP", "to join");
 }
 
 function staking(input: StationInput, seat: Seat): Lines {
@@ -135,9 +134,9 @@ export function stationView(input: StationInput, seat: Seat, now: number): Stati
   if (input.phase === "boot") return fitView("", big, small, { mode });
   const { badge, ens } = input.seats[seat];
   const extra: { done?: string; sign?: string; mode: StationMode } = { mode };
-  // The station's own tap feedback names the seated player by their whole ENS name (it scrolls); a roll is a signature
-  // on the chip, so it says so. A tap that isn't welcome gets the station's own NOT NOW.
-  if (badge) extra.done = `DONE|${playerName(badge, ens)}`;
+  // The station's own tap feedback names the seated player by their whole ENS name, big, beside the check mark (it
+  // scrolls); a roll is a signature on the chip, so it says so. A tap that isn't welcome gets the station's own NOT NOW.
+  if (badge) extra.done = playerName(badge, ens);
   if (tapPlan(input, seat, now) === "random") extra.sign = "HOLD STILL|rolling";
   return fitView(`P${seat + 1}`, big, small, extra);
 }
