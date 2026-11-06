@@ -3,7 +3,8 @@
 The plan for games that live online instead of on the Box. A team-published zip holds a game's page and the rules an
 AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G's
 private inference reads the match's log and says who gets paid how much. If it can't, everyone gets their stake back.
-Nothing here is built yet.
+Built and tested on the branch `game-store`, on fakes and two seats: nothing is deployed, 0G hasn't judged a real match,
+it hasn't run on the Pi, and step 7, four seats on the Box, isn't done.
 
 ## 1. Goal
 

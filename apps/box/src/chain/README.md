@@ -71,4 +71,6 @@ open that may have landed, a key that can't sign, the rounds across a restart, t
 `store.test.ts` does the same for a store game: `Stake` and `Judge` against the store's vectors, every route's body, each
 way an open may have landed, the verifier followed to each end, a refusal, an outage with its backoff and fresh
 deadlines, one that never answers, and its HTTP API. `server/chain-match.test.ts` plays a whole match through this port on the Box server, and
-`server/store-match.test.ts` a store game's.
+`server/store-match.test.ts` a store game's. Those stand in a mock relayer that takes any body, so `relayer.test.ts` puts a
+store game's open, refund and top-up through the relayer's real routes, signed by the real signer. It has its own
+`tsconfig.relayer.json`: those routes need the Workers' types, and the Box's own code must not get them.

@@ -231,4 +231,6 @@ reads, the balances are read again; and a seat short of the stake sent to the lo
 name. `store-match`: the real Tap Rush bundle from a stand-in store on the Sepolia chain port, over a mocked relayer and
 verifier: listed, fetched, staked by hash, played with the page's words over the link, judged and paid, with the log
 passing the verifier's own check; the index gone and back; a changed zip sealed for good, a zip that never came sealed
-until the next read; and no store games on the demo chain. `match` and `fake-box` play on the demo chain.
+until the next read; and no store games on the demo chain. Its last test plays Tap Rush in a real Chromium on the built
+screen, where the kiosk's frame and the core really meet, and is skipped without one. `match` and `fake-box` play on the
+demo chain.

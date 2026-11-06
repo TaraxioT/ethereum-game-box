@@ -142,7 +142,7 @@ The uploads pay in 0G on 0G's chain. That and the provider reads are the only us
 | `src/audit-store.ts`, `src/zg-storage.ts` | The `AuditStore` interface, and 0G Storage behind it |
 | `src/texts.ts` | Long text in Durable Object storage, in chunks under its 2 MB limit |
 | `src/limits.ts`, `src/failure.ts`, `src/safe.ts`, `src/json.ts`, `src/abortable.ts` | The limits, why a run failed, redaction, JSON helpers and a deadline for work with no signal |
-| `test/` | Every refusal, failure and crash on fakes, through `test/world.ts` |
+| `test/` | Every refusal, failure and crash on fakes, through `test/world.ts`. `relayer.test.ts` puts what a `Judge` really sends through the relayer's real routes |
 | `test/fake-zg/` | A fake 0G for tests and for the end-to-end harness |
 | `container/` | The agent's container: its own package and tests |
 
