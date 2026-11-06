@@ -53,9 +53,17 @@ Say this plainly on the site and in the demo.
 - **0G doesn't prove the prompt.** Its signature covers the reply, and its docs don't say it covers the request. No
   contract can check that a verdict came from the real log.
 - **The Worker and the container aren't enclaves.** Whoever runs them could feed the agent a false log or sign a false
-  verdict. The verifier key is trusted, and the contract limits the damage: it pays only the match's players, and
-  only the exact pot.
-- **The Box is trusted for taps.** It records them and signs the log, so a dishonest Box could forge one.
+  verdict. The verifier key is trusted, and the contract limits the damage: it pays only the players the Box named,
+  and only the exact pot.
+- **The pot's admin is trusted as far as the verifier key.** It can replace that key, so it could make itself a
+  verifier. It is its own account, and the deploy takes the role away from the relayer's key. That key still licenses
+  Boxes until the admin hand-over, so a leak of it could forge a log, but not sign a verdict.
+- **The Box is trusted for taps and for who plays.** It records the taps and signs the log, so a dishonest Box could
+  forge one. It also names the players, and a badge signs nothing. So a dishonest Box could name a badge that never
+  tapped, stake its whole balance and forge a log that pays the Box's own badge. It could also keep a balance locked,
+  by opening a new pot each time one is refunded. `open` has no cap on a stake, and one wouldn't help: a Box can open
+  pot after pot. `DuelPot` trusts a Box the same way. This is fine for a token with no value, when only the team
+  licenses a Box and can suspend one. Real money would need the badges to sign.
 - **A store game isn't Verified.** That tier means the chain checks the result. Store games get a new tier, `judged`,
   shown on Stake before anyone stakes.
 
@@ -170,7 +178,7 @@ chain with the verdict.
 
 | Call | Signed by | What it does |
 |---|---|---|
-| `list(hash)` | Admin | Lets a bundle be staked. |
+| `list(hash)` | The lister key | Lets a bundle be staked. |
 | `open(stake)` | The Box's P-256 key | Pulls `amount` from each player into a pot, keyed by Box and round. |
 | `settle(verdict)` | The verifier key | Pays `payouts[i]` to `players[i]`. Refuses unless the payouts add up to the pot. |
 | `void(refund)` | The verifier key | Sends each stake back at once. |
@@ -242,10 +250,12 @@ arrives, and steps 5 to 7 get their detail from its results.
   - `Verdict(string box, uint256 round, uint256[] payouts, bytes32 record, uint256 deadline)`
   - `Void(string box, uint256 round, bytes32 record, uint256 deadline)`
 - **Roles:** `LISTER_ROLE` lists bundles. A verdict's signer must hold `VERIFIER_ROLE`, so an admin can replace the key.
+  The admin is its own account, apart from the relayer and the verifier key.
 - **It refuses:** an unlisted bundle, fewer than 2 or more than 4 players, a repeated player, a pot that exists, payouts
   of the wrong length or sum, a pot that isn't open, an expired deadline, and a wrong signer.
-- **Deploy:** `FakeUSDC` again as `StoreUSDC`, with the relayer as minter, then `StorePot`, then `setGameSpender`. The
-  deployer needs Sepolia ETH and sends with `--skip-simulation -g 150`, like the other scripts.
+- **Deploy:** `FakeUSDC` again as `StoreUSDC`, with the relayer as minter, then `StorePot`, then `setGameSpender`, and
+  the pot's admin role goes from the deployer to `STORE_ADMIN`. The deployer needs Sepolia ETH and sends with
+  `--skip-simulation -g 150`, like the other scripts.
 - **Shared:** digests, ABIs and test vectors in `packages/shared/src/store/`.
 - **Relayer routes:** `/store/open`, `/store/settle`, `/store/void`, `/store/refund` and `/store/topup`, each in the
   existing checked-then-sent pattern.
@@ -265,6 +275,7 @@ arrives, and steps 5 to 7 get their detail from its results.
 - A 0G testnet key from pc.testnet.0g.ai, and a mainnet key from pc.0g.ai before step 8.
 - A funded 0G wallet for Storage: the testnet faucet first, then real 0G.
 - A new verifier key, as a Worker secret.
+- An admin address for `StorePot`, held apart from the relayer and the verifier key, as `STORE_ADMIN` for step 4.
 - A funded Sepolia deployer key in `.env`, for step 4.
 - `forge`: Foundry isn't on the main development Mac yet, so contract tests need it installed.
 

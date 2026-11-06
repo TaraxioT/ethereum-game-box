@@ -216,9 +216,17 @@ that isn&#39;t <code>tee_verified</code>. Say &quot;each turn passed an attested
 <li><strong>0G doesn&#39;t prove the prompt.</strong> Its signature covers the reply, and its docs don&#39;t say it covers the request. No
 contract can check that a verdict came from the real log.</li>
 <li><strong>The Worker and the container aren&#39;t enclaves.</strong> Whoever runs them could feed the agent a false log or sign a false
-verdict. The verifier key is trusted, and the contract limits the damage: it pays only the match&#39;s players, and
-only the exact pot.</li>
-<li><strong>The Box is trusted for taps.</strong> It records them and signs the log, so a dishonest Box could forge one.</li>
+verdict. The verifier key is trusted, and the contract limits the damage: it pays only the players the Box named,
+and only the exact pot.</li>
+<li><strong>The pot&#39;s admin is trusted as far as the verifier key.</strong> It can replace that key, so it could make itself a
+verifier. It is its own account, and the deploy takes the role away from the relayer&#39;s key. That key still licenses
+Boxes until the admin hand-over, so a leak of it could forge a log, but not sign a verdict.</li>
+<li><strong>The Box is trusted for taps and for who plays.</strong> It records the taps and signs the log, so a dishonest Box could
+forge one. It also names the players, and a badge signs nothing. So a dishonest Box could name a badge that never
+tapped, stake its whole balance and forge a log that pays the Box&#39;s own badge. It could also keep a balance locked,
+by opening a new pot each time one is refunded. <code>open</code> has no cap on a stake, and one wouldn&#39;t help: a Box can open
+pot after pot. <code>DuelPot</code> trusts a Box the same way. This is fine for a token with no value, when only the team
+licenses a Box and can suspend one. Real money would need the badges to sign.</li>
 <li><strong>A store game isn&#39;t Verified.</strong> That tier means the chain checks the result. Store games get a new tier, <code>judged</code>,
 shown on Stake before anyone stakes.</li>
 </ul>
@@ -374,7 +382,7 @@ chain with the verdict.</p>
 </thead>
 <tbody><tr>
 <td><code>list(hash)</code></td>
-<td>Admin</td>
+<td>The lister key</td>
 <td>Lets a bundle be staked.</td>
 </tr>
 <tr>
@@ -468,11 +476,13 @@ Box&#39;s signature.</li>
 <li><code>Void(string box, uint256 round, bytes32 record, uint256 deadline)</code></li>
 </ul>
 </li>
-<li><strong>Roles:</strong> <code>LISTER_ROLE</code> lists bundles. A verdict&#39;s signer must hold <code>VERIFIER_ROLE</code>, so an admin can replace the key.</li>
+<li><strong>Roles:</strong> <code>LISTER_ROLE</code> lists bundles. A verdict&#39;s signer must hold <code>VERIFIER_ROLE</code>, so an admin can replace the key.
+The admin is its own account, apart from the relayer and the verifier key.</li>
 <li><strong>It refuses:</strong> an unlisted bundle, fewer than 2 or more than 4 players, a repeated player, a pot that exists, payouts
 of the wrong length or sum, a pot that isn&#39;t open, an expired deadline, and a wrong signer.</li>
-<li><strong>Deploy:</strong> <code>FakeUSDC</code> again as <code>StoreUSDC</code>, with the relayer as minter, then <code>StorePot</code>, then <code>setGameSpender</code>. The
-deployer needs Sepolia ETH and sends with <code>--skip-simulation -g 150</code>, like the other scripts.</li>
+<li><strong>Deploy:</strong> <code>FakeUSDC</code> again as <code>StoreUSDC</code>, with the relayer as minter, then <code>StorePot</code>, then <code>setGameSpender</code>, and
+the pot&#39;s admin role goes from the deployer to <code>STORE_ADMIN</code>. The deployer needs Sepolia ETH and sends with
+<code>--skip-simulation -g 150</code>, like the other scripts.</li>
 <li><strong>Shared:</strong> digests, ABIs and test vectors in <code>packages/shared/src/store/</code>.</li>
 <li><strong>Relayer routes:</strong> <code>/store/open</code>, <code>/store/settle</code>, <code>/store/void</code>, <code>/store/refund</code> and <code>/store/topup</code>, each in the
 existing checked-then-sent pattern.</li>
@@ -495,6 +505,7 @@ shared with TypeScript; and a test for every relayer refusal.</li>
 <li>A 0G testnet key from pc.testnet.0g.ai, and a mainnet key from pc.0g.ai before step 8.</li>
 <li>A funded 0G wallet for Storage: the testnet faucet first, then real 0G.</li>
 <li>A new verifier key, as a Worker secret.</li>
+<li>An admin address for <code>StorePot</code>, held apart from the relayer and the verifier key, as <code>STORE_ADMIN</code> for step 4.</li>
 <li>A funded Sepolia deployer key in <code>.env</code>, for step 4.</li>
 <li><code>forge</code>: Foundry isn&#39;t on the main development Mac yet, so contract tests need it installed.</li>
 </ul>

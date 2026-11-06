@@ -6,11 +6,12 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 /// @title IFakeUSDC
 /// @notice The demo's stake token on Sepolia: an ERC-20 with 6 decimals, named "USD Coin (Game Box test)", symbol
-///         `USDC`. It is the only USDC the project uses (stakes, prizes, staking fees and
-///         the GBX/USDC pool) and has no value.
+///         `USDC`. It has no value. The first deployment is the USDC of stakes, prizes, staking fees and the GBX/USDC
+///         pool. A second, `StoreUSDC`, is the same contract with the same name, and holds store games' stakes.
 ///         `MINTER_ROLE` (the deployer, which is the relayer) mints it, for the lobby's top-ups and a championship's
 ///         prize.
-/// @dev One **game spender**, set once by the admin to `DuelPot`, may move any holder's balance without an allowance.
+/// @dev One **game spender**, set once by the admin to `DuelPot` (`StorePot` on `StoreUSDC`), may move any holder's
+///      balance without an allowance.
 ///      A HaLo badge signs only `sign_random` and refuses raw digests, so it can't sign an `approve` transaction, an
 ///      EIP-2612 permit or a Permit2 transfer. The Box vouches for the badge with its own P-256 key instead (a signed
 ///      `Stake`), and `DuelPot` pulls each player's stake as this token's game spender. Real USDC has no such hook: it
@@ -33,7 +34,7 @@ interface IFakeUSDC is IERC20Metadata, IAccessControl {
     function mint(address to, uint256 amount) external;
 
     /// @notice Sets the game spender, once. Needs `DEFAULT_ADMIN_ROLE`.
-    /// @param spender `DuelPot`.
+    /// @param spender `DuelPot`, or `StorePot` on `StoreUSDC`.
     function setGameSpender(address spender) external;
 
     /// @notice The game spender, which `transferFrom`s any balance with no allowance, or zero before it is set.
