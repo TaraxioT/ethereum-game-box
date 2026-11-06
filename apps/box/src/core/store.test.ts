@@ -612,6 +612,37 @@ describe("a store game", () => {
     expect(TEAM_GAMES.map((g) => g.id)).toContain(playing.core.state().focus);
   });
 
+  it("goes Home after a failed open if the game left the rack while it was in flight", async () => {
+    const r = rig();
+    await toStake(r);
+    await tap(r, 0, NOVA);
+    await tap(r, 1, KITE);
+    r.rack(TEAM_GAMES);
+    expect(r.core.state().phase).toBe("stake");
+    r.store.opens[0]?.watch({ ...paid("failed"), error: "the relayer can't be reached" });
+    await settle(r);
+    expect(r.core.state()).toMatchObject({ phase: "home", match: null });
+    expect(r.core.state().seats.map((s) => s.signed)).toEqual([false, false]);
+    expect(r.bundles.drops()).toBe(1);
+    expect(TEAM_GAMES.map((g) => g.id)).toContain(r.core.state().focus);
+  });
+
+  it("plays the staked store game when a built game takes its id while the stakes go in", async () => {
+    const r = rig();
+    await toStake(r);
+    await tap(r, 0, NOVA);
+    await tap(r, 1, KITE);
+    r.rack([...TEAM_GAMES, { ...STORE_GAME, kind: "built", tier: "refereed", icon: "/games/tap-rush/icon.svg" }]);
+    r.store.opens[0]?.watch(paid());
+    await settle(r);
+    expect(r.core.state().phase).toBe("playing");
+    expect(play(r.core.state())).toMatchObject({ id: "tap-rush", bundle: HASH });
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    expect(r.core.state().phase).toBe("judging");
+    expect(r.store.judges[0]?.order).toMatchObject({ round: 1, bundle: HASH, amount: 10 });
+  });
+
   it("can't play on a Box with no bundle port", async () => {
     const r = rig({ bundles: false });
     await toJoin(r);

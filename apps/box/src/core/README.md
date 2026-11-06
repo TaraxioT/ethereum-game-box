@@ -104,8 +104,9 @@ keeps the money, the clock and the log, and the verifier says who gets what. It 
   even with both seats full, until it is here and checked. Every match fetches again, a rematch too. A fetch that fails
   has sealed the game: the Box goes Home with nothing staked.
 - **The rack can change under it.** A store game that leaves the rack (its index can't be reached) sends Join, an
-  unsigned Stake or a lobby opened from them Home, with nothing staked. Once both have signed it plays on, and a rematch
-  of a game no longer in the rack goes Home.
+  unsigned Stake or a lobby opened from them Home, with nothing staked. Once both have signed it plays on, unless the
+  open fails, which goes Home too, and a rematch of a game no longer in the rack goes Home. A built game that takes its
+  id while the stakes go in changes nothing: the store game that was staked is what plays.
 - **Stake** is the same as a team game's, in Store USDC: seats read that balance while a store game is focused, a seat
   short of the stake goes to the lobby, whose top-up is Store USDC too, and a badge needs a player name where the port
   says so. There's no title or championship to play for. Both signed, `store.open` sends a `Stake` naming the bundle's
@@ -187,6 +188,6 @@ stations, played for nothing with no request to the chain, a void mid-game and a
 `store.test.ts` plays a store game on fake bundles and a fake store port (a whole match to its split, each way it closes,
 the verifier refunding, failing and never answering, a bad download, the rack losing the game at every step, a rematch's
 fresh download, Store USDC and its top-up, the frame's words and what they can't do, a log filled by taps, an event timed just before the tap that fills it, the
-rematch tap held from when Result opens);
+rematch tap held from when Result opens, a failed open of a game gone from the rack, a built game taking its id);
 `store-log.test.ts` runs the logs it makes, the fullest ones and every order of taps and events, through the verifier's
 own `logProblems`.

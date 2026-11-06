@@ -621,6 +621,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           } else if (update.step === "failed") {
             cue("error");
             setPhase("stake");
+            leaveLostGame();
           }
         };
         if (wanted) port.store?.open({ round, bundle: wanted.hash, badges, amount }, hear);
@@ -655,8 +656,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       refunded: [false, false],
       lines: null,
     });
-    if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
+    // What was staked plays, whatever the rack says now: a built game can take a store game's id while the stakes go in.
     if (wanted?.facts) return openStore(wanted, wanted.facts, now, opened);
+    if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
     const play = startPlay(chosen as TeamGameId, seed, now);
     match = opened(play);
     lastFronts = fronts(play, now);
