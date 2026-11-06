@@ -72,8 +72,8 @@ behind the interface the chain plugs into later. Only what has to wait for the c
 - **Bridge timings that work:** a request waits 4.0 s, a re-select 3.0 s, a dropped link 2.0 s of grace, and a sign
   result is reported 0.4 s after the chip answers.
 - **Games.** Quick Draw judges by touch time, waits 450 ms after the first touch for the other station, reads for up
-  to 1.5 s, calls a player too slow after 4 s, and takes a rematch tap within 4 s; it never says GO on the speaker
-  (the speaker lags). Stock Duel freezes a seat's front card on `touch`, plays it at the touch time on `done`, and
+  to 1.5 s, calls a player too slow after 4 s, and takes a seated badge's tap as a rematch only 4 s after the result,
+  so a chip left on the reader can't skip it; it never says GO on the speaker (the speaker lags). Stock Duel freezes a seat's front card on `touch`, plays it at the touch time on `done`, and
   releases it on `fail`.
 - **The builder.** A one-question-at-a-time Designer produces a brief; a Forge copies a template into a confined
   folder and runs a Claude agent on it with five file tools and one `build_game` tool, then bundles, checks and
@@ -116,8 +116,8 @@ apps/box/src/
   core/        phase machine, ledger, chain clock, txs, station views, bot, catalogue; ports.ts; no DOM, no Node
   server/      main.ts, env, data dir, http (CSP, local origin, launcher token), ws link, ledger store,
                sessions/records, rules runner host, test page API; tsconfig with Node types, no DOM
-  taps/        receiver (serialport), protocol parser, stations + screens, libhalo over nfc, roster, tap machine,
-               fake receiver, simulated badges, bench
+  taps/        receiver (Node's own tty handle), protocol parser, stations + screens, libhalo over nfc, roster,
+               tap machine, fake receiver, simulated badges, bench
   builder/     designer/, forge/ (child process), voice/
   games/       quick-draw/, stock-duel/ in the module shape (game.json, rules.ts, screen.ts, icon.svg, BLUEPRINT.md)
   screen/      the UI pass's screen; link/live.ts (LiveLink), link/sim.ts (SimLink); the Build and Designer views
@@ -176,8 +176,8 @@ interface CorePorts {
 
 ## 5. Taps and badges
 
-**No middlemen.** The server owns the receiver's port (`serialport`) and speaks `firmware/tap-station/protocol.md`.
-HaLo commands go through libhalo's `execHaloCmd` (`@arx-research/libhalo/api/custom`), over `nfc <st> <id> …` lines.
+**No middlemen.** The server owns the receiver's tty (read through Node's own tty handle, no native addon) and speaks
+`firmware/tap-station/protocol.md`. HaLo commands go through libhalo's `execHaloCmd` (`@arx-research/libhalo/api/custom`), over `nfc <st> <id> …` lines.
 There is no C helper, no Python bridge and no monitor process.
 
 **The tap state machine.** For each `tap` line from the receiver:
@@ -231,8 +231,9 @@ Every game's rules run on the Pi, in the server, and the server referees every g
 **Team games** run in the core, in-process.
 
 - **Quick Draw** judges by touch time. After the first touch it waits `SETTLE_MS` (450 ms) for the other station's
-  touch, reads for up to `READ_WAIT_MS` (1500 ms), calls `TOO_SLOW_MS` (4000 ms) after the draw, and takes a rematch
-  tap within `REMATCH_TAP_MS` (4000 ms). It never says GO on the speaker. Its taps are `identify`.
+  touch, reads for up to `READ_WAIT_MS` (1500 ms), calls `TOO_SLOW_MS` (4000 ms) after the draw, and takes a seated
+  badge's tap as a rematch only `REMATCH_TAP_MS` (4000 ms) after the result, so a resting chip can't skip it. It never
+  says GO on the speaker. Its taps are `identify`.
 - **Stock Duel.** Its taps are `random`. `touch` freezes that seat's Rolodex front card; `done` plays it at the touch
   time with the chip's roll; `fail` releases it. New rule events (`touch`, `done`, `fail`) with tests.
 
@@ -330,7 +331,11 @@ IRQ on 37. The receiver is an ESP32-C3: LED A on GPIO12, BOOT on GPIO9.
   callback, before the ack; resends every 20 ms, 25 tries, each id counted once; the link times out after 2.5 s of
   silence (any packet counts), compared signed.
 - **Presence checks:** every 20 ms, Diagnose first, then R(NAK); cycle the RF field for chips that aren't ISO-DEP;
-  800 ms of grace for a fresh chip; 150 ms of quiet after a Pi request.
+  800 ms of grace for a fresh chip; 150 ms of quiet after a Pi request. **Measured and changed:** Diagnose fails on
+  these badges (status 0x13) and leaves a chip nothing has talked to deaf to R(NAK), so every check fell back to a
+  ~68 ms field-cycle re-read. The station selects the applet right after the tap and then checks with R(NAK) alone
+  (4.3 ms), so the grace is gone too; a chip that misses R(NAK) is re-read with a field cycle from then on, and a
+  `gone` cycles the field so a chip still on the reader comes back as a fresh tap.
 - **The reader:** read 16 bytes of each answer, then NACK for the rest; clock the bus clear; send the sign reply
   before the LED and the log.
 - **Interfaces:** the LED / OLED / buzz table; the screen payload keys; the serial protocol.
@@ -382,9 +387,14 @@ ESP ↔ Pi speed is the first requirement.
 **Station speed-ups**, each measured and kept only if it wins:
 
 - The station selects the HaLo applet itself as soon as it detects an ISO-DEP chip, and puts the answer in the `tap`.
-  This saves a round trip.
-- It tries the applet ID that chip answered last first. This saves a `6D00` miss.
-- It reports the UID before the wake-up step.
+  This saves a round trip. **Kept in another form:** the station selects right after sending the `tap` and answers
+  the Pi's identical SELECT from its kept answer (3.4 ms). Measured: no select, tap at 28.9 ms and the applet ready
+  at the Pi at 56.8 ms; the answer in the tap, both at 52.0 ms; select after the tap, tap at 28.9 ms and applet at
+  51.8 ms.
+- It tries the applet ID that chip answered last first. This saves a `6D00` miss. **Kept:** these badges answer only
+  the legacy ID; the other costs a `6D00` after 23.4 ms, so the station's select is 20 ms instead of 43.
+- It reports the UID before the wake-up step. **Dropped:** the UID arrives at 22.2 ms instead of 29.0, but the PN532
+  then won't carry the chip's ISO-DEP framing (RATS by hand costs 9.2 ms), so chip commands would get slower.
 
 **Pi side:**
 
@@ -402,7 +412,34 @@ delay, idle and during a game build. Run once with the Bluetooth speaker playing
 **Targets:** match or beat every number in §2; the event loop stays under 5 ms at p99 during a build; a tap shows on
 the kiosk within one frame plus 10 ms of reaching the Pi.
 
-**Measured results:** in §13.
+**Measured results** (on the Pi, through the Box server, 200 of each, badges resting on both readers):
+
+| What | Median | p95 | p99 | Max | Target |
+|---|--:|--:|--:|--:|---|
+| Pi serial write → reply (`press` → `c3_press`) | 2.17 ms | 2.97 | 4.93 | 5.36 | |
+| Press C3 → S3, receiver round trip | 2.81 ms | 4.90 | 6.33 | 6.38 | 2.4–2.8 ms |
+| Press C3 → S3, Pi write → ack | 4.05 ms | 6.20 | 7.97 | 8.13 | |
+| Press S3 → C3 (firmware bench) | 2.53 / 2.44 ms | | | | 2.8 ms |
+| Ping, P1 / P2 | 2.81 / 2.87 ms | 4.90 / 4.52 | 6.19 / 7.09 | 6.22 / 7.34 | 3.1 ms, 96–98 % < 6 ms |
+| `buzz` → `buzz_ok`, P1 / P2 | 2.85 / 2.84 ms | 4.54 / 4.91 | 7.52 / 5.42 | 9.91 / 6.24 | |
+| `screen` → `screen_ok`, P1 / P2 | 2.87 / 2.85 ms | 5.07 / 4.87 | 5.99 / 5.55 | 41.5 / 6.66 | |
+| `nfc list`, Pi round trip | 69.0 ms | 71.0 | 73.9 | 84.8 | ~35 ms (an empty reader) |
+| Chip read on the station (`read_us`) | 28.9 ms | | | | 27.4–29.4 ms |
+| Applet select on the station | 20.2 ms | | | | 40–75 ms |
+| Identify, an unknown badge (`get_pkeys` + select), Pi | 130–167 ms | | | | ~150–250 ms |
+| Verified `sign_random` roll, Pi | 372–384 ms | | | | 700–900 ms |
+| Parse a line | 1.8 µs | 2.2 | 2.4 | 2.4 | ≤ 0.1 ms: JSON lines stay |
+| Event-loop delay, idle | 1.05 ms | 1.07 | 1.12 | 1.84 | p99 < 5 ms |
+| Event-loop delay, during a live `claude` build | 1.05 ms | 1.07 | 1.26 | 1.88 | p99 < 5 ms |
+| Kiosk frame time, Home / Quick Draw / Stock Duel, through blocks | 16.7 ms | 16.7 | | 16.8 | 60 fps |
+
+- `nfc list` with a badge resting on the reader is a field cycle (21 ms, of which the PN532 spends 6.3 ms switching
+  the field off) plus listing up to two chips (42.6 ms against 29.1 ms for one); the ~35 ms target was an empty
+  reader, which couldn't be measured with the badges in place.
+- The run with the Bluetooth speaker playing couldn't be made: no speaker was connected (the Pi's only sink was a
+  dummy output), and the Pi's audio is not to be changed.
+- The serialport addon's reader stopped after its first chunk on the Pi (Node 26, Linux arm64): replies came a write
+  late, 108 ms median and up to 897 ms. Reading the tty through Node's own handle fixed it (2.2 ms).
 
 ## 10. Real and simulated
 
@@ -455,58 +492,127 @@ One or more commits each, in this order. If time runs out, cut from the end.
 
 ## 13. On the Pi
 
-_Filled in after the bring-up._
+Brought up on 2026-11-06 on the Pi 5 at the table, with a HaLo badge resting on each station's reader throughout.
+The results of the bench are in §9.
+
+**What changed on the Pi**
+
+- The previous Box's user units (`esp-monitor`, `gamebox-server`, `gamebox-ui`, `gamebox-deploy.timer`) were checked
+  idle, recorded in `~/egb-takeover/units-before.txt`, then stopped and disabled. Nothing was deleted.
+  `~/egb-takeover/README.txt` says how to turn them back on.
+- Each board's flash was saved before the first flash, in `~/egb-takeover/flash-backup/` (4 MB each, with
+  `SHA256SUMS`).
+- `deploy/pi/setup.sh` installed Node 26.13 in `~/.local/lib/nodejs` (the system's Node 22 is untouched), pnpm
+  12.3.4, `uhubctl`, the `/dev/egb-receiver` udev rule, the nice limit the server needs, and the units.
+  `egb-server` and `egb-kiosk` start at boot; `egb-update.timer` stays disabled until the repo has the deploy key.
+- The audio, speaker and volume were not touched.
+
+**Tested on the hardware**
+
+- All three boards run the new firmware. Every flash hung a station's PN532, and switching every USB port's power off and on
+  freed it each time: `for h in 1 3 2 4; do uhubctl -l $h -a off; done; sleep 3; for h in 1 3 2 4; do uhubctl -l $h -a on; done`.
+- The first-command bug: a freshly enumerated USB tty echoes the receiver's buffered output back to it until the host
+  switches it to raw mode, gluing the host's first command onto a fragment of the receiver's own line. The receiver
+  now takes the command out of the echoed junk; a command sent the moment the port opens is answered.
+- The serialport addon's reader stalled on the Pi (replies a write late, 108 ms median, up to 897 ms); the server now
+  reads the tty through Node's own handle (2.2 ms).
+- Badges: identify of an unknown badge (`get_pkeys`) 130–167 ms; a verified `sign_random` roll 372–384 ms, the
+  chip's counter advancing by one each time.
+- Buzz, screens and the receiver's press work on both stations (the bench's `buzz_ok`, `screen_ok`, `c3_ack` on every
+  try); a station's own press was measured by the firmware bench (2.53 / 2.44 ms), since nobody was there to press
+  BOOT.
+- Station OLEDs follow the game, read with `frame.py` at each phase: `SIGN 10 EGB`, `WAIT tap on DRAW`,
+  `WIN 45 ms` / `LOSE 191 ms`, the Stock Duel ticker on the front card, `DIAL`, the round's stat, `OFFLINE wait 3
+  blocks`, `REFUNDED +10 EGB`. A badge left resting kept `DONE` on the screen for good; the station now shows a result
+  for 1.5 s, then the Box's screen.
+- Quick Draw and Stock Duel played end to end on the Pi with injected taps while the real stations showed the screens
+  and buzzed: join, stake, play, result and payout (Quick Draw judged at the touch: 45 ms against 191 ms; Stock Duel
+  over two rounds on `price` and `24h move`, both picked from the two badges' rolls), and a refund after cutting the
+  power from the test page (both stakes back).
+- A game built on the Pi: through the Designer by typed answers (read by `claude-haiku-5-5` on the Pi's Claude
+  login), the Forge built **Rooftop Dash** with `claude-sonnet-5-5` in 57 s (12 turns, $0.19): manifest, typecheck,
+  bundle with a test match, icon, then installed. Its cartridge took its place in the rack, and it played a whole
+  match on the Pi with its rules in the sandboxed child and its screen in the sandboxed frame, the stations showing its
+  own text (`HOLD red light, don't tap`, `WIN 5 of 5 taps`), and paid out. The event loop stayed at a p99 of 1.26 ms
+  through the build.
+- The kiosk: the Pi's panel runs at 60.04 Hz. Each simulated block cost a 133–150 ms frame (GPU re-raster as parts
+  moved on and off their own layers); with those parts on layers of their own it holds 16.7 ms frames through blocks
+  on Home and in both games.
+
+**Left short**
+
+- `nfc list` with a badge resting on the reader is 69 ms against the ~35 ms measured on an empty reader (§9).
+- The kiosk drops a frame of 66–100 ms when a tap's ring flashes on a port (the same GPU re-raster as the blocks);
+  blocks no longer do.
+- The last station firmware (a chip that misses R(NAK) is re-read instead of counted gone) passed its host tests and
+  a clean build and was flashed, but the badges had been taken off the readers by then, so it hasn't met a badge.
+- The live demo: `game-ui` moved on to a new look while this branch was built, and the demo at
+  https://ethereum-game-box.pages.dev/ runs it. This branch's demo build was not deployed over it; merging `game-ui`
+  in is the team's call (it removes the demo desk and parts this branch changed).
+
+**What still needs people, or a chain**
+
+- Real taps with a hand: everything here used injected taps or the badges resting on the readers. The team should
+  tap both games for real, including Quick Draw's reaction times and a badge lifted mid-roll.
+- A station's BOOT press timed through the Box, and the bench with the Bluetooth speaker playing (no speaker was
+  connected).
+- The repo deploy key: `~/.ssh/egb_deploy.pub` on the Pi goes on the repo as a read-only deploy key, then
+  `EGB_REPO_URL` in `~/.config/egb/env` and `systemctl --user enable --now egb-update.timer`.
+- The chain: stakes, payouts and blocks are simulated behind the core's ports until the contracts, relayer and Box key
+  land.
 
 ## 14. Done when
 
 **Builds**
 
-- [ ] The `box` build runs on the Pi through `LiveLink`.
-- [ ] The demo build still runs on `SimLink` and is live.
+- [x] The `box` build runs on the Pi through `LiveLink`.
+- [ ] The demo build still runs on `SimLink` and is live. (It runs on `SimLink` and its tests pass; the live demo now
+      runs `game-ui`'s new look, so this branch's build wasn't deployed over it: §13.)
 
 **Firmware and the bench**
 
-- [ ] Both stations and the receiver run the new firmware.
-- [ ] The bench meets the targets, and its results are in this plan.
+- [x] Both stations and the receiver run the new firmware.
+- [ ] The bench meets the targets, and its results are in this plan. (All but `nfc list` with a badge resting, 69 ms
+      against ~35 ms; no run with the speaker playing: §9.)
 
 **Hardware behaviour**
 
-- [ ] Station OLEDs follow the game (shown with `frame` screenshots).
-- [ ] Buzz and press work on both stations.
+- [x] Station OLEDs follow the game (shown with `frame` screenshots).
+- [x] Buzz and press work on both stations.
 
 **Games**
 
-- [ ] Quick Draw and Stock Duel play end to end on the Pi with injected taps: join, simulated stake, play, result,
+- [x] Quick Draw and Stock Duel play end to end on the Pi with injected taps: join, simulated stake, play, result,
       refund.
-- [ ] They do the same on the laptop with `EGB_RECEIVER=fake`.
-- [ ] Quick Draw judges by touch time.
-- [ ] Stock Duel's stat comes from both badges' verified rolls.
+- [x] They do the same on the laptop with `EGB_RECEIVER=fake`.
+- [x] Quick Draw judges by touch time.
+- [x] Stock Duel's stat comes from both badges' verified rolls.
 
 **Taps**
 
-- [ ] An unknown badge is read whatever the plan, and a known one costs no chip command.
-- [ ] Every `touch` ends in `done` or `fail`, even when the receiver drops.
+- [x] An unknown badge is read whatever the plan, and a known one costs no chip command.
+- [x] Every `touch` ends in `done` or `fail`, even when the receiver drops.
 
 **Built games**
 
-- [ ] A game built on the Pi with the `claude` provider installs, shows as a cartridge and plays end to end on the Pi.
-- [ ] Its rules run in the sandboxed child.
-- [ ] Tests prove every refusal for the rules child and the frame.
-- [ ] The confinement and bundler-guard tests pass.
-- [ ] Mock voice drives a Designer session.
+- [x] A game built on the Pi with the `claude` provider installs, shows as a cartridge and plays end to end on the Pi.
+- [x] Its rules run in the sandboxed child.
+- [x] Tests prove every refusal for the rules child and the frame.
+- [x] The confinement and bundler-guard tests pass.
+- [x] Mock voice drives a Designer session.
 
 **Pi state**
 
-- [ ] The old units are disabled, and how to re-enable them is noted.
-- [ ] The new units are enabled, so the Pi boots into the new Box.
+- [x] The old units are disabled, and how to re-enable them is noted.
+- [x] The new units are enabled, so the Pi boots into the new Box.
 
 **Firmware code**
 
-- [ ] Host tests pass, and no `String`, heap printf or busy wait sits on a hot path.
+- [x] Host tests pass, and no `String`, heap printf or busy wait sits on a hot path.
 
 **Repo**
 
-- [ ] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm firmware:test` pass; `pnpm firmware:build` compiles clean.
-- [ ] The deploy scripts pass `shellcheck`.
-- [ ] Every module is documented in its README, and the root README layout is updated.
-- [ ] Nothing in the repo or its history points at an outside workspace or carries borrowed names.
+- [x] `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm firmware:test` pass; `pnpm firmware:build` compiles clean.
+- [x] The deploy scripts pass `shellcheck`.
+- [x] Every module is documented in its README, and the root README layout is updated.
+- [x] Nothing in the repo or its history points at an outside workspace or carries borrowed names.
