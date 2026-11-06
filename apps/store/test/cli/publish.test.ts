@@ -24,8 +24,7 @@ import { type PublishOptions, publish } from '../../scripts/publisher.ts';
 
 const TAP_RUSH = path.join(import.meta.dirname, '../../sample/tap-rush');
 const POT: Address = '0x00000000000000000000000000000000000000a1';
-// Anvil's first well-known key, public and worth nothing.
-const LISTER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const LISTER_KEY: Hex = `0x${'11'.repeat(32)}`;
 const HASH: Hex = `0x${'ab'.repeat(32)}`;
 
 interface FakeNode {
