@@ -217,6 +217,16 @@ describe("the API", () => {
     expect((await post(box, "/api/state", {})).status).toBe(405);
   });
 
+  it("runs no route for a request a page elsewhere started: a game's prerender is a GET no CSP stops", async () => {
+    const { box } = await start();
+    const site = async (value: string) => (await getRaw(`${box.url}/api/health`, { "sec-fetch-site": value })).status;
+    expect(await site("cross-site")).toBe(403);
+    expect(await site("same-site")).toBe(403);
+    expect(await site("same-origin")).toBe(200);
+    expect(await site("none")).toBe(200); // the address bar
+    expect((await getRaw(`${box.url}/api/health`, {})).status).toBe(200); // not a browser: curl, the deploy's updater
+  });
+
   it("calls the Box busy from Join on, while a match is open and while money moves", () => {
     const state = (patch: object) => ({ phase: "home", match: null, txs: [], ...patch }) as unknown as Parameters<typeof busy>[0];
     expect(busy(state({}))).toBe(false);

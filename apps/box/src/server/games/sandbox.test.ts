@@ -4,12 +4,12 @@
 // tries something, and the proof is what the outside and the Box then saw, not what the page says. Skipped without a
 // Chromium (EGB_CHROMIUM names one, else the Pi's, Playwright's or Chrome), or without a network address to stand the
 // outside on.
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import dgram from "node:dgram";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
-import type { AddressInfo } from "node:net";
+import net, { type AddressInfo } from "node:net";
 import { homedir, networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -278,6 +278,16 @@ window.addEventListener("load", () => {
 });
 `;
 
+/** Gives what a page set going the time to get there. */
+const ENDS_SOON = `window.addEventListener("load", () => setTimeout(() => egb.end(), 500));`;
+
+/** WebRTC over TCP to a TURN server at `address`: the one WebRTC route the kiosk's flags leave, and only to this machine. */
+const turnTo = (address: string) => `
+const peer = new RTCPeerConnection({ iceServers: [{ urls: "turn:${address}?transport=tcp", username: "x", credential: "y" }] });
+peer.createDataChannel("x");
+peer.createOffer().then((offer) => peer.setLocalDescription(offer));
+`;
+
 /** What a game can do: reads its players on its first line, loads its own files, hears a tap and answers. */
 const GAME = `
 const egb = window.egb;
@@ -339,7 +349,7 @@ const LEAVERS = [
 ];
 
 describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
-  const servers: http.Server[] = [];
+  const servers: (http.Server | net.Server)[] = [];
   const bundles = new Map<string, { dir: string; files: ReadonlySet<string> }>();
   const scenarios: { id: string; hash: string; waits: boolean }[] = [];
   const reports = new Map<string, Report>();
@@ -347,9 +357,13 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
   let outsideConnections = 0;
   let udpPackets = 0;
   const boxRequests: string[] = [];
+  let routeRuns = 0;
+  const localRequests: string[] = [];
+  let localConnections = 0;
   let netLog = "";
+  let chromium: ChildProcess | null = null;
 
-  function listen(server: http.Server, host: string): Promise<number> {
+  function listen(server: http.Server | net.Server, host: string): Promise<number> {
     servers.push(server);
     return new Promise((resolve) => server.listen(0, host, () => resolve((server.address() as AddressInfo).port)));
   }
@@ -392,6 +406,16 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     udp.on("message", () => udpPackets++);
     await new Promise<void>((resolve) => udp.bind(0, here, resolve));
     const STUN = `${here}:${udp.address().port}`;
+    const local = http.createServer((req, res) => {
+      localRequests.push(req.url ?? "");
+      res.end("heard");
+    });
+    const LOCAL = `http://127.0.0.1:${await listen(local, "127.0.0.1")}`;
+    const turn = net.createServer((socket) => {
+      localConnections++;
+      socket.destroy();
+    });
+    const TURN = `127.0.0.1:${await listen(turn, "127.0.0.1")}`;
 
     const globals = inline(`const OUT = ${JSON.stringify(OUT)}, STUN = ${JSON.stringify(STUN)};${HARNESS}`);
     const gameDir = bundle("game", {
@@ -413,6 +437,9 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     bundle("forgeries", { "index.html": page(inline(FORGERIES)) });
     bundle("crushers", { "index.html": page(inline(CRUSHERS)) });
     bundle("buffers", { "index.html": page(inline(BUFFERS)) });
+    // A page gets one prerender, so each knock is its own bundle.
+    bundle("knocks on the API", { "index.html": page(`<link rel="prerender" href="/api/probe">${inline(ENDS_SOON)}`) });
+    bundle("knocks on a local port", { "index.html": page(`<link rel="prerender" href="${LOCAL}/knock?secret=NOVA">${inline(`${turnTo(TURN)}${ENDS_SOON}`)}`) });
     bundle("leaves for the outside", { "index.html": leaves(JSON.stringify(`${OUT}/leave`)) });
     bundle("leaves by a meta refresh", { "index.html": page(`<meta http-equiv="refresh" content="1;url=${OUT}/refresh">`) });
     bundle("leaves for a data page", { "index.html": leaves(`"data:text/html,<script>" + ${JSON.stringify(LANDED)} + "<" + "/script>"`) });
@@ -448,6 +475,14 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
       routes: [
         { method: "GET", path: "/api/scenarios", handle: (_req, res) => sendJson(res, scenarios) },
         {
+          method: "GET",
+          path: "/api/probe",
+          handle: (_req, res) => {
+            routeRuns++;
+            sendJson(res, {});
+          },
+        },
+        {
           method: "POST",
           path: "/api/report",
           handle: async (req, res) => {
@@ -470,7 +505,7 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     const boxPort = await listen(box, "127.0.0.1");
 
     const logFile = path.join(root, "net.json");
-    const chromium = spawn(
+    const browser = spawn(
       CHROMIUM ?? "",
       [
         "--headless=new",
@@ -486,19 +521,21 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
       ],
       { stdio: "ignore" },
     );
-    const exited = new Promise<void>((resolve) => chromium.once("exit", () => resolve()));
+    chromium = browser;
+    const exited = new Promise<void>((resolve) => browser.once("exit", () => resolve()));
     void exited.then(finished);
     await done;
-    chromium.kill("SIGTERM");
+    browser.kill("SIGTERM");
     await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))]);
-    chromium.kill("SIGKILL");
+    browser.kill("SIGKILL");
     udp.close();
     netLog = readFileSync(logFile, "utf8");
   }, 120_000);
 
   afterAll(() => {
+    chromium?.kill("SIGKILL");
     for (const server of servers) {
-      server.closeAllConnections();
+      if (server instanceof http.Server) server.closeAllConnections();
       server.close();
     }
   });
@@ -534,11 +571,17 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     expect(netLog).not.toMatch(/"dns_query_types"[^\n]*canary-/);
   });
 
-  it("reaches nothing on the Box beyond its own listed files", () => {
+  it("gets no file of the Box's but its own, and runs no route", () => {
     const paths = new Set(boxRequests.map((url) => url.replace(/^\/store\/0x[0-9a-f]{64}\//, "/store/<hash>/")));
     const ownFiles = ["index.html", "own.css", "own.js", "own-module.js", "own.png", "art/own-art.png", "own.woff2", "own.mp3", "second.html"].map((name) => `/store/<hash>/${name}`);
-    // /api/state is the frame leaving for it, which only loses it the frame.
-    expect([...paths].sort()).toEqual([...ownFiles, "/", "/kiosk.js", "/favicon.ico", "/bundle-host.js", "/api/state"].sort());
+    // /api/state is the frame leaving for it, and /api/probe its prerender: the Box hears them and refuses them.
+    expect([...paths].sort()).toEqual([...ownFiles, "/", "/kiosk.js", "/favicon.ico", "/bundle-host.js", "/api/state", "/api/probe"].sort());
+    expect(routeRuns).toBe(0);
+  });
+
+  it("can still knock on this machine's own ports, where the walls stop: one GET it can't read, and a connection", () => {
+    expect(localRequests).toEqual(["/knock?secret=NOVA"]);
+    expect(localConnections).toBeGreaterThan(0);
   });
 
   it("makes no tap and no command from anything a page posts, and holds a flood to its rates", () => {

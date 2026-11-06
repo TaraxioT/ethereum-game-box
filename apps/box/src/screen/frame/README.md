@@ -69,8 +69,9 @@ is decided on the kiosk's side, before a message goes further:
 `load` at all. So `ready` only counts as an answer: one a page says before the kiosk asks is spent. A page that stops its
 load or reloads for ever is never asked, and a landing page has nothing to answer with: the Box shows no other page of a
 bundle in a frame (a navigation to one is a 404), the kiosk's `frame-src 'self'` keeps out `data:` and `blob:` pages, and
-the Box's other pages have nothing of the game's in them. Either way the view's timeout loses the page. A page it can't
-tell from the real one would be `index.html` again, which is the game.
+the Box's other pages have nothing of the game's in them. Either way the view's timeout loses the page. Two pages can
+still answer: `index.html` again, which is the game, and a built game's frame page, which says `ready` by itself and then
+waits for an `init` that never comes. The match then runs out its time, as with a game that hangs.
 
 **Lost pages.** The view (`bundleFrameView`) passes what the gate lets through to the Box through its `powers`. A page
 that never says ready, leaves, or keeps sending what the gate can't weigh is lost: the frame goes, and
@@ -81,6 +82,11 @@ ways: `<link rel="prerender">` sends a full GET to any URL, `preconnect` opens a
 up, and WebRTC sends UDP (`webrtc 'block'` isn't enforced). The host can't take those away, because a nested `srcdoc`
 frame gets a fresh window. Only the kiosk's own start can stop them: `deploy/pi/units/egb-kiosk.service` starts Chromium
 with `--host-resolver-rules` and `--webrtc-ip-handling-policy`, and `server/games/sandbox.test.ts` runs that line's flags.
+
+**Where the walls stop.** The kiosk's page is on loopback, so those flags have to leave loopback open, and a page can still
+knock on this machine's own ports: one prerender a page, a GET it can't read the answer to, and a TCP connection from a
+TURN server's address. The Box refuses to run a route for either (`Sec-Fetch-Site`, `server/http.ts`). No flag or
+preference tried stops the prerender. So nothing else on the Pi's loopback may trust a GET, or change anything on one.
 
 | Module | What it is | API |
 |---|---|---|

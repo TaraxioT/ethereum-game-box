@@ -56,9 +56,10 @@ sealed or unknown game gets; and a bundle's CSP, its exact paths, its one page, 
 it with, read from that file, on the real handler, CSPs, view, gate and channel, with a second server and a UDP socket as
 the outside. A game's own files load and its taps and words go through. Then 50-odd tries at getting out (fetch, beacon,
 image, form, WebSocket, WebRTC, every kind of link hint, parent access, storage, workers, devices, eval) fail, and the
-outside's own count says nothing reached it: no request, no connection, no packet, no name looked up. Forged and flooding
-messages stop at the gate, and each way of leaving loses the page. It is skipped without a Chromium; `EGB_CHROMIUM` names
-one.
+outside's own count says nothing reached it: no request, no connection, no packet, no name looked up. Of the Box it gets
+only its own files and runs no route, though a prerender can still knock on a local port, and a test says so. Forged,
+flooding and oversized messages stop at the gate, and each way of leaving loses the page. It is skipped without a
+Chromium; `EGB_CHROMIUM` names one.
 
 **It passes only with the unit's two walls.** Without `--host-resolver-rules` and `--webrtc-ip-handling-policy`,
 `<link rel="prerender">` reaches the outside, with the CSP and sandbox in place, and a test fails if the unit loses

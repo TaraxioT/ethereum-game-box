@@ -72,8 +72,10 @@ it is a 421: a page whose own name points at 127.0.0.1 (DNS rebinding) can't rea
 answers only on those names; `EGB_HOST` changes the address it binds, not the names it answers to. Every request
 that isn't a GET, and the link's upgrade, also needs the same origin: an Origin of exactly `http://` and the
 request's Host, so the Box's own port (or the dev server's, which passes the page's requests through with its own
-Host), never another local server's page. No Origin at all is allowed, as browsers always send one. JSON bodies are
-capped at 64 KB. Every page and file goes out with the CSP
+Host), never another local server's page. No Origin at all is allowed, as browsers always send one. A route under
+`/api/` also needs a `Sec-Fetch-Site` of `same-origin` or `none`, or none at all, else it is a 403: a store game's
+prerender is a GET to any local URL that no CSP stops, and it can't read the answer, but the route would still run. JSON
+bodies are capped at 64 KB. Every page and file goes out with the CSP
 in `security.ts`. A route marked `launcher` needs the `x-egb-launcher` header to match this boot's token (compared in
 constant time).
 
@@ -189,7 +191,7 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `taps-api.ts` | The stations' routes for the test page and the bench. | `tapsRoutes` |
 | `sessions.ts` | The session log, and the records and per-pair counts rebuilt from it after the listen. | `createSessionLog(dataDir, log)` (the core's `MatchLog`; `load()`, `records()`, `flush()`), `dayOf` |
 | `routes.ts` | The HTTP handler: the loopback Host, the same origin, the launcher guard, the API, the built games' routes, the screen's files. | `createHandler`, `Route` |
-| `http.ts` | Static files, capped bodies, the loopback-host and same-origin rules. | `loopbackHost`, `sameOrigin`, `within`, `sendFile`, `readBody`, `readJson`, `HttpError` |
+| `http.ts` | Static files, capped bodies, the loopback-host, same-origin and own-request rules. | `loopbackHost`, `sameOrigin`, `ownRequest`, `within`, `sendFile`, `readBody`, `readJson`, `HttpError` |
 | `security.ts` | The CSP and the launcher token. | `CSP`, `createLauncherToken`, `isTopNavigation`, `withToken`, `hasToken` |
 | `link.ts` | The screen's WebSocket on the HTTP server (`ws`, `noServer`); its upgrade takes the same Host and origin rules as a POST. | `attachLink(server, box, log)`, `parseCommand` |
 | `coalesce.ts` | At most one run per window, always a trailing run. | `coalesce(run, everyMs)` |
