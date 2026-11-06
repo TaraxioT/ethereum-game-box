@@ -54,6 +54,27 @@ describe("the screen's link", () => {
     expect(tb.box.core.state().phase).toBe("attract");
   });
 
+  it("carries every command the screen can send", () => {
+    // Keyed by type: a new ScreenCommand that isn't listed here fails the typecheck, and one the link drops fails here.
+    const every: { readonly [K in ScreenCommand["type"]]: Extract<ScreenCommand, { type: K }> } = {
+      booted: { type: "booted" },
+      start: { type: "start" },
+      focus: { type: "focus", game: "stock-duel" },
+      play: { type: "play" },
+      stake: { type: "stake", amount: 10 },
+      back: { type: "back" },
+      rematch: { type: "rematch" },
+      home: { type: "home" },
+      refund: { type: "refund" },
+      build: { type: "build" },
+      lobby: { type: "lobby" },
+      topup: { type: "topup" },
+      propose: { type: "propose" },
+      claim: { type: "claim" },
+    };
+    for (const command of Object.values(every)) expect(parseCommand(JSON.stringify({ t: "command", command }))).toEqual(command);
+  });
+
   it("reads commands strictly", () => {
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "focus", game: "quick-draw" } }))).toEqual({ type: "focus", game: "quick-draw" });
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "stake", amount: 25, extra: 1 } }))).toEqual({ type: "stake", amount: 25 });

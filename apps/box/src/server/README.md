@@ -136,7 +136,7 @@ free-result rules, `core/transcript.ts`).
 On connect, a screen gets `{ t: "state", now, state }`; then `{ t: "event", now, state, event }` for every event, in
 order and never coalesced. The one change with no event (the stations' views moving with the clock) goes out as a
 whole `state` at most every 100 ms; an event cancels a pending one, since it carries the whole state too. The screen
-sends `{ t: "command", command }`, checked strictly before it reaches the core (`build` opens the game builder from
+sends `{ t: "command", command }`, checked strictly before it reaches the core (`lobby`, `topup`, `propose` and `claim` drive the lobby; `build` opens the game builder from
 Home). A socket that stops reading (1 MB
 unread) or stops answering pings (15 s) is dropped; the screen reconnects and starts from the whole state.
 
