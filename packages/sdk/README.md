@@ -16,7 +16,7 @@ for either platform. The one browser-only piece, the screen contract, is its own
 | `station.ts` | `StationView`, what a tap station's OLED shows (`tag` ≤ 3, `big` ≤ 32 and `small` ≤ 40, scrolling when too wide, the `hold` / `sign` / `done` / `fail` / `nope` overrides, and the `mode`: `open`, `play` or `shut`), `stationView()` to build one cut to fit, and `printable()` |
 | `manifest.ts` | `GameManifest`, the shape of `game.json`, `manifestProblems()` to check one, the checks it shares with a bundle's manifest, and `PLAYER_LIMITS` |
 | `runner.ts` | The rules-runner protocol: JSON lines over a built game's child's stdio (`start`, `step`; `ready`, `state`, `error`), and `MAX_MESSAGE` |
-| `frame.ts` | The frame channel: what the kiosk posts a built game's screen (`init`, `update`) and the only things it may post back (`ready`, `error`) |
+| `frame.ts` | The frame channel: what the kiosk posts a built game's screen (`init`, `update`) and the only things it may post back (`ready`, `error`). What a store bundle's page hears (`bundle-init`, `tap`) and may say (`FromBundle`: `event`, `station`, `buzz`, `end`), its `window.egb` (`BundleApi`) and `FRAME_LIMITS` |
 | `transcript.ts` | `Transcript`: one line per match in the session log, from which records are rebuilt |
 | `match-log.ts` | `MatchLog`, what the verifier judges, `LOG_LIMITS`, `logProblems()` to check one from an untrusted Box, and `logTextProblems()` to check its exact text, which is what the verifier gets. Tested in `match-log.test.ts` |
 | `check.ts` | `isRecord` and `strayKey`, for parsed, untrusted JSON, and `hasOneReading`, for its text |
