@@ -58,7 +58,7 @@ Pop-ups, the operator site and the agent are out of the story; their pages stay.
 ## The lobby and cups
 
 - **Lobby** (`#/lobby/<name>`): pick a player or type a name; it resolves through ENS, and the page reads its test
-  USDC. "Top up 100 USDC" calls the relayer's `POST /usdc/topup { player }`, which mints when the balance is under 25.
+  USDC. "Top up 100 USDC" calls the relayer's `POST /usdc/topup { player }`, which mints whatever the balance (once per player every 10 minutes).
   Every player is listed with their balance.
 - **Cups** (`#/championships`): an open cup's standings, leader, countdown and prize, read from
   its name's records; the latest closed one, frozen, with its winner, role table and Try grid; and every cup

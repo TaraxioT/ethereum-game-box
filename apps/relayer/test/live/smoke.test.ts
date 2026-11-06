@@ -324,7 +324,7 @@ describe('the Game Box names, live on Sepolia', () => {
     if (resolvable) expect(await client.getEnsText({ name, key: 'status', blockNumber })).toBe(status);
   });
 
-  it('tops both players up with 100 USDC, one by its ENS name, and refuses a second top-up', async () => {
+  it('tops both players up with 100 USDC, one by its ENS name, and refuses a second top-up within 10 minutes', async () => {
     const byName = resolvable ? fullName(rivalLabel) : rival.address;
     const [first, second] = await Promise.all(
       [badge.address, byName].map((player) => call<TxView>(urls.relayer, '/usdc/topup', { player })),
@@ -336,7 +336,7 @@ describe('the Game Box names, live on Sepolia', () => {
     expect(await balanceOf(badge.address, blockNumber)).toBe(usdc(100));
     expect(await balanceOf(rival.address, blockNumber)).toBe(usdc(100));
     const again = await call<{ error: string }>(urls.relayer, '/usdc/topup', { player: badge.address });
-    expect(again.status, again.body.error).toBe(409);
+    expect(again.status, again.body.error).toBe(429);
   });
 
   it('refuses a stake signed by a key that is not the Box\'s, with no gas spent', async () => {

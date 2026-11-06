@@ -1,8 +1,8 @@
 // `POST /usdc/topup`: the lobby's top-up. It mints `TOPUP` test USDC (`FakeUSDC.mint`, which the relayer's wallet may
-// call as its minter) to a player holding less than `TOPUP_BELOW`. The player is an address, or an ENS name resolved
-// with stock viem through the Universal Resolver.
+// call as its minter) to a player, whatever it already holds; `limits.ts` keeps it to one per player per 10 minutes.
+// The player is an address, or an ENS name resolved with stock viem through the Universal Resolver.
 
-import { fakeUsdcAbi, formatUsdc, usdc } from '@egb/shared/names';
+import { fakeUsdcAbi, usdc } from '@egb/shared/names';
 import { type Address, encodeFunctionData, getAddress, isAddress } from 'viem';
 import { normalize } from 'viem/ens';
 
@@ -13,8 +13,6 @@ import { isRevert } from '../revert.ts';
 
 /** What one top-up mints. */
 export const TOPUP = usdc(100);
-/** A player holding this much or more gets no top-up. */
-export const TOPUP_BELOW = usdc(25);
 
 /** The address `player` names: itself, or what its ENS name resolves to. Throws a 400 or a 404. */
 async function playerAddress(ctx: Context, player: string): Promise<Address> {
@@ -38,10 +36,6 @@ async function playerAddress(ctx: Context, player: string): Promise<Address> {
 export async function prepareTopup(ctx: Context, input: unknown): Promise<Prepared> {
   const player = await playerAddress(ctx, field.text(field.object(input), 'player'));
   const token = { address: ctx.addresses.usdc, abi: fakeUsdcAbi } as const;
-  const balance = await ctx.client.readContract({ ...token, functionName: 'balanceOf', args: [player] });
-  if (balance >= TOPUP_BELOW) {
-    throw new Refusal(409, `${player} already holds ${formatUsdc(balance)} USDC (top-ups are for under ${formatUsdc(TOPUP_BELOW)})`);
-  }
 
   const call = { to: token.address, data: encodeFunctionData({ ...token, functionName: 'mint', args: [player, TOPUP] }) };
   await simulate(ctx, call);
