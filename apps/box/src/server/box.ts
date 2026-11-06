@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
 import type { Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
-import { systemClock } from "../core/system-clock.ts";
+import { monotonicClock } from "../core/system-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { badgeOf } from "../taps/roster.ts";
 import { createTaps, type Taps } from "../taps/taps.ts";
@@ -71,7 +71,8 @@ function urlHost(host: string): string {
 export async function startBox(options: BoxOptions): Promise<Box> {
   const { settings } = options;
   const log = options.log ?? ((text: string) => console.log(text));
-  const clock = options.clock ?? systemClock();
+  // Monotonic: a clock step (NTP after boot) must not move touch times against the game's own timers.
+  const clock = options.clock ?? monotonicClock();
   const started = performance.now();
   const builderEnv = options.builder?.env ?? process.env;
   // A bad EGB_FORGE_PROVIDER stops the start before anything listens.
@@ -136,6 +137,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   });
   server.on("error", (error) => log(`http: ${error.message}`));
 
+  // The match log is read back now, not before the listen: it only grows.
+  void sessions.load();
   void library.rescan();
 
   if (settings.receiver.kind !== "none") {

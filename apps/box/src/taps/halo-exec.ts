@@ -2,12 +2,16 @@
 // station's reader, through `nfc <st> <id> apdu|sign <hex>` lines. libhalo builds each command and parses the answer;
 // this selects the HaLo applet once per tap, wraps each command in its APDU, and recovers from a radio or RF error by
 // re-activating the chip and trying again while it is still on the reader.
+//
+// The station runs an APDU on whatever chip is on its reader: it doesn't know which one the Pi means. So every
+// exchange is checked against the tap's own chip before it goes out and again when its answer comes back: an answer
+// that arrives after the chip left (a `gone`, or a newer tap on the station) may be another chip's, and is thrown away.
 import { ISO7816_SELECT_CMDS } from "@arx-research/libhalo/api/common";
 import { checkErrors, execHaloCmd } from "@arx-research/libhalo/api/custom";
 import type { Clock } from "../core/ports.ts";
 import { NfcError, NotHaloError } from "./errors.ts";
 import type { StationId } from "./lines.ts";
-import type { Nfc } from "./nfc.ts";
+import type { Nfc, NfcReply, NfcRequest } from "./nfc.ts";
 
 /** A libhalo command (`{ name: "get_pkeys" }`, `{ name: "sign_random", keyNo: 2 }`) and its parsed answer. */
 export type HaloExec = (command: { readonly name: string; readonly [arg: string]: unknown }) => Promise<unknown>;
@@ -49,8 +53,6 @@ export interface ChipTarget {
   readonly st: StationId;
   readonly uid: string;
   readonly sak: string;
-  /** The station selected the HaLo applet when it found the chip (the tap's `sel` was 9000). */
-  readonly selected: boolean;
   /** Still on the reader: no `gone` line, and no newer tap on the station. */
   present(): boolean;
   /** Waits out a dropped link; rejects when its grace runs out. */
@@ -62,14 +64,13 @@ export class ChipSession {
   private readonly aids: AidMemory;
   private readonly target: ChipTarget;
   private readonly clock: Clock;
-  private selected: boolean;
+  private selected = false;
 
   constructor(nfc: Nfc, aids: AidMemory, target: ChipTarget, clock: Clock) {
     this.nfc = nfc;
     this.aids = aids;
     this.target = target;
     this.clock = clock;
-    this.selected = target.selected;
   }
 
   /** Runs one libhalo command on the chip, re-activating it after a radio or RF error (up to RETRIES times). */
@@ -88,16 +89,16 @@ export class ChipSession {
   };
 
   /**
-   * Selects the HaLo applet, unless the station already did. One try, no recovery. The station's presence check (an
-   * ISO-DEP R(NAK)) needs no prior exchange, and the station selects the applet itself right after each tap and keeps
-   * the chip's answer, so a SELECT with the same bytes is answered at once, without the chip.
+   * Selects the HaLo applet, once per session. One try, no recovery. The station selects the applet itself right after
+   * each tap and keeps the chip's answer, so a SELECT with the same bytes is answered at once (~3 ms), without the chip;
+   * the AID this chip answered last goes first, as the station's own select does.
    */
   async select(): Promise<void> {
     if (this.selected) return;
-    const { st, uid, sak } = this.target;
+    const { uid, sak } = this.target;
     if ((parseInt(sak, 16) & SAK_ISO_DEP) === 0) throw new NotHaloError("not an ISO-DEP card, so not a HaLo");
     for (const i of this.aids.order(uid)) {
-      const reply = await this.nfc.request(st, { op: "apdu", hex: ISO7816_SELECT_CMDS[i]! });
+      const reply = await this.request({ op: "apdu", hex: ISO7816_SELECT_CMDS[i]! });
       if (reply.hex.endsWith("9000")) {
         this.selected = true;
         this.aids.answered(uid, i);
@@ -110,7 +111,7 @@ export class ChipSession {
   /** One HaLo command in its APDU (CLA B0, INS 51), and its answer without the status word. */
   private async transmit(bytes: Buffer, sign: boolean): Promise<{ result: string; extra: Record<string, string> }> {
     const hex = `B0510000${byte(bytes.length)}${bytes.toString("hex")}00`;
-    const reply = await this.nfc.request(this.target.st, { op: sign ? "sign" : "apdu", hex });
+    const reply = await this.request({ op: sign ? "sign" : "apdu", hex });
     const sw = reply.hex.slice(-4);
     if (sw !== "9000" && sw !== "9100") {
       // A chip that lost power for a moment answers 6D00: the applet has to be selected again.
@@ -120,6 +121,18 @@ export class ChipSession {
     const data = Buffer.from(reply.hex.slice(0, -4), "hex");
     checkErrors(data);
     return { result: data.toString("hex"), extra: {} };
+  }
+
+  /** One exchange with the tap's chip: refused before it goes out, and its answer dropped, once the chip has left. */
+  private async request(req: NfcRequest): Promise<NfcReply> {
+    this.ensurePresent();
+    const reply = await this.nfc.request(this.target.st, req);
+    this.ensurePresent();
+    return reply;
+  }
+
+  private ensurePresent(): void {
+    if (!this.target.present()) throw new NfcError("no-chip", "the chip left the reader");
   }
 
   /** Gets the chip ready for another try, or throws when there's no point (lifted, not a HaLo, a dead reader). */

@@ -18,8 +18,11 @@ import type { OpenPort } from "./receiver.ts";
 /** The receiver ESP32-C3's USB serial number (its MAC), as its by-id name carries it. */
 export const RECEIVER_SERIAL = "7C:DF:A1:D5:04:CC";
 const BY_ID = "/dev/serial/by-id";
-/** A write the kernel couldn't take whole (its buffer full) gets the rest after this long. */
+/** A write the kernel couldn't take whole (its buffer full) gets the rest after this long, doubling each time … */
 const WRITE_RETRY_MS = 1;
+const WRITE_RETRY_MAX_MS = 50;
+/** … for this long at most: a receiver that stopped reading this long won't take the command in time to matter. */
+const WRITE_GIVE_UP_MS = 500;
 
 /** The by-id path of the receiver, or throws when it isn't plugged in. */
 export async function findReceiver(dir = BY_ID): Promise<string> {
@@ -29,19 +32,59 @@ export async function findReceiver(dir = BY_ID): Promise<string> {
   return join(dir, name);
 }
 
-/** Writes all of `data` to a non-blocking descriptor, waiting out EAGAIN off the event loop's hot path. */
-function writeAll(fd: number, data: Buffer, done: (error?: Error | null) => void): void {
-  let sent = 0;
-  const step = (): void => {
-    try {
-      while (sent < data.length) sent += writeSync(fd, data, sent, data.length - sent);
-      done();
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "EAGAIN") setTimeout(step, WRITE_RETRY_MS);
-      else done(e as Error);
-    }
+/** Writes part of a buffer to the port without blocking: the bytes taken, or throws (EAGAIN when it takes none). */
+export type WriteSome = (data: Buffer, offset: number, length: number) => number;
+
+export interface TtyWriter {
+  /** Writes all of `data`, waiting out a full buffer off the event loop's hot path; `done` once it's out or dropped. */
+  write(data: Buffer, done: (error?: Error | null) => void): void;
+  /** No more writes: a retry still waiting is cancelled (its descriptor is about to close, and may be reused). */
+  close(): void;
+}
+
+/**
+ * Writes to a non-blocking descriptor. A command the kernel won't take within WRITE_GIVE_UP_MS is dropped (`onDrop`),
+ * not retried for ever; one cut off part way gets a newline ahead of the next, so the receiver answers the torn line
+ * with `bad` instead of reading the next command into it.
+ */
+export function ttyWriter(writeSome: WriteSome, onDrop: () => void): TtyWriter {
+  let closed = false;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+  let torn = false;
+  return {
+    write(chunk, done) {
+      if (closed) return done(new Error("the receiver's port is closed"));
+      const data = torn ? Buffer.concat([Buffer.from("\n"), chunk]) : chunk;
+      torn = false;
+      let sent = 0;
+      let waited = 0;
+      let pause = WRITE_RETRY_MS;
+      const step = (): void => {
+        retry = null;
+        if (closed) return;
+        try {
+          while (sent < data.length) sent += writeSome(data, sent, data.length - sent);
+          done();
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== "EAGAIN") return done(e as Error);
+          if (waited >= WRITE_GIVE_UP_MS) {
+            torn = sent > 0;
+            onDrop();
+            return done();
+          }
+          retry = setTimeout(step, pause);
+          waited += pause;
+          pause = Math.min(WRITE_RETRY_MAX_MS, pause * 2);
+        }
+      };
+      step();
+    },
+    close() {
+      closed = true;
+      if (retry !== null) clearTimeout(retry);
+      retry = null;
+    },
   };
-  step();
 }
 
 /**
@@ -53,19 +96,22 @@ export function openTty(path: string): Duplex {
   const readFd = openSync(path, constants.O_RDWR | constants.O_NOCTTY);
   const input = new ReadStream(readFd);
   input.setRawMode(true);
-  let writeFd: number | null = openSync(path, constants.O_WRONLY | constants.O_NOCTTY | constants.O_NONBLOCK);
-  const port = new Duplex({
+  const writeFd = openSync(path, constants.O_WRONLY | constants.O_NOCTTY | constants.O_NONBLOCK);
+  const writer = ttyWriter(
+    (data, offset, length) => writeSync(writeFd, data, offset, length),
+    () => port.emit("drop"),
+  );
+  const port: Duplex = new Duplex({
     read() {
       input.resume();
     },
     write(chunk: Buffer, _encoding, done) {
-      if (writeFd === null) done(new Error("the receiver's port is closed"));
-      else writeAll(writeFd, chunk, done);
+      writer.write(chunk, done);
     },
     destroy(error, done) {
+      writer.close();
       input.destroy();
-      if (writeFd !== null) closeSync(writeFd);
-      writeFd = null;
+      closeSync(writeFd);
       done(error);
     },
   });

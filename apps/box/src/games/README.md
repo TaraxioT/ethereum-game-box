@@ -42,6 +42,6 @@ down; the higher number takes the round, best of three. Its taps are `random`.
 
 | Module | What it is |
 |---|---|
-| `types.ts` | `StockDuelState` (hands, the drums, played and held cards, rolls, the stat, the history), `StockDuelEvent` (`tick`, `touch`, `tap`, `release`). |
+| `types.ts` | `StockDuelState` (hands, the drums, played and held cards, rolls, the stat, the history), `StockDuelEvent` (`tick`, `touch`, `tap`, `release`); `Stock` and `StatKey` are the deck's (`built/deck.ts`). |
 | `rules.ts` | `rules`, `frontIndex`, `frontCard`, `frontRemainingMs`, the timings. Tested in `rules.test.ts`. |
 | `deck.ts` | The 20-stock deck with recorded numbers, `STATS`, `STAT_LABEL`, `formatStat`. |

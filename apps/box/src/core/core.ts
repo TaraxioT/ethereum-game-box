@@ -39,12 +39,13 @@ import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame } from "./catalogue.ts";
 import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
-import { balanceOf, escrowTotal, faucet, FAUCET_EGB, lock, refund, returnAll, settle, type Ledger } from "./ledger.ts";
+import { balanceOf, canLock, escrowTotal, faucet, FAUCET_EGB, lock, refund, returnAll, settle, type Ledger } from "./ledger.ts";
 import { transcriptOf } from "./transcript.ts";
 import { createTxBook } from "./txs.ts";
 import { stationViews, type StationInput } from "./stations.ts";
 import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
+import { sameBadge } from "./badges.ts";
 import { startBuilt, type BuiltDriver } from "./built.ts";
 
 /** Join waits this long with both seats full before moving on to Stake. */
@@ -129,10 +130,6 @@ type GameTap =
   | { readonly kind: "touch"; readonly seat: Seat; readonly at: number }
   | { readonly kind: "tap"; readonly seat: Seat; readonly at: number; readonly roll: number | null }
   | { readonly kind: "release"; readonly seat: Seat };
-
-function sameBadge(a: Badge | null, b: Badge | null): boolean {
-  return a !== null && b !== null && a.address === b.address;
-}
 
 /** A team game's play: its rules run here, in the core. */
 type TeamPlay = Exclude<MatchPlay, BuiltPlay>;
@@ -238,6 +235,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   const fauceting = new Set<string>();
   /** Refund transactions sent and not yet landed, by seat. */
   const refunding: [boolean, boolean] = [false, false];
+  /** Those refunds' payments: a reset hands their stakes back at once, and cancels them. */
+  const refundsOut = new Set<{ readonly address: string; readonly amount: number; cancelled: boolean }>();
   let openTxId: number | null = null;
   let opponent: Opponent = bot ? "bot" : "hotseat";
   let power = true;
@@ -478,11 +477,28 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       const amount = stake;
       const id: number = book.submit({ kind: "open", seat: null, direction: "in", amount: amount * 2 }, () => {
         // A reset while it was on its way leaves the stakes where they are.
-        if (openTxId === id) setLedger(lock(ledger, both, amount));
+        if (openTxId !== id) return;
+        if (canLock(ledger, both, amount)) setLedger(lock(ledger, both, amount));
+        else voidOpen();
       }).id;
       openTxId = id;
     }
     return "accepted";
+  }
+
+  /**
+   * The stakes can't be locked after all (a balance spent while the open was on its way): the open locks nothing, the
+   * match doesn't open, and both signatures are handed back, so the players see Stake again.
+   */
+  function voidOpen(): void {
+    openTxId = null;
+    for (const seat of SEATS) {
+      if (!seats[seat].signed) continue;
+      seats[seat].signed = false;
+      emit({ type: "seat", seat });
+    }
+    fundSeats();
+    cue("error");
   }
 
   function openMatch(block: number): void {
@@ -666,11 +682,15 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const id = match.id;
     refunding[seat] = true;
     owe(address, amount);
+    const payment = { address, amount, cancelled: false };
+    refundsOut.add(payment);
     book.submit({ kind: "refund", seat, direction: "out", amount }, () => {
-      // A reset may have handed the stake back already.
+      refundsOut.delete(payment);
+      refunding[seat] = false;
+      // A reset handed the stake back already (and the escrow may hold a new match's stake by now).
+      if (payment.cancelled) return;
       if (holds(address, amount)) setLedger(refund(ledger, address, amount));
       land(address, amount);
-      refunding[seat] = false;
       if (!match || match.id !== id) return;
       const refunded: [boolean, boolean] = seat === 0 ? [true, match.refunded[1]] : [match.refunded[0], true];
       match = { ...match, refunded };
@@ -936,8 +956,16 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     reset() {
       stopBuilt();
       openTxId = null;
-      // A match that hasn't sent its settlement hands each stake back; one in Result is already paying out.
-      if (phase !== "result" && escrowTotal(ledger) > 0) setLedger(returnAll(ledger));
+      // A match that hasn't sent its settlement hands each stake back; one in Result is already paying out. A refund
+      // on its way is paid by that, so it is no longer money coming: a stake can't count on it.
+      if (phase !== "result" && escrowTotal(ledger) > 0) {
+        setLedger(returnAll(ledger));
+        for (const payment of refundsOut) {
+          payment.cancelled = true;
+          land(payment.address, payment.amount);
+        }
+        refundsOut.clear();
+      }
       setPhase("home");
     },
     stop() {

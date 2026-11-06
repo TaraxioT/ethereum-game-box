@@ -1,23 +1,9 @@
-// Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events.
+// Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events. The cards and
+// their stats are the deck's (built/deck.ts), shared with Stock Duel's built form.
 import type { Seat } from "@egb/sdk";
+import type { StatKey, Stock } from "./built/deck.ts";
 
-/** The four stats a round can be played on, in roll order: `(roll1 + roll2) % 4` picks one. */
-export type StatKey = "price" | "avgPrice" | "change24h" | "liquidity";
-
-export interface Stock {
-  readonly ticker: string;
-  readonly name: string;
-  /** The brand colour, for the card's band and tab. */
-  readonly colour: string;
-  /** USD, the pool's spot price. */
-  readonly price: number;
-  /** USD, the 24-hour average price. */
-  readonly avgPrice: number;
-  /** Percent over 24 hours. */
-  readonly change24h: number;
-  /** USD in the pool. */
-  readonly liquidity: number;
-}
+export type { StatKey, Stock };
 
 export type StockDuelPhase = "deal" | "pick" | "dial" | "reveal" | "over";
 

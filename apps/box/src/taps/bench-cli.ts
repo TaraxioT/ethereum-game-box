@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
-import { systemClock } from "../core/system-clock.ts";
+import { monotonicClock } from "../core/system-clock.ts";
 import { loadEnv } from "../server/env.ts";
 import { readSettings, type Settings } from "../server/settings.ts";
 import { formatReport, runBench, type BenchReport } from "./bench.ts";
@@ -36,7 +36,7 @@ async function direct(settings: Settings, receiver: string, count: number): Prom
     receiver,
     stations: settings.stations,
     dataDir: settings.dataDir,
-    clock: systemClock(),
+    clock: monotonicClock(),
     plan: () => "none",
     onTap: () => {},
     log: () => {},

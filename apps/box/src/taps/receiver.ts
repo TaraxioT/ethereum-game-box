@@ -10,7 +10,10 @@ import { parseEvent, type DropReason } from "./events.ts";
 import type { ReceiverCommand, ReceiverEvent } from "./lines.ts";
 import { LineScanner } from "./scanner.ts";
 
-/** An open line to a receiver, and what to call it in the status. */
+/**
+ * An open line to a receiver, and what to call it in the status. The stream may emit `drop` for a command it gave up
+ * on (the receiver stopped reading); it is counted with the other write drops.
+ */
 export interface OpenedPort {
   readonly stream: Duplex;
   readonly path: string;
@@ -44,9 +47,12 @@ export interface ReceiverStats {
   /** Scan and parse time per line, µs (not the handlers'). */
   readonly parseUsPerLine: number;
   readonly writes: number;
-  /** Commands not written: the port was closed, or its write backlog full. */
+  /** Commands not written: the port was closed, its write backlog full, or the receiver stopped taking bytes. */
   readonly writeDrops: number;
 }
+
+/** Lines that start afresh: nothing before one may be taken as after it. */
+const isBarrier = (e: ReceiverEvent): boolean => e.ev === "ready" || e.ev === "state";
 
 /** USB replug: try again soon, then back off. */
 const REOPEN_MIN_MS = 250;
@@ -60,12 +66,6 @@ const WRITE_BACKLOG_MAX = 8192;
 export class Receiver {
   private readonly opts: ReceiverOptions;
   private readonly scanner = new LineScanner();
-  /** Reused for every chunk: a chunk's lines, then its events. */
-  private readonly lineBuf: string[] = [];
-  private readonly eventBuf: ReceiverEvent[] = [];
-  private readonly collect = (text: string): void => {
-    this.lineBuf.push(text);
-  };
   private port: OpenedPort | null = null;
   private stopped = false;
   private reopenMs = REOPEN_MIN_MS;
@@ -165,6 +165,9 @@ export class Receiver {
     this.status_ = { path: opened.path, opens: this.status_.opens + 1, lastError: null };
     this.reopenMs = REOPEN_MIN_MS;
     stream.on("data", (chunk: Buffer) => this.onData(chunk));
+    stream.on("drop", () => {
+      this.counts.writeDrops++;
+    });
     stream.on("error", (e: Error) => {
       this.status_ = { ...this.status_, lastError: e.message };
     });
@@ -189,11 +192,11 @@ export class Receiver {
     const started = performance.now();
     const c = this.counts;
     c.bytes += chunk.length;
-    const lines = this.lineBuf;
-    const events = this.eventBuf;
-    lines.length = 0;
-    events.length = 0;
-    this.scanner.push(chunk, this.collect);
+    // Fresh for each chunk: a handler that writes a command can have the next chunk delivered inside it (a stream
+    // that answers at once, like the fake), and that must not clear this one's.
+    const lines: string[] = [];
+    const events: ReceiverEvent[] = [];
+    this.scanner.push(chunk, (text) => lines.push(text));
     for (const text of lines) {
       const parsed = parseEvent(text);
       if (typeof parsed === "string") c.dropped[parsed]++;
@@ -203,8 +206,22 @@ export class Receiver {
     c.events += events.length;
     c.parseMs += performance.now() - started;
     // Taps first: a touch's time is already fixed by its line, but the game should hear of it before anything else.
-    for (const e of events) if (e.ev === "tap") this.deliver(e, now);
-    for (const e of events) if (e.ev !== "tap") this.deliver(e, now);
+    // Never past a `ready` or a `state`, though: a reboot fails everything open, and a tap after it in the chunk is the
+    // new receiver's, so it must come after; a snapshot is older than a tap after it.
+    let from = 0;
+    for (let i = 0; i < events.length; i++) {
+      if (!isBarrier(events[i]!)) continue;
+      this.deliverRun(events, from, i, now);
+      this.deliver(events[i]!, now);
+      from = i + 1;
+    }
+    this.deliverRun(events, from, events.length, now);
+  }
+
+  /** The chunk's events from `from` up to `to`, its taps first. */
+  private deliverRun(events: readonly ReceiverEvent[], from: number, to: number, now: number): void {
+    for (let i = from; i < to; i++) if (events[i]!.ev === "tap") this.deliver(events[i]!, now);
+    for (let i = from; i < to; i++) if (events[i]!.ev !== "tap") this.deliver(events[i]!, now);
   }
 
   private deliver(event: ReceiverEvent, now: number): void {

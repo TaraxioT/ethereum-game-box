@@ -6,15 +6,12 @@ import type { Clock, TimerHandle } from "../core/ports.ts";
 import { NfcError } from "./errors.ts";
 import type { ReceiverCommand, ReceiverEvent, StationId, TagLine } from "./lines.ts";
 
-export type NfcRequest =
-  | { readonly op: "apdu" | "sign"; readonly hex: string }
-  | { readonly op: "reselect" | "list" }
-  | { readonly op: "select"; readonly uid: string };
+export type NfcRequest = { readonly op: "apdu" | "sign"; readonly hex: string } | { readonly op: "reselect" | "list" };
 
 export interface NfcReply {
   /** `apdu` / `sign`: the chip's answer, status word included (upper-case hex); else "". */
   readonly hex: string;
-  /** `reselect` / `select` / `list`: the chips that answered. */
+  /** `reselect` / `list`: the chips that answered. */
   readonly tags: readonly TagLine[];
   /** `reselect`: the HaLo applet select's status word, when the station sent one. */
   readonly sel: string | null;
@@ -149,8 +146,6 @@ function command(st: StationId, id: number, req: NfcRequest): ReceiverCommand {
     case "apdu":
     case "sign":
       return { cmd: "nfc", st, id, op: req.op, hex: req.hex };
-    case "select":
-      return { cmd: "nfc", st, id, op: "select", uid: req.uid };
     default:
       return { cmd: "nfc", st, id, op: req.op };
   }

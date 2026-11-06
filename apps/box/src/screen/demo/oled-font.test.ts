@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stationView } from "@egb/sdk";
-import { bigLine, drawText, faceLines, fit, glyph, hasGlyph, OLED_H, OLED_W, smallLines, stationPixels, textWidth, wrap } from "./oled-font.ts";
+import { bigLine, drawText, faceLines, fit, glyph, OLED_H, OLED_W, smallLines, stationPixels, textWidth, wrap } from "./oled-font.ts";
 
 const REQUIRED = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!?.:-+×=/%$#";
 
@@ -11,8 +11,8 @@ function rowsOf(pixels: readonly (readonly [number, number])[]): number[] {
 describe("glyphs", () => {
   it("has every required character, seven rows inside its width", () => {
     for (const ch of REQUIRED) {
-      expect(hasGlyph(ch), ch).toBe(true);
       const g = glyph(ch);
+      expect(g, ch).not.toEqual(glyph("€"));
       expect(g.rows).toHaveLength(7);
       expect(g.width).toBeGreaterThan(0);
       expect(g.width).toBeLessThanOrEqual(5);
@@ -34,7 +34,6 @@ describe("glyphs", () => {
 
   it("reads lower case as upper case and prints a box for a missing character", () => {
     expect(glyph("q")).toEqual(glyph("Q"));
-    expect(hasGlyph("€")).toBe(false);
     expect(glyph("€").width).toBe(5);
     expect(glyph("€").rows[0]).toBe(0b11111);
   });
