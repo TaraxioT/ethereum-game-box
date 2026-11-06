@@ -16,7 +16,7 @@ named.
 |---|---|---|
 | `EGB_PORT` | `8790` | The port for HTTP and the link. |
 | `EGB_HOST` | `127.0.0.1` | The address it binds. |
-| `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games) and `forge/`. |
+| `EGB_DATA` | `~/.local/share/egb` | The data folder: `ledger.json`, `sessions/YYYY-MM-DD.jsonl`, `badges.json` (`badges.fake.json` for the fake receiver), `games/` (installed built games), `forge/` and `logs/` (the Box's log, `YYYY-MM-DD.log`). |
 | `EGB_RECEIVER` | `auto` | The receiver's serial port: a path (`/dev/serial/by-id/…`), `auto`, `fake` or `none`. |
 | `EGB_STATIONS` | `df3b9c,df3d88` | The station ids at Player 1's and Player 2's seats. |
 | `EGB_SCREEN_DIR` | `apps/box/dist/screen` | The built screen (`pnpm --filter @egb/box build:box`). |
@@ -161,6 +161,7 @@ unread) or stops answering pings (15 s) is dropped; the screen reconnects and st
 | `inject.ts` | Injected taps: a badge by roster label or address. | `parseInjection`, `resolveBadge`, `injectTap` |
 | `ledger-file.ts` | The ledger in `$EGB_DATA/ledger.json` (balances, and each stake in escrow under its badge): loaded once, written atomically off the tap path after every change. A file that isn't a ledger is moved aside. | `createLedgerFile(file, log)` |
 | `files.ts` | Atomic writes: a temp file, fsync, rename, then the folder fsynced. The ledger, the roster, the Forge's job records and the voice's clips and totals all write through it. | `writeFileAtomic` |
+| `log-file.ts` | The Box's log: every line the server logs (each tap's plan, end and cause; each phase; each tap the core took or didn't) also goes to `$EGB_DATA/logs/YYYY-MM-DD.log`, appended in order off the tap path, because the Pi keeps no user journal. | `createLogFile(dataDir, echo)` |
 | `release.ts` | The running commit. | `readCommit(repoRoot)` |
 | `testing.ts` | For tests: a whole Box on a free port with its core (and taps) on a fake clock, a recording screen. | `startTestBox`, `openScreen`, `post`, `flush` |
 

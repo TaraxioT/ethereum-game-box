@@ -24,6 +24,14 @@ import { LinkLostError, type Stations } from "./stations.ts";
 
 type TapLine = Extract<ReceiverEvent, { ev: "tap" }>;
 
+/**
+ * A running tap's chip that the station counts gone and reads again within this long, on the same station, never
+ * left: the same tap carries on. HaLos with SAK 28 answer the station's presence check only now and then, so a badge
+ * held still on the reader reads as `gone` and then as a new `tap` a few ms later (the station logs it), which used to
+ * fail every roll it interrupted as `lifted` (Stock Duel's pick, on the Box).
+ */
+export const REJOIN_MS = 500;
+
 export interface TapMachineDeps {
   readonly clock: Clock;
   readonly roster: Roster;
@@ -38,11 +46,14 @@ export interface TapMachineDeps {
 interface OpenTap {
   readonly tap: number;
   readonly seat: Seat;
-  readonly line: TapLine;
+  /** The station's latest line for this chip: a rejoin moves it on to the new tap id. */
+  line: TapLine;
   readonly uid: string;
   readonly at: number;
   readonly badge: Badge | null;
   gone: boolean;
+  /** When the station last counted the chip gone (Pi ms). */
+  goneAt: number;
   settled: boolean;
 }
 
@@ -75,13 +86,20 @@ export class TapMachine {
     const seat = this.deps.stations.seatOf(line.st);
     if (seat === null) return;
     const previous = this.open.get(line.st);
+    if (previous && this.rejoins(previous, line)) {
+      this.deps.log(`taps: tap ${previous.tap} carries on: ${line.st} read the same chip again`);
+      previous.line = line;
+      previous.gone = false;
+      this.newest.set(line.st, previous);
+      return;
+    }
     if (previous) {
       this.deps.log(`taps: tap ${previous.tap} failed lifted: a new tap began on ${line.st} before it finished`);
       this.fail(previous, "lifted", "Another tap began on this station before this one finished.");
     }
     const uid = line.uid.toUpperCase();
     const entry = this.deps.roster.byUid(uid);
-    const t: OpenTap = { tap: ++this.last, seat, line, uid, at, badge: entry ? badgeOf(entry) : null, gone: false, settled: false };
+    const t: OpenTap = { tap: ++this.last, seat, line, uid, at, badge: entry ? badgeOf(entry) : null, gone: false, goneAt: 0, settled: false };
     this.open.set(line.st, t);
     this.newest.set(line.st, t);
     this.counts.touch++;
@@ -92,7 +110,20 @@ export class TapMachine {
   /** A `gone` line: the chip of that tap left the reader. */
   gone(line: Extract<ReceiverEvent, { ev: "gone" }>): void {
     const t = this.newest.get(line.st);
-    if (t && t.line.id === line.id) t.gone = true;
+    if (t && t.line.id === line.id) {
+      t.gone = true;
+      t.goneAt = this.deps.clock.now();
+    }
+  }
+
+  /** A new `tap` line on a station whose tap is still running is that tap's chip coming back, not a new tap. */
+  private rejoins(t: OpenTap, line: TapLine): boolean {
+    return t.uid === line.uid.toUpperCase() && (!t.gone || this.deps.clock.now() - t.goneAt <= REJOIN_MS);
+  }
+
+  /** The tap's chip was counted gone, and may yet be read again (`REJOIN_MS`). */
+  private returning(t: OpenTap): boolean {
+    return t.gone && !t.settled && this.newest.get(t.line.st) === t && this.deps.clock.now() - t.goneAt <= REJOIN_MS;
   }
 
   /** The station's link stayed down past its grace. */
@@ -123,7 +154,8 @@ export class TapMachine {
   private async run(t: OpenTap, plan: TapPlan, known: RosterEntry | undefined): Promise<void> {
     const { st, sak } = t.line;
     const { clock, nfc, aids, stations, roster } = this.deps;
-    const session = new ChipSession(nfc, aids, { st, uid: t.uid, sak, present: () => this.present(t), whenUp: () => stations.whenUp(st) }, clock);
+    const target = { st, uid: t.uid, sak, present: () => this.present(t), returning: () => this.returning(t), whenUp: () => stations.whenUp(st) };
+    const session = new ChipSession(nfc, aids, target, clock);
     this.deps.log(`taps: tap ${t.tap} touched ${st} seat ${t.seat} uid ${t.uid} (${t.badge?.name ?? "unknown"}), plan ${plan}`);
     if (known && plan !== "random") {
       this.done(t, known, null);

@@ -55,6 +55,8 @@ export interface ChipTarget {
   readonly sak: string;
   /** Still on the reader: no `gone` line, and no newer tap on the station. */
   present(): boolean;
+  /** Counted gone a moment ago, and may yet be read again on the same station (the tap machine's rejoin). Absent: never. */
+  returning?(): boolean;
   /** Waits out a dropped link; rejects when its grace runs out. */
   whenUp(): Promise<void>;
 }
@@ -148,7 +150,12 @@ export class ChipSession {
     const { st, uid } = this.target;
     const deadline = this.clock.now() + RESELECT_MS;
     for (;;) {
-      if (!this.target.present()) throw cause;
+      if (!this.target.present()) {
+        // A chip the station lost for a moment may be read again: wait for it, then select it afresh.
+        if (!this.target.returning?.() || this.clock.now() >= deadline) throw cause;
+        await new Promise<void>((resolve) => this.clock.after(RESELECT_PAUSE_MS / 4, resolve));
+        continue;
+      }
       try {
         const reply = await this.nfc.request(st, { op: "reselect" });
         if (reply.tags.some((t) => t.uid.toUpperCase() === uid)) {
