@@ -17,10 +17,11 @@
 
 | Module | Holds |
 |---|---|
-| `keys.ts` | Every record key, grouped by who may write it (Box, player, game and title names, and `gamebox.eth`'s default record), the Box `status` values, and the ENSIP-26 agent keys (`agent-context`, `agent-endpoint[<protocol>]`) |
-| `labels.ts` | The label rule (`labelProblem`: 3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the same one `GameBoxNames` checks, and the pop-up, full and title names |
+| `keys.ts` | Every record key, grouped by who may write it (Box, player, game and title names, and `gamebox.eth`'s default record), the Box `status` values, the operator's commission bounds (`COMMISSION_MIN_BPS`, `COMMISSION_MAX_BPS`), and the ENSIP-26 agent keys (`agent-context`, `agent-endpoint[<protocol>]`) |
+| `labels.ts` | The label rule (`labelProblem`: 3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the same one `GameBoxNames` checks, the pop-up, full and title names, and a name DNS-encoded for a resolver (`dnsName`) |
 | `messages.ts` | The three EIP-712 messages (`ClaimName`, `Execute`, `Result`): the typed data a wallet signs and the digest the contract checks, for a single `execute` and for `executeBatch` (`encodeCalls`) |
-| `webauthn.ts` | The two signature forms a `P256Account` takes: raw (`rawSignature`) and a passkey's assertion (`webAuthnChallenge`, `parseDerSignature`, `encodeWebAuthnSignature`), low `s` always; and a passkey's public key from its SPKI (`p256PublicKeyFromSpki`) |
+| `webauthn.ts` | The two signature forms a `P256Account` takes: raw (`rawSignature`) and a passkey's assertion (`webAuthnChallenge`, `parseDerSignature`, `encodeWebAuthnSignature`), low `s` always; a passkey's public key from its SPKI (`p256PublicKeyFromSpki`); an assertion checked the way the account checks it (`checkAssertion`, `assertionSignature`); and `base64url` |
+| `p256.ts` | P-256 without WebAuthn's help: the hash an authenticator signs (`assertionHash`), the keys a signature recovers to (`recoverP256Keys`), `verifyP256`, and a public key read from or written as `0x04` + x + y (`parseP256PublicKey`, `p256PublicKeyHex`) |
 | `roles.ts` | ENSv2's registry and resolver role bits, the resources for a text key or coin type, a decoder from bitmap to role names, and `GameBoxNames`' own roles |
 | `abis.ts` | The ABIs of the names contracts and of the ENSv2 slice they call. Generated: `pnpm names:abis` builds the contracts and rewrites it |
 | `vectors.json` | Written by `contracts/test/names/Vectors.t.sol`; `vectors.test.ts` checks `messages.ts`, `webauthn.ts`, `primaryName.ts` and `roles.ts` against it |

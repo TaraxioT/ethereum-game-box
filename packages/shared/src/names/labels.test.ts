@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fullName, labelProblem, popupLabel, popupLabelProblem, titleName } from './labels.ts';
+import { dnsName, fullName, labelProblem, popupLabel, popupLabelProblem, titleName } from './labels.ts';
 
 describe('labelProblem', () => {
   it.each(['abc', 'mumbai-01', 'bot', 'a-b', '0x0', 'a'.repeat(32), 'quickdraw'])('accepts %s', (label) => {
@@ -43,5 +43,11 @@ describe('names', () => {
   it('builds full and title names', () => {
     expect(fullName('alice')).toBe('alice.gamebox.eth');
     expect(titleName('quickdraw')).toBe('champion.quickdraw.gamebox.eth');
+  });
+});
+
+describe('dnsName', () => {
+  it('DNS-encodes the full name, as NameLib.dnsName does', () => {
+    expect(dnsName('mumbai-01')).toBe('0x096d756d6261692d30310767616d65626f780365746800');
   });
 });

@@ -11,7 +11,8 @@ export const BOX_KEYS = {
   boxKey: 'boxKey',
   /** Written by `GameBoxNames`. One of `BOX_STATUS`. */
   status: 'status',
-  /** Written by the operator. The operator's commission, in basis points. */
+  /** Written by the operator. The operator's commission, in basis points, from `COMMISSION_MIN_BPS` to
+   *  `COMMISSION_MAX_BPS`. */
   commission: 'commission',
   /** Written by the operator. Where the Box stands. */
   location: 'location',
@@ -32,6 +33,10 @@ export const BOX_OPERATOR_KEYS = [
   BOX_KEYS.description,
   BOX_KEYS.games,
 ] as const;
+/** The operator's commission bounds, in basis points of the Box's half: 10% to 90% (`plan/README.md`). */
+export const COMMISSION_MIN_BPS = 1_000;
+export const COMMISSION_MAX_BPS = 9_000;
+
 export const BOX_DEVICE_KEYS = [BOX_KEYS.lastSeen, BOX_KEYS.game] as const;
 
 /** The values of a Box's `status`. */

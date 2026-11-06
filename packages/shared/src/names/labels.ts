@@ -1,6 +1,9 @@
 // The label rule, the same one `GameBoxNames` checks on chain: 3 to 32 characters of `a-z`, `0-9` and `-`, with no
 // hyphen at either end. Every label that passes is already ENS-normalised.
 
+import { type Hex, toHex } from 'viem';
+import { packetToBytes } from 'viem/ens';
+
 /** The parent of every Game Box name. */
 export const PARENT_NAME = 'gamebox.eth';
 
@@ -39,4 +42,9 @@ export function fullName(label: string): string {
 /** `champion.<game>.gamebox.eth`, the game's title. */
 export function titleName(game: string): string {
   return `champion.${fullName(game)}`;
+}
+
+/** `<label>.gamebox.eth` DNS-encoded, as a resolver's `setText` and `resolve` take the name. */
+export function dnsName(label: string): Hex {
+  return toHex(packetToBytes(fullName(label)));
 }

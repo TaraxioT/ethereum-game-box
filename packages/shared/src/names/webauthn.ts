@@ -5,8 +5,11 @@
 //   `WebAuthn.WebAuthnAuth` in order with no outer offset. The account checks `"type":"webauthn.get"`, the challenge,
 //   and that the user was present and verified, so ask for `userVerification: 'required'`.
 // Either way `s` must be low (at most n/2): `lowS` normalises it, and every encoder here applies it.
+// `checkAssertion` checks an assertion the way the account will, so a bad one fails in the browser and not on chain.
 
 import { type Hex, bytesToBigInt, bytesToHex, encodeAbiParameters, hexToBytes, numberToHex } from 'viem';
+
+import { assertionHash, verifyP256 } from './p256.ts';
 
 /** The order of P-256. */
 export const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
@@ -109,4 +112,51 @@ export function p256PublicKeyFromSpki(spki: Uint8Array): P256PublicKey {
     throw new Error('not a P-256 public key');
   }
   return { qx: bytesToHex(spki.subarray(27, 59)), qy: bytesToHex(spki.subarray(59, 91)) };
+}
+
+/** Bytes as base64url without padding: how `clientDataJSON` carries the challenge, and how a credential id travels. */
+export function base64url(bytes: Uint8Array): string {
+  let text = '';
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function fromBase64url(text: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+/** `authenticatorData` flags: user present, user verified. */
+const FLAG_UP = 0x01;
+const FLAG_UV = 0x04;
+
+/** An assertion as `navigator.credentials.get` returns it, the signature still DER. */
+export interface RawAssertion {
+  authenticatorData: Uint8Array;
+  clientDataJSON: Uint8Array;
+  /** `AuthenticatorAssertionResponse.signature`: DER. */
+  signature: Uint8Array;
+}
+
+/** Checks an assertion of `challenge` the way `P256Account` will: `"type":"webauthn.get"`, the challenge, user present
+ *  and verified, and (when `key` is given) the key's signature. Returns `r`, `s` (low) and the signed hash, from which
+ *  `recoverP256Keys` finds the key when it isn't known. Throws, saying why, on the first failure. */
+export function checkAssertion(assertion: RawAssertion, challenge: Uint8Array, key?: P256PublicKey) {
+  const client = JSON.parse(new TextDecoder().decode(assertion.clientDataJSON)) as { type?: unknown; challenge?: unknown };
+  if (client.type !== 'webauthn.get') throw new Error('not a WebAuthn assertion');
+  if (client.challenge !== base64url(challenge)) throw new Error('the passkey signed a different challenge');
+  const flags = assertion.authenticatorData[32] ?? 0;
+  if ((flags & (FLAG_UP | FLAG_UV)) !== (FLAG_UP | FLAG_UV)) {
+    throw new Error("the authenticator didn't verify the user (user verification is required)");
+  }
+  const { r, s } = parseDerSignature(assertion.signature);
+  const hash = assertionHash(assertion.authenticatorData, assertion.clientDataJSON);
+  if (key && !verifyP256(key, r, s, hash)) throw new Error("the signature isn't this key's");
+  return { r, s, hash };
+}
+
+/** The WebAuthn signature a `P256Account` takes for `digest`, from `key`'s assertion of it, checked first. */
+export function assertionSignature(key: P256PublicKey, digest: Hex, assertion: RawAssertion): Hex {
+  const { r, s } = checkAssertion(assertion, hexToBytes(digest), key);
+  return encodeWebAuthnSignature({ authenticatorData: assertion.authenticatorData, clientDataJSON: assertion.clientDataJSON, r, s });
 }
