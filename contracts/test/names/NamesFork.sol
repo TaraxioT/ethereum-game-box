@@ -44,7 +44,7 @@ abstract contract NamesFork is Test, P256Keys {
     PlayerStats internal stats;
     BoxResults internal results;
     DemoLicences internal licences;
-    FakeUSDC internal usdc;
+    FakeUSDC internal fakeUsdc;
     DuelPot internal pot;
     Championships internal cups;
     BoxSeats internal seats;
@@ -73,9 +73,9 @@ abstract contract NamesFork is Test, P256Keys {
             ensFactory, vm.parseJsonAddress(json, ".ens.UserRegistryImpl.address"), resolverImpl, ethRegistry, admin
         );
         stats = new PlayerStats(names);
-        usdc = new FakeUSDC(admin, admin);
-        pot = new DuelPot(names, usdc);
-        cups = new Championships(names, usdc, ensFactory, resolverImpl, admin);
+        fakeUsdc = new FakeUSDC(admin, admin);
+        pot = new DuelPot(names, fakeUsdc);
+        cups = new Championships(names, fakeUsdc, ensFactory, resolverImpl, admin);
         results = new BoxResults(names, stats, pot, cups);
         licences = new DemoLicences(names);
         seats = new BoxSeats(names);
@@ -85,7 +85,7 @@ abstract contract NamesFork is Test, P256Keys {
         names.grantRole(names.SEATER_ROLE(), address(seats));
         names.setStatsWriter(address(stats));
         names.setChampionships(address(cups));
-        usdc.setGameSpender(address(pot));
+        fakeUsdc.setGameSpender(address(pot));
         (bytes32 qx, bytes32 qy) = p256Public(boxKey);
         demoBox = P256Account(payable(accounts.deploy(qx, qy)));
         vm.stopPrank();
