@@ -1,7 +1,8 @@
 // Home: the library. The focused game's title, its facts as IC chips and a brass Play on the left; the cartridge rack
 // along the bottom, fed into the core. Focus by touching a cartridge or with the arrow keys; Enter plays. On the Box,
 // the rack ends in a blank NEW GAME cartridge: it focuses like a game (on this screen alone: the Box's focus is always
-// a game), and its key opens the game builder.
+// a game), and its key opens the game builder. Built games' cartridges stand before it, each with its art from the
+// Box; one that can't load is sealed, and focusing it says why. A game the Forge installs slides into the rack.
 import type { BoxState, GameInfo } from "../../core/types.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbFact } from "../parts/fact.ts";
@@ -9,16 +10,20 @@ import type { EgbKey } from "../parts/key.ts";
 import { el, fitFont, fitWidth, place, play } from "../shell/dom.ts";
 import { createRack, NEW_GAME, rackOf } from "./rack.ts";
 
+/** The rack's cartridges when Home last stood: a game installed since (on the Build screen) slides in on return. */
+let racked: ReadonlySet<string> | null = null;
+
 export function homeView(ctx: ViewContext): View {
   const { layout, link, machine, sound } = ctx;
-  const games = link.state().games;
-  const entries = rackOf(games);
+  let entries = rackOf(link.state().games);
   const root = el("div", "home");
 
   const title = el("div", "home-title");
   place(title, layout.title);
   const titleText = el("h1", "home-title-text");
-  title.append(titleText);
+  /** Why a sealed game can't play. */
+  const reason = el("p", "home-reason");
+  title.append(titleText, reason);
 
   const facts = el("div", "home-facts");
   place(facts, layout.facts);
@@ -41,13 +46,30 @@ export function homeView(ctx: ViewContext): View {
     link.send({ type: "play" });
   });
 
-  const rack = createRack(layout, entries, (id) => {
+  const pick = (id: string): void => {
     sound.play("tick");
     if (id === NEW_GAME.id) focusNewGame(true);
     else focusGame(id);
-  });
+  };
+  let rack = createRack(layout, entries, pick);
+  const arrived = racked ? entries.filter((entry) => !racked?.has(entry.id)) : [];
+  racked = new Set(entries.map((entry) => entry.id));
+
+  /** The library changed: the rack is built again, and a new game's cartridge slides into its housing. */
+  function restock(state: BoxState): void {
+    const had = new Set(entries.map((entry) => entry.id));
+    entries = rackOf(state.games);
+    racked = new Set(entries.map((entry) => entry.id));
+    const next = createRack(layout, entries, pick);
+    rack.el.replaceWith(next.el);
+    rack = next;
+    rack.focus(newGame ? NEW_GAME.id : state.focus);
+    for (const entry of entries) if (!had.has(entry.id)) rack.slideIn(entry.id);
+    current = undefined;
+  }
 
   root.append(title, facts, playKey, rack.el);
+  for (const entry of arrived) rack.slideIn(entry.id);
 
   let current: GameInfo | undefined;
   /** NEW GAME is focused on this screen. */
@@ -59,9 +81,10 @@ export function homeView(ctx: ViewContext): View {
     if (!game || game === current) return;
     current = game;
     titleText.textContent = game.title;
-    playKey.textContent = game.ready ? "PLAY" : "SOON";
+    reason.textContent = game.sealed ?? "";
+    playKey.textContent = game.ready ? "PLAY" : game.sealed ? "SEALED" : "SOON";
     playKey.toggleAttribute("disabled", !game.ready);
-    facts.replaceChildren(...factsFor(game));
+    facts.replaceChildren(...(game.sealed ? [fact("shield", "SEALED")] : factsFor(game)));
     fit();
     rack.focus(game.id);
     const slot = state.games.indexOf(game);
@@ -74,6 +97,7 @@ export function homeView(ctx: ViewContext): View {
     newGame = true;
     current = undefined;
     titleText.textContent = NEW_GAME.title;
+    reason.textContent = "";
     playKey.textContent = "DESIGN";
     playKey.removeAttribute("disabled");
     facts.replaceChildren(fact("players", "2 PLAYERS"), fact("shield", "BUILT ON THE BOX"));
@@ -130,6 +154,7 @@ export function homeView(ctx: ViewContext): View {
     update(state, event) {
       // A focus the Box moved (another screen, a keyboard) takes over from NEW GAME.
       if (event.type === "focus") newGame = false;
+      if (event.type === "games") restock(state);
       show(state, event.type === "focus");
     },
     dispose() {

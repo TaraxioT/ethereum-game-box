@@ -57,8 +57,9 @@ describe("the library", () => {
     expect(library.games()).toBe(TEAM_GAMES);
     await library.rescan();
     await library.scanned;
-    expect(library.games()).toEqual(TEAM_GAMES);
-    expect(changes()).toBe(0);
+    // The same games, now with their checked game.json: one change.
+    expect(library.games().map(({ manifest: _m, ...info }) => info)).toEqual(TEAM_GAMES.map(({ manifest: _m, ...info }) => info));
+    expect(changes()).toBe(1);
     expect(library.entry("quick-draw")?.manifest).toMatchObject({ kind: "team", taps: "identify", forge: { template: true, label: "Quick Draw", default: true } });
     expect(library.entry("stock-duel")?.manifest).toMatchObject({ kind: "team", taps: "random", forge: { template: true, label: "Stock Duel" } });
     expect(library.entry("bet-on-x")).toMatchObject({ dir: null, problem: null, info: { ready: false } });
@@ -83,10 +84,13 @@ describe("the library", () => {
       ["half-done", false],
       ["junk", false],
     ]);
-    expect(library.games().slice(0, TEAM_GAMES.length)).toEqual(TEAM_GAMES);
+    expect(library.games().slice(0, TEAM_GAMES.length).map((g) => g.id)).toEqual(TEAM_GAMES.map((g) => g.id));
     expect(built[1]).toMatchObject({ title: "LANTERN RACE", minutes: 2, stakes: [1, 5], tier: "refereed", icon: expect.stringMatching(/^\/games\/lantern-race\/icon\.svg\?v=[0-9a-z]+$/) });
     expect(built[3]?.title).toBe("Half Done");
     expect(library.entry("no-bundle")?.problem).toBe("dist/rules.js is missing");
+    expect(library.entry("no-bundle")?.info.sealed).toBe("dist/rules.js is missing");
+    expect(built[1]?.sealed).toBeNull();
+    expect(built[1]?.manifest).toMatchObject({ kind: "built", taps: "identify", budgetMs: 40 });
     expect(library.entry("quick-draw")).toMatchObject({ info: { kind: "team", ready: true } });
     expect(logs).toContain("library: junk is sealed: game.json is missing or isn't JSON");
     expect(logs).toContain(`library: ${path.join(gamesDir, "quick-draw")} is left out: a team game already uses its id`);
@@ -107,7 +111,7 @@ describe("the library", () => {
     const dir = install(gamesDir, "lantern-race");
     await library.rescan();
     library.seal("lantern-race", "its rules exited (1) before loading");
-    expect(library.entry("lantern-race")).toMatchObject({ info: { ready: false }, problem: "its rules exited (1) before loading" });
+    expect(library.entry("lantern-race")).toMatchObject({ info: { ready: false, sealed: "its rules exited (1) before loading" }, problem: "its rules exited (1) before loading" });
     expect(library.rules("lantern-race")).toBeNull();
     await library.rescan();
     expect(library.entry("lantern-race")?.info.ready).toBe(false);

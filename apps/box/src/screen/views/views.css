@@ -8,6 +8,9 @@
 }
 [data-orientation="portrait"] .home-title { align-items: center; }
 [data-orientation="portrait"] .home-title-text { font-size: 52px; }
+/* A sealed game's reason, under its title: quiet engraved mono, one line. */
+.home-reason { margin: 8px 0 0; max-width: 100%; font: 600 15px/1.3 var(--mono); letter-spacing: 0.04em; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-reason:empty { display: none; }
 .home-facts { display: flex; gap: 10px; align-items: center; transform-origin: left center; }
 [data-orientation="portrait"] .home-facts { justify-content: center; transform-origin: center; }
 .home-facts egb-fact { height: 44px; }

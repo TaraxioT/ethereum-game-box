@@ -17,6 +17,8 @@ export interface Route {
 
 export interface HandlerOptions {
   readonly routes: readonly Route[];
+  /** Built games' cartridges and frames (server/games/), ahead of the screen's files: true when it answered. */
+  readonly games?: (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<boolean>;
   /** The built screen. */
   readonly screenDir: string;
   readonly token: string;
@@ -70,6 +72,7 @@ export function createHandler(options: HandlerOptions): (req: http.IncomingMessa
     const read = method === "GET" || method === "HEAD";
     if (!read && !localOrigin(req.headers.origin)) return sendText(res, 403, "only pages from this machine may do that");
     if (url.pathname.startsWith("/api/")) return api(req, res, url, method);
+    if (options.games && (await options.games(req, res, url))) return;
     if (!read) return sendText(res, 405, "method not allowed");
     return screen(req, res, url.pathname);
   }

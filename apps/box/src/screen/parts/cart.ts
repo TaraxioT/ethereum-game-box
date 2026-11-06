@@ -1,7 +1,9 @@
 // <egb-cart game="…">: a game's cartridge in the rack. A chunky gunmetal keycap set in a wider, clipped housing: a
 // bevelled metal face round a big dark glass screen, the title in arcade caps across the top of the glass and the
 // game's art standing on it. A game with no art yet (Bet on X, B17) is sealed: no screen, a riveted metal cover with
-// the title engraved and a SOON plate. `new-game` is the blank cartridge that opens the game builder.
+// the title engraved and a SOON plate. `new-game` is the blank cartridge that opens the game builder. A built game
+// brings its own art: `icon`, its icon.svg from the Box, fills the glass under the title; one whose bundle failed is
+// `sealed`: the cover again, with a SEALED plate.
 //
 // Size: it fills its box (designed at 176 × 186). Attributes: `game` (or `new-game`), `title` (the printed title), `focused` (the
 // keycap rises out of its housing on a spring, and only then a thin lavender strip lights at its foot and round the
@@ -129,6 +131,9 @@ const styles = sheet(`
 }
 .art { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(2 * var(--p)); height: calc(58 * var(--p)); }
 .art svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* A built game's icon: full-bleed art on its own background, filling the glass, the title over its top. */
+.art.icon { top: 0; bottom: 0; height: auto; }
+.art.icon img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .floor { fill: #ad8fff; opacity: 0.12; }
 .bolt-glow { fill: none; stroke: var(--neon-gold); stroke-width: 5; stroke-linejoin: round; opacity: 0.22; }
 .spark path { fill: none; stroke: #ffe3a1; stroke-width: 2.4; stroke-linecap: round; }
@@ -177,7 +182,7 @@ const styles = sheet(`
 `);
 
 export class EgbCart extends HTMLElement {
-  static readonly observedAttributes = ["game", "title"];
+  static readonly observedAttributes = ["game", "title", "icon", "sealed"];
   readonly #face: HTMLElement;
 
   constructor() {
@@ -200,10 +205,14 @@ export class EgbCart extends HTMLElement {
   attributeChangedCallback(): void {
     const game = this.getAttribute("game") ?? "";
     const title = this.getAttribute("title") ?? game.replace(/-/g, " ");
-    const art = ART[game];
+    const sealed = this.hasAttribute("sealed");
+    const icon = this.getAttribute("icon");
+    const art = sealed ? undefined : (ART[game] ?? (icon ? `<img alt="" draggable="false">` : undefined));
     this.#face.innerHTML = art
-      ? `<div class="glass"><span class="title"></span><div class="art">${art}</div><i class="veil"></i></div>`
-      : `<div class="cover">${RIVETS}<span class="etched"></span><egb-plate variant="brass">SOON</egb-plate></div>`;
+      ? `<div class="glass"><span class="title"></span><div class="art${ART[game] ? "" : " icon"}">${art}</div><i class="veil"></i></div>`
+      : `<div class="cover">${RIVETS}<span class="etched"></span><egb-plate variant="brass">${sealed ? "SEALED" : "SOON"}</egb-plate></div>`;
     pick(this.#face, art ? ".title" : ".etched").textContent = title;
+    // Set as a property, never written into the markup: the URL is the server's, but it is still data.
+    if (art && icon && !ART[game]) pick<HTMLImageElement>(this.#face, "img").src = icon;
   }
 }

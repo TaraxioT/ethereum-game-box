@@ -69,8 +69,8 @@ function checkedManifest(dir: string, kind: GameManifest["kind"]): { manifest: G
   return problems.length === 0 ? { manifest: m, problem: null, raw } : { manifest: null, problem: problems.join("; "), raw };
 }
 
-function infoOf(id: string, m: GameManifest, kind: GameInfo["kind"], icon: string | null, ready: boolean): GameInfo {
-  return { id, kind, title: m.title, players: m.players, minutes: m.minutes, stakes: m.stakes, tier: m.tier, ready, icon };
+function infoOf(id: string, m: GameManifest, kind: GameInfo["kind"], icon: string | null, sealed: string | null): GameInfo {
+  return { id, kind, title: m.title, players: m.players, minutes: m.minutes, stakes: m.stakes, tier: m.tier, ready: sealed === null, sealed, icon, manifest: m };
 }
 
 /** A team game from its game.json; one without a folder (a sealed game in the catalogue) stays as the catalogue lists it. */
@@ -78,8 +78,8 @@ function teamEntry(teamDir: string, listed: GameInfo): LibraryEntry {
   const dir = path.join(teamDir, listed.id);
   if (readManifestFile(dir) === null) return catalogueEntry(listed);
   const { manifest, problem } = checkedManifest(dir, "team");
-  if (!manifest) return { info: { ...listed, ready: false }, dir, manifest: null, problem };
-  return { info: infoOf(listed.id, manifest, "team", null, true), dir, manifest, problem: null };
+  if (!manifest) return { info: { ...listed, ready: false, sealed: problem }, dir, manifest: null, problem };
+  return { info: infoOf(listed.id, manifest, "team", null, null), dir, manifest, problem: null };
 }
 
 /** A built game as the rack shows it; a broken one still shows its own title when game.json has one. */
@@ -91,10 +91,10 @@ async function builtEntry(dir: string, sealed: ReadonlyMap<string, string>): Pro
   const iconAt = (await stat(path.join(dir, "icon.svg")).catch(() => null))?.mtimeMs ?? 0;
   // Installed at: when the Forge wrote forge.json, else when the folder last changed.
   const at = ((await stat(path.join(dir, PROVENANCE)).catch(() => null)) ?? (await stat(dir).catch(() => null)))?.mtimeMs ?? 0;
-  if (manifest) return { info: infoOf(id, manifest, "built", iconUrl(id, iconAt), problem === null), dir, manifest, problem, at };
+  if (manifest) return { info: infoOf(id, manifest, "built", iconUrl(id, iconAt), problem), dir, manifest, problem, at };
   const named = (raw as { title?: unknown } | null)?.title;
   const title = typeof named === "string" && named.trim() ? named.slice(0, 24) : id;
-  const info: GameInfo = { id, kind: "built", title, players: 2, minutes: 1, stakes: [1], tier: "refereed", ready: false, icon: iconUrl(id, iconAt) };
+  const info: GameInfo = { id, kind: "built", title, players: 2, minutes: 1, stakes: [1], tier: "refereed", ready: false, sealed: problem, icon: iconUrl(id, iconAt), manifest: null };
   return { info, dir, manifest: null, problem, at };
 }
 
@@ -193,7 +193,7 @@ export function createLibrary(options: LibraryOptions): Library {
       const e = entry(id);
       if (!e || e.info.kind !== "built" || sealed.has(id)) return;
       sealed.set(id, reason);
-      publish(entries.map((x) => (x.info.id === id ? { ...x, info: { ...x.info, ready: false }, problem: x.problem ?? reason } : x)));
+      publish(entries.map((x) => (x.info.id === id ? { ...x, info: { ...x.info, ready: false, sealed: x.problem ?? reason }, problem: x.problem ?? reason } : x)));
     },
   };
 }

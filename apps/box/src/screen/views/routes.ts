@@ -9,6 +9,11 @@ import { stakeView } from "./stake.ts";
 import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
 import { builderView } from "./builder.ts";
+import { frameView } from "../frame/view.ts";
+import { builtMatch } from "../frame/feed.ts";
+
+/** A built game's screen: its own, in the sandboxed frame. */
+const builtScreen = frameView(builtMatch);
 
 export const routes: Routes = (state) => {
   switch (state.phase) {
@@ -22,10 +27,11 @@ export const routes: Routes = (state) => {
       return { key: "join", pose: "page", view: joinView };
     case "stake":
       return { key: "stake", pose: "page", view: stakeView };
-    case "playing":
-      return state.match?.game === "stock-duel"
-        ? { key: `play-${state.match.id}`, pose: "game", view: stockDuelScreen }
-        : { key: `play-${state.match?.id ?? 0}`, pose: "game", view: quickDrawScreen };
+    case "playing": {
+      const key = `play-${state.match?.id ?? 0}`;
+      const game = state.match?.play.game;
+      return { key, pose: "game", view: game === "built" ? builtScreen : game === "stock-duel" ? stockDuelScreen : quickDrawScreen };
+    }
     case "result":
       return { key: "result", pose: "page", view: resultView };
     case "refund":

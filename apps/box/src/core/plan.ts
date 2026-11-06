@@ -14,9 +14,11 @@ export type PlanInput = Omit<BoxState, "stations">;
 /** After a game ends, a seated badge's tap is a rematch only this long after. */
 export const REMATCH_TAP_MS = 4_000;
 
-function gamePlan(match: Match | null, seat: Seat): TapPlan {
+function gamePlan(state: PlanInput, match: Match | null, seat: Seat): TapPlan {
   if (!match || match.outcome) return "none";
   const { play } = match;
+  // A built game's rules decide what a tap means: every tap asks what its game.json says.
+  if (play.game === "built") return state.games.find((g) => g.id === play.id)?.manifest?.taps ?? "identify";
   // Quick Draw judges by the touch: who touched, and when.
   if (play.game === "quick-draw") return play.state.phase !== "done" && play.state.taps[seat] === null ? "identify" : "none";
   // Stock Duel's tap plays a card, and its roll picks the stat.
@@ -40,7 +42,7 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
     case "stake":
       return mine.badge && !mine.signed ? "identify" : "none";
     case "playing":
-      return mine.badge ? gamePlan(state.match, seat) : "none";
+      return mine.badge ? gamePlan(state, state.match, seat) : "none";
     case "refund": {
       const { match } = state;
       const open = match !== null && !match.refunded[seat] && state.chain.block >= match.refundBlock;

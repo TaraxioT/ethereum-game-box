@@ -3,7 +3,7 @@
 import type { GameId, GameInfo, TeamGameId } from "./types.ts";
 import type { LibraryPort } from "./ports.ts";
 
-const team = (info: Omit<GameInfo, "kind" | "icon">): GameInfo => ({ ...info, kind: "team", icon: null });
+const team = (info: Omit<GameInfo, "kind" | "icon" | "sealed" | "manifest">): GameInfo => ({ ...info, kind: "team", sealed: null, icon: null, manifest: null });
 
 export const TEAM_GAMES: readonly GameInfo[] = [
   team({ id: "quick-draw", title: "Quick Draw", players: 2, minutes: 1, stakes: [5, 10, 25], tier: "refereed", ready: true }),

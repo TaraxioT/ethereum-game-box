@@ -4,7 +4,10 @@ A built game's screen runs in the kiosk inside `<iframe sandbox="allow-scripts">
 under a CSP with `connect-src 'none'` (`server/games/`). It only draws. The kiosk tells it the state and what happened
 through a typed `postMessage` channel (`@egb/sdk`'s `ToFrame`); it answers only `ready` and `error` (`FromFrame`).
 
-**The kiosk's side.** `frameView(source)` is the `ViewFactory` for a built match: the iframe fills the stage below
+**The kiosk's side.** `frameView(builtMatch)` is the router's view for a built match (`views/routes.ts`); in dev,
+Vite passes `/games`, `/parts…` and `/frame.js` through to the Box server.
+
+`frameView(source)` is the `ViewFactory`: the iframe fills the stage below
 the Box's overlay (130 px landscape, 150 px portrait). When the frame says `ready` it gets `init` with the state as it
 is then; after that, an `update` for each moment (the match ending, an accepted tap, a new rules state) and nothing for
 the Box's own business. A frame that errors, or isn't ready within 8 s, gets a quiet `SCREEN FAULT · PLAY ON` plate:
@@ -22,7 +25,7 @@ and posts only to it.
 | Module | What it is | API |
 |---|---|---|
 | `view.ts` | The kiosk's view of a built match. | `frameView(source): ViewFactory`, `READY_TIMEOUT_MS` |
-| `feed.ts` | What the frame is told, from BoxState and BoxEvents. Pure. | `FrameMatch`, `FrameSource`, `frameSeats`, `frameInit`, `frameEvent`, `frameUpdate` |
+| `feed.ts` | What the frame is told, from BoxState and BoxEvents. Pure. | `builtMatch` (the router's source: the built play and its game.json from the library), `FrameMatch`, `FrameSource`, `frameSeats`, `frameInit`, `frameEvent`, `frameUpdate` |
 | `channel.ts` | The kiosk's end of the channel and the iframe's attributes. | `openFrameChannel(host, frame, onMessage)`, `parseFromFrame`, `frameAttributes(id, title)` |
 | `runtime.ts` | The frame's end, platform-free. | `createFrameRuntime({ root, post, load })`, `MAX_ERRORS` |
 | `frame.ts` | `/frame.js`: the runtime wired to the frame page. | entry |
