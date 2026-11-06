@@ -16,6 +16,7 @@
     "names:verify": "node --env-file-if-exists=.env packages/shared/scripts/names/verify.ts",
     "names:check": "node --env-file-if-exists=.env packages/shared/scripts/names/check.ts",
     "plan:publish": "plans publish plan/index.html --name ethereum-game-box --date 2026-11-05",
+    "store:publish": "node --env-file-if-exists=.env apps/store/scripts/publish.ts",
     "firmware:test": "sh firmware/tap-station/scripts/test.sh",
     "firmware:build": "sh firmware/tap-station/scripts/build.sh",
     "firmware:flash": "sh firmware/tap-station/scripts/flash.sh",
