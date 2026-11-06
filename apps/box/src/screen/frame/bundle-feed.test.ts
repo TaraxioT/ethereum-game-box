@@ -30,9 +30,14 @@ describe("a store match on the kiosk", () => {
   });
 
   it("names the bundle, the title and the players in seat order, and nothing else plays", () => {
-    expect(storeMatch.match(stateOf(play))).toEqual({ hash: BUNDLE, title: "Tap Rush", players: [{ name: "NOVA" }, { name: "KITE" }] });
+    expect(storeMatch.match(stateOf(play))).toEqual({ hash: BUNDLE, title: "Tap Rush", players: [{ name: "NOVA", boxSeat: 0 }, { name: "KITE", boxSeat: 1 }] });
     expect(storeMatch.match(stateOf(null))).toBeNull();
     expect(storeMatch.match(stateOf({ game: "built", id: "x", state: null, stations: [{}, {}] } as unknown as Match["play"]))).toBeNull();
+  });
+
+  it("counts players, not seats: one left empty isn't on the page's list, and each player keeps their seat at the Box", () => {
+    const state = { ...stateOf(play), seats: [seat("nova"), seat(null), seat("juno"), seat("orion")] } as unknown as BoxState;
+    expect(storeMatch.match(state)?.players).toEqual([{ name: "NOVA", boxSeat: 0 }, { name: "JUNO", boxSeat: 2 }, { name: "ORION", boxSeat: 3 }]);
   });
 
   it("hears a finished tap and no other moment", () => {

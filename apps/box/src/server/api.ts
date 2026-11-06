@@ -64,7 +64,7 @@ export function apiRoutes({ core, commit, uptimeMs, roster, records, building, e
       method: "POST",
       path: "/api/taps/inject",
       async handle(req, res) {
-        const { seat, badge } = parseInjection(await readJson(req));
+        const { seat, badge } = parseInjection(await readJson(req), core.state().stations.length);
         sendJson(res, injectTap(core, seat, resolveBadge(badge, roster())) satisfies InjectReply);
       },
     },

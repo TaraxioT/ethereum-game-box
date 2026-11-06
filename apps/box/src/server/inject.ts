@@ -2,7 +2,7 @@
 // from the Pi's own randomness when the plan asks for one). They never touch a chip. They test games on the Pi while
 // the real stations show the screens and buzz, and they are never evidence for a counted result.
 import { randomInt } from "node:crypto";
-import type { Seat } from "@egb/sdk";
+import { SEATS, type Seat } from "@egb/sdk";
 import type { TapPlan } from "../core/ports.ts";
 import type { Core } from "../core/core.ts";
 import type { Badge } from "../core/types.ts";
@@ -25,13 +25,14 @@ export interface Injected {
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
-/** `{ seat: 0 | 1, badge: "NOVA" | "0x…" }` from a request body; a 400 when it isn't. */
-export function parseInjection(body: unknown): Injection {
-  const shape = 'the body must be { seat: 0 | 1, badge: a roster label ("NOVA") or an address }';
+/** `{ seat, badge: "NOVA" | "0x…" }` from a request body, for a Box with `seats` seats; a 400 when it isn't. */
+export function parseInjection(body: unknown, seats: number): Injection {
+  const shape = `the body must be { seat: 0 to ${seats - 1}, badge: a roster label ("NOVA") or an address }`;
   if (typeof body !== "object" || body === null) throw new HttpError(400, shape);
   const { seat, badge } = body as Record<string, unknown>;
-  if ((seat !== 0 && seat !== 1) || typeof badge !== "string" || !badge.trim() || badge.length > 64) throw new HttpError(400, shape);
-  return { seat, badge: badge.trim() };
+  const taken = SEATS.slice(0, seats).find((s) => s === seat);
+  if (taken === undefined || typeof badge !== "string" || !badge.trim() || badge.length > 64) throw new HttpError(400, shape);
+  return { seat: taken, badge: badge.trim() };
 }
 
 /**

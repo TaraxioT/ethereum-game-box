@@ -1,7 +1,7 @@
 // A store bundle's frame, both ends: what the kiosk's gate lets a page say and how much of it, the host's `window.egb`,
 // and the kiosk's view of the match. server/games/sandbox.test.ts proves the walls in a real browser.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FRAME_LIMITS, LOG_LIMITS, SMALL_CHARS, type FromBundle } from "@egb/sdk";
+import { FRAME_LIMITS, LOG_LIMITS, SMALL_CHARS, type BundlePlayer, type FromBundle } from "@egb/sdk";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import type { Layout } from "../shell/layout.ts";
 import type { ViewContext } from "../views/view.ts";
@@ -13,7 +13,7 @@ import { MAX_ERRORS } from "./runtime.ts";
 import { READY_TIMEOUT_MS } from "./view.ts";
 
 const HASH = `0x${"ab".repeat(32)}`;
-const PLAYERS = [{ name: "NOVA" }, { name: "ORION" }, { name: null }];
+const PLAYERS: readonly BundlePlayer[] = [{ name: "NOVA", boxSeat: 0 }, { name: "ORION", boxSeat: 2 }, { name: "JUNO", boxSeat: 3 }];
 
 describe("a bundle's iframe", () => {
   it("is as sandboxed as a built game's, on its own page, with the players in its name", () => {
@@ -249,16 +249,16 @@ describe("window.egb", () => {
     const { runtime } = page();
     const { players } = runtime.egb;
     expect(players).toEqual(PLAYERS);
-    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth" }, { name: "ORION" }] });
-    expect(players).toEqual([{ name: "nova.eth" }, { name: "ORION" }]);
+    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth", boxSeat: 0 }, { name: "ORION", boxSeat: 2 }] });
+    expect(players).toEqual([{ name: "nova.eth", boxSeat: 0 }, { name: "ORION", boxSeat: 2 }]);
   });
 
   it("says ready only when the kiosk asks, with the players already up to date", () => {
     const { runtime, posted } = page();
     expect(posted).toEqual([]);
-    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth" }] });
+    runtime.receive({ t: "bundle-init", players: [{ name: "nova.eth", boxSeat: 0 }] });
     expect(posted).toEqual([{ t: "ready" }]);
-    expect(runtime.egb.players).toEqual([{ name: "nova.eth" }]);
+    expect(runtime.egb.players).toEqual([{ name: "nova.eth", boxSeat: 0 }]);
   });
 
   it("starts with no players when the frame's name isn't theirs", () => {
@@ -384,8 +384,8 @@ describe("the kiosk's view of a store match", () => {
   });
 
   it("tells the page the players as the Box knows them when it has loaded", () => {
-    const seen = [{ name: "nova.eth" }];
-    let match = { hash: HASH, title: "Tap Rush", players: PLAYERS };
+    const seen = [{ name: "nova.eth", boxSeat: 0 }] as const;
+    let match: { hash: string; title: string; players: readonly BundlePlayer[] } = { hash: HASH, title: "Tap Rush", players: PLAYERS };
     const m = play({ match: () => match });
     match = { ...match, players: seen };
     m.load();

@@ -2,7 +2,7 @@
 // hash, the log the Box writes (its taps and the game's claims, labelled), the three ways a match closes, and what the
 // verifier says: a split on Result, a refund as a refund, and silence as Refund. Nothing here runs on a Box with no store.
 import { describe, expect, it } from "vitest";
-import { LOG_LIMITS, mulberry32, type LogEntry, type Transcript } from "@egb/sdk";
+import { LOG_LIMITS, mulberry32, type LogEntry, type Seat, type Transcript } from "@egb/sdk";
 import type { BundlePort, ChainPort, JudgeOrder, JudgeWatch, LibraryPort, StoreBundle, StoreChainPort, StoreStakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, BoxEvent, BoxState, GameInfo, Judged, StorePlay } from "./types.ts";
 import { createCore, END_HOLD_MS, JOIN_SETTLE_MS, REFUND_DONE_MS, TOPUP_USDC, type Core } from "./core.ts";
@@ -15,12 +15,16 @@ import { instantTap } from "./instant-tap.ts";
 import { stationViews } from "./stations.ts";
 
 const START = Date.parse("2026-11-06T10:00:00Z");
-const [NOVA, KITE] = DEMO_BADGES as [Badge, Badge];
+const [NOVA, KITE, JUNO] = DEMO_BADGES as [Badge, Badge, Badge];
+const ORION: Badge = { address: `0x${"d4".repeat(20)}`, name: "orion.gamebox.eth" };
 const HASH = `0x${"ab".repeat(32)}` as const;
 const FACTS: StoreBundle = { minutes: 2, taps: "identify" };
 const TX = `0x${"cd".repeat(32)}` as const;
 
 const STORE_GAME: GameInfo = { id: "tap-rush", kind: "store", title: "Tap Rush", players: 2, minutes: 0, stakes: [5, 10, 25], tier: "judged", ready: true, sealed: null, icon: "/games/icon.svg", manifest: null, bundle: HASH };
+
+/** A game for two to four, on a Box with four stations. */
+const FOUR_SEATS = { stations: 4, game: { ...STORE_GAME, players: 4, minPlayers: 2 } };
 
 function fakeBundles() {
   const fetched: string[] = [];
@@ -64,11 +68,13 @@ interface Rig {
   readonly logged: Transcript[];
   readonly events: BoxEvent[];
   readonly buzzes: string[];
+  /** Each time the stations were told which seats are in use. */
+  readonly inUse: (readonly Seat[])[];
   /** Replaces the rack, as a store index that changed or vanished would. */
   rack(games: readonly GameInfo[]): void;
 }
 
-function rig(options: { bundles?: boolean; name?: boolean } = {}): Rig {
+function rig(options: { bundles?: boolean; name?: boolean; stations?: number; game?: GameInfo } = {}): Rig {
   const clock = createFakeClock(START);
   const rnd = mulberry32(5);
   const chain = createDemoChain(clock);
@@ -77,7 +83,8 @@ function rig(options: { bundles?: boolean; name?: boolean } = {}): Rig {
   const logged: Transcript[] = [];
   const events: BoxEvent[] = [];
   const buzzes: string[] = [];
-  let games: readonly GameInfo[] = [...TEAM_GAMES, STORE_GAME];
+  const inUse: (readonly Seat[])[] = [];
+  let games: readonly GameInfo[] = [...TEAM_GAMES, options.game ?? STORE_GAME];
   const listeners = new Set<() => void>();
   const library: LibraryPort = {
     games: () => games,
@@ -89,13 +96,13 @@ function rig(options: { bundles?: boolean; name?: boolean } = {}): Rig {
   const port: ChainPort = { ...chain, store: store.port, stakeNeedsName: options.name ?? false };
   const core = createCore({
     clock,
-    stations: { show: () => {}, buzz: (seat, kind) => void buzzes.push(`${seat} ${kind}`) },
+    stations: { show: () => {}, buzz: (seat, kind) => void buzzes.push(`${seat} ${kind}`), inUse: (seats) => void inUse.push(seats) },
     chain: port,
     library,
     ...(options.bundles === false ? {} : { bundles: bundles.port }),
     log: { record: (t) => void logged.push(t), countedSince: () => 0 },
     random: () => Math.floor(rnd() * 2 ** 32) >>> 0,
-  });
+  }, options.stations ? { stations: options.stations } : {});
   core.subscribe((_, event) => void events.push(event));
   return {
     core,
@@ -106,6 +113,7 @@ function rig(options: { bundles?: boolean; name?: boolean } = {}): Rig {
     logged,
     events,
     buzzes,
+    inUse,
     rack(next) {
       games = next;
       for (const listener of listeners) listener();
@@ -120,7 +128,7 @@ async function settle(r: Rig, ms = 0): Promise<void> {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 }
 
-async function tap(r: Rig, seat: 0 | 1, badge: Badge, roll: number | null = null): Promise<void> {
+async function tap(r: Rig, seat: Seat, badge: Badge, roll: number | null = null): Promise<void> {
   instantTap(r.core, seat, badge, roll ?? 0);
   await settle(r);
 }
@@ -647,5 +655,238 @@ describe("a store game", () => {
     const r = rig({ bundles: false });
     await toJoin(r);
     expect(r.core.state().phase).toBe("home");
+  });
+});
+
+describe("a store game for more than two", () => {
+  /** Seats these players, in order, each at their seat, with the bundle here. */
+  async function seat(r: Rig, players: readonly (readonly [Seat, Badge])[]): Promise<void> {
+    await toJoin(r);
+    r.bundles.arrive();
+    await settle(r);
+    for (const [at, badge] of players) await tap(r, at, badge);
+  }
+
+  async function sign(r: Rig, players: readonly (readonly [Seat, Badge])[]): Promise<void> {
+    for (const [at, badge] of players) await tap(r, at, badge);
+    r.store.opens[0]?.watch(paid());
+    await settle(r);
+  }
+
+  const ALL: readonly (readonly [Seat, Badge])[] = [[0, NOVA], [1, KITE], [2, JUNO], [3, ORION]];
+  const THREE = ALL.slice(0, 3);
+  /** Player 2's seat left empty. */
+  const GAP: readonly (readonly [Seat, Badge])[] = [[0, NOVA], [2, KITE], [3, JUNO]];
+
+  it("opens the game's seats at Play, and gives them back at Home", async () => {
+    const r = rig(FOUR_SEATS);
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "focus", game: "tap-rush" });
+    // Home stands on two seats, whatever is focused, and the others' stations say so.
+    expect(r.core.state().seats).toHaveLength(2);
+    expect(r.core.plan(2)).toBe("none");
+    expect(r.core.state().stations[2]).toMatchObject({ tag: "P3", big: "NEXT", small: "this game seats 2", mode: "shut" });
+    r.core.send({ type: "play" });
+    await settle(r);
+    expect(r.core.state()).toMatchObject({ phase: "join", fewest: 2 });
+    expect(r.core.state().seats).toHaveLength(4);
+    expect(r.core.plan(3)).toBe("identify");
+    await tap(r, 3, ORION);
+    expect(r.core.state().seats[3]?.badge).toEqual(ORION);
+    r.core.send({ type: "back" });
+    expect(r.core.state().phase).toBe("home");
+    expect(r.core.state().seats).toHaveLength(2);
+    // Nobody is left in a seat that has gone: the next game starts with it empty.
+    r.core.send({ type: "play" });
+    await settle(r);
+    expect(r.core.state().seats[3]?.badge).toBeNull();
+  });
+
+  it("moves on by itself with every seat full, stakes them all, logs each by place and splits four ways", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, ALL);
+    await settle(r, JOIN_SETTLE_MS);
+    expect(r.core.state().phase).toBe("stake");
+    for (const [at, badge] of ALL.slice(0, 3)) await tap(r, at, badge);
+    expect(r.store.opens).toHaveLength(0);
+    expect(r.core.state().stations[0]).toMatchObject({ big: "SIGNED", small: "waiting" });
+    await tap(r, 3, ORION);
+    expect(r.store.opens[0]?.order).toMatchObject({ bundle: HASH, badges: ALL.map(([, b]) => b.address), amount: 10 });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "open", amount: 40 });
+    r.store.opens[0]?.watch(paid());
+    await settle(r);
+    expect(r.core.state().phase).toBe("playing");
+    expect(play(r.core.state()).lines).toEqual(["PLAY", "PLAY", "PLAY", "PLAY"]);
+    expect(r.core.state().match?.refunded).toEqual([false, false, false, false]);
+
+    await tap(r, 3, ORION);
+    await tap(r, 2, JUNO);
+    expect(r.events.filter((e) => e.type === "game-tap").map((e) => e.seat)).toEqual([3, 2]);
+    r.core.send({ type: "frame", word: { t: "station", seat: 3, text: "FOUR" } });
+    r.core.send({ type: "frame", word: { t: "buzz", seat: 2 } });
+    expect(r.core.state().stations[3]?.big).toBe("FOUR");
+    expect(r.buzzes.at(-1)).toBe("2 ok");
+    // Only a seat the match has.
+    r.core.send({ type: "frame", word: { t: "buzz", seat: 4 } });
+    expect(r.buzzes.at(-1)).toBe("2 ok");
+
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    const { order, watch } = r.store.judges[0] as (typeof r.store.judges)[number];
+    expect(order.badges).toEqual(ALL.map(([, b]) => b.address));
+    expect(order.entries.flatMap((e) => (e.t === "tap" ? [e.seat] : []))).toEqual([3, 2]);
+    expect(r.logged.at(-1)).toMatchObject({ badges: ALL.map(([, b]) => b.address), result: "void", counts: false });
+
+    watch(said("paying", { payouts: [25, 5, 5, 5], hash: TX }));
+    expect(r.core.state().seats.map((s) => s.pending)).toEqual([25, 5, 5, 5]);
+    watch(said("paid", { payouts: [25, 5, 5, 5], hash: TX }));
+    await settle(r);
+    expect(r.core.state().phase).toBe("result");
+    expect(r.core.state().stations.map((v) => v.big)).toEqual(["+25 USDC", "+5 USDC", "+5 USDC", "+5 USDC"]);
+  });
+
+  it("waits for START with seats to spare, and takes it only with enough seated and the bundle here", async () => {
+    const r = rig(FOUR_SEATS);
+    await toJoin(r);
+    await tap(r, 0, NOVA);
+    r.core.send({ type: "begin" });
+    expect(r.core.state().phase).toBe("join");
+    await tap(r, 2, KITE);
+    // Two have joined, but the bundle isn't here.
+    r.core.send({ type: "begin" });
+    expect(r.core.state().phase).toBe("join");
+    r.bundles.arrive();
+    await settle(r, JOIN_SETTLE_MS * 3);
+    expect(r.core.state().phase).toBe("join");
+    r.core.send({ type: "begin" });
+    expect(r.core.state().phase).toBe("stake");
+    // From here the players are fixed: a new badge can't join.
+    await tap(r, 1, JUNO);
+    expect(r.core.state().seats[1]?.badge).toBeNull();
+  });
+
+  it("tells the stations which seats need one: those on show, the players from Stake on, and two again at Home", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, [[0, NOVA], [2, KITE]]);
+    expect(r.inUse.at(-1)).toEqual([0, 1, 2, 3]);
+    r.core.send({ type: "begin" });
+    expect(r.inUse.at(-1)).toEqual([0, 2]);
+    r.core.reset();
+    expect(r.inUse.at(-1)).toEqual([0, 1]);
+    // Only when they change.
+    expect(r.inUse.map((seats) => seats.join())).toEqual(["0,1", "0,1,2,3", "0,2", "0,1"]);
+  });
+
+  it("won't START a team game, whose every seat must fill", async () => {
+    const r = rig(FOUR_SEATS);
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "start" });
+    r.core.send({ type: "play" });
+    await tap(r, 0, NOVA);
+    r.core.send({ type: "begin" });
+    expect(r.core.state()).toMatchObject({ phase: "join", fewest: 2 });
+    expect(r.core.state().seats).toHaveLength(2);
+  });
+
+  it("closes up a seat left empty: the pot, the log, the page and the split count players", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, GAP);
+    r.core.send({ type: "begin" });
+    await settle(r);
+    await sign(r, GAP);
+    expect(r.store.opens[0]?.order.badges).toEqual(GAP.map(([, b]) => b.address));
+    expect(r.core.state().stations[1]).toMatchObject({ big: "NEXT", small: "next match", mode: "shut" });
+    expect(r.core.plan(1)).toBe("none");
+
+    await tap(r, 3, JUNO);
+    expect(r.events.findLast((e) => e.type === "game-tap")).toMatchObject({ seat: 2 });
+    // The page's second player sits at the Box's third seat.
+    r.core.send({ type: "frame", word: { t: "station", seat: 1, text: "HERE" } });
+    r.core.send({ type: "frame", word: { t: "buzz", seat: 1 } });
+    expect(r.core.state().stations[2]?.big).toBe("HERE");
+    expect(r.core.state().stations[1]?.big).toBe("NEXT");
+    expect(r.buzzes.at(-1)).toBe("2 ok");
+    r.core.send({ type: "frame", word: { t: "buzz", seat: 3 } });
+    expect(r.buzzes.at(-1)).toBe("2 ok");
+
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    expect(r.store.judges[0]?.order.entries.filter((e) => e.t === "tap")).toMatchObject([{ seat: 2 }]);
+    r.store.judges[0]?.watch(said("paid", { payouts: [0, 30, 0], hash: TX }));
+    await settle(r);
+    expect(r.core.state().stations.map((v) => v.big)).toEqual(["+0 USDC", "NEXT", "+30 USDC", "+0 USDC"]);
+  });
+
+  it("refunds everyone from Refund: one tap, the whole pot", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, THREE);
+    r.core.send({ type: "begin" });
+    await settle(r);
+    await sign(r, THREE);
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    r.store.judges[0]?.watch(said("failed", { reason: "the verifier is gone" }));
+    await settle(r);
+    expect(r.core.state().phase).toBe("refund");
+    r.clock.advance(DEMO_REFUND_MS);
+    expect(r.core.plan(2)).toBe("identify");
+    await tap(r, 2, JUNO);
+    expect(r.store.refunds).toHaveLength(1);
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "refund", amount: 30 });
+    expect(r.core.state().seats.map((s) => s.pending)).toEqual([10, 10, 10, 0]);
+    r.store.refunds[0]?.watch(paid());
+    await settle(r);
+    expect(r.core.state().match?.refunded).toEqual([true, true, true]);
+    expect(r.core.state().stations.map((v) => v.big)).toEqual(["REFUNDED", "REFUNDED", "REFUNDED", "NEXT"]);
+    expect(r.core.plan(0)).toBe("none");
+  });
+
+  it("keeps the table through the lobby, and a rematch back at Join", async () => {
+    const r = rig(FOUR_SEATS);
+    r.store.balances.set(JUNO.address, 0);
+    await seat(r, THREE);
+    r.core.send({ type: "begin" });
+    await settle(r);
+    await tap(r, 2, JUNO);
+    expect(r.core.state().phase).toBe("lobby");
+    expect(r.core.state().seats).toHaveLength(4);
+    r.store.balances.set(JUNO.address, 100);
+    r.core.send({ type: "back" });
+    await settle(r);
+    expect(r.core.state().phase).toBe("stake");
+    await sign(r, THREE);
+    r.core.send({ type: "frame", word: { t: "end", why: "game" } });
+    await settle(r, END_HOLD_MS);
+    r.store.judges[0]?.watch(said("paid", { payouts: [10, 10, 10], hash: TX }));
+    await settle(r);
+    r.core.send({ type: "rematch" });
+    await settle(r);
+    expect(r.core.state()).toMatchObject({ phase: "join", fewest: 2 });
+    expect(r.core.state().seats.map((s) => s.badge)).toEqual([NOVA, KITE, JUNO, null]);
+    r.bundles.arrive();
+    await settle(r, JOIN_SETTLE_MS * 2);
+    expect(r.core.state().phase).toBe("join");
+    r.core.send({ type: "begin" });
+    expect(r.core.state().phase).toBe("stake");
+  });
+
+  it("sends a seated player who moves station to the new seat", async () => {
+    const r = rig(FOUR_SEATS);
+    await seat(r, [[0, NOVA], [1, KITE]]);
+    await tap(r, 3, NOVA);
+    expect(r.core.state().seats.map((s) => s.badge)).toEqual([null, KITE, null, NOVA]);
+  });
+
+  it("offers a game for three seats no more than three", async () => {
+    const r = rig({ stations: 3, game: { ...STORE_GAME, players: 3 } });
+    await toJoin(r);
+    r.bundles.arrive();
+    await settle(r);
+    expect(r.core.state()).toMatchObject({ fewest: 3 });
+    expect(r.core.state().seats).toHaveLength(3);
+    for (const [at, badge] of THREE) await tap(r, at, badge);
+    await settle(r, JOIN_SETTLE_MS);
+    expect(r.core.state().phase).toBe("stake");
   });
 });

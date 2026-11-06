@@ -65,6 +65,11 @@ only its own files and runs no route, though a prerender can still knock on a lo
 flooding and oversized messages stop at the gate, and each way of leaving loses the page. It is skipped without a
 Chromium; `EGB_CHROMIUM` names one.
 
+`seats.test.ts` draws every seated page in a real browser (`screen/seats-kiosk.ts`, the real shell, views, parts, styles
+and fonts on a stand-in link), with 2, 3 and 4 seats, at the Pi's 16:9, the demo's 16:10 and in portrait. With three or
+four panels nothing may lie on anything else or stick out of its panel or plate; two stay as the team games have them.
+It is skipped without a Chromium too.
+
 **It passes only with the unit's two walls.** Without `--host-resolver-rules` and `--webrtc-ip-handling-policy`,
 `<link rel="prerender">` reaches the outside, with the CSP and sandbox in place, and a test fails if the unit loses
 either. See `screen/frame/README.md`.

@@ -48,6 +48,8 @@ export async function startTestBox(
     port?: number;
     dir?: string;
     receiver?: ReceiverSetting;
+    /** The Box's stations: two, unless a test seats more. */
+    stations?: readonly string[];
     fake?: FakeOptions;
     builder?: BoxOptions["builder"];
     chain?: BoxOptions["chain"];
@@ -69,7 +71,7 @@ export async function startTestBox(
       dataDir: join(dir, "data"),
       screenDir: join(dir, "screen"),
       receiver: options.receiver ?? { kind: "none" },
-      stations: ["e4ba70", "df3d88"],
+      stations: options.stations ?? ["e4ba70", "df3d88"],
       chain: { kind: "demo" },
       admin: null,
       store: options.store ?? null,
@@ -110,6 +112,25 @@ export async function startTestBox(
       if (!options.dir) await rm(dir, { recursive: true, force: true });
     },
   };
+}
+
+/** A simulated badge lands on a station's reader, stays until its tap has ended, and lifts off. */
+export async function fakeTap(tb: TestBox, badge: string, st: string): Promise<void> {
+  const taps = tb.box.taps();
+  if (!taps?.fake) throw new Error("no fake receiver");
+  const { fake } = taps;
+  // stats() hands out the live counters: keep a copy.
+  const before = structuredClone(taps.stats().taps);
+  const ended = () => {
+    const now = taps.stats().taps;
+    const fails = Object.values(now.fail).reduce((a, b) => a + b, 0) - Object.values(before.fail).reduce((a, b) => a + b, 0);
+    return now.touch > before.touch && now.done - before.done + fails === now.touch - before.touch && taps.status().running === 0;
+  };
+  fake.lift(badge);
+  fake.place(badge, st);
+  await tb.settle(ended, 5_000, 5);
+  fake.lift(badge);
+  await tb.settle(() => fake.status().badges.every((b) => b.name !== badge || b.station === null), 1_000, 5);
 }
 
 /** A screen on the link: every message it got, in order. */

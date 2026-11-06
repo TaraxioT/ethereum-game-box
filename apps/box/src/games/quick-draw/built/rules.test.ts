@@ -1,12 +1,12 @@
 // Quick Draw's built rules: judged by touch time, settled for the other station, false starts, dead heats, and an
 // end to every match.
 import { describe, expect, it } from "vitest";
-import type { BuiltEvent, Seat } from "@egb/sdk";
+import type { BuiltEvent, DuelSeat } from "@egb/sdk";
 import rules, { MAX_WAIT_MS, MIN_WAIT_MS, reactionMs, SETTLE_MS, STANDOFFS, TOO_SLOW_MS, type QuickDrawState } from "./rules.ts";
 
 const T0 = 1_000_000;
 const tick = (now: number): BuiltEvent => ({ type: "tick", now });
-const tap = (seat: Seat, now: number): BuiltEvent => ({ type: "tap", seat, now, roll: null });
+const tap = (seat: DuelSeat, now: number): BuiltEvent => ({ type: "tap", seat, now, roll: null });
 const run = (state: QuickDrawState, ...events: BuiltEvent[]) => events.reduce(rules.step, state);
 
 describe("Quick Draw's built rules", () => {

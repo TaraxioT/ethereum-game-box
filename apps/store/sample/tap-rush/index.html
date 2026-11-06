@@ -70,15 +70,16 @@
   const lanes = document.getElementById("lanes");
   const counts = egb.players.map(() => 0);
 
-  const views = counts.map((_, seat) => {
+  // A lane goes by the player's place, as a tap's seat does, but wears their seat at the Box, as their station does.
+  const views = egb.players.map(({ boxSeat }) => {
     const lane = document.createElement("section");
     lane.className = "lane";
-    lane.style.setProperty("--seat", `var(--seat-${seat + 1})`);
+    lane.style.setProperty("--seat", `var(--seat-${boxSeat + 1})`);
     const fill = document.createElement("div");
     fill.className = "fill";
     const label = document.createElement("div");
     label.className = "seat";
-    label.textContent = `P${seat + 1}`;
+    label.textContent = `P${boxSeat + 1}`;
     const count = document.createElement("div");
     count.className = "count";
     count.textContent = "0";

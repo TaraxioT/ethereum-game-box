@@ -1,5 +1,5 @@
 /* The Box's design tokens. The launcher wears the Grid: a near-black world where all light comes from thin emissive
-   lines, cool white-blue for the system, orange and cyan for the two sides, red only when something is wrong. Glow is
+   lines, cool white-blue for the system, orange, cyan, green and pink for the seats, red only when something is wrong. Glow is
    static (shadows and stacked strokes, at most 24 px); only transform and opacity animate. The games keep their own
    looks, built on the shared seat, type, brass and easing tokens. */
 :root {
@@ -26,6 +26,12 @@
   --p2: #3fd9ff;
   --p2-hi: #b5f1ff;
   --p2-bloom: rgb(63 217 255 / 0.45);
+  --p3: #7dffa6;
+  --p3-hi: #c9ffdb;
+  --p3-bloom: rgb(125 255 166 / 0.45);
+  --p4: #ff7de0;
+  --p4-hi: #ffc9f1;
+  --p4-bloom: rgb(255 125 224 / 0.45);
 
   /* Text */
   --fg: #eaf7ff;

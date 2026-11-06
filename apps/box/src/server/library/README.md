@@ -13,7 +13,9 @@ The games the Box offers: the core's `LibraryPort` on the Pi.
   `judged`, no folder and no manifest until a match fetches the bundle, and the fallback icon (`/games/icon.svg`). The
   index is read at the start and every minute: while it can't be read they aren't in the list, and team and built games
   never notice. A listing that isn't good is left out on its own. One whose id a team or built game holds is left out
-  and logged. One that needs more seats than the Box has is sealed.
+  and logged. One that needs more seats than the Box has is sealed. `GameInfo.players` is the most it seats on this Box
+  (`seats`, from `EGB_STATIONS`), and `minPlayers` the fewest, when that's under it. A zip that seats other numbers than
+  the store lists is refused like any other, so Join seats what the hash-pinned manifest says.
 - **A store game's bundle** is fetched by hash for each match (`bundles.ts`), into its own folder under
   `$EGB_DATA/store-bundles/`, and deleted when the match is over or the players leave. There is no cache, and the folder
   is emptied at the start for whatever a power cut left. It is checked in memory with `@egb/sdk/bundle`, and against the

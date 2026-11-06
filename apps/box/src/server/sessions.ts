@@ -8,7 +8,7 @@
 // power cut mid-write) gets a newline before the next line, so the torn line can't swallow it.
 import { open, readdir, readFile, appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Transcript } from "@egb/sdk";
+import { PLAYER_LIMITS, type Transcript } from "@egb/sdk";
 import type { MatchLog } from "../core/ports.ts";
 
 export interface BadgeRecord {
@@ -33,14 +33,15 @@ export function dayOf(ms: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const pairKey = (badges: readonly [string, string]): string => [...badges].map((b) => b.toLowerCase()).sort().join(":");
+/** The badges that played together, whatever their seats: every count of counted results is theirs. */
+const pairKey = (badges: readonly string[]): string => [...badges].map((b) => b.toLowerCase()).sort().join(":");
 
 /** A transcript from a parsed line, or null when the line isn't one (a torn line from a power cut). */
 function transcriptOf(value: unknown): Transcript | null {
   if (typeof value !== "object" || value === null) return null;
   const t = value as Partial<Transcript>;
   const badges = t.badges;
-  if (t.v !== 1 || !Array.isArray(badges) || badges.length !== 2 || typeof t.endedAt !== "number" || typeof t.counts !== "boolean") return null;
+  if (t.v !== 1 || !Array.isArray(badges) || badges.length < PLAYER_LIMITS.min || badges.length > PLAYER_LIMITS.max || typeof t.endedAt !== "number" || typeof t.counts !== "boolean") return null;
   if (t.result !== "void" && (typeof t.result !== "object" || t.result === null)) return null;
   return t as Transcript;
 }

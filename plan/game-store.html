@@ -82,8 +82,8 @@
   <div class="lede"><p>The plan for games that live online instead of on the Box. A team-published zip holds a game&#39;s page and the rules an
 AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G&#39;s
 private inference reads the match&#39;s log and says who gets paid how much. If it can&#39;t, everyone gets their stake back.
-Built and tested on the branch <code>game-store</code>, on fakes and two seats: nothing is deployed, 0G hasn&#39;t judged a real match,
-it hasn&#39;t run on the Pi, and step 7, four seats on the Box, isn&#39;t done.</p></div>
+Built and tested on the branch <code>game-store</code>, on fakes and up to four seats: nothing is deployed, 0G hasn&#39;t judged a real
+match, and it hasn&#39;t run on the Pi or on real badges.</p></div>
   <nav>
     <a href="#s1">Goal</a>
     <a href="#s2">Decisions</a>
@@ -415,11 +415,16 @@ chain with the verdict.</p>
 
 <section id="s10">
 <h2><span class="n">10</span>Four players</h2>
-<p>The Box assumes two players throughout: <code>Seat</code> is <code>0 | 1</code>, ports use pairs, <code>EGB_STATIONS</code> must be exactly two, and
-Join, Stake and Result draw two sides. This pass widens all of it to four.</p>
+<p><code>Seat</code> is <code>0 | 1 | 2 | 3</code>, <code>EGB_STATIONS</code> takes 2 to 4, a seat each, and Join, Stake, Result, Refund and the ports draw
+two, three or four. A station past the game&#39;s seats, or a seat left empty, says so and takes no tap. It stands by: if a
+seat in use loses its station, it takes over, so a third station is a two-player game&#39;s spare.</p>
 <ul>
-<li>Team games stay two-player. Their rules use <code>other(seat)</code>, and a game&#39;s manifest sets its own limits.</li>
-<li>The firmware already takes four stations (<code>MAX_STATIONS</code>).</li>
+<li>Team games stay two-player. Their rules use <code>DuelSeat</code> and <code>other(seat)</code>, and a game&#39;s manifest sets its own limits.</li>
+<li>A store game seats its manifest&#39;s max, or the Box&#39;s stations if fewer. With every seat full Join moves on. With its
+min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
+split count players, not seats. The page also hears each player&#39;s seat at the Box, to name and colour them the same.</li>
+<li>The firmware already takes four stations (<code>MAX_STATIONS</code>). It forgets none until it restarts, so a fifth can&#39;t link
+before then.</li>
 <li>Refunds and results pay a list of players, not a pair.</li>
 </ul>
 </section>
@@ -436,7 +441,8 @@ enclave&#39;s signature itself, and the SDK runs in the Worker with a <code>fetc
 <li><strong>The contract.</strong> <code>StorePot</code>, its forge tests, Store USDC, the deploy and the relayer&#39;s routes.</li>
 <li><strong>The verifier.</strong> The Worker, the container, the agent and the failure paths, against a fake 0G.</li>
 <li><strong>The Box, two seats.</strong> The library, the frame&#39;s powers, the log and the chain. A full staked match on the Pi.</li>
-<li><strong>Four seats.</strong> The core, the settings, the stations and every screen.</li>
+<li><strong>Four seats.</strong> The core, the settings, the stations and every screen. Done on the fake stations, and every screen
+rendered with 2, 3 and 4 seats in a real browser. Not yet played on the Pi with real badges.</li>
 <li><strong>Mainnet 0G.</strong> Deploy with the real key and play one match.</li>
 </ol>
 </section>

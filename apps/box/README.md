@@ -37,7 +37,7 @@
 
 Players stake fake USDC (5, 10 or 25; 10 first) on Sepolia, or play for the game's title (20 each) or its open
 championship (15 each). The screen names every player by ENS: the ports, the seat panels, the games and a card on each
-tap, with the titles and championships whose own ENS names resolve to them. When both seats sign, the match opens at once and the Box sends a
+tap, with the titles and championships whose own ENS names resolve to them. When every player signs, the match opens at once and the Box sends a
 `Stake` (its round from `rounds.json`) to the relayer's `/duel/open`; the result goes as a `Result` with the same round
 to `/box/result` once the open is done, and one transaction pays the pot, moves the title and scores the championship.
 The tx bar shows each transaction's real hash, linked to Etherscan. The lobby tops a badge up and claims its player
@@ -48,5 +48,6 @@ name. The browser demo runs the same core on the demo chain in memory.
 Games from the store (`EGB_STORE_URL`) stand in the rack after the others. Each match downloads its bundle, stakes Store
 USDC in `StorePot` by the bundle's hash, plays its page in the kiosk's sandboxed frame, and sends the Box's log to the
 verifier (`EGB_VERIFIER_URL`), whose AI judge splits the pot. Their tier is `judged`, shown on Stake as `JUDGED BY AI`.
-They seat two for now. `src/core/` has the match, `src/server/library/` the rack and the download, and `src/chain/` the
+They seat as many as their manifest and the Box's stations allow, two to four, and can start with fewer than that.
+`src/core/` has the match, `src/server/library/` the rack and the download, and `src/chain/` the
 money. The browser demo has none.

@@ -6,7 +6,7 @@
 // touch (the screen turns a card half a turn after the drum steps). Once one seat has played, the other has one turn
 // of its drum; then its front card is played for it, with its last roll. The stat is chosen only after both cards
 // are down: chosen first, it would hand the round to whoever plays second.
-import { hash32, other, shuffle, stationView, type BuiltEvent, type BuiltRules, type Outcome, type Seat, type StationView } from "@egb/sdk";
+import { hash32, other, shuffle, stationView, type BuiltEvent, type BuiltRules, type Outcome, type DuelSeat, type StationView } from "@egb/sdk";
 import { DECK, formatStat, STAT_LABEL, STATS, type StatKey, type Stock } from "./deck.ts";
 
 export const DEAL_MS = 3000;
@@ -24,7 +24,7 @@ export interface RoundRecord {
   readonly cards: readonly [Stock, Stock];
   readonly stat: StatKey;
   /** null: a tie, replayed with the next cards. */
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
 export interface StockDuelState {
@@ -50,11 +50,11 @@ export interface StockDuelState {
   readonly stat: StatKey | null;
   readonly history: readonly RoundRecord[];
   /** Set when phase is `over`: null is a draw. */
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
 type Pair<T> = readonly [T, T];
-const put = <T>(pair: Pair<T>, seat: Seat, value: T): Pair<T> => (seat === 0 ? [value, pair[1]] : [pair[0], value]);
+const put = <T>(pair: Pair<T>, seat: DuelSeat, value: T): Pair<T> => (seat === 0 ? [value, pair[1]] : [pair[0], value]);
 const mod = (n: number, m: number): number => ((n % m) + m) % m;
 
 export const dwellForRound = (round: number): number => DWELL_MS[Math.min(round, DWELL_MS.length) - 1] ?? 2400;
@@ -63,7 +63,7 @@ export const dwellForRound = (round: number): number => DWELL_MS[Math.min(round,
 const drumStart = (now: number, dwellMs: number): Pair<number> => [now, now - dwellMs];
 
 /** The index of a seat's front card at `now`: its played card once down, else the one the clock shows. */
-export function frontIndex(state: StockDuelState, seat: Seat, now: number): number {
+export function frontIndex(state: StockDuelState, seat: DuelSeat, now: number): number {
   const hand = state.hands[seat];
   const played = state.played[seat];
   if (played) return Math.max(0, hand.indexOf(played));
@@ -72,7 +72,7 @@ export function frontIndex(state: StockDuelState, seat: Seat, now: number): numb
   return mod(Math.floor((at - state.drumAt[seat]) / state.dwellMs), hand.length);
 }
 
-const frontCard = (state: StockDuelState, seat: Seat, now: number): Stock | null => state.hands[seat][frontIndex(state, seat, now)] ?? null;
+const frontCard = (state: StockDuelState, seat: DuelSeat, now: number): Stock | null => state.hands[seat][frontIndex(state, seat, now)] ?? null;
 
 function start(seed: number, now: number): StockDuelState {
   const deck = shuffle(DECK, seed);
@@ -102,7 +102,7 @@ function reveal(state: StockDuelState, now: number): StockDuelState {
   if (!a || !b) return state;
   const stat = STATS[((state.rolls[0] + state.rolls[1]) >>> 0) % STATS.length] ?? "price";
   const difference = a[stat] - b[stat];
-  const winner: Seat | null = difference > 0 ? 0 : difference < 0 ? 1 : null;
+  const winner: DuelSeat | null = difference > 0 ? 0 : difference < 0 ? 1 : null;
   return {
     ...state,
     phase: "reveal",
@@ -113,7 +113,7 @@ function reveal(state: StockDuelState, now: number): StockDuelState {
   };
 }
 
-function play(state: StockDuelState, seat: Seat, card: Stock, at: number, roll: number | null): StockDuelState {
+function play(state: StockDuelState, seat: DuelSeat, card: Stock, at: number, roll: number | null): StockDuelState {
   const partner = other(seat);
   const waiting = state.played[partner] === null;
   return {
@@ -183,7 +183,7 @@ function step(state: StockDuelState, event: BuiltEvent): StockDuelState {
 /** Printable ASCII for a station: the stat's minus sign becomes a hyphen. */
 const ascii = (text: string): string => text.replace(/−/g, "-");
 
-function station(state: StockDuelState, seat: Seat): StationView {
+function station(state: StockDuelState, seat: DuelSeat): StationView {
   const now = state.now;
   const tag = seat === 0 ? "P1" : "P2";
   const played = state.played[seat];

@@ -17,7 +17,7 @@ receiver port ─bytes─▶ scanner ─lines─▶ events (parse) ─▶ taps f
 ```ts
 const taps = createTaps({
   receiver: "auto",                // a /dev/serial/by-id path, auto, or fake (EGB_RECEIVER)
-  stations: ["df3b9c", "df3d88", "e4ba70"],  // the known stations (EGB_STATIONS); seats go by link order
+  stations: ["df3b9c", "df3d88", "e4ba70"],  // the known stations (EGB_STATIONS), a seat each; seats go by link order
   dataDir,                         // $EGB_DATA: badges.json (badges.fake.json for the fake)
   clock,                           // the core's Clock
   plan: (seat) => core.plan(seat), // asked after each touch
@@ -25,7 +25,7 @@ const taps = createTaps({
 });
 ```
 
-`Taps` is the core's `StationsPort` (`show(seat, view)`, `buzz(seat, "ok" | "no")`), plus `status()`, `stats()`,
+`Taps` is the core's `StationsPort` (`show(seat, view)`, `buzz(seat, "ok" | "no")`, `inUse(seats)`), plus `status()`, `stats()`,
 `identify(st)`, `roll(st)`, `list(st)`, `roster()`, `press()`, `close()`, `fake` (the fake receiver's controls, or
 null) and `probe` (one measurement each, for the bench). `runBench(taps, { count })` in `bench.ts` measures the link;
 `pnpm taps:bench` runs it through the server's `POST /api/taps/bench`, or opens the port itself with `--direct`.
@@ -61,10 +61,15 @@ Every tap logs its station, seat, badge and plan at the touch, then its end and 
 server keeps these lines in `$EGB_DATA/logs/`).
 Taps on a station no seat uses are ignored, though the station's status shows the chip.
 
-7. **Seats go by link order.** The first station to link is Player 1's, the second Player 2's; a third waits on the
-   bench (`NEXT`, `both seats taken - you're next`, `mode=shut`). A seat is kept through a dropped link's grace; once
-   its station is lost the bench's earliest-linked station takes it, with the seat's last view. The receiver's
-   `state` lists stations in the order they first reached it, so a reopened port seats them the same way.
+7. **Seats go by link order.** There's a seat for each known station, up to four. The first station to link is Player
+   1's, the second Player 2's; one linked with every seat taken waits on the bench (`NEXT`, `every seat taken - you're
+   next`, `mode=shut`). The list sets how many seats there are, not whose they are: an unlisted station takes a free
+   seat like any other. A seat is kept through a dropped link's grace; once its station is lost the bench's
+   earliest-linked station takes it, with the seat's last view. With the bench empty, a seat in use (`inUse`, from the
+   core) takes a linked station from a seat that isn't: the third station in a two-seat game, or a seat left empty in a
+   store match. A lost station that comes back takes a free seat. The receiver's `state` lists stations in the order
+   they first reached it, so a reopened port seats them the same way. Its table holds four stations and forgets none,
+   so a fifth can't link until the receiver restarts, and on a four-seat Box a dead station can't be swapped before then.
 8. **The station knows what a tap means.** Every view carries a `mode` from the seat's tap plan: `shut` when the plan
    is `none` (the station answers a tap with NOT NOW itself, at once), `play` in a game, `open` otherwise.
 
@@ -105,7 +110,7 @@ Taps on a station no seat uses are ignored, though the station's status shows th
 | `serial.ts` | `serialOpener(path)`: a /dev/serial/by-id path, or `auto` (the receiver's by-id entry, by its USB serial `7C:DF:A1:D5:04:CC`), read through Node's own tty handle in the event loop (raw mode, no DTR/RTS toggling) and written with non-blocking writes on a second descriptor (`ttyWriter`: bounded retries, a `drop` event for a command given up). No native addon. |
 | `fresh-ids.ts` | `FreshIds`: each station's latest `tap`, `gone` and `signed` id; `fresh(kind, st, id, now)` says whether a line is new or a resend of an older one. |
 | `receiver-clock.ts` | `ReceiverClock`: `at_us` onto Pi ms, and the touch time of a tap line. |
-| `stations.ts` | `Stations`: seats by link order (`seated` when one changes hands, `bench()`), each station's link, signal, ping, reader and chip; the 2 s link grace (`lost`), `whenUp(st)`; ping and press-report samples. |
+| `stations.ts` | `Stations`: a seat per known station, up to four, by link order (`seated` when one changes hands, `bench()`, `inUse(seats)`: a seat that needs a station takes one from a seat that doesn't), each station's link, signal, ping, reader and chip; the 2 s link grace (`lost`), `whenUp(st)`; ping and press-report samples. |
 | `samples.ts` | `Samples`: a fixed ring of the latest numbers. |
 | `acks.ts` | `Acks`: commands waiting on their answer by id (buzz, screen, press), with timeouts and Pi-side times. |
 | `screen-payload.ts` | `screenPayload(view, ttl)`: a `StationView` as the station's `key=value` payload, each value cut to its line, at most 200 bytes. |
@@ -120,7 +125,7 @@ Taps on a station no seat uses are ignored, though the station's status shows th
 | `tap-machine.ts` | `TapMachine`: one tap from its line to `done` or `fail` (above). |
 | `taps.ts` | `createTaps(options)`: everything above wired together; the API the server, the test page and the bench use. |
 | `fake/sim-badge.ts` | `SimBadge`: a HaLo with real secp256k1 keys (deterministic per name) answering the applet select (Arx or legacy AID), `get_pkeys` and key 2's `sign_random` with its counter, signed as a chip signs. |
-| `fake/fake-receiver.ts` | `FakeReceiver`: a duplex stream the `Receiver` owns instead of a serial port, speaking the exact lines, with simulated stations (pings, taps and gones, buzz and screen acks, NFC answers, `signed`) and five badges. Like the hardware, a station selects the applet right after the tap and answers the Pi's identical SELECT from its kept answer. `place`, `lift`, `linkDown`, `linkUp`, `unplug`, `plug`, `status`, `heard`. `EGB_RECEIVER=fake`. |
+| `fake/fake-receiver.ts` | `FakeReceiver`: a duplex stream the `Receiver` owns instead of a serial port, speaking the exact lines, with simulated stations (pings, taps and gones, buzz and screen acks, NFC answers, `signed`), four at most as on the receiver, and five badges. Like the hardware, a station selects the applet right after the tap and answers the Pi's identical SELECT from its kept answer. `place`, `lift`, `linkDown`, `linkUp`, `unplug`, `plug`, `status`, `heard`. `EGB_RECEIVER=fake`. |
 | `bench.ts` | `runBench(taps, { count })`: pings, press both ways, serial write → reply, buzz → `buzz_ok`, screen → `screen_ok`, `nfc list`, the idle event loop's delay and the parse cost; median, p95, p99, max. `formatReport` prints it. |
 | `bench-cli.ts` | `pnpm taps:bench`: asks the running server (`POST /api/taps/bench`), or `--direct[=port]` with the server stopped. |
 
@@ -134,5 +139,6 @@ chip ops against simulated badges (a verified roll; one signed by another key fa
 is dropped; a roll carried on through a station's gone-and-back flap, and failed when the chip stays away), the tap machine on its own (a tap that ended records nothing), the roster file, and the whole library
 against the fake receiver on a fake clock: touch then done or fail, unknown chips read whatever the plan, a known
 chip's identify with no chip command, the SELECT answered from the station's kept answer, the AID memory, a lift
-mid-roll, a resent older tap, a tap after `ready` in one chunk, the receiver dropping and coming back, and the link
-grace.
+mid-roll, a resent older tap, a tap after `ready` in one chunk, the receiver dropping and coming back, the link
+grace, and the seats: link order whoever is listed, no fifth link, and a lost seat covered from the bench or from a
+seat not in use, never from a player.

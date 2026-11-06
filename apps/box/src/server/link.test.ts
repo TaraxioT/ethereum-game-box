@@ -62,6 +62,7 @@ describe("the screen's link", () => {
       start: { type: "start" },
       focus: { type: "focus", game: "stock-duel" },
       play: { type: "play" },
+      begin: { type: "begin" },
       stake: { type: "stake", amount: 10 },
       "play-for": { type: "play-for", target: "cup" },
       back: { type: "back" },

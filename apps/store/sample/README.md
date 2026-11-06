@@ -12,8 +12,8 @@ Its page uses the frame's one object, `window.egb`, which the Box adds to the fr
 
 | Member | What it does |
 |---|---|
-| `players` | One item per seat, in seat order. Tap Rush only counts them. |
-| `onTap(fn)` | Calls `fn` with each tap. Tap Rush reads `seat` from it. |
+| `players` | One item per player, in seat order. Tap Rush draws a lane for each, named and coloured by the player's `boxSeat`, as on their station. |
+| `onTap(fn)` | Calls `fn` with each tap. Tap Rush reads `seat` from it: a place in `players`. |
 | `event(name, data)` | Adds a game event to the log. |
 | `station(seat, text)` | Shows text on a seat's station. |
 | `buzz(seat)` | Buzzes a seat's station. |

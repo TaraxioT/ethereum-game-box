@@ -10,7 +10,7 @@ for either platform. The one browser-only piece, the screen contract, is its own
 
 | Module | Holds |
 |---|---|
-| `seat.ts` | `Seat` (0 is Player 1, 1 is Player 2), `SEATS`, `other()` |
+| `seat.ts` | `Seat` (0 is Player 1 up to 3, Player 4), `SEATS`, `Seated<T>` (one each for a list of seats), `sideOf()`; and `DuelSeat` (0 or 1), `DUEL_SEATS`, `isDuelSeat()` and `other()` for two-player games, which every team and built game is |
 | `random.ts` | Seeded randomness for rules: `hash32`, `mulberry32`, `shuffle`. Tested in `random.test.ts` |
 | `rules.ts` | `GameRules<S, E>` (pure `start` / `step` / `outcome`), `Outcome`, and a built game's `BuiltRules<S>` with `stations(state)` and its events, `BuiltEvent` (`tick`, and `tap` at its touch time with the verified roll) |
 | `station.ts` | `StationView`, what a tap station's OLED shows (`tag` ≤ 3, `big` ≤ 32 and `small` ≤ 40, scrolling when too wide, the `hold` / `sign` / `done` / `fail` / `nope` overrides, and the `mode`: `open`, `play` or `shut`), `stationView()` to build one cut to fit, and `printable()` |

@@ -1,6 +1,6 @@
 // The tap stations' routes, for the test page's Stations and Badges tabs and the bench. Every write needs a local
 // origin (routes.ts). With EGB_RECEIVER=none there are no taps: GET /api/taps says so and the rest answer 409.
-import type { Seat } from "@egb/sdk";
+import { SEATS, type Seat } from "@egb/sdk";
 import type { Taps } from "../taps/taps.ts";
 import { runBench } from "../taps/bench.ts";
 import type { BenchReply, IdentifyReply, PressReply, RollReply, TapsReply } from "../test-page/wire.ts";
@@ -18,6 +18,8 @@ const FAKE_OPS: readonly FakeOp[] = ["place", "lift", "linkDown", "linkUp", "unp
 interface Options {
   readonly taps: () => Taps | null;
   readonly receiver: ReceiverSetting["kind"];
+  /** How many seats this Box has: EGB_STATIONS. */
+  readonly seats: number;
 }
 
 /** A failed chip read or radio request is the station's answer, not the server's fault. */
@@ -36,7 +38,7 @@ async function body(req: Parameters<Route["handle"]>[0]): Promise<Record<string,
   return value as Record<string, unknown>;
 }
 
-export function tapsRoutes({ taps, receiver }: Options): Route[] {
+export function tapsRoutes({ taps, receiver, seats }: Options): Route[] {
   const need = (): Taps => {
     const t = taps();
     if (!t) throw new HttpError(409, "this Box has no receiver (EGB_RECEIVER=none)");
@@ -48,8 +50,9 @@ export function tapsRoutes({ taps, receiver }: Options): Route[] {
     return value;
   };
   const seatOf = (value: unknown): Seat => {
-    if (value !== 0 && value !== 1) throw new HttpError(400, "seat must be 0 or 1");
-    return value;
+    const seat = SEATS.slice(0, seats).find((s) => s === value);
+    if (seat === undefined) throw new HttpError(400, `seat must be 0 to ${seats - 1}`);
+    return seat;
   };
 
   return [
@@ -63,7 +66,7 @@ export function tapsRoutes({ taps, receiver }: Options): Route[] {
         const at = (seat: Seat) => status?.stations.find((s) => s.seat === seat)?.st ?? "";
         sendJson(res, {
           receiver,
-          stations: [at(0), at(1)],
+          stations: SEATS.slice(0, seats).map(at),
           status,
           stats: t?.stats() ?? null,
           roster: t?.roster() ?? [],

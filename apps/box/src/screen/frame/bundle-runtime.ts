@@ -6,7 +6,7 @@
 // the frame's name, so a game can read it on its first line; `bundle-init` then brings them up to date in the same array.
 //
 // Platform-free (no window, no parent): bundle-host.ts wires it to the page, and the tests drive it directly.
-import type { BundleApi, BundleTap, FrameSeat, FromBundle, ToFrame } from "@egb/sdk";
+import type { BundleApi, BundlePlayer, BundleTap, FromBundle, ToFrame } from "@egb/sdk";
 import { errorText, MAX_ERRORS } from "./runtime.ts";
 
 export interface BundleRuntimeOptions {
@@ -27,10 +27,10 @@ export interface BundleRuntime {
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 /** The players in the frame's name; none if it holds anything else. */
-function playersIn(name: string): FrameSeat[] {
+function playersIn(name: string): BundlePlayer[] {
   try {
     const players = JSON.parse(name) as unknown;
-    return Array.isArray(players) ? (players as FrameSeat[]) : [];
+    return Array.isArray(players) ? (players as BundlePlayer[]) : [];
   } catch {
     return [];
   }

@@ -46,11 +46,11 @@ function install(gamesDir: string, id: string, o: Install = {}): string {
 
 const listing = (id: string, over: Partial<RackListing> = {}): RackListing => ({ id, title: "Tap Rush", players: { min: 2, max: 4 }, stakes: [5, 10, 25], hash: `0x${"ab".repeat(32)}`, ...over });
 
-function setup(listed?: () => readonly RackListing[]) {
+function setup(listed?: () => readonly RackListing[], seats?: number) {
   const gamesDir = path.join(tempDir("egb-library-"), "games");
   const logs: string[] = [];
   const store = listed ? { refresh: async () => {}, listings: listed } : null;
-  const library = createLibrary({ teamDir: TEAM_DIR, gamesDir, log: (text) => logs.push(text), store });
+  const library = createLibrary({ teamDir: TEAM_DIR, gamesDir, log: (text) => logs.push(text), store, ...(seats ? { seats } : {}) });
   let changes = 0;
   library.subscribe(() => changes++);
   return { gamesDir, library, logs, changes: () => changes };
@@ -168,6 +168,22 @@ describe("the library", () => {
     const { library } = setup(() => [listing("four-square", { players: { min: 3, max: 4 } })]);
     await library.rescan();
     expect(library.entry("four-square")?.info).toMatchObject({ ready: false, sealed: "it needs 3 players, and this Box seats 2" });
+  });
+
+  it("seats a store game by its listing and the Box's stations", async () => {
+    const rack = () => [listing("four-square", { players: { min: 3, max: 4 } }), listing("for-two", { players: { min: 2, max: 2 } }), listing("two-to-four")];
+    const four = setup(rack, 4).library;
+    await four.rescan();
+    expect(four.entry("four-square")?.info).toMatchObject({ ready: true, sealed: null, players: 4, minPlayers: 3 });
+    expect(four.entry("two-to-four")?.info).toMatchObject({ players: 4, minPlayers: 2 });
+    // A game for exactly two has nothing to choose.
+    expect(four.entry("for-two")?.info.players).toBe(2);
+    expect(four.entry("for-two")?.info.minPlayers).toBeUndefined();
+    const three = setup(rack, 3).library;
+    await three.rescan();
+    expect(three.entry("four-square")?.info).toMatchObject({ ready: true, players: 3 });
+    expect(three.entry("four-square")?.info.minPlayers).toBeUndefined();
+    expect(three.entry("two-to-four")?.info).toMatchObject({ players: 3, minPlayers: 2 });
   });
 
   it("gives an id to whoever had it first, and says so", async () => {

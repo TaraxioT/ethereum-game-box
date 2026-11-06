@@ -1,4 +1,4 @@
-// The lobby: a badge tapped on either station shows its card, read from chain: its player name, or (with none yet) a
+// The lobby: a badge tapped on any station shows its card, read from chain: its player name, or (with none yet) a
 // proposed name with ANOTHER and CLAIM (the Box vouches for the badge with its own key: a badge can't sign a claim);
 // its USDC and TOP UP 100 USDC. Beside it, the game's title (`champion.<game>.gamebox.eth`, its holder and streak)
 // and its open championship (the standings, the prize and a countdown to the close), read through the Universal
@@ -95,7 +95,7 @@ export function lobbyView(ctx: ViewContext): View {
     claim.toggleAttribute("disabled", !canClaim);
     topup.toggleAttribute("disabled", !lobby.badge || topping);
     plate.textContent = !lobby.badge
-      ? "TAP YOUR BADGE ON EITHER STATION"
+      ? `TAP YOUR BADGE ON ${state.stations.length > 2 ? "ANY" : "EITHER"} STATION`
       : claiming
         ? "CLAIMING YOUR NAME ON SEPOLIA…"
         : topping

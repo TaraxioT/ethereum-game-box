@@ -1,6 +1,6 @@
 // The core's ports: everything the phase machine needs from the world. The core has no DOM and no Node APIs and reads
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
-import type { Seat, StationView, Transcript, BuiltEvent, LogEntry, Outcome, TapNeed } from "@egb/sdk";
+import type { DuelSeat, Seat, StationView, Transcript, BuiltEvent, LogEntry, Outcome, TapNeed } from "@egb/sdk";
 import type { Badge, Board, GameId, GameInfo, Judged, PlayerCard, TxStep } from "./types.ts";
 
 /** An opaque timer handle. */
@@ -20,6 +20,8 @@ export interface StationsPort {
   show(seat: Seat, view: StationView): void;
   /** `ok`: one short buzz (an accepted tap). `no`: two short (a refused one). */
   buzz(seat: Seat, kind: "ok" | "no"): void;
+  /** The seats that need a station now, each time that changes: a station on any other seat can cover a lost one. */
+  inUse(seats: readonly Seat[]): void;
 }
 
 /** What the next tap at a seat should ask of the badge. `none`: the tap means nothing now (still identified). */
@@ -70,11 +72,11 @@ export interface ChainTxUpdate {
 /** Hears a transaction's every step, up to `paid` or `failed`. */
 export type TxWatch = (update: ChainTxUpdate) => void;
 
-/** Both stakes of a match, for the pot. The game is the core's id; the port names it on chain. */
+/** Every stake of a team game's match, for the pot. The game is the core's id; the port names it on chain. */
 export interface StakeOrder {
   readonly round: number;
   readonly game: GameId;
-  readonly badges: readonly [`0x${string}`, `0x${string}`];
+  readonly badges: readonly `0x${string}`[];
   /** Whole USDC per seat. */
   readonly amount: number;
 }
@@ -83,8 +85,8 @@ export interface StakeOrder {
 export interface ResultOrder {
   readonly round: number;
   readonly game: GameId;
-  readonly badges: readonly [`0x${string}`, `0x${string}`];
-  readonly winner: 0 | 1 | null;
+  readonly badges: readonly `0x${string}`[];
+  readonly winner: DuelSeat | null;
 }
 
 /** A store match's stakes, for `StorePot`: the bundle's hash names the game. */
@@ -219,8 +221,8 @@ export interface RulesRunnerPort {
 /** Where finished matches go: the session log on the Pi, nowhere in the demo. */
 export interface MatchLog {
   record(transcript: Transcript): void;
-  /** How many counted results this pair of badges (either seat) has had since `since` (ms since the epoch). */
-  countedSince(badges: readonly [string, string], since: number): number;
+  /** How many counted results these badges (in any seats) have had together since `since` (ms since the epoch). */
+  countedSince(badges: readonly string[], since: number): number;
 }
 
 /**
