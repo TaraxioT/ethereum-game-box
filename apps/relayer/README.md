@@ -8,12 +8,12 @@ else. Live at **https://gamebox-relayer.mathew.workers.dev**.
 
 | Route | Takes | Checks before spending any gas | Sends |
 |---|---|---|---|
-| `POST /names/claim` | `{ label, badge, deadline, signature }` | the label rule; an unexpired deadline; the EIP-712 `ClaimName` signature recovers to `badge` (or ERC-1271 says yes); the badge has no name, the label is free and was never a Box; an `eth_call` of the exact call | `GameBoxNames.claimPlayer` |
+| `POST /names/claim` | `{ label, badge, deadline, signature, primaryName? }` | the label rule; an unexpired deadline; the EIP-712 `ClaimName` signature recovers to `badge` (or ERC-1271 says yes); the badge has no name, the label is free and was never a Box; an `eth_call` of the exact call. With `primaryName: { expiry, signature }`, also: the expiry is 1 to 60 minutes away, the badge's ERC-191 signature of `primaryNameMessage` recovers to it, and an `eth_call` of the registrar call | `GameBoxNames.claimPlayer`, then, once it is in a block, `DefaultReverseRegistrar.setNameForAddrWithSignature` under the same request id |
 | `POST /box/execute` | `{ account, target, value, data, nonce, deadline, r, s }` | the call is `PermissionedResolver.setText` of `lastSeen` or `game` on a `<box>.gamebox.eth` name; `account` is that Box's `BoxAccount` and `target` its resolver; the licence is live; the P-256 signature over `Execute` matches the Box's key; `eth_call` | `BoxAccount.execute` |
 | `POST /box/result` | `{ result, r, s }` | the P-256 signature over `Result` matches the Box's key from `GameBoxNames`; the round is new; `eth_call` | `BoxResults.submit` |
 | `POST /box/popup` | `{ label }` | the label rule; `popup-<label>` is not live; `eth_call` | `DemoLicences.openPopup` |
 | `POST /names/drip` | `{ badge }` | the badge holds a player name, never had a drip, and holds less than the drip | 0.0003 ETH to the badge |
-| `GET /tx/:id` | | | the request's progress: `signed`, `sent` (hash), `in-block` (block), `done` or `failed` (the revert by name) |
+| `GET /tx/:id` | | | the request's progress: `signed`, `sent` (hash), `in-block` (block), `done` or `failed` (the revert by name). A claim's primary-name transaction is its `primaryName` step; the request is `done` once that step has settled too |
 | `GET /health` | | | the wallet's address and balance (wei), the pending count and the head block |
 
 The request and response types are `@egb/shared/names` `api.ts`. A POST answers `202` with the request's `TxView`. A
@@ -27,7 +27,7 @@ a known Box; `409` taken, replayed or already pending; `422` the `eth_call` reve
 |---|---|
 | `src/index.ts` | The Worker: builds the routes' context from the environment |
 | `src/routes.ts` | The routes and CORS (`src/cors.ts`) |
-| `src/requests/` | One file per POST route: its checks, ending in the exact call and its gas limit |
+| `src/requests/` | One file per POST route: its checks, ending in the exact call and its gas limit. `primary-name.ts` is the claim's optional second call |
 | `src/request.ts` | What the routes share: the `eth_call`, the gas limits, the deadline check |
 | `src/verify.ts` | P-256 over the raw digest with a low `s`, and the badge's ECDSA or ERC-1271 signature |
 | `src/allowlist.ts` | The only calls a Box may have relayed through `execute` |

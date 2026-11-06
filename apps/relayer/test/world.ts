@@ -3,6 +3,7 @@
 import {
   boxAccountAbi,
   boxResultsAbi,
+  defaultReverseRegistrarAbi,
   demoLicencesAbi,
   gameBoxNamesAbi,
   permissionedRegistryAbi,
@@ -23,6 +24,7 @@ export const addresses: Addresses = {
   names: '0x00000000000000000000000000000000000000a1',
   results: '0x00000000000000000000000000000000000000a2',
   licences: '0x00000000000000000000000000000000000000a3',
+  reverseRegistrar: '0x00000000000000000000000000000000000000a5',
 };
 export const REGISTRY: Address = '0x00000000000000000000000000000000000000a4';
 export const BOX_ACCOUNT: Address = '0x00000000000000000000000000000000000000B0';
@@ -115,6 +117,9 @@ export class World {
       })
       .contract(addresses.licences, demoLicencesAbi as Abi, {
         openPopup: ([label]) => (fail('openPopup'), `popup-${label}`),
+      })
+      .contract(addresses.reverseRegistrar, defaultReverseRegistrarAbi as Abi, {
+        setNameForAddrWithSignature: () => fail('setNameForAddrWithSignature'),
       })
       .contract(BOX_ACCOUNT, boxAccountAbi as Abi, {
         execute: () => (fail('execute'), '0x'),
