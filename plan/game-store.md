@@ -200,15 +200,73 @@ Each step ends with tests, and step 1 can stop the plan.
 7. **Four seats.** The core, the settings, the stations and every screen.
 8. **Mainnet 0G.** Switch by configuration and play one match.
 
-## 12. Needed from the team
+## 12. Build detail
+
+Steps 2 to 4 need no 0G key. Step 2 comes first, then steps 3 and 4 can run side by side. Step 1 runs as soon as a key
+arrives, and steps 5 to 7 get their detail from its results.
+
+### Step 2: the bundle
+
+- **Where:** `packages/sdk/src/bundle/`, a new entry `@egb/sdk/bundle`. It runs unchanged on the Box, in a Worker and in
+  a browser.
+- **`read.ts`** starts from the `.game` prototype's reader, in worktree `wf_1c26fd3f-9a5-1`. It accepts one exact zip
+  shape and refuses everything else.
+- **`pack.ts`** is the only way to make that shape: sorted names, fixed fields and no timestamps. So `store:publish`
+  takes a folder, not a zip, and the same folder always gives the same hash. A zip made by another tool is refused.
+- **`format.ts`** holds the manifest's type, its checks and the limits: 16 MB a zip, 64 files, and `.html`, `.css`,
+  `.js`, `.png`, `.jpg`, `.webp`, `.svg`, `.woff2` and `.mp3` only.
+- **Tap Rush** is the sample, in `apps/store/sample/tap-rush/`, with instructions a test can check by hand.
+- **Tests:** the prototype's hostile zips (unsafe paths, overlaps, zip bombs), a changed byte, and packing twice to one
+  hash.
+
+### Step 3: the store
+
+- **Where:** `apps/store`, a Worker named `gamebox-store`, with an R2 bucket `gamebox-bundles`, on the relayer's
+  Cloudflare account. Containers and R2 both work on that account.
+- **Storage:** `bundles/<hash>.zip` and `listings/<hash>.json`, written only if absent, so nothing can be overwritten.
+  `/index.json` is built from the listings.
+- **Uploads:** `POST /bundles` needs the secret `STORE_PUBLISH_TOKEN`. It runs the reader, recomputes the hash and
+  refuses an id already taken by another hash. A new version needs a new id, such as `tap-rush-2`.
+- **Reads:** open to anyone. A zip is sent with `cache-control: immutable`.
+- **`pnpm store:publish <folder>`:** packs, uploads and prints the hash. It calls `list(hash)` once step 4 is deployed.
+- **Tests:** every refusal against an in-memory R2, then a publish and a download from the live Worker.
+
+### Step 4: the contract
+
+- **`StorePot`**, in `contracts/src/game/`, with its own EIP-712 domain, `Game Box Store Pots` v1, and `BoxCheck` for the
+  Box's signature.
+- **Messages:**
+  - `Stake(string box, bytes32 bundle, uint256 round, address[] players, uint256 amount, uint256 deadline)`
+  - `Verdict(string box, uint256 round, uint256[] payouts, bytes32 record, uint256 deadline)`
+  - `Void(string box, uint256 round, bytes32 record, uint256 deadline)`
+- **Roles:** `LISTER_ROLE` lists bundles. A verdict's signer must hold `VERIFIER_ROLE`, so an admin can replace the key.
+- **It refuses:** an unlisted bundle, fewer than 2 or more than 4 players, a repeated player, a pot that exists, payouts
+  of the wrong length or sum, a pot that isn't open, an expired deadline, and a wrong signer.
+- **Deploy:** `FakeUSDC` again as `StoreUSDC`, with the relayer as minter, then `StorePot`, then `setGameSpender`. The
+  deployer needs Sepolia ETH and sends with `--skip-simulation -g 150`, like the other scripts.
+- **Shared:** digests, ABIs and test vectors in `packages/shared/src/store/`.
+- **Relayer routes:** `/store/open`, `/store/settle`, `/store/void`, `/store/refund` and `/store/topup`, each in the
+  existing checked-then-sent pattern.
+- **Tests:** forge tests for each refusal, every payout shape from 2 to 4 players, and settle racing the refund; vectors
+  shared with TypeScript; and a test for every relayer refusal.
+
+### Noted for step 6
+
+- `FromFrame` accepts only `ready` and `error` today. It gains `event`, `station`, `buzz` and `end`, each capped.
+- Game events reach the server through the kiosk, so they need a new `ScreenCommand`.
+- `frameCsp` has no inline scripts, and an `index.html` will want them. A bundle gets its own policy, which still has
+  `connect-src 'none'` and the sandbox.
+- `GameInfo.kind` gains `store`, and Stake's tier plate gains `judged`.
+
+## 13. Needed from the team
 
 - A 0G testnet key from pc.testnet.0g.ai, and a mainnet key from pc.0g.ai before step 8.
 - A funded 0G wallet for Storage: the testnet faucet first, then real 0G.
-- A Cloudflare plan with Containers on the account that runs the relayer. Not checked yet.
 - A new verifier key, as a Worker secret.
+- A funded Sepolia deployer key in `.env`, for step 4.
 - `forge`: Foundry isn't on the main development Mac yet, so contract tests need it installed.
 
-## 13. Still to confirm
+## 14. Still to confirm
 
 These came up while writing the plan. Each has a default the build will use unless the team says otherwise.
 
@@ -219,9 +277,11 @@ These came up while writing the plan. Each has a default the build will use unle
 - **The one-chain rule:** `CLAUDE.md` says not to add other chains. 0G Storage needs transactions on 0G's chain, so
   the rule gets one exception: storage payments only, and no contracts there.
 - **The refund delay:** one hour, as `DuelPot`.
+- **Player names:** `StorePot` doesn't need them, but the Box's stake flow keeps asking for one, as it does today.
+- **Icons:** store cartridges use the fallback icon in this pass.
 - **Bet on X and B17:** unchanged by this plan.
 
-## 14. Done when
+## 15. Done when
 
 - [ ] A team member publishes a game, and it appears in the rack on the Pi.
 - [ ] A changed zip is refused, and an unlisted hash can't be staked.
