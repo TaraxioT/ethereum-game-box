@@ -4,7 +4,9 @@
 // own resolver, and, once `gamebox.eth` points at our registry, through the Universal Resolver with stock viem. It
 // prints the Etherscan links and the gas, and spends real Sepolia ETH from the relayer (about 0.02 ETH at 2 gwei).
 //
-// Needs SEPOLIA_RPC_URL (and for LIVE_DEV, DEMO_BOX_P256_KEY, AGENT_P256_KEY and the `sepolia-deployer` keystore).
+// Needs SEPOLIA_RPC_URL. LIVE_DEV also needs the `sepolia-deployer` keystore, and DEMO_BOX_P256_KEY and AGENT_P256_KEY in
+// the environment: those keys live only as the demo Box Worker's secrets, so a local run uses test keys of its own.
+// The heartbeat and result steps need mumbai-01 registered, and the result step needs bot.gamebox.eth claimed.
 
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
