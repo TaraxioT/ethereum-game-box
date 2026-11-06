@@ -158,7 +158,7 @@ stats for store games, and any game fee.</p>
 </tr>
 <tr>
 <td>Which 0G</td>
-<td>Testnet first, then mainnet by configuration, in Private mode.</td>
+<td>Mainnet only, in Private mode. Testnet is unavailable, and the account holds 1 USD, so tests use a fake.</td>
 </tr>
 <tr>
 <td>Where the keys live</td>
@@ -211,9 +211,12 @@ stats for store games, and any game fee.</p>
 <h2><span class="n">03</span>What this does and doesn't prove</h2>
 <p>Say this plainly on the site and in the demo.</p>
 <ul>
-<li><strong>0G proves the model.</strong> In Private mode each turn runs in an attested enclave, and the Worker refuses any reply
-that isn&#39;t <code>tee_verified</code>. Say &quot;each turn passed an attested enclave&quot;.</li>
-<li><strong>0G doesn&#39;t prove the prompt.</strong> Its signature covers the reply, and its docs don&#39;t say it covers the request. No
+<li><strong>0G proves an enclave handled each turn.</strong> In Private mode each turn runs in an attested enclave. Mainnet&#39;s replies
+carry no <code>tee_verified</code> field, so the Worker checks each turn itself: the enclave&#39;s signature for that chat must
+recover to the key 0G&#39;s serving contract lists for the provider. It refuses any reply that fails. Say &quot;each turn
+passed an attested enclave&quot;.</li>
+<li><strong>0G doesn&#39;t prove the prompt or the reply.</strong> The signed text is two hashes of ciphertext, which nobody outside the
+enclave can recompute, so the signature binds neither the prompt nor the reply&#39;s text to that chat. No
 contract can check that a verdict came from the real log.</li>
 <li><strong>The Worker and the container aren&#39;t enclaves.</strong> Whoever runs them could feed the agent a false log or sign a false
 verdict. The verifier key is trusted, and the contract limits the damage: it pays only the players the Box named,
@@ -302,7 +305,7 @@ through the relayer. <code>StorePot</code> pays each player their share. The Box
 <p><strong>On failure:</strong> one retry on a fresh container. If that fails too, the Worker signs a refund and each stake goes back
 to the address it came from. If the verifier never answers at all, anyone can call the refund after a delay, and the
 Box&#39;s sweep does so.</p>
-<p>A failure is any of: a timeout, 0G unreachable, a reply that isn&#39;t <code>tee_verified</code>, an agent that says it can&#39;t judge,
+<p>A failure is any of: a timeout, 0G unreachable, a reply that fails the TEE check, an agent that says it can&#39;t judge,
 or a verdict that fails the Worker&#39;s checks.</p>
 </section>
 
@@ -424,15 +427,16 @@ Join, Stake and Result draw two sides. This pass widens all of it to four.</p>
 <h2><span class="n">11</span>Steps</h2>
 <p>Each step ends with tests, and step 1 can stop the plan.</p>
 <ol>
-<li><strong>Prove 0G.</strong> On testnet: is there a private model, do tool calls work, and does <code>verify_tee</code> come back? Does the
-0G Storage SDK run in a Worker? If not, a second container with no agent does the upload.</li>
+<li><strong>Prove 0G.</strong> On mainnet: is there a private model, do tool calls work, and does <code>verify_tee</code> come back? Does the
+0G Storage SDK run in a Worker? Done: tool calls work, <code>tee_verified</code> doesn&#39;t come back so the Worker checks the
+enclave&#39;s signature itself, and the SDK runs in the Worker with a <code>fetch</code> transport, so no second container.</li>
 <li><strong>The bundle.</strong> The format, the reader and a sample game, Tap Rush.</li>
 <li><strong>The store.</strong> The Worker, R2, <code>store:publish</code> and a deploy.</li>
 <li><strong>The contract.</strong> <code>StorePot</code>, its forge tests, Store USDC, the deploy and the relayer&#39;s routes.</li>
-<li><strong>The verifier.</strong> The Worker, the container, the agent and the failure paths, against a fake 0G and then testnet.</li>
+<li><strong>The verifier.</strong> The Worker, the container, the agent and the failure paths, against a fake 0G.</li>
 <li><strong>The Box, two seats.</strong> The library, the frame&#39;s powers, the log and the chain. A full staked match on the Pi.</li>
 <li><strong>Four seats.</strong> The core, the settings, the stations and every screen.</li>
-<li><strong>Mainnet 0G.</strong> Switch by configuration and play one match.</li>
+<li><strong>Mainnet 0G.</strong> Deploy with the real key and play one match.</li>
 </ol>
 </section>
 
@@ -502,8 +506,8 @@ shared with TypeScript; and a test for every relayer refusal.</li>
 <section id="s13">
 <h2><span class="n">13</span>Needed from the team</h2>
 <ul>
-<li>A 0G testnet key from pc.testnet.0g.ai, and a mainnet key from pc.0g.ai before step 8.</li>
-<li>A funded 0G wallet for Storage: the testnet faucet first, then real 0G.</li>
+<li>A mainnet 0G key from pc.0g.ai before step 8.</li>
+<li>A wallet funded with real 0G, for Storage.</li>
 <li>A new verifier key, as a Worker secret.</li>
 <li>An admin address for <code>StorePot</code>, held apart from the relayer and the verifier key, as <code>STORE_ADMIN</code> for step 4.</li>
 <li>A funded Sepolia deployer key in <code>.env</code>, for step 4.</li>
@@ -538,7 +542,7 @@ the rule gets one exception: storage payments only, and no contracts there.</li>
 <li><input disabled="" type="checkbox"> Killing the verifier mid-run retries once, then refunds each stake to its address.</li>
 <li><input disabled="" type="checkbox"> A forged verdict, one that doesn&#39;t add up, and one from a wrong key are all refused.</li>
 <li><input disabled="" type="checkbox"> With the verifier down, the refund works after the delay.</li>
-<li><input disabled="" type="checkbox"> Every model turn is <code>tee_verified</code>, on mainnet 0G.</li>
+<li><input disabled="" type="checkbox"> Every model turn passes the TEE check, on mainnet 0G.</li>
 <li><input disabled="" type="checkbox"> The audit record is on 0G Storage, and its hash matches the chain.</li>
 <li><input disabled="" type="checkbox"> The container has no secrets and can&#39;t reach the internet, proved by a test run from its shell.</li>
 <li><input disabled="" type="checkbox"> <code>pnpm typecheck</code>, the tests and <code>pnpm contracts:test</code> pass.</li>

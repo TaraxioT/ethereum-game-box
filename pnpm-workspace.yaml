@@ -3,4 +3,7 @@ packages:
   - apps/verifier/container
   - packages/*
 allowBuilds:
+  bufferutil: false
+  es5-ext: false
   esbuild: true
+  utf-8-validate: false
