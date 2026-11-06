@@ -1,11 +1,11 @@
 // What the test page reads from the Box server's routes: the parts of each reply it draws. The server's replies
 // satisfy these (server/api.ts, server/taps-api.ts), so the two can't drift apart. No DOM and no Node here.
-import type { BoxState, Badge } from "../core/types.ts";
+import type { BoxState, Badge, Seat } from "../core/types.ts";
 import type { TapPlan } from "../core/ports.ts";
 
 export interface StationRow {
   readonly st: string;
-  readonly seat: 0 | 1 | null;
+  readonly seat: Seat | null;
   readonly up: boolean;
   readonly rssi: number | null;
   /** The last ping's round trip, µs. */
@@ -27,7 +27,7 @@ export interface RosterRow {
 export interface TapsReply {
   readonly receiver: "serial" | "auto" | "fake" | "none";
   /** Station ids by seat, as they linked (empty: no station has that seat). */
-  readonly stations: readonly [string, string];
+  readonly stations: readonly string[];
   readonly status: {
     readonly receiver: { readonly open: boolean; readonly path: string | null; readonly lastError: string | null };
     readonly stations: readonly StationRow[];

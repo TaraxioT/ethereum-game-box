@@ -4,9 +4,10 @@
 // Box's clock. Commands from a screen go to the core.
 import type http from "node:http";
 import type { Duplex } from "node:stream";
+import { LOG_LIMITS, PLAYER_LIMITS, SMALL_CHARS, printable, utf8Bytes } from "@egb/sdk";
 import { WebSocketServer, type WebSocket } from "ws";
 import { labelProblem } from "@egb/shared/names";
-import type { BoxEvent, BoxLink, BoxState, ScreenCommand } from "../core/types.ts";
+import type { BoxEvent, BoxLink, BoxState, FrameWord, ScreenCommand } from "../core/types.ts";
 import { LINK_COALESCE_MS, LINK_PATH, STATE_ONLY, type LinkDown } from "../core/wire.ts";
 import { coalesce } from "./coalesce.ts";
 import { loopbackHost, sameOrigin } from "./http.ts";
@@ -15,8 +16,10 @@ import { loopbackHost, sameOrigin } from "./http.ts";
 const MAX_BUFFERED = 1024 * 1024;
 /** Each socket is pinged this often, and dropped if it didn't answer the last ping. */
 const PING_MS = 15_000;
-/** The screen sends only small commands. */
+/** The screen sends only small commands: the largest is a store game's event, at most a KB of data. */
 const MAX_COMMAND = 4 * 1024;
+/** A game event's name, as the kiosk's gate lets it through. */
+const EVENT_NAME = new RegExp(`^[\\x20-\\x7e]{1,${LOG_LIMITS.eventName}}$`);
 
 export interface ScreenLink {
   /** Screens connected now. */
@@ -26,6 +29,30 @@ export interface ScreenLink {
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function isSeatNumber(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) < PLAYER_LIMITS.max;
+}
+
+/** A store game's word as the log can take it, or null. The kiosk's gate holds the same line, and the rates. */
+function parseFrameWord(value: unknown): FrameWord | null {
+  if (typeof value !== "object" || value === null) return null;
+  const word = value as Record<string, unknown>;
+  switch (word.t) {
+    case "end":
+      return word.why === "game" || word.why === "lost" ? { t: "end", why: word.why } : null;
+    case "buzz":
+      return isSeatNumber(word.seat) ? { t: "buzz", seat: word.seat } : null;
+    case "station":
+      return isSeatNumber(word.seat) && typeof word.text === "string" ? { t: "station", seat: word.seat, text: printable(word.text, SMALL_CHARS) } : null;
+    case "event": {
+      if (typeof word.name !== "string" || !EVENT_NAME.test(word.name) || word.data === undefined) return null;
+      return utf8Bytes(JSON.stringify(word.data)) <= LOG_LIMITS.eventDataBytes ? { t: "event", name: word.name, data: word.data } : null;
+    }
+    default:
+      return null;
+  }
 }
 
 /** A screen command from a message, or null when it isn't one. */
@@ -44,6 +71,7 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "booted":
     case "start":
     case "play":
+    case "begin":
     case "back":
     case "rematch":
     case "home":
@@ -68,6 +96,10 @@ export function parseCommand(data: string): ScreenCommand | null {
       return isNumber(c.amount) ? { type: "stake", amount: c.amount } : null;
     case "play-for":
       return c.target === "title" || c.target === "cup" ? { type: "play-for", target: c.target } : null;
+    case "frame": {
+      const word = parseFrameWord(c.word);
+      return word ? { type: "frame", word } : null;
+    }
     default:
       return null;
   }

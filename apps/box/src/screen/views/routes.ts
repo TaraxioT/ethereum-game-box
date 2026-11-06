@@ -9,15 +9,21 @@ import { joinView } from "./join.ts";
 import { stakeView } from "./stake.ts";
 import { resultView } from "./result.ts";
 import { refundView } from "./refund.ts";
+import { judgingView } from "./judging.ts";
 import { lobbyView } from "./lobby.ts";
 import { hallView } from "./hall.ts";
 import { builderView } from "./builder.ts";
+import { bundleFrameView } from "../frame/bundle-view.ts";
+import { storeMatch, storePowers } from "../frame/bundle-feed.ts";
 import { frameView } from "../frame/view.ts";
 import { builtMatch } from "../frame/feed.ts";
 import { isTeamGame } from "../../core/catalogue.ts";
+import { allSigned } from "../../core/seats.ts";
 
 /** A built game's screen: its own, in the sandboxed frame. */
 const builtScreen = frameView(builtMatch);
+/** A store game's screen: its bundle's page, in the same frame, behind the kiosk's gate. */
+const storeScreen = bundleFrameView(storeMatch, storePowers);
 
 /** A team game's screen, from the stakes going in to the end of its match. Every match passes through Stake or Home
  * before the next, so the key changes between matches. Stock Duel draws its own top band (players, score, pot); Quick
@@ -39,18 +45,20 @@ export const routes: Routes = (state) => {
     case "join":
       return { key: "join", pose: "page", view: joinView };
     case "stake": {
-      // Both signed for a team game: its stakes are going into the pot, and the game's own screen shows the wait (the
+      // Everyone signed for a team game: its stakes are going into the pot, and the game's own screen shows the wait (the
       // gunslingers pace out, the market's pre-open). The key is the one the match will play under, so the same
       // screen carries on into it without a move.
       const focus = state.focus;
-      if (isTeamGame(focus) && state.seats.every((s) => s.signed)) return teamRoute(focus);
+      if (isTeamGame(focus) && allSigned(state.seats)) return teamRoute(focus);
       return { key: "stake", pose: "page", view: stakeView };
     }
     case "playing": {
       const game = state.match?.play.game;
       if (game === "quick-draw" || game === "stock-duel") return teamRoute(game);
-      return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: builtScreen };
+      return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: game === "store" ? storeScreen : builtScreen };
     }
+    case "judging":
+      return { key: "judging", pose: "page", view: judgingView };
     case "result":
       return { key: "result", pose: "page", view: resultView };
     case "refund":

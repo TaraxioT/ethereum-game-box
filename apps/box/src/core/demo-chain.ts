@@ -3,7 +3,7 @@
 // PAY_MS after it. No hashes: nothing here is on Sepolia, and the screen shows none. The Box itself runs the real port
 // (`src/chain/`).
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Board, GameId, Leader, PlayerCard, PlayerRecord, Settlement } from "./types.ts";
+import type { Board, DuelSeat, GameId, Leader, PlayerCard, PlayerRecord, Settlement } from "./types.ts";
 import { NO_RECORD, counted, recordText } from "./stats.ts";
 import { BLOCK_MS, TOPUP_USDC } from "./core.ts";
 import { chainLabel } from "./catalogue.ts";
@@ -22,7 +22,7 @@ const FIRST_BLOCK = 12_065_134;
 type Address = `0x${string}`;
 
 interface Pot {
-  readonly badges: readonly [Address, Address];
+  readonly badges: readonly Address[];
   readonly amount: number;
 }
 
@@ -33,6 +33,13 @@ export interface DemoChain extends ChainPort {
 }
 
 const short = (address: Address): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+/** The address a result names as its winner. */
+function winnerOf(order: ResultOrder, seat: DuelSeat): `0x${string}` {
+  const winner = order.badges[seat];
+  if (!winner) throw new Error(`round ${order.round} has no seat ${seat}`);
+  return winner;
+}
 
 export function createDemoChain(clock: Clock): DemoChain {
   const timers = createTimers(clock);
@@ -128,17 +135,17 @@ export function createDemoChain(clock: Clock): DemoChain {
       run(`settle ${order.round}`, watch, () => {
         const pot = pots.get(order.round);
         pots.delete(order.round);
-        if (pot) paid.set(order.round, order.winner === null ? pot.amount : pot.amount * 2);
+        if (pot) paid.set(order.round, order.winner === null ? pot.amount : pot.amount * pot.badges.length);
         if (pot && order.winner === null) for (const address of pot.badges) credit(address, pot.amount);
         const label = chainLabel(order.game) ?? order.game;
         if (order.winner === null) {
           for (const address of order.badges) score(address, "draw");
           return;
         }
-        const winner = order.badges[order.winner];
+        const winner = winnerOf(order, order.winner);
         score(winner, "win");
-        score(order.badges[order.winner === 0 ? 1 : 0], "loss");
-        if (pot) credit(winner, pot.amount * 2);
+        for (const address of order.badges) if (address !== winner) score(address, "loss");
+        if (pot) credit(winner, pot.amount * pot.badges.length);
         const title = titles.get(label);
         const held = title && title.holder === winner && title.expires > clock.now();
         titles.set(label, { holder: winner, streak: held ? title.streak + 1 : 1, expires: clock.now() + (TITLE_TERM_MS[label] ?? 0) });
@@ -165,14 +172,14 @@ export function createDemoChain(clock: Clock): DemoChain {
     },
     outcome(order: ResultOrder): Promise<Settlement> {
       const amount = paid.get(order.round) ?? null;
-      const stats = [recordOf(order.badges[0]), recordOf(order.badges[1])] as const;
+      const stats = order.badges.map(recordOf);
       const statsLines = order.badges.flatMap((address, i) => {
         const r = stats[i];
         return r ? [`${nameOf(address)} stats: ${recordText(r)}`] : [];
       });
       const label = chainLabel(order.game) ?? order.game;
       const title = order.winner === null ? undefined : titles.get(label);
-      const winner = order.winner === null ? null : order.badges[order.winner];
+      const winner = order.winner === null ? null : winnerOf(order, order.winner);
       const holds = winner !== null && title?.holder === winner ? { name: `champion.${label}.gamebox.eth`, streak: title.streak } : null;
       const lines =
         winner === null
@@ -184,7 +191,7 @@ export function createDemoChain(clock: Clock): DemoChain {
       const named = (address: Address): string | null => names.get(address) ?? null;
       return Promise.resolve({
         lines: [...lines, ...statsLines],
-        names: [named(order.badges[0]), named(order.badges[1])],
+        names: order.badges.map(named),
         paid: amount,
         title: holds,
         cup: null,

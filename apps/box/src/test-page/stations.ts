@@ -1,5 +1,6 @@
 // The Stations tab: each station's link, signal, ping, reader, the chip on it and the screen it shows; Buzz; the press
 // round trip; and the bench.
+import { SEATS, type Seat } from "@egb/sdk";
 import type { BenchReply, PressReply, StationRow, TapsReply } from "./wire.ts";
 import { button, h, ms, post, rows, show } from "./dom.ts";
 
@@ -14,7 +15,7 @@ function screenText(row: StationRow): string {
   return `${row.screen.payload.replace(/\n/g, "  ·  ")}${row.screen.acked ? "" : "  (not acked)"}`;
 }
 
-function stationCard(seat: 0 | 1): { el: HTMLElement; update(row: StationRow | undefined, st: string): void } {
+function stationCard(seat: Seat): { el: HTMLElement; update(row: StationRow | undefined, st: string): void } {
   const fields = ["Station", "Link", "RSSI", "Ping", "Reader", "Chip", "Screen"] as const;
   const values = Object.fromEntries(fields.map((f) => [f, h("dd")])) as Record<(typeof fields)[number], HTMLElement>;
   const out = h("output", "result");
@@ -43,7 +44,7 @@ function stationCard(seat: 0 | 1): { el: HTMLElement; update(row: StationRow | u
 }
 
 export function stationsTab(): Tab {
-  const cards = [stationCard(0), stationCard(1)] as const;
+  const cards = SEATS.map(stationCard);
   const receiver = h("p", "status");
   const pressOut = h("output", "result");
   const press = button("Press round trip", () =>
@@ -74,7 +75,7 @@ export function stationsTab(): Tab {
     "div",
     "tab",
     receiver,
-    h("div", "cards", cards[0].el, cards[1].el),
+    h("div", "cards", ...cards.map((card) => card.el)),
     h("section", "card wide", h("h2", "", "Press"), h("div", "row", press), pressOut),
     h("section", "card wide", h("h2", "", "Bench"), h("div", "row", h("label", "", "Samples ", count), bench), benchOut, table),
   );
@@ -94,7 +95,12 @@ export function stationsTab(): Tab {
           (counts ? ` · taps ${counts.touch} touched, ${counts.done} done, ${fails} failed, ${status.running} running` : "");
         receiver.className = rx.open ? "status" : "status bad";
       }
-      taps.stations.forEach((st, seat) => cards[seat as 0 | 1].update(status?.stations.find((s) => s.st === st), st));
+      cards.forEach((card, seat) => {
+        const st = taps.stations[seat];
+        // A card for each seat this Box has.
+        card.el.hidden = st === undefined;
+        if (st !== undefined) card.update(status?.stations.find((s) => s.st === st), st);
+      });
     },
   };
 }

@@ -13,12 +13,15 @@
     "build:box": "VITE_EGB_MODE=box vite build",
     "preview": "vite preview",
     "start": "node src/server/main.ts",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json && tsc -p tsconfig.server.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json && tsc -p tsconfig.server.json && tsc -p tsconfig.relayer.json",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261015.1",
+    "@egb/relayer": "workspace:*",
     "@types/node": "26.6.6",
     "@types/ws": "8.18.2",
+    "happy-dom": "20.14.6",
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.1.0"

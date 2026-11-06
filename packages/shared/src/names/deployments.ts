@@ -46,6 +46,8 @@ export type ContractName =
   | 'DuelPot'
   | 'Championships'
   | 'BoxSeats'
+  | 'StoreUSDC'
+  | 'StorePot'
   | 'BoxLease'
   | 'GBX'
   | (string & {});

@@ -1,5 +1,5 @@
 // Quick Draw's state and events. The rules (rules.ts) are pure: time and seeds arrive in events.
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 
 /**
  * `count`: 3-2-1 before a standoff (taps change nothing). `wait`: the sign reads WAIT…, decoys may show, a tap is a
@@ -40,9 +40,9 @@ export interface QuickDrawState {
   /** A chip that touched a seat's reader and is still being read (who it is isn't known yet): its touch time. */
   readonly pending: readonly [number | null, number | null];
   /** When phase is `round`: who took the round (null: nobody). When `done`: who took the match (null: a draw). */
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
   /** Who took the last standoff, from `round` on (null: nobody, or none decided yet). */
-  readonly took: Seat | null;
+  readonly took: DuelSeat | null;
   /** How the last standoff ended, from `round` on; null before. */
   readonly reason: QuickDrawReason | null;
   /** When the last standoff was decided, from `round` on; null before. */
@@ -56,8 +56,8 @@ export interface QuickDrawState {
 export type QuickDrawEvent =
   | { readonly type: "tick"; readonly now: number }
   /** A chip touched a seat's reader; whose it is comes later (a `tap`, or a `release`). */
-  | { readonly type: "touch"; readonly seat: Seat; readonly at: number; readonly now: number }
+  | { readonly type: "touch"; readonly seat: DuelSeat; readonly at: number; readonly now: number }
   /** The seated player's chip touched a seat's reader at `at`. */
-  | { readonly type: "tap"; readonly seat: Seat; readonly at: number; readonly now: number }
+  | { readonly type: "tap"; readonly seat: DuelSeat; readonly at: number; readonly now: number }
   /** The touch at a seat doesn't count: it wasn't the seated player's chip, or it couldn't be read. */
-  | { readonly type: "release"; readonly seat: Seat; readonly now: number };
+  | { readonly type: "release"; readonly seat: DuelSeat; readonly now: number };

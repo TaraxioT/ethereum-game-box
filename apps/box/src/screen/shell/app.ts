@@ -1,10 +1,10 @@
 // The app: the screen area (the whole window), the stage scaled into it, the machine on the stage and the router in
 // the machine's view layer. It feeds every Box state change to both, rebuilds the stage when the window turns
 // between landscape and portrait, and runs the boot. In Demo mode the screen also stands in for the tap stations:
-// touching a player's frame taps that seat, and so does touching their half of the screen in a game.
+// touching a player's frame taps that seat, and so does touching their part of the screen in a game.
 import type { Badge, BoxLink, Seat } from "../../core/types.ts";
 import type { Sound, ViewContext } from "../views/view.ts";
-import { layoutForArea, type Layout } from "./layout.ts";
+import { layoutForArea, OVERLAY_FOOT, seatAt, type Layout } from "./layout.ts";
 import { applyFit, createStage, fit, type Fit } from "./stage.ts";
 import { createMachine, type MachineView } from "./machine.ts";
 import { createRouter, type Router, type Routes } from "./router.ts";
@@ -12,6 +12,7 @@ import { boot } from "./boot.ts";
 import { calm, el, play } from "./dom.ts";
 import { musicFor, soundsFor } from "../sound/event-sounds.ts";
 import { bindBoardHold } from "../sound/board.ts";
+import { SEAT_KEYS } from "../demo/keys.ts";
 
 export interface AppOptions {
   readonly link: BoxLink;
@@ -22,9 +23,6 @@ export interface AppOptions {
   /** Demo mode: whether a badge is the bot's (its port wears a BOT tag). */
   readonly isBot?: (badge: Badge) => boolean;
 }
-
-/** In a game, a touch below the overlay (stage px) taps the seat whose half it lands in. */
-const OVERLAY_FOOT = { landscape: 130, portrait: 150 } as const;
 
 export function startApp(host: HTMLElement, options: AppOptions): void {
   const { link, sound, routes } = options;
@@ -48,7 +46,7 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
     scale = s;
     stage = createStage(next);
     machine = createMachine(next, s, options.isBot ? { isBot: options.isBot } : {});
-    if (options.onSeatTap) machine.parts.ports.forEach((port, i) => port.setAttribute("key", i === 0 ? "A" : "L"));
+    if (options.onSeatTap) machine.parts.ports.forEach((port, seat) => port.setAttribute("key", SEAT_KEYS[seat] ?? ""));
     stage.append(machine.root);
     area.append(stage);
     const ctx: ViewContext = { link, machine, sound, layout: next, calm: calm() };
@@ -83,7 +81,7 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
       const x = (e.clientX - box.left - placed.x) / placed.scale;
       const y = (e.clientY - box.top - placed.y) / placed.scale;
       if (y > OVERLAY_FOOT[layout.orientation]) {
-        seat = x < layout.width / 2 ? 0 : 1;
+        seat = seatAt(layout, link.state().seats.length, x, y);
         ripple(stage, seat, x, y);
       }
     }
@@ -123,7 +121,7 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
   }
 }
 
-/** A ring of the seat's light swelling out from the touch and fading: the half-screen tap landed. */
+/** A ring of the seat's light swelling out from the touch and fading: the tap on the seat's part of the screen landed. */
 function ripple(stage: HTMLElement, seat: Seat, x: number, y: number): void {
   const ring = el("i", `tap-ripple seat-${seat}`);
   ring.style.left = `${x - 60}px`;

@@ -68,6 +68,15 @@ describe('POST /usdc/topup', () => {
     expect(world.chain.sent).toHaveLength(1);
   });
 
+  it('allows 60 top-ups a day from one address, apart from /store/topup', async () => {
+    const world = new World();
+    await world.store.put('rate:topup:ip:203.0.113.7', Array.from({ length: 60 }, (_, i) => NOW - i));
+    const res = await world.post('/usdc/topup', { player: newBadge().address });
+    expect(res).toMatchObject({ status: 429, body: { error: 'rate limit: 60 top-ups per day from one address' } });
+    expect(world.chain.sent).toHaveLength(0);
+    expect((await world.post('/store/topup', { player: newBadge().address })).status).toBe(202);
+  });
+
   it('allows 300 top-ups a day in all', async () => {
     const world = new World();
     await world.store.put('rate:topup:all', Array.from({ length: 300 }, (_, i) => NOW - i));

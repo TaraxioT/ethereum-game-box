@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ethereum Game Box · Game store plan</title>
+<style>
+  :root {
+    --bg: #FAF9F5; --ink: #141413; --muted: #6F6E68; --line: #DEDCD2; --panel: #F0EEE6;
+    --accent: #3B5BDB; --accent-soft: #E3E8FB; --good: #2F7D4F;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1B1B1A; --ink: #EDEBE4; --muted: #A09E96; --line: #3A3936; --panel: #252523;
+            --accent: #8FA6FF; --accent-soft: #263055; --good: #7CC79A; }
+  }
+  * { box-sizing: border-box }
+  html { scroll-behavior: smooth }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 16px 120px }
+  header .kicker { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent) }
+  h1 { font: 500 44px/1.1 var(--serif); letter-spacing: -.015em; margin: 14px 0 12px }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 28px; max-width: 620px }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 48px }
+  nav a { font: 13px/1 var(--mono); color: var(--ink); text-decoration: none; padding: 8px 12px;
+          border: 1px solid var(--line); border-radius: 999px }
+  nav a:hover { border-color: var(--accent); color: var(--accent) }
+  section { border-top: 1px solid var(--line); padding-top: 36px; margin-top: 52px }
+  h2 { font: 500 30px/1.2 var(--serif); margin: 0 0 6px }
+  h2 .n { font: 600 13px/1 var(--mono); color: var(--accent); vertical-align: middle; margin-right: 10px }
+  h3 { font-size: 17px; margin: 30px 0 8px }
+  p, li { max-width: 680px }
+  ul, ol { padding-left: 22px }
+  li { margin: 4px 0 }
+  .sub { color: var(--muted); margin-top: 0 }
+  .callout { background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; margin: 22px 0 }
+  .callout p { margin: 0 }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 18px 0 }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px }
+  .card h4 { margin: 0 0 4px; font-size: 15px }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted) }
+  .steps { counter-reset: s; list-style: none; padding: 0 }
+  .steps li { counter-increment: s; position: relative; padding-left: 40px; margin: 12px 0 }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px;
+                      border-radius: 50%; background: var(--accent); color: var(--bg);
+                      font: 600 13px/26px var(--mono); text-align: center }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 15px }
+  th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 9px 10px; vertical-align: top }
+  th { font: 600 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+  .table-scroll { overflow-x: auto }
+  code { font: 13.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+         padding: 1px 5px; overflow-wrap: anywhere }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 20px 0; padding: 0; list-style: none }
+  .flow li { flex: 1 1 120px; max-width: none; margin: 0; background: var(--panel); border: 1px solid var(--line);
+             border-radius: 10px; padding: 10px 12px; font-size: 14px; position: relative }
+  .flow li strong { display: block; font-size: 15px }
+  .flow li span { color: var(--muted) }
+  .flow li:not(:last-child)::after { content: "→"; position: absolute; right: -6px; top: 50%;
+             transform: translate(50%, -50%); color: var(--accent); font-weight: 700; z-index: 1 }
+  footer { margin-top: 72px; color: var(--muted); font-size: 14px }
+  @media (max-width: 560px) {
+    h1 { font-size: 34px } .lede { font-size: 17px } h2 { font-size: 25px }
+    .flow { flex-direction: column; gap: 14px }
+    .flow li { flex: none }
+    .flow li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -7px;
+             transform: translate(-50%, 50%) }
+  }
+  li.todo, li.done { list-style: none; margin-left: -22px }
+  li.done { color: var(--good) }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto }
+  pre code { background: none; border: 0; padding: 0 }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">ETHGlobal Mumbai · Game store plan</div>
+  <h1>The game store and the AI verifier</h1>
+  <div class="lede"><p>The plan for games that live online instead of on the Box. A team-published zip holds a game&#39;s page and the rules an
+AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G&#39;s
+private inference reads the match&#39;s log and says who gets paid how much. If it can&#39;t, everyone gets their stake back.
+Built and tested on the branch <code>game-store</code>, on fakes and up to four seats: nothing is deployed, 0G hasn&#39;t judged a real
+match, and it hasn&#39;t run on the Pi or on real badges. <code>pnpm store:e2e</code> plays it end to end on one laptop: anvil, the real
+Workers on <code>wrangler dev</code>, a real container and the real Box in a real browser, with 0G, <code>GameBoxNames</code>, the Box&#39;s hardware
+key and the badges faked.</p></div>
+  <nav>
+    <a href="#s1">Goal</a>
+    <a href="#s2">Decisions</a>
+    <a href="#s3">What this does and doesn't prove</a>
+    <a href="#s4">How it fits together</a>
+    <a href="#s5">One match, end to end</a>
+    <a href="#s6">The bundle</a>
+    <a href="#s7">The store</a>
+    <a href="#s8">The verifier</a>
+    <a href="#s9">The contract</a>
+    <a href="#s10">Four players</a>
+    <a href="#s11">Steps</a>
+    <a href="#s12">Build detail</a>
+    <a href="#s13">Needed from the team</a>
+    <a href="#s14">Still to confirm</a>
+    <a href="#s15">Done when</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section id="s1">
+<h2><span class="n">01</span>Goal</h2>
+<ul>
+<li><strong>A mini game store:</strong> an online index of every game bundle. There are no updates: a Box downloads a game each time
+it runs.</li>
+<li><strong>A game bundle:</strong> a zip holding <code>index.html</code>, the game, and <code>manifest.json</code>, which describes it and carries the AI
+verifier&#39;s instructions.</li>
+<li><strong>A game verifier:</strong> a Docker container, started on demand, that runs an agent over the match&#39;s logs and the
+manifest&#39;s instructions. It ends with who gets paid how much. On any failure, the funds go back to the addresses
+they came from.</li>
+</ul>
+<p>Not in this plan: an in-Box store page, a store page on the public site, Forge-built games in the store, titles or
+stats for store games, and any game fee.</p>
+</section>
+
+<section id="s2">
+<h2><span class="n">02</span>Decisions</h2>
+<p>Each of these was asked and answered on 6 November.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>What is judged</td>
+<td>The Box&#39;s own tap log and the game&#39;s own events, labelled by source.</td>
+</tr>
+<tr>
+<td>What a verdict pays</td>
+<td>Any split of the pot between the match&#39;s players, adding up to exactly the pot.</td>
+</tr>
+<tr>
+<td>Who has the final say</td>
+<td>A verifier key. The Box can&#39;t change a verdict.</td>
+</tr>
+<tr>
+<td>Where the container runs</td>
+<td>Cloudflare Containers.</td>
+</tr>
+<tr>
+<td>Who publishes</td>
+<td>The team only.</td>
+</tr>
+<tr>
+<td>Where the store lives</td>
+<td>A Worker, with the zips in R2.</td>
+</tr>
+<tr>
+<td>What &quot;agent&quot; means</td>
+<td>A full agent with a shell, inside the container.</td>
+</tr>
+<tr>
+<td>Which 0G</td>
+<td>Mainnet only, in Private mode. Testnet is unavailable, and the account holds 1 USD, so tests use a fake.</td>
+</tr>
+<tr>
+<td>Where the keys live</td>
+<td>In the Worker. The container holds no secrets.</td>
+</tr>
+<tr>
+<td>When it fails</td>
+<td>One retry on a fresh container, then an instant refund.</td>
+</tr>
+<tr>
+<td>Bundle versions</td>
+<td>Immutable and pinned by hash. A new version is a new listing.</td>
+</tr>
+<tr>
+<td>On the Box</td>
+<td>Cartridges in the rack, beside team and built games.</td>
+</tr>
+<tr>
+<td>Players</td>
+<td>2 to 4, everywhere.</td>
+</tr>
+<tr>
+<td>Names and titles</td>
+<td>Money only: no titles, stats or championships.</td>
+</tr>
+<tr>
+<td>The audit record</td>
+<td>On 0G Storage, with its hash on chain.</td>
+</tr>
+<tr>
+<td>If the upload fails</td>
+<td>Pay anyway, and keep retrying the upload.</td>
+</tr>
+<tr>
+<td>The game&#39;s powers</td>
+<td>Taps in, station text and buzz out.</td>
+</tr>
+<tr>
+<td>The stake token</td>
+<td>A separate test token for store games.</td>
+</tr>
+<tr>
+<td>Agent code</td>
+<td>Our own small loop.</td>
+</tr>
+</tbody></table></div>
+</section>
+
+<section id="s3">
+<h2><span class="n">03</span>What this does and doesn't prove</h2>
+<p>Say this plainly on the site and in the demo.</p>
+<ul>
+<li><strong>0G proves an enclave handled each turn.</strong> In Private mode each turn runs in an attested enclave. Mainnet&#39;s replies
+carry no <code>tee_verified</code> field, so the Worker checks each turn itself: the enclave&#39;s signature for that chat must
+recover to the key 0G&#39;s serving contract lists for the provider. It refuses any reply that fails. Say &quot;each turn
+passed an attested enclave&quot;.</li>
+<li><strong>0G doesn&#39;t prove the prompt or the reply.</strong> The signed text is two hashes of ciphertext, which nobody outside the
+enclave can recompute, so the signature binds neither the prompt nor the reply&#39;s text to that chat. No
+contract can check that a verdict came from the real log.</li>
+<li><strong>The Worker and the container aren&#39;t enclaves.</strong> Whoever runs them could feed the agent a false log or sign a false
+verdict. The verifier key is trusted, and the contract limits the damage: it pays only the players the Box named,
+and only the exact pot.</li>
+<li><strong>The pot&#39;s admin is trusted as far as the verifier key.</strong> It can replace that key, so it could make itself a
+verifier. It is its own account, and the deploy takes the role away from the relayer&#39;s key. That key still licenses
+Boxes until the admin hand-over, so a leak of it could forge a log, but not sign a verdict.</li>
+<li><strong>The Box is trusted for taps and for who plays.</strong> It records the taps and signs the log, so a dishonest Box could
+forge one. It also names the players, and a badge signs nothing. So a dishonest Box could name a badge that never
+tapped, stake its whole balance and forge a log that pays the Box&#39;s own badge. It could also keep a balance locked,
+by opening a new pot each time one is refunded. <code>open</code> has no cap on a stake, and one wouldn&#39;t help: a Box can open
+pot after pot. <code>DuelPot</code> trusts a Box the same way. This is fine for a token with no value, when only the team
+licenses a Box and can suspend one. Real money would need the badges to sign.</li>
+<li><strong>A store game isn&#39;t Verified.</strong> That tier means the chain checks the result. Store games get a new tier, <code>judged</code>,
+shown on Stake before anyone stakes.</li>
+</ul>
+</section>
+
+<section id="s4">
+<h2><span class="n">04</span>How it fits together</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Where</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Bundle format</td>
+<td><code>packages/sdk</code></td>
+<td>Reads and checks a bundle, the manifest&#39;s types, and the frame&#39;s messages.</td>
+</tr>
+<tr>
+<td>Store</td>
+<td><code>apps/store</code> (new Worker, R2)</td>
+<td>Serves the index and the zips, and takes the team&#39;s uploads.</td>
+</tr>
+<tr>
+<td>Verifier</td>
+<td><code>apps/verifier</code> (new Worker, with its container)</td>
+<td>Takes a log, runs the agent, checks and signs the verdict, and holds every key.</td>
+</tr>
+<tr>
+<td><code>StorePot</code></td>
+<td><code>contracts/src/game</code></td>
+<td>Holds stakes for 2 to 4 players, and pays a signed verdict or refund.</td>
+</tr>
+<tr>
+<td>Store USDC</td>
+<td><code>deployments/sepolia.json</code></td>
+<td>A second deployment of <code>FakeUSDC</code>, with <code>StorePot</code> as its spender: the first one&#39;s spender is set for good to <code>DuelPot</code>.</td>
+</tr>
+<tr>
+<td>Relayer</td>
+<td><code>apps/relayer</code></td>
+<td>New routes that send the pot&#39;s open, verdict and refund, and top up Store USDC.</td>
+</tr>
+<tr>
+<td>The Box</td>
+<td><code>apps/box</code></td>
+<td>Lists, downloads and plays store games, records the log, and seats up to 4.</td>
+</tr>
+</tbody></table></div>
+</section>
+
+<section id="s5">
+<h2><span class="n">05</span>One match, end to end</h2>
+<ol>
+<li><strong>Pick.</strong> The rack shows store games from the index. If the index can&#39;t be reached, they don&#39;t appear, and team
+games play as usual.</li>
+<li><strong>Join.</strong> Two to four badges tap in, as many as the manifest allows.</li>
+<li><strong>Download.</strong> The Box fetches the zip into a temporary folder and checks its hash and shape. If that fails, the
+game is sealed and nothing is staked.</li>
+<li><strong>Stake.</strong> The Box signs a <code>Stake</code> naming the bundle&#39;s hash, the players and the amount. <code>StorePot</code> pulls Store USDC
+from each player.</li>
+<li><strong>Play.</strong> The game runs in the sandboxed frame. The Box records every tap and every event the game posts.</li>
+<li><strong>End.</strong> The game says it&#39;s over, or the manifest&#39;s time limit runs out. The Box signs the log and sends it to the
+verifier. The screen shows <code>JUDGING</code>.</li>
+<li><strong>Judge.</strong> The Worker checks the Box&#39;s signature and that the pot is open, and takes the instructions from the
+store by hash, never from the Box. It starts a container, and the agent works until it submits a verdict.</li>
+<li><strong>Pay.</strong> The Worker checks the verdict, builds the audit record, puts its hash in the signed verdict and sends it
+through the relayer. <code>StorePot</code> pays each player their share. The Box shows the split.</li>
+<li><strong>Keep.</strong> The Worker uploads the record to 0G Storage, and retries until it lands. The Box deletes the bundle.</li>
+</ol>
+<p><strong>On failure:</strong> one retry on a fresh container. If that fails too, the Worker signs a refund and each stake goes back
+to the address it came from. If the verifier never answers at all, anyone can call the refund after a delay, and the
+Box&#39;s sweep does so.</p>
+<p>A failure is any of: a timeout, 0G unreachable, a reply that fails the TEE check, an agent that says it can&#39;t judge,
+or a verdict that fails the Worker&#39;s checks.</p>
+</section>
+
+<section id="s6">
+<h2><span class="n">06</span>The bundle</h2>
+<p>A zip of <code>index.html</code>, <code>manifest.json</code> and any assets the page uses by relative path.</p>
+<pre><code class="language-json">{
+  &quot;format&quot;: 1,
+  &quot;id&quot;: &quot;tap-rush&quot;,
+  &quot;title&quot;: &quot;Tap Rush&quot;,
+  &quot;blurb&quot;: &quot;Most taps in ten seconds takes the pot.&quot;,
+  &quot;players&quot;: { &quot;min&quot;: 2, &quot;max&quot;: 4 },
+  &quot;minutes&quot;: 1,
+  &quot;stakes&quot;: [5, 10, 25],
+  &quot;taps&quot;: &quot;identify&quot;,
+  &quot;verifier&quot;: {
+    &quot;instructions&quot;: &quot;Count each player&#39;s accepted taps from the Box&#39;s log. Most taps wins the whole pot. On a tie, split it evenly between the tied players.&quot;
+  }
+}
+</code></pre>
+<ul>
+<li><strong>Checks on upload and on download:</strong> the same reader, which refuses unsafe paths, oversized files and zip tricks. It
+starts from the <code>.game</code> prototype&#39;s reader, which was tested against hostile zips.</li>
+<li><strong>The hash is the game&#39;s identity.</strong> It is the sha256 of the zip. The store never lets a listing change.</li>
+<li><strong>A bundle&#39;s code is untrusted.</strong> It runs only in the kiosk&#39;s sandboxed frame, under the Box&#39;s own CSP header with no
+network, and never in Node.</li>
+</ul>
+<h3>The game&#39;s powers</h3>
+<p>A small script the Box adds to the frame gives the game one object:</p>
+<ul>
+<li><strong>In:</strong> the players and each <code>tap</code> (seat, time and roll, when the game asks for rolls).</li>
+<li><strong>Out:</strong> <code>event(name, data)</code> for the log, <code>station(seat, text)</code> and <code>buzz(seat)</code>, cut to what a station shows and
+rate limited, and <code>end()</code>.</li>
+</ul>
+<p>A game has no say over money. Its <code>end()</code> only closes the match.</p>
+</section>
+
+<section id="s7">
+<h2><span class="n">07</span>The store</h2>
+<ul>
+<li><code>GET /index.json</code>: every listing: id, title, blurb, players, stakes, icon, hash and size.</li>
+<li><code>GET /bundles/&lt;hash&gt;.zip</code>: a zip, cached forever.</li>
+<li><code>POST /bundles</code>: an upload with the team&#39;s token. It runs the reader, stores the zip and adds the listing.</li>
+<li><code>pnpm store:publish &lt;folder&gt;</code>: zips a folder, uploads it and calls <code>StorePot</code>&#39;s <code>list(hash)</code>.</li>
+</ul>
+<p>An unlisted hash can&#39;t be staked: <code>StorePot</code> checks that the team listed it, so a Box can&#39;t stake on a game the team
+never read.</p>
+</section>
+
+<section id="s8">
+<h2><span class="n">08</span>The verifier</h2>
+<p><strong>The Worker</strong> is the only part with secrets: the verifier key, the 0G API key and the 0G Storage wallet.</p>
+<p><strong>The container</strong> has no secrets and no internet. <code>enableInternet = false</code>, and its one way out is a Cloudflare outbound
+handler back to the Worker. It starts on demand, one per match, and stops at the end.</p>
+<p><strong>The agent</strong> is our own small loop on the OpenAI format, with two tools: <code>shell</code> and <code>submit_verdict</code>. It gets the
+instructions and the log as files. It must end with <code>submit_verdict</code>, either as a split or as <code>cannot_judge</code>. Limits on
+turns and time end a run that wanders.</p>
+<p><strong>Every model call</strong> goes through the Worker&#39;s proxy, which sets <code>X-0G-Provider-Trust-Mode: private</code> and
+<code>verify_tee: true</code>, and fails the run on anything else. It records each turn, with its chat ID.</p>
+<p><strong>Text from a game can steer the agent.</strong> The log&#39;s game events are labelled as claims, and the prompt says to treat them
+as data. That helps but doesn&#39;t guarantee anything, so the design assumes a tricked agent. The most it can do is
+propose a bad split between the match&#39;s players, or fail the run. The team reads each game before listing it.</p>
+<p><strong>The audit record</strong> holds the log, the instructions, every turn with its chat ID, and the verdict. Its hash goes on
+chain with the verdict.</p>
+</section>
+
+<section id="s9">
+<h2><span class="n">09</span>The contract</h2>
+<p><code>StorePot</code> takes up to four players, and is separate from <code>DuelPot</code> and <code>BoxResults</code>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Call</th>
+<th>Signed by</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>list(hash)</code></td>
+<td>The lister key</td>
+<td>Lets a bundle be staked.</td>
+</tr>
+<tr>
+<td><code>open(stake)</code></td>
+<td>The Box&#39;s P-256 key</td>
+<td>Pulls <code>amount</code> from each player into a pot, keyed by Box and round.</td>
+</tr>
+<tr>
+<td><code>settle(verdict)</code></td>
+<td>The verifier key</td>
+<td>Pays <code>payouts[i]</code> to <code>players[i]</code>. Refuses unless the payouts add up to the pot.</td>
+</tr>
+<tr>
+<td><code>void(refund)</code></td>
+<td>The verifier key</td>
+<td>Sends each stake back at once.</td>
+</tr>
+<tr>
+<td><code>refund(box, round)</code></td>
+<td>Nobody</td>
+<td>The same, for anyone, after the delay.</td>
+</tr>
+</tbody></table></div>
+<p>A verdict names players only by position, so it has no way to pay anyone else. It also carries the audit record&#39;s hash.</p>
+</section>
+
+<section id="s10">
+<h2><span class="n">10</span>Four players</h2>
+<p><code>Seat</code> is <code>0 | 1 | 2 | 3</code>, <code>EGB_STATIONS</code> takes 2 to 4, a seat each, and Join, Stake, Result, Refund and the ports draw
+two, three or four. A station past the game&#39;s seats, or a seat left empty, says so and takes no tap. It stands by: if a
+seat in use loses its station, it takes over, so a third station is a two-player game&#39;s spare.</p>
+<ul>
+<li>Team games stay two-player. Their rules use <code>DuelSeat</code> and <code>other(seat)</code>, and a game&#39;s manifest sets its own limits.</li>
+<li>A store game seats its manifest&#39;s max, or the Box&#39;s stations if fewer. With every seat full Join moves on. With its
+min seated, someone can press START. A seat left empty sits the match out, and the pot, the log, the page and the
+split count players, not seats. The page also hears each player&#39;s seat at the Box, to name and colour them the same.</li>
+<li>The firmware already takes four stations (<code>MAX_STATIONS</code>). It forgets none until it restarts, so a fifth can&#39;t link
+before then.</li>
+<li>Refunds and results pay a list of players, not a pair.</li>
+</ul>
+</section>
+
+<section id="s11">
+<h2><span class="n">11</span>Steps</h2>
+<p>Each step ends with tests, and step 1 can stop the plan.</p>
+<ol>
+<li><strong>Prove 0G.</strong> On mainnet: is there a private model, do tool calls work, and does <code>verify_tee</code> come back? Does the
+0G Storage SDK run in a Worker? Done: tool calls work, <code>tee_verified</code> doesn&#39;t come back so the Worker checks the
+enclave&#39;s signature itself, and the SDK runs in the Worker with a <code>fetch</code> transport, so no second container.</li>
+<li><strong>The bundle.</strong> The format, the reader and a sample game, Tap Rush.</li>
+<li><strong>The store.</strong> The Worker, R2, <code>store:publish</code> and a deploy.</li>
+<li><strong>The contract.</strong> <code>StorePot</code>, its forge tests, Store USDC, the deploy and the relayer&#39;s routes.</li>
+<li><strong>The verifier.</strong> The Worker, the container, the agent and the failure paths, against a fake 0G.</li>
+<li><strong>The Box, two seats.</strong> The library, the frame&#39;s powers, the log and the chain. A full staked match on the Pi.</li>
+<li><strong>Four seats.</strong> The core, the settings, the stations and every screen. Done on the fake stations, and every screen
+rendered with 2, 3 and 4 seats in a real browser. Not yet played on the Pi with real badges.</li>
+<li><strong>Mainnet 0G.</strong> Deploy with the real key and play one match.</li>
+</ol>
+</section>
+
+<section id="s12">
+<h2><span class="n">12</span>Build detail</h2>
+<p>Steps 2 to 4 need no 0G key. Step 2 comes first, then steps 3 and 4 can run side by side. Step 1 runs as soon as a key
+arrives, and steps 5 to 7 get their detail from its results.</p>
+<h3>Step 2: the bundle</h3>
+<ul>
+<li><strong>Where:</strong> <code>packages/sdk/src/bundle/</code>, a new entry <code>@egb/sdk/bundle</code>. It runs unchanged on the Box, in a Worker and in
+a browser.</li>
+<li><strong><code>read.ts</code></strong> starts from the <code>.game</code> prototype&#39;s reader, in worktree <code>wf_1c26fd3f-9a5-1</code>. It accepts one exact zip
+shape and refuses everything else.</li>
+<li><strong><code>pack.ts</code></strong> is the only way to make that shape: sorted names, fixed fields and no timestamps. So <code>store:publish</code>
+takes a folder, not a zip, and the same folder always gives the same hash. A zip made by another tool is refused.</li>
+<li><strong><code>format.ts</code></strong> holds the manifest&#39;s type, its checks and the limits: 16 MB a zip, 64 files, and <code>.html</code>, <code>.css</code>,
+<code>.js</code>, <code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.svg</code>, <code>.woff2</code> and <code>.mp3</code> only.</li>
+<li><strong>Tap Rush</strong> is the sample, in <code>apps/store/sample/tap-rush/</code>, with instructions a test can check by hand.</li>
+<li><strong>Tests:</strong> the prototype&#39;s hostile zips (unsafe paths, overlaps, zip bombs), a changed byte, and packing twice to one
+hash.</li>
+</ul>
+<h3>Step 3: the store</h3>
+<ul>
+<li><strong>Where:</strong> <code>apps/store</code>, a Worker named <code>gamebox-store</code>, with an R2 bucket <code>gamebox-bundles</code>, on the relayer&#39;s
+Cloudflare account. Containers and R2 both work on that account.</li>
+<li><strong>Storage:</strong> <code>bundles/&lt;hash&gt;.zip</code> and <code>listings/&lt;hash&gt;.json</code>, written only if absent, so nothing can be overwritten.
+<code>/index.json</code> is built from the listings.</li>
+<li><strong>Uploads:</strong> <code>POST /bundles</code> needs the secret <code>STORE_PUBLISH_TOKEN</code>. It runs the reader, recomputes the hash and
+refuses an id already taken by another hash. A new version needs a new id, such as <code>tap-rush-2</code>.</li>
+<li><strong>Reads:</strong> open to anyone. A zip is sent with <code>cache-control: immutable</code>.</li>
+<li><strong><code>pnpm store:publish &lt;folder&gt;</code>:</strong> packs, uploads and prints the hash. It calls <code>list(hash)</code> once step 4 is deployed.</li>
+<li><strong>Tests:</strong> every refusal against an in-memory R2, then a publish and a download from the live Worker.</li>
+</ul>
+<h3>Step 4: the contract</h3>
+<ul>
+<li><strong><code>StorePot</code></strong>, in <code>contracts/src/game/</code>, with its own EIP-712 domain, <code>Game Box Store Pots</code> v1, and <code>BoxCheck</code> for the
+Box&#39;s signature.</li>
+<li><strong>Messages:</strong><ul>
+<li><code>Stake(string box, bytes32 bundle, uint256 round, address[] players, uint256 amount, uint256 deadline)</code></li>
+<li><code>Verdict(string box, uint256 round, uint256[] payouts, bytes32 record, uint256 deadline)</code></li>
+<li><code>Void(string box, uint256 round, bytes32 record, uint256 deadline)</code></li>
+</ul>
+</li>
+<li><strong>Roles:</strong> <code>LISTER_ROLE</code> lists bundles. A verdict&#39;s signer must hold <code>VERIFIER_ROLE</code>, so an admin can replace the key.
+The admin is its own account, apart from the relayer and the verifier key.</li>
+<li><strong>It refuses:</strong> an unlisted bundle, fewer than 2 or more than 4 players, a repeated player, a pot that exists, payouts
+of the wrong length or sum, a pot that isn&#39;t open, an expired deadline, and a wrong signer.</li>
+<li><strong>Deploy:</strong> <code>FakeUSDC</code> again as <code>StoreUSDC</code>, with the relayer as minter, then <code>StorePot</code>, then <code>setGameSpender</code>, and
+the pot&#39;s admin role goes from the deployer to <code>STORE_ADMIN</code>. The deployer needs Sepolia ETH and sends with
+<code>--skip-simulation -g 150</code>, like the other scripts.</li>
+<li><strong>Shared:</strong> digests, ABIs and test vectors in <code>packages/shared/src/store/</code>.</li>
+<li><strong>Relayer routes:</strong> <code>/store/open</code>, <code>/store/settle</code>, <code>/store/void</code>, <code>/store/refund</code> and <code>/store/topup</code>, each in the
+existing checked-then-sent pattern.</li>
+<li><strong>Tests:</strong> forge tests for each refusal, every payout shape from 2 to 4 players, and settle racing the refund; vectors
+shared with TypeScript; and a test for every relayer refusal.</li>
+</ul>
+<h3>Noted for step 6</h3>
+<ul>
+<li><code>FromFrame</code> accepts only <code>ready</code> and <code>error</code> today. It gains <code>event</code>, <code>station</code>, <code>buzz</code> and <code>end</code>, each capped.</li>
+<li>Game events reach the server through the kiosk, so they need a new <code>ScreenCommand</code>.</li>
+<li><code>frameCsp</code> has no inline scripts, and an <code>index.html</code> will want them. A bundle gets its own policy, which still has
+<code>connect-src &#39;none&#39;</code> and the sandbox.</li>
+<li><code>GameInfo.kind</code> gains <code>store</code>, and Stake&#39;s tier plate gains <code>judged</code>.</li>
+</ul>
+</section>
+
+<section id="s13">
+<h2><span class="n">13</span>Needed from the team</h2>
+<ul>
+<li>A mainnet 0G key from pc.0g.ai before step 8.</li>
+<li>A wallet funded with real 0G, for Storage.</li>
+<li>A new verifier key, as a Worker secret.</li>
+<li>An admin address for <code>StorePot</code>, held apart from the relayer and the verifier key, as <code>STORE_ADMIN</code> for step 4.</li>
+<li>A funded Sepolia deployer key in <code>.env</code>, for step 4.</li>
+<li><code>forge</code>: Foundry isn&#39;t on the main development Mac yet, so contract tests need it installed.</li>
+</ul>
+</section>
+
+<section id="s14">
+<h2><span class="n">14</span>Still to confirm</h2>
+<p>These came up while writing the plan. Each has a default the build will use unless the team says otherwise.</p>
+<ul>
+<li><strong>Team games:</strong> they stay two-player. &quot;2 to 4, everywhere&quot; means the Box and store games.</li>
+<li><strong>The tier&#39;s name:</strong> <code>judged</code>.</li>
+<li><strong>Who pays for 0G:</strong> the team, from one balance. Players pay nothing extra, and a Box can&#39;t run up the bill beyond
+one run per open pot.</li>
+<li><strong>The one-chain rule:</strong> <code>CLAUDE.md</code> says not to add other chains. 0G Storage needs transactions on 0G&#39;s chain, so
+the rule gets one exception: storage payments only, and no contracts there.</li>
+<li><strong>The refund delay:</strong> one hour, as <code>DuelPot</code>.</li>
+<li><strong>Player names:</strong> <code>StorePot</code> doesn&#39;t need them, but the Box&#39;s stake flow keeps asking for one, as it does today.</li>
+<li><strong>Icons:</strong> store cartridges use the fallback icon in this pass.</li>
+<li><strong>Bet on X and B17:</strong> unchanged by this plan.</li>
+</ul>
+</section>
+
+<section id="s15">
+<h2><span class="n">15</span>Done when</h2>
+<ul>
+<li><input disabled="" type="checkbox"> A team member publishes a game, and it appears in the rack on the Pi.</li>
+<li><input disabled="" type="checkbox"> A changed zip is refused, and an unlisted hash can&#39;t be staked.</li>
+<li><input disabled="" type="checkbox"> Four real badges on four stations stake and play a store game on the Pi.</li>
+<li><input disabled="" type="checkbox"> The agent&#39;s verdict pays a split on Sepolia, and the Box shows it.</li>
+<li><input disabled="" type="checkbox"> Killing the verifier mid-run retries once, then refunds each stake to its address.</li>
+<li><input disabled="" type="checkbox"> A forged verdict, one that doesn&#39;t add up, and one from a wrong key are all refused.</li>
+<li><input disabled="" type="checkbox"> With the verifier down, the refund works after the delay.</li>
+<li><input disabled="" type="checkbox"> Every model turn passes the TEE check, on mainnet 0G.</li>
+<li><input disabled="" type="checkbox"> The audit record is on 0G Storage, and its hash matches the chain.</li>
+<li><input disabled="" type="checkbox"> The container has no secrets and can&#39;t reach the internet, proved by a test run from its shell.</li>
+<li><input disabled="" type="checkbox"> <code>pnpm typecheck</code>, the tests and <code>pnpm contracts:test</code> pass.</li>
+</ul>
+</section>
+
+<section id="sources">
+<h2>Sources</h2>
+<ul>
+<li><a href="https://0g.ai/pc/page.md">0G Private Computer</a>: trust modes and endpoints.</li>
+<li><a href="https://docs.0g.ai/developer-hub/building-on-0g/compute-network/router/features/verifiable-execution">0G Verifiable Execution</a>: <code>verify_tee</code> and what is signed.</li>
+<li><a href="https://docs.0g.ai/developer-hub/building-on-0g/compute-network/router/overview">0G Router overview</a>: testnet.</li>
+<li><a href="https://docs.0g.ai/developer-hub/building-on-0g/storage/sdk">0G Storage SDK</a>: uploads.</li>
+<li><a href="https://developers.cloudflare.com/containers/platform-details/outbound-traffic/">Cloudflare Containers outbound traffic</a>: <code>enableInternet</code> and outbound handlers.</li>
+</ul>
+</section>
+
+<footer>Ethereum Game Box · ETHGlobal Mumbai 2026 · <a href="https://plans.georgekm.com/ethereum-game-box-2026-11-05/">Project plan</a></footer>
+</div>
+</body>
+</html>

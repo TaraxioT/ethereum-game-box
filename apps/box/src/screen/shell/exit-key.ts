@@ -1,6 +1,6 @@
 // EXIT, fixed to the window's bottom-left corner while a match runs (from its first moment to its outcome). A first
 // tap arms it for a few seconds and says what it does; a second calls the match off (`quit`): it ends as a draw, so
-// both stakes go back. Its pointer and key events never reach the stage.
+// the stakes go back. Its pointer and key events never reach the stage.
 import type { BoxLink, BoxState } from "../../core/types.ts";
 import type { Sound } from "../views/view.ts";
 import { el } from "./dom.ts";
@@ -8,7 +8,8 @@ import { el } from "./dom.ts";
 /** How long a first tap keeps EXIT armed. */
 const ARMED_MS = 4_000;
 
-const running = (state: BoxState): boolean => state.phase === "playing" && state.match !== null && state.match.outcome === null;
+// A store match has no EXIT: only the verifier's verdict or refund closes its pot.
+const running = (state: BoxState): boolean => state.phase === "playing" && state.match !== null && state.match.play.game !== "store" && state.match.outcome === null;
 
 export function mountExitKey(host: HTMLElement, link: BoxLink, sound: Sound): void {
   const key = el("button", "exit-key");
@@ -34,7 +35,7 @@ export function mountExitKey(host: HTMLElement, link: BoxLink, sound: Sound): vo
       sound.play("ui-select");
       key.classList.add("armed");
       label.textContent = "TAP AGAIN";
-      hint.textContent = link.state().match?.stake ? "to call it off · both stakes go back" : "to call it off";
+      hint.textContent = link.state().match?.stake ? "to call it off · the stakes go back" : "to call it off";
       armed = setTimeout(disarm, ARMED_MS);
       return;
     }

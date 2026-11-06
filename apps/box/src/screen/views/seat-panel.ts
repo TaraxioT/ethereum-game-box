@@ -1,10 +1,11 @@
-// A seat's panel on a page: a chamfered frame in the seat's colour round a socket of two rings in a dial of ticks, holding the badge's
-// LED blockie, the player's ENS name (`nova` bright, `.gamebox.eth` dim; the badge's own label until it is read; a long
-// one scrolls), every title it holds and cup it leads on one scrolling line in brass (each by its own ENS name, which
-// resolves to the player), its stats (wins, losses and draws over every game, the streak, and its USDC, read from
-// chain, popping in when the badge taps) and one status line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Every line stays
-// inside the frame: the names scroll, the stats and the status shrink to fit. Lit when the story is about this seat (it
-// is asked to act, or it won); a loss dims it. Touching it taps that seat (Demo mode).
+// A seat's panel on a page, with `small` beside others when three or four show: a chamfered frame in the seat's colour
+// round a socket of two rings in a dial of ticks, holding the badge's LED blockie, the player's ENS name (`nova` bright,
+// `.gamebox.eth` dim; the badge's own label until it is read; a long one scrolls), every title it holds and cup it
+// leads on one scrolling line in brass (each by its own ENS name, which resolves to the player), its stats (wins, losses
+// and draws over every game, the streak, and its USDC, read from chain, popping in when the badge taps) and one status
+// line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Every line stays inside the frame: the names scroll, the stats and the
+// status shrink to fit. Lit when the story is about this seat (it is asked to act, or it won); a loss dims it. Touching
+// it taps that seat (Demo mode).
 import { playerName } from "../../core/badges.ts";
 import type { Honour } from "../../core/honours.ts";
 import type { Seat, SeatState } from "../../core/types.ts";

@@ -1,10 +1,10 @@
 // The HTTP handler: the API routes, then the built screen. Every request must be addressed to this machine by name
-// (a loopback Host); every one that isn't a GET also needs this server's own origin; the routes marked `launcher`
-// also need this boot's launcher token.
+// (a loopback Host); every one that isn't a GET also needs this server's own origin; every one to the API must come from
+// no other site's page; the routes marked `launcher` also need this boot's launcher token.
 import type http from "node:http";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { HttpError, loopbackHost, sameOrigin, sendFile, sendText, within } from "./http.ts";
+import { HttpError, loopbackHost, ownRequest, sameOrigin, sendFile, sendText, within } from "./http.ts";
 import { CSP, hasToken, isTopNavigation, withToken } from "./security.ts";
 
 export interface Route {
@@ -32,6 +32,7 @@ export function createHandler(options: HandlerOptions): (req: http.IncomingMessa
   const { routes, screenDir, token } = options;
 
   async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL, method: string): Promise<void> {
+    if (!ownRequest(req.headers["sec-fetch-site"])) return sendText(res, 403, "only the Box's own pages may do that");
     const route = routes.find((r) => r.path === url.pathname && (r.method === method || (method === "HEAD" && r.method === "GET")));
     if (!route) {
       const known = routes.some((r) => r.path === url.pathname);

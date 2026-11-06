@@ -1,0 +1,31 @@
+{
+  "name": "@egb/verifier",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./test/fake-zg": "./test/fake-zg/index.ts"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "fake-zg": "node test/fake-zg/main.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-storage-ts-sdk": "1.2.13",
+    "@cloudflare/containers": "0.3.7",
+    "@egb/relayer": "workspace:*",
+    "@egb/sdk": "workspace:*",
+    "@egb/shared": "workspace:*",
+    "ethers": "6.13.1",
+    "viem": "2.57.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261015.1",
+    "@noble/curves": "2.4.0",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

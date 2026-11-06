@@ -2,7 +2,7 @@
 // their side, and a raised tray down the middle that holds the stat wheel and the played cards. A player's glow
 // brightens on their moments (a play, a won round) by fading in a brighter copy of it: opacity only.
 import type { Point, Rect } from "../../screen/shell/layout.ts";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import { el, place, play } from "../../screen/shell/dom.ts";
 
 export interface ScenePlaces {
@@ -18,16 +18,16 @@ export interface ScenePlaces {
 export interface Scene {
   readonly el: HTMLElement;
   /** The seat's glow flares up and settles back; `holdMs` is how long it stays bright. */
-  flare(seat: Seat, holdMs: number): void;
+  flare(seat: DuelSeat, holdMs: number): void;
   /** Keeps one glow bright (the match's winner), or none. */
-  hold(seat: Seat | null): void;
+  hold(seat: DuelSeat | null): void;
 }
 
 export function createScene(at: ScenePlaces): Scene {
   const root = el("div", "sd-scene");
   place(root, { x: 0, y: 0, w: at.width, h: at.height });
 
-  const glow = (seat: Seat, bright: boolean): HTMLElement => {
+  const glow = (seat: DuelSeat, bright: boolean): HTMLElement => {
     const node = el("i", `sd-glow s${seat}${bright ? " bright" : ""}`);
     const c = at.glows[seat];
     place(node, { x: c.x - at.reach.rx, y: c.y - at.reach.ry, w: at.reach.rx * 2, h: at.reach.ry * 2 });
@@ -39,7 +39,7 @@ export function createScene(at: ScenePlaces): Scene {
   place(tray, at.tray);
   root.append(...steady, ...bright, tray);
 
-  let held: Seat | null = null;
+  let held: DuelSeat | null = null;
 
   return {
     el: root,

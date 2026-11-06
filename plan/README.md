@@ -228,6 +228,8 @@ Every settled game pays a small fee, split in half:
 <details open>
 <summary><b>0G</b>: voice bets, a practice opponent, an audit log</summary>
 
+- **Game verifier:** an agent on 0G's private inference reads a store game's log and says who gets paid how much. See
+  [the game store plan](game-store.md).
 - **Voice:** players speak a bet, and 0G turns it into terms the chain can check.
 - **Practice opponent:** an AI player to learn against.
 - **Decision log:** every AI decision is stored on 0G Storage with its request ID, so it can be audited.
@@ -268,6 +270,7 @@ What runs today, as of 6 November, what we have to decide, and what comes next.
 | **Stock Duel data** | Not built | It plays from a frozen deck: no live Robinhood reads and no replay proof. |
 | **Token flows** | Not built | The launch auction, the game fee, buyback and burn, and the lobby's swap. The Box's lobby tops up test USDC today. |
 | **Trust** | Not built | Pot caps, the challenge window and proof of cheating. Nobody can slash a Box until a dispute contract exists. |
+| **Game store** | Planned | Team-published game bundles, judged by an agent on 0G's private inference. See [the game store plan](game-store.md). |
 | **The network** | Not built | The operator auction, Bet on X, B17 and 0G. |
 
 Our done rule needs a run on the Pi with real badges, so the staked match is the one to record next.

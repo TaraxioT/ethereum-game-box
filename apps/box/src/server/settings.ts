@@ -1,6 +1,7 @@
 // The server's settings, read once from the environment, typed and checked. A bad value stops the start with every
 // problem named, rather than a Box that half works.
 import { isAbsolute, join, resolve } from "node:path";
+import { PLAYER_LIMITS } from "@egb/sdk";
 import { labelProblem } from "@egb/shared/names";
 
 /** Where the receiver's serial port is: a path, found by its USB id (`auto`), the fake receiver, or none. */
@@ -25,6 +26,14 @@ export interface AdminSetting {
   readonly rpcUrl: string;
 }
 
+/** Where store games come from and who judges them. Null without them: this Box has no store games. */
+export interface StoreSetting {
+  /** `EGB_STORE_URL`: the store's index and bundles. */
+  readonly storeUrl: string;
+  /** `EGB_VERIFIER_URL`: the verifier. */
+  readonly verifierUrl: string;
+}
+
 export interface Settings {
   readonly host: string;
   readonly port: number;
@@ -33,11 +42,12 @@ export interface Settings {
   /** The built screen (`pnpm --filter @egb/box build:box`). */
   readonly screenDir: string;
   readonly receiver: ReceiverSetting;
-  /** The stations this Box knows (the last three bytes of each MAC, lower-case hex), which the fake simulates. Seats
-   *  go by link order, not by this list: the first to link is Player 1's. */
+  /** The stations this Box knows (the last three bytes of each MAC, lower-case hex), two to four, which the fake
+   *  simulates. Each is a seat, but seats go by link order, not by this list: the first to link is Player 1's. */
   readonly stations: readonly string[];
   readonly chain: ChainSetting;
   readonly admin: AdminSetting | null;
+  readonly store: StoreSetting | null;
 }
 
 export const DEFAULTS = {
@@ -96,8 +106,9 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
   else problems.push(`EGB_RECEIVER must be a serial port's path, auto, fake or none, not "${receiverText}"`);
 
   const stationIds = (get("EGB_STATIONS") ?? DEFAULTS.stations).split(",").map((id) => id.trim().toLowerCase());
-  if (stationIds.length < 1 || !stationIds.every((id) => STATION.test(id)) || new Set(stationIds).size !== stationIds.length) {
-    problems.push("EGB_STATIONS must be different station ids, six hex digits each (df3b9c,df3d88,e4ba70)");
+  const stationCount = stationIds.length >= PLAYER_LIMITS.min && stationIds.length <= PLAYER_LIMITS.max;
+  if (!stationCount || !stationIds.every((id) => STATION.test(id)) || new Set(stationIds).size !== stationIds.length) {
+    problems.push(`EGB_STATIONS must be ${PLAYER_LIMITS.min} to ${PLAYER_LIMITS.max} different station ids, six hex digits each (df3b9c,df3d88,e4ba70)`);
   }
 
   // Never put a chain setting's value in a problem: the RPC URL holds the node's key.
@@ -126,6 +137,17 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     else if (chain.kind !== "sepolia") problems.push("SEPOLIA_RPC_URL must be an http(s) URL");
   }
 
+  const storeUrl = get("EGB_STORE_URL");
+  const verifierUrl = get("EGB_VERIFIER_URL");
+  let store: StoreSetting | null = null;
+  if (storeUrl !== undefined && verifierUrl !== undefined) {
+    if (!isHttpUrl(storeUrl)) problems.push("EGB_STORE_URL must be an http(s) URL");
+    if (!isHttpUrl(verifierUrl)) problems.push("EGB_VERIFIER_URL must be an http(s) URL");
+    store = { storeUrl, verifierUrl };
+  } else if (storeUrl !== undefined || verifierUrl !== undefined) {
+    problems.push("store games need both EGB_STORE_URL and EGB_VERIFIER_URL");
+  }
+
   if (problems.length > 0) throw new SettingsError(problems);
   return {
     host,
@@ -136,5 +158,6 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     stations: stationIds,
     chain,
     admin,
+    store,
   };
 }

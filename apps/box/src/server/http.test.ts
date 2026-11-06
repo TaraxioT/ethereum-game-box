@@ -1,10 +1,13 @@
-import { get } from "node:http";
+import { readdirSync, writeFileSync } from "node:fs";
+import { createServer, get, type Server } from "node:http";
 import { rm } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import { tempDir } from "../builder/forge/test-helpers.ts";
 import { LINK_PATH } from "../core/wire.ts";
-import { loopbackHost, sameOrigin, within } from "./http.ts";
+import { loopbackHost, sameOrigin, sendFile, within } from "./http.ts";
 import { CSP, LAUNCHER_HEADER } from "./security.ts";
 import { busy } from "./api.ts";
 import { PAGE, post, startTestBox, type TestBox } from "./testing.ts";
@@ -120,6 +123,55 @@ describe("the loopback-host and same-origin rules", () => {
   });
 });
 
+describe("sendFile", () => {
+  const LARGE = 8 * 1024 * 1024; // past what a socket's buffers hold, so a transfer is still going when the client leaves
+  const openFiles = () => readdirSync("/dev/fd").length;
+  let server: Server | null = null;
+
+  afterEach(() => {
+    server?.closeAllConnections();
+    server?.close();
+    server = null;
+  });
+
+  /** A server sending a large file to everyone, and each request's send so far. */
+  async function serve(): Promise<{ url: string; sends: Promise<boolean>[] }> {
+    const file = join(tempDir("egb-http-"), "large.bin");
+    writeFileSync(file, Buffer.alloc(LARGE, 7));
+    const sends: Promise<boolean>[] = [];
+    const listening = createServer((_req, res) => void sends.push(sendFile(res, file)));
+    server = listening;
+    await new Promise<void>((done) => listening.listen(0, "127.0.0.1", done));
+    return { url: `http://127.0.0.1:${(listening.address() as AddressInfo).port}/`, sends };
+  }
+
+  function abandon(url: string): Promise<void> {
+    return new Promise((done) => {
+      const req = get(url, (res) =>
+        res.once("data", () => {
+          req.destroy();
+          done();
+        }),
+      );
+      req.on("error", () => {});
+    });
+  }
+
+  it("sends a whole file", async () => {
+    const { url } = await serve();
+    expect((await (await fetch(url)).arrayBuffer()).byteLength).toBe(LARGE);
+    expect((await fetch(url, { method: "HEAD" })).headers.get("content-length")).toBe(String(LARGE));
+  });
+
+  it("lets go of the file when the client leaves part way: a game can abort its own requests at will", async () => {
+    const { url, sends } = await serve();
+    const before = openFiles();
+    for (let i = 0; i < 20; i++) await abandon(url);
+    expect(await Promise.all(sends)).toEqual(Array.from({ length: 20 }, () => true));
+    await vi.waitFor(() => expect(openFiles()).toBeLessThanOrEqual(before));
+  });
+});
+
 describe("the screen", () => {
   it("serves the page under the CSP, with the launcher token only for a top-level navigation", async () => {
     const { box } = await start();
@@ -163,6 +215,16 @@ describe("the API", () => {
     expect(await (await fetch(`${box.url}/api/state`)).json()).toEqual({ phase: "boot", match: false, busy: false, now: box.core.now() });
     expect((await fetch(`${box.url}/api/nope`)).status).toBe(404);
     expect((await post(box, "/api/state", {})).status).toBe(405);
+  });
+
+  it("runs no route for a request a page elsewhere started: a game's prerender is a GET no CSP stops", async () => {
+    const { box } = await start();
+    const site = async (value: string) => (await getRaw(`${box.url}/api/health`, { "sec-fetch-site": value })).status;
+    expect(await site("cross-site")).toBe(403);
+    expect(await site("same-site")).toBe(403);
+    expect(await site("same-origin")).toBe(200);
+    expect(await site("none")).toBe(200); // the address bar
+    expect((await getRaw(`${box.url}/api/health`, {})).status).toBe(200); // not a browser: curl, the deploy's updater
   });
 
   it("calls the Box busy from Join on, while a match is open and while money moves", () => {

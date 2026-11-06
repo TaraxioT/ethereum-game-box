@@ -32,6 +32,8 @@
   cursor: default;
 }
 .seat-panel.seat-1 { --seat: var(--p2); --seat-bloom: var(--p2-bloom); }
+.seat-panel.seat-2 { --seat: var(--p3); --seat-bloom: var(--p3-bloom); }
+.seat-panel.seat-3 { --seat: var(--p4); --seat-bloom: var(--p4-bloom); }
 .seat-panel > * { position: relative; }
 .seat-panel > .frame-fill { position: absolute; inset: 0; background: var(--glass); }
 .seat-panel > .frame-line { opacity: 0.35; }
@@ -104,6 +106,32 @@
 [data-orientation="portrait"] .seat-panel-tile { width: 58px; height: 58px; }
 [data-orientation="portrait"] .seat-panel-status { font-size: 15px; }
 [data-orientation="portrait"] .seat-panel-stats { font-size: 13px; gap: 8px; min-height: 16px; }
+
+/* Three or four seats: a smaller panel, its socket beside the name and the status along the foot. */
+.seat-panel[small] {
+  display: grid; grid-template-columns: 92px minmax(0, 1fr); grid-template-rows: auto auto auto auto auto; justify-items: start; align-items: center;
+  align-content: center; gap: 2px 14px; padding: 12px 16px;
+}
+.seat-panel[small] .seat-panel-label { grid-column: 1 / -1; margin-bottom: 6px; font-size: 14px; }
+.seat-panel[small] .seat-panel-socket { grid-column: 1; grid-row: 2 / span 3; width: 92px; height: 92px; }
+.seat-panel[small] .seat-panel-socket::after { inset: 6px; }
+.seat-panel[small] .seat-panel-dial { inset: -9px; }
+.seat-panel[small] .seat-panel-tile { width: 54px; height: 54px; }
+.seat-panel[small] .seat-panel-name { grid-column: 2; font-size: 20px; }
+.seat-panel[small]:not([seated]) .seat-panel-name { font-size: 15px; }
+.seat-panel[small] .seat-panel-honour { grid-column: 2; }
+.seat-panel[small] .seat-panel-stats { grid-column: 2; font-size: 13px; gap: 6px; }
+.seat-panel[small] .seat-stat.usdc:not(:first-child)::before { margin-right: 6px; }
+.seat-panel[small] .seat-panel-status { grid-column: 1 / -1; justify-self: stretch; margin-top: 10px; font-size: 15px; }
+.seat-panel[small][data-tone="win"] .seat-panel-status { font-size: 17px; }
+[data-orientation="portrait"] .seat-panel[small] { grid-template-columns: 64px minmax(0, 1fr); gap: 1px 12px; padding: 8px 14px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-label { margin-bottom: 2px; font-size: 13px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-socket { width: 64px; height: 64px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-socket::after { inset: 5px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-dial { inset: -7px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-tile { width: 38px; height: 38px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-name { font-size: 18px; }
+[data-orientation="portrait"] .seat-panel[small] .seat-panel-status { margin-top: 3px; font-size: 14px; }
 
 .page-plate { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; text-align: center; padding: 0 28px; font: 600 19px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); }
 .page-plate[alert] { --frame-tone: var(--alert); color: var(--alert); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import {
   COUNT_MS, DECOY_MS, decoyAt, fouler, MAX_STANDOFFS, MAX_WAIT_MS, MIN_WAIT_MS, READ_WAIT_MS, reactionMs, ROUND_MS, rules, SETTLE_MS, TOO_SLOW_MS,
 } from "./rules.ts";
@@ -8,7 +8,7 @@ import type { QuickDrawState } from "./types.ts";
 const T0 = 1_000_000;
 
 /** The seated player's chip touched at `at`; the Box hears of it at `now` (just after, by default). */
-const tap = (state: QuickDrawState, seat: Seat, at: number, now = at + 5) => rules.step(state, { type: "tap", seat, at, now });
+const tap = (state: QuickDrawState, seat: DuelSeat, at: number, now = at + 5) => rules.step(state, { type: "tap", seat, at, now });
 const tick = (state: QuickDrawState, now: number) => rules.step(state, { type: "tick", now });
 
 /** The first standoff, counted in: the sign reads WAIT…. */
@@ -24,7 +24,7 @@ function drawn(seed = 1): QuickDrawState {
 }
 
 /** The standoff is won by `seat`, 200 ms after the draw, and the next one counted in. */
-function takeRound(state: QuickDrawState, seat: Seat): QuickDrawState {
+function takeRound(state: QuickDrawState, seat: DuelSeat): QuickDrawState {
   const won = tick(tap(tick(state, state.drawAt), seat, state.drawAt + 200), state.drawAt + 200 + SETTLE_MS);
   return won.phase === "round" ? tick(won, (won.decidedAt ?? 0) + ROUND_MS) : won;
 }

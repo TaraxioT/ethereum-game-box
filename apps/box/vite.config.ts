@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vitest/config";
 
 /** The Box server `pnpm dev:box` talks to (start it with `pnpm start`). */
@@ -52,8 +53,11 @@ export default defineConfig(() => {
     envDir: "..",
     plugins: [pagePaths()],
     build: { outDir: "../dist/screen", emptyOutDir: true, target: "es2023", rollupOptions: { input } },
-    // Built games' cartridges and frames are the Box server's too (server/games/): the frame's page, its parts and fonts.
-    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": { target: BOX, bypass: ownFile }, "/parts": BOX, "/frame.js": BOX } },
-    test: { root: ".", include: ["src/**/*.test.ts"], environment: "node", passWithNoTests: true },
+    // Games' cartridges and frames are the Box server's too (server/games/): a frame's page, its parts and fonts, and a
+    // store bundle's files and host script. A string target rewrites the Host, and a frame page's CSP names the origin
+    // from its Host, so /games and /store/ are objects: the page stays on the dev server's origin.
+    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": { target: BOX, bypass: ownFile }, "/parts": BOX, "/frame.js": BOX, "/bundle-host.js": BOX, "/store/": { target: BOX } } },
+    // The relayer's real routes run in chain/relayer.test.ts, with its stub of `cloudflare:workers`.
+    test: { root: ".", include: ["src/**/*.test.ts"], environment: "node", passWithNoTests: true, alias: { "cloudflare:workers": fileURLToPath(new URL("../relayer/test/cloudflare-workers.ts", import.meta.url)) } },
   };
 });

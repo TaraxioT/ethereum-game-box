@@ -1,10 +1,10 @@
-// <egb-port seat="0|1">: a player's node in a top corner of the Box. A round socket of light in the seat's colour
-// (Player 1 orange, Player 2 cyan) holding the badge's blockie as a lit 8 × 8 LED grid, the badge's name reading away
-// from it, the balance under the name, and a seat-colour underline running out from the socket under both. Seat 0
-// reads rightwards from its socket at the left; seat 1 mirrors it.
+// <egb-port seat="0|1|2|3">: a player's node in a top corner of the Box. A round socket of light in the seat's colour
+// (Player 1 orange, Player 2 cyan, Player 3 green, Player 4 pink) holding the badge's blockie as a lit 8 × 8 LED grid, the badge's name reading away
+// from it, the balance under the name, and a seat-colour underline running out from the socket under both. Seats 0
+// and 2 read rightwards from their sockets at the left; seats 1 and 3 mirror them.
 //
 // Size: the module fills its box (designed at 380 × 96, the socket's centre 52 px in from its outer side and halfway
-// down). `compact`: the in-game overlay, drawn at 70 % from its top outer corner. `key="A|L"` (Demo mode): a key hint
+// down), so at half height two share a corner. `compact`: the in-game overlay, drawn at 70 % from its top outer corner. `key="A|L"` (Demo mode): a key hint
 // in the inner bottom corner, and hover lifts the socket. `bot`: a small BOT tag (the bot holds this seat).
 //
 // `set(seat)` draws a seat. A badge arriving rezzes the socket and the name; leaving derezzes the name and drops the
@@ -23,12 +23,15 @@ const styles = sheet(`
   --seat: var(--p1); --seat-bloom: var(--p1-bloom);
 }
 :host([seat="1"]) { --seat: var(--p2); --seat-bloom: var(--p2-bloom); }
+:host([seat="2"]) { --seat: var(--p3); --seat-bloom: var(--p3-bloom); }
+:host([seat="3"]) { --seat: var(--p4); --seat-bloom: var(--p4-bloom); }
+:host([hidden]) { display: none; }
 :host([key]) { cursor: pointer; }
 .port {
   --p: calc(100cqh / 96);
   position: absolute; inset: 0; transform-origin: 0 0; transition: transform var(--t-move) var(--ease-out);
 }
-:host([seat="1"]) .port { direction: rtl; transform-origin: 100% 0; }
+:host(:is([seat="1"], [seat="3"])) .port { direction: rtl; transform-origin: 100% 0; }
 :host([compact]) .port { transform: scale(0.7); }
 
 /* The socket: a circle of seat-colour light, 25 % while empty, full with its bloom once a badge is seated, inside a
@@ -85,7 +88,7 @@ const styles = sheet(`
   background: linear-gradient(to var(--run, right), var(--seat), color-mix(in srgb, var(--seat) 50%, transparent));
   opacity: 0.3; transition: opacity 200ms linear;
 }
-:host([seat="1"]) .underline { --run: left; }
+:host(:is([seat="1"], [seat="3"])) .underline { --run: left; }
 .underline::before {
   content: ""; position: absolute; inset-inline-start: 0; top: -1px; width: calc(48 * var(--p)); height: 3px;
   background: var(--seat); box-shadow: 0 0 6px var(--seat-bloom);

@@ -69,6 +69,9 @@ button:disabled { opacity: 0.5; }
 
 .card.seat-0 { border-top: 2px solid var(--p1); }
 .card.seat-1 { border-top: 2px solid var(--p2); }
+.card.seat-2 { border-top: 2px solid var(--p3); }
+.card.seat-3 { border-top: 2px solid var(--p4); }
+.card[hidden] { display: none; }
 
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
 dt { color: var(--fg-3); }

@@ -24,6 +24,9 @@ export class Revert {
   }
 }
 
+/** What a node answers for a call that reverts with `revert`. */
+export const nodeRevert = ({ data }: Revert) => Object.assign(new Error('execution reverted'), { code: 3, data });
+
 type Handler = (args: readonly unknown[]) => unknown;
 
 export interface FakeContract {
@@ -53,10 +56,14 @@ export class FakeChain {
   head = 100;
   /** What `eth_estimateGas` answers for a call that doesn't revert. */
   estimate = 200_000n;
+  /** Makes `eth_estimateGas` fail with this, though an `eth_call` of the same call passes. */
+  estimateError: Error | undefined;
   /** The account nonce the node expects next. */
   chainNonce = 0;
   /** Makes the next sends fail with these messages, one per send. */
   sendErrors: string[] = [];
+  /** Makes the next sends end in `error` instead of an answer, one per send, the node having taken them if `taken`. */
+  lostSends: { error: Error; taken: boolean }[] = [];
   /** How often each RPC method was called. */
   readonly calls = new Map<string, number>();
 
@@ -90,6 +97,7 @@ export class FakeChain {
       case 'eth_call':
         return this.call(p[0] as { to?: Address; data: Hex });
       case 'eth_estimateGas':
+        if (this.estimateError) throw this.estimateError;
         await this.call(p[0] as { to?: Address; data: Hex });
         return numberToHex(this.estimate);
       case 'eth_sendRawTransaction':
@@ -127,7 +135,7 @@ export class FakeChain {
     try {
       result = handler(args ?? []);
     } catch (error) {
-      if (error instanceof Revert) throw Object.assign(new Error('execution reverted'), { code: 3, data: error.data });
+      if (error instanceof Revert) throw nodeRevert(error);
       throw error;
     }
     if (result === undefined) return '0x';
@@ -139,6 +147,8 @@ export class FakeChain {
   private send(raw: Hex): Hex {
     const failure = this.sendErrors.shift();
     if (failure) throw Object.assign(new Error(failure), { code: -32000 });
+    const lost = this.lostSends.shift();
+    if (lost && !lost.taken) throw lost.error;
     const tx = parseTransaction(raw);
     if (tx.nonce !== this.chainNonce) {
       throw Object.assign(new Error(`nonce too ${tx.nonce! < this.chainNonce ? 'low' : 'high'}`), { code: -32000 });
@@ -146,6 +156,7 @@ export class FakeChain {
     this.chainNonce++;
     const hash = keccak256(raw);
     this.sent.push({ raw, hash, nonce: tx.nonce!, to: tx.to ?? undefined, data: tx.data, gas: tx.gas });
+    if (lost) throw lost.error;
     return hash;
   }
 

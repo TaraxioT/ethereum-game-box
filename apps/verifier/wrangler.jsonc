@@ -1,0 +1,35 @@
+// The verifier Worker. Secrets (`VERIFIER_PRIVATE_KEY`, `ZG_API_KEY`, `ZG_STORAGE_KEY`, `SEPOLIA_RPC_URL`) are set with
+// `wrangler secret put`, and for `wrangler dev` in `.dev.vars` (see `.dev.vars.example`); never here.
+{
+  "name": "gamebox-verifier",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-29",
+  // The 0G Storage SDK's dependencies import Node's modules.
+  "compatibility_flags": ["nodejs_compat"],
+  "containers": [{ "class_name": "AgentContainer", "image": "./container/Dockerfile", "instance_type": "basic", "max_instances": 8 }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "JUDGEMENT", "class_name": "Judgement" },
+      { "name": "BOX_GATE", "class_name": "BoxGate" },
+      { "name": "AGENT", "class_name": "AgentContainer" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Judgement", "BoxGate", "AgentContainer"] }],
+  // The relayer and the store, through service bindings: a Worker can't fetch another workers.dev Worker on its account.
+  "services": [
+    { "binding": "RELAYER", "service": "gamebox-relayer" },
+    { "binding": "STORE", "service": "gamebox-store" }
+  ],
+  "vars": {
+    "ZG_BASE_URL": "https://router-api.0g.ai/v1",
+    "ZG_MODEL": "0gm-1.0-35b-a3b",
+    "ZG_RPC": "https://evmrpc.0g.ai",
+    "ZG_SERVING_CONTRACT": "0x47340d900bdFec2BD393c626E12ea0656F938d84",
+    "ZG_STORAGE_RPC": "https://evmrpc.0g.ai",
+    "ZG_STORAGE_INDEXER": "https://indexer-storage-turbo.0g.ai",
+    "RELAYER_URL": "https://gamebox-relayer.mathew.workers.dev",
+    "STORE_URL": "https://gamebox-store.mathew.workers.dev"
+  },
+  "observability": { "enabled": true }
+}

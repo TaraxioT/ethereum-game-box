@@ -18,7 +18,7 @@ abstract contract Deployments is Script {
     }
 
     /// @notice Records `addr` as `.contracts.<name>`, created by `new <contractName>`.
-    function _save(string memory name, address addr, string memory contractName) internal {
+    function _save(string memory name, address addr, string memory contractName) internal virtual {
         _record(name, addr, contractName, VmSafe.BroadcastTxType.Create, addr);
     }
 
@@ -76,7 +76,7 @@ abstract contract Deployments is Script {
     }
 
     /// @notice The recorded address of `.contracts.<name>`, or zero if it is missing or has no code.
-    function _deployed(string memory name) internal view returns (address addr) {
+    function _deployed(string memory name) internal view virtual returns (address addr) {
         string memory json = vm.readFile(PATH);
         string memory key = string.concat(".contracts.", name, ".address");
         if (!vm.keyExistsJson(json, key)) return address(0);

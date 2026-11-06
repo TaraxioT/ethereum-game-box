@@ -6,10 +6,10 @@
 // loads doesn't stop the match. The view puts a quiet plate over it and the players play on.
 import "./frame.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
-import type { Orientation, Rect } from "../shell/layout.ts";
+import type { Layout, Orientation, Rect } from "../shell/layout.ts";
 import type { View, ViewFactory } from "../views/view.ts";
 import { el, place } from "../shell/dom.ts";
-import { frameAttributes, openFrameChannel } from "./channel.ts";
+import { frameAttributes, openFrameChannel, parseFromFrame } from "./channel.ts";
 import { frameInit, frameUpdate, type FrameMatch, type FrameSource } from "./feed.ts";
 
 /** The Box's overlay (ports, clock, stake) holds the top of the stage; the game's frame owns everything below it. */
@@ -18,30 +18,43 @@ const OVERLAY: Record<Orientation, number> = { landscape: 130, portrait: 150 };
 /** A screen that hasn't said ready by now isn't coming (the Pi loads a frame in well under a second). */
 export const READY_TIMEOUT_MS = 8_000;
 
+export interface FrameGlass {
+  readonly root: HTMLElement;
+  readonly frame: HTMLIFrameElement;
+  /** Says why in the console, and puts up the quiet plate once. */
+  showFault(why: string): void;
+}
+
+/** What every frame view stands on: the iframe with these attributes below the Box's overlay, and the fault plate. */
+export function frameGlass(layout: Layout, attributes: Readonly<Record<string, string>>): FrameGlass {
+  const root = el("div", "frame-view");
+  const { orientation, width, height } = layout;
+  const area: Rect = { x: 0, y: OVERLAY[orientation], w: width, h: height - OVERLAY[orientation] };
+  place(root, area);
+
+  let fault: HTMLElement | null = null;
+  const showFault = (why: string) => {
+    console.warn(`frame: ${why}`);
+    if (fault) return;
+    fault = el("egb-panel", "frame-fault", "SCREEN FAULT · PLAY ON");
+    root.append(fault);
+  };
+
+  const frame = el("iframe", "frame-glass");
+  // The sandbox goes on before the src, so the page never loads unsandboxed.
+  for (const [name, value] of Object.entries(attributes)) frame.setAttribute(name, value);
+  root.append(frame);
+  return { root, frame, showFault };
+}
+
 export function frameView(source: FrameSource): ViewFactory {
   return (ctx): View => {
-    const root = el("div", "frame-view");
-    const { orientation, width, height } = ctx.layout;
-    const area: Rect = { x: 0, y: OVERLAY[orientation], w: width, h: height - OVERLAY[orientation] };
-    place(root, area);
-
     let ready = false;
-    let fault: HTMLElement | null = null;
-    const showFault = (why: string) => {
-      console.warn(`frame: ${why}`);
-      if (fault) return;
-      fault = el("egb-panel", "frame-fault", "SCREEN FAULT · PLAY ON");
-      root.append(fault);
-    };
-
     let match: FrameMatch | null = source(ctx.link.state());
-    const frame = el("iframe", "frame-glass");
-    // The sandbox goes on before the src, so the page never loads unsandboxed.
-    if (match) for (const [name, value] of Object.entries(frameAttributes(match.id, match.manifest.title))) frame.setAttribute(name, value);
-    root.append(frame);
+    const { root, frame, showFault } = frameGlass(ctx.layout, match ? frameAttributes(match.id, match.manifest.title) : {});
     const timeout = setTimeout(() => ready || showFault("the screen never said ready"), READY_TIMEOUT_MS);
 
-    const channel = openFrameChannel(window, frame, {
+    const channel = openFrameChannel(window, frame, parseFromFrame, {
       message(message) {
         if (message.t === "error") return showFault(message.message);
         ready = true;

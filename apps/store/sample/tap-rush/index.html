@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tap Rush</title>
+<style>
+  :root {
+    --void: #010409;
+    --line: #cfe8f6;
+    --seat-1: #ff9b3d;
+    --seat-2: #3fd9ff;
+    --seat-3: #7dffa6;
+    --seat-4: #ff7de0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    gap: 3vh;
+    padding: 4vh 4vw;
+    background: var(--void);
+    color: var(--line);
+    font-family: system-ui, sans-serif;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 4vw; }
+  h1 { margin: 0; font-size: 5vh; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  #clock { font-family: ui-monospace, monospace; font-size: 11vh; font-variant-numeric: tabular-nums; }
+  #lanes { display: flex; flex: 1; gap: 2vw; min-height: 0; }
+  .lane {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid var(--seat);
+    color: var(--seat);
+    box-shadow: 0 0 18px -6px var(--seat);
+  }
+  .fill {
+    position: absolute;
+    inset: 0;
+    background: var(--seat);
+    opacity: 0.18;
+    transform: scaleY(0);
+    transform-origin: bottom;
+    transition: transform 120ms ease-out;
+  }
+  .seat { position: relative; font-size: 4vh; letter-spacing: 0.08em; }
+  .count { position: relative; font-family: ui-monospace, monospace; font-size: 24vh; line-height: 1; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tap Rush</h1>
+  <output id="clock">TAP!</output>
+</header>
+<main id="lanes"></main>
+<script>
+  // Tap Rush. The Box's log decides the pot, so this page only shows the race: nothing here can move a coin.
+  const ROUND_MS = 10000;
+  // A tap's answer can land after its touch, so the match stays open a moment past the clock. The judge cuts by touch.
+  const GRACE_MS = 1000;
+
+  const egb = window.egb;
+  const clock = document.getElementById("clock");
+  const lanes = document.getElementById("lanes");
+  const counts = egb.players.map(() => 0);
+
+  // A lane goes by the player's place, as a tap's seat does, but wears their seat at the Box, as their station does.
+  const views = egb.players.map(({ boxSeat }) => {
+    const lane = document.createElement("section");
+    lane.className = "lane";
+    lane.style.setProperty("--seat", `var(--seat-${boxSeat + 1})`);
+    const fill = document.createElement("div");
+    fill.className = "fill";
+    const label = document.createElement("div");
+    label.className = "seat";
+    label.textContent = `P${boxSeat + 1}`;
+    const count = document.createElement("div");
+    count.className = "count";
+    count.textContent = "0";
+    lane.append(fill, label, count);
+    lanes.append(lane);
+    return { fill, count };
+  });
+
+  let stopsAt = null;
+  let over = false;
+  let ticker = null;
+
+  function draw() {
+    clock.textContent = (Math.max(0, stopsAt - Date.now()) / 1000).toFixed(1);
+  }
+
+  function start() {
+    stopsAt = Date.now() + ROUND_MS;
+    ticker = setInterval(draw, 100);
+    setTimeout(stop, ROUND_MS);
+  }
+
+  function stop() {
+    over = true;
+    clearInterval(ticker);
+    clock.textContent = "TIME";
+    egb.event("score", { counts });
+    counts.forEach((count, seat) => {
+      egb.station(seat, `TIME ${count}`);
+      egb.buzz(seat);
+    });
+    setTimeout(() => egb.end(), GRACE_MS);
+  }
+
+  egb.onTap(({ seat }) => {
+    if (over) return;
+    if (stopsAt === null) start();
+    counts[seat] += 1;
+    views[seat].count.textContent = String(counts[seat]);
+    egb.station(seat, String(counts[seat]));
+    const most = Math.max(...counts);
+    views.forEach(({ fill }, lane) => {
+      fill.style.transform = `scaleY(${counts[lane] / most})`;
+    });
+  });
+
+  counts.forEach((_, seat) => egb.station(seat, "TAP!"));
+</script>
+</body>
+</html>

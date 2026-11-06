@@ -6,7 +6,7 @@
 // A played card lifts off the drum toward the tray.
 import type { Rect } from "../../screen/shell/layout.ts";
 import type { Sound } from "../../screen/views/view.ts";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import type { Stock } from "./types.ts";
 import { SHOW_LAG_MS } from "./rules.ts";
 import { calm, el } from "../../screen/shell/dom.ts";
@@ -69,7 +69,7 @@ interface Card {
   readonly shade: HTMLElement;
 }
 
-export function createRolodex(seat: Seat, at: Placement, sound: Sound): Rolodex {
+export function createRolodex(seat: DuelSeat, at: Placement, sound: Sound): Rolodex {
   const root = el("div", `sd-rx s${seat}`);
   root.style.left = `${at.x}px`;
   root.style.top = `${at.y}px`;

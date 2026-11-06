@@ -1,4 +1,4 @@
-// The lobby: a badge tapped on either station shows its card, read from chain: its player name, or (with none yet) a
+// The lobby: a badge tapped on any station shows its card, read from chain: its player name, or (with none yet) a
 // name field holding the proposed label, which the player may type over (a tap on the field opens the Box's own
 // keyboard, `name-keys.ts`; a keyboard works too; the label rule is checked as they type), with ANOTHER and CLAIM
 // (Enter claims too). The Box vouches for the badge with its
@@ -197,7 +197,7 @@ export function lobbyView(ctx: ViewContext): View {
     nameKeys.claimable(naming && !claiming && problem === null);
     topup.toggleAttribute("disabled", !lobby.badge || topping);
     plate.textContent = !lobby.badge
-      ? "TAP YOUR BADGE ON EITHER STATION"
+      ? `TAP YOUR BADGE ON ${state.stations.length > 2 ? "ANY" : "EITHER"} STATION`
       : claiming
         ? "CLAIMING YOUR NAME ON SEPOLIA…"
         : topping

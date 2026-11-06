@@ -2,7 +2,7 @@
 //
 // Settings come from the environment, after the env files (EGB_ENV_FILE or ~/.config/egb/env, then the repo's .env)
 // have filled in what isn't set: EGB_PORT (8790), EGB_HOST (127.0.0.1), EGB_DATA (~/.local/share/egb), EGB_RECEIVER
-// (a serial path, auto, fake or none), EGB_STATIONS (the known station ids; seats go by link order), EGB_SCREEN_DIR (apps/box/dist/screen).
+// (a serial path, auto, fake or none), EGB_STATIONS (2 to 4 known station ids, a seat each, in link order), EGB_SCREEN_DIR (apps/box/dist/screen).
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "./env.ts";
