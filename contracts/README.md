@@ -7,7 +7,7 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 | Folder | Holds |
 |---|---|
 | `src/box/` | The P-256 account every role-holder uses (`P256Account`), its factory (`P256AccountFactory`), and P-256 verification through the EIP-7951 precompile with low `s` enforced. Box licences and key rotation live in `names/GameBoxNames.sol` |
-| `src/game/` | Match escrow: `DuelPot`, one USDC pot per match (open, settle, refund) |
+| `src/game/` | Match escrow: `DuelPot`, one USDC pot per match (open, settle, refund), and `StorePot`, one Store USDC pot per store game's match (open, settle, void, refund) |
 | `src/token/` | The Game Box token and its launch through Uniswap's auction, and the demo's test USDC (`FakeUSDC`) |
 | `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
 | `src/staking/` | Staking to a Box, rewards, commission, and the operator auction |
@@ -52,7 +52,8 @@ from the source the Sepolia deployment was built from (`ensdomains/contracts-v2`
 | `names/Championships.sol` | Time-boxed championships, each a name in its game's registry: `<label>.<game>.gamebox.eth`, one open per game. `open` (admin) registers it to the contract until `ends + 1 day` with its own resolver, writes `ends`, `prize` and `standings`, and takes the USDC prize. `score` (a referee: `BoxResults`) adds win 3, draw 1, loss 0 and rewrites `standings` (top 5, JSON), `leader` and `addr`. `close` (anyone, after `ends`) pays the winner (most points, then most wins, then who reached that score first), registers the name to the winner with no expiry and token roles 0, writes `standings`, `winner` and `addr`, and revokes every role it holds on the resolver: nobody holds one after that, so the records are frozen. With no players the prize goes back and the name is unregistered |
 | `names/BoxCheck.sol`, `names/IBoxSigned.sol` | What every Box-signed message shares (`BoxResults`, `DuelPot`, `BoxSeats`): a registered, unexpired, `Active` Box's key, a low-`s` P-256 signature, a deadline, and their errors |
 | `game/DuelPot.sol` | One USDC pot per match. `open(stake, r, s)` checks EIP-712 `Stake(box, game, round, a, b, amount, deadline)` (domain `Game Box Stakes`) signed by a live, `Active` Box's P-256 key and pulls `amount` from each player as USDC's game spender. `settle` (a referee: `BoxResults`) pays the winner both stakes or refunds both on a draw; the result's game and players must be the pot's. `refund` is open to anyone an hour after `open` if the pot is unsettled. The round number is the shared key: a match's `Stake` and `Result` carry the same `(box, round)`. It refuses `a == b`, a zero amount and a `(box, round)` that had a pot |
-| `token/FakeUSDC.sol` | The demo's stake token: 6 decimals, "USD Coin (Game Box test)", `USDC`. `MINTER_ROLE` (the deployer, which is the relayer) mints. One game spender, set once to `DuelPot`, moves balances with no allowance, because a badge can't sign an approval or a permit. Every USDC in the project is this token: stakes, prizes, staking fees and the GBX/USDC pool |
+| `game/StorePot.sol` | One Store USDC pot per store game's match, for 2 to 4 players, separate from `DuelPot` and `BoxResults`: it touches no names, titles or stats and takes no fee. `list(bundle)` (`LISTER_ROLE`) lets a bundle's sha256 be staked, for good. `open(stake, r, s)` checks EIP-712 `Stake(box, bundle, round, players, amount, deadline)` (domain `Game Box Store Pots`) signed by a live, `Active` Box's P-256 key and pulls `amount` from each player as Store USDC's game spender. `settle(verdict, signature)` takes a `Verdict(box, round, payouts, record, deadline)` and pays `payouts[i]` to `players[i]`; `voidPot(voiding, signature)` takes a `Void(box, round, record, deadline)` and sends each stake back. Both are ECDSA, 65 bytes, low `s`, and the signer must hold `VERIFIER_ROLE` when they land. A verdict's payouts name players only by position, and must add up to exactly `amount * players.length`. `record` is the audit record's keccak256. `refund` is open to anyone an hour after `open`. Whichever ending lands first closes the pot, and none of them checks the Box, so a suspended Box can't trap a stake. `open` refuses an unlisted bundle, fewer than 2 or more than 4 players, a repeated player, the pot itself as a player (a verdict could pay that seat's share out of other pots), a zero amount and a `(box, round)` that had a pot |
+| `token/FakeUSDC.sol` | The demo's stake token: 6 decimals, "USD Coin (Game Box test)", `USDC`. `MINTER_ROLE` (the deployer, which is the relayer) mints. One game spender, set once to `DuelPot`, moves balances with no allowance, because a badge can't sign an approval or a permit. Stakes, prizes, staking fees and the GBX/USDC pool all use this token. `StoreUSDC` is a second deployment of it, unchanged, with `StorePot` as its game spender |
 | `names/DemoLicences.sol` | A licensor for now. `openPopup(label)` calls `registerPopup(label, "mumbai-01", now + 10 minutes)`, for anyone |
 | `names/DefaultRecord.sol` | `gamebox.eth`'s own `PermissionedResolver` set-up: the default record (on the empty name `0x00`) with `url` and `description` and no `addr`, which every free `*.gamebox.eth` name resolves to |
 | `names/NameLib.sol` | The label rule (3 to 32 of `a-z`, `0-9`, `-`, no hyphen at either end), the DNS-encoded names and namehashes |
@@ -88,6 +89,10 @@ resolver: it has no record for that name, so it answers with its default record.
 | `GameBoxNames.championships` | `Championships` | set once (`setChampionships`); `addGame` grants it its title-registry roles |
 | `FakeUSDC` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE` (sets the game spender once) and `MINTER_ROLE` |
 | | `DuelPot` | the game spender: `transferFrom` with no allowance |
+| `StoreUSDC` (a second `FakeUSDC`) | deployer | `DEFAULT_ADMIN_ROLE` and `MINTER_ROLE` |
+| | `StorePot` | the game spender: `transferFrom` with no allowance |
+| `StorePot` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE` (rotates the keys below) and `LISTER_ROLE` (lists bundles) |
+| | the verifier key | `VERIFIER_ROLE`: signs `Verdict` and `Void`. It is checked when the signature lands, so revoking a key stops what it already signed |
 | `Championships` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE`: opens championships |
 | `gamebox.eth`'s registry, root | `GameBoxNames` | `REGISTRAR \| RENEW` and their admins, and nobody else holds a root role, so it is emancipated. Nobody holds `SET_PARENT` |
 | a title registry, root | `GameBoxNames` | `REGISTRAR \| UNREGISTER \| RENEW` and their admins. Moving a title is unregister + register, so it isn't emancipated. Nobody holds `SET_PARENT` |
@@ -225,6 +230,21 @@ prize needs and approves it; pick a fresh label each time, since a closed champi
 good. A new `GameBoxNames` means deleting its entry in `deployments/sepolia.json` before `DeployNames`: every contract
 bound to the old one is then deployed again, and the factory and USDC stay. `PointGameBox` needs the `.eth` owner of `gamebox.eth`. The operator's first records and the Box's heartbeat go through
 their `P256Account`s and the relayer, never from a key on disk.
+
+### Store pots
+
+`pnpm store:deploy-pot` runs `script/game/DeployStorePot.s.sol` from `contracts/`, with `SEPOLIA_RPC_URL` and
+`STORE_VERIFIER` (the verifier key's address) exported, then runs it again without `--broadcast` to record each block
+and transaction. It deploys `StoreUSDC`, then `StorePot`, makes the pot the token's game spender and grants the roles.
+It needs `GameBoxNames`, and it skips what is already done. To rotate the verifier, the admin grants `VERIFIER_ROLE` to
+the new key and revokes the old one; the script only ever adds a key.
+
+`FakeUSDC` is reused unchanged. Its name is fixed in its constructor, so `StoreUSDC` also reads "USD Coin (Game Box
+test)", `USDC`, in a wallet: tell them apart by address. A name of its own would mean changing a deployed, verified
+contract's source for a token with no value.
+
+`test/game/StorePot.t.sol` runs on the names fork against the real `GameBoxNames`. `StoreVectors.t.sol` writes
+`packages/shared/src/store/vectors.json`.
 
 ### Verify and check
 
