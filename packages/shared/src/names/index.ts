@@ -7,3 +7,4 @@ export * from './messages.ts';
 export * from './primaryName.ts';
 export * from './roles.ts';
 export * from './vectors.ts';
+export * from './webauthn.ts';

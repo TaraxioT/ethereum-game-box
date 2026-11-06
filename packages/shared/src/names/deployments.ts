@@ -1,6 +1,7 @@
 // Reads `deployments/sepolia.json`, so no app hard-codes an address. `ens` holds ENS's contracts (each with the source
 // it was read from); `contracts` holds ours, each with its deploy block, transaction and verification; `names` holds
-// the proxies `GameBoxNames` created (its registry, the shared resolvers and the title registries).
+// the proxies `GameBoxNames` created (its registry, the shared resolvers and the title registries) and `gamebox.eth`'s
+// own resolver.
 
 import { type Address, type Hex, getAddress } from 'viem';
 
@@ -33,6 +34,7 @@ export type EnsName =
   | 'ReverseRegistrar';
 
 export type ContractName =
+  | 'P256AccountFactory'
   | 'GameBoxNames'
   | 'PlayerStats'
   | 'BoxResults'
@@ -40,8 +42,10 @@ export type ContractName =
   | 'DemoBoxAccount'
   | (string & {});
 
-/** The proxies our contracts created through ENS's `VerifiableFactory` and that never move. */
+/** The proxies we created through ENS's `VerifiableFactory` and that never move. */
 export interface NamesProxies {
+  /** `gamebox.eth`'s own resolver: the default record every free `*.gamebox.eth` name resolves to (wildcard). */
+  gameboxResolver: Address;
   /** `gamebox.eth`'s own `UserRegistry`. */
   registry: Address;
   /** The resolver of every champion title. */

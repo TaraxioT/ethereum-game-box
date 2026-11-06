@@ -62,7 +62,8 @@ contract PlayersTest is NamesFork {
         claim("egbt-alice");
         assertTrue(registry.isEmancipated());
         assertEq(
-            registry.roles(0, address(names)), RegistryRoles.REGISTRAR | RegistryRoles.RENEW | RegistryRoles.SET_PARENT
+            registry.roles(0, address(names)),
+            RegistryRoles.REGISTRAR | RegistryRoles.REGISTRAR_ADMIN | RegistryRoles.RENEW | RegistryRoles.RENEW_ADMIN
         );
         (IPermissionedRegistry parent, string memory label) = _parent();
         assertEq(address(parent), address(ethRegistry));

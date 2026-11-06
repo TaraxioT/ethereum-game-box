@@ -6,7 +6,7 @@ import type { Address, Hex } from 'viem';
 
 import vectors from './vectors.json' with { type: 'json' };
 
-import type { ClaimName, Execute, Result } from './messages.ts';
+import type { ClaimName, Execute, ExecuteBatch, Result } from './messages.ts';
 import type { PrimaryName } from './primaryName.ts';
 
 /** `ClaimName` for `alice`, signed by the badge as viem `signTypedData` (and `eth_signTypedData_v4`) produces it. */
@@ -32,8 +32,10 @@ export const P256_VECTOR_KEY = {
   qy: vectors.p256.qy as Hex,
 } as const;
 
-/** `Execute` for a `BoxAccount` on `P256_VECTOR_KEY`, signed over the raw digest with a low `s`. */
+/** `Execute` for the `P256Account` of `P256_VECTOR_KEY`, signed over the raw digest with a low `s`. */
 export const EXECUTE_VECTOR = {
+  /** The `P256AccountFactory` that made `account` (on the test fork). */
+  factory: vectors.execute.factory as Address,
   account: vectors.execute.account as Address,
   chainId: Number(vectors.chainId),
   call: {
@@ -43,10 +45,47 @@ export const EXECUTE_VECTOR = {
     nonce: BigInt(vectors.execute.nonce),
     deadline: BigInt(vectors.execute.deadline),
   } satisfies Execute,
-  /** `BoxAccount.executeDigest`. */
+  /** `P256Account.executeDigest`. */
   digest: vectors.execute.digest as Hex,
   r: vectors.execute.r as Hex,
   s: vectors.execute.s as Hex,
+  /** The raw form, `r ‖ s`. */
+  signature: vectors.execute.signature as Hex,
+} as const;
+
+/** `executeBatch` of two calls for the same account, signed raw. */
+export const EXECUTE_BATCH_VECTOR = {
+  account: vectors.batch.account as Address,
+  chainId: Number(vectors.chainId),
+  batch: {
+    calls: [
+      { target: vectors.batch.target0 as Address, value: BigInt(vectors.batch.value0), data: vectors.batch.data0 as Hex },
+      { target: vectors.batch.target1 as Address, value: BigInt(vectors.batch.value1), data: vectors.batch.data1 as Hex },
+    ],
+    nonce: BigInt(vectors.batch.nonce),
+    deadline: BigInt(vectors.batch.deadline),
+  } satisfies ExecuteBatch,
+  /** `keccak256(abi.encode(calls))`. */
+  dataHash: vectors.batch.dataHash as Hex,
+  /** `P256Account.batchDigest`. */
+  digest: vectors.batch.digest as Hex,
+  signature: vectors.batch.signature as Hex,
+} as const;
+
+/** A passkey's (WebAuthn) signature of `EXECUTE_VECTOR`'s digest by `P256_VECTOR_KEY`, which the account ran. */
+export const WEBAUTHN_VECTOR = {
+  /** The challenge: `EXECUTE_VECTOR.digest`. */
+  digest: vectors.webAuthn.digest as Hex,
+  authenticatorData: vectors.webAuthn.authenticatorData as Hex,
+  /** The UTF-8 bytes of `clientDataJSON`. */
+  clientDataJSON: vectors.webAuthn.clientDataJSON as Hex,
+  challengeIndex: Number(vectors.webAuthn.challengeIndex),
+  typeIndex: Number(vectors.webAuthn.typeIndex),
+  r: vectors.webAuthn.r as Hex,
+  /** Low. */
+  s: vectors.webAuthn.s as Hex,
+  /** The encoded assertion `P256Account` takes. */
+  signature: vectors.webAuthn.signature as Hex,
 } as const;
 
 /** `Result` for `BoxResults`, signed by `P256_VECTOR_KEY` over the raw digest with a low `s`. */

@@ -26,11 +26,12 @@ const deploymentsPath = `${root}deployments/sepolia.json`;
 
 /** Our contracts, by their name in `deployments/sepolia.json`, and their source. */
 const OURS: Record<string, string> = {
+  P256AccountFactory: 'src/box/P256AccountFactory.sol:P256AccountFactory',
   GameBoxNames: 'src/names/GameBoxNames.sol:GameBoxNames',
   PlayerStats: 'src/names/PlayerStats.sol:PlayerStats',
   BoxResults: 'src/names/BoxResults.sol:BoxResults',
   DemoLicences: 'src/names/DemoLicences.sol:DemoLicences',
-  DemoBoxAccount: 'src/box/BoxAccount.sol:BoxAccount',
+  DemoBoxAccount: 'src/box/P256Account.sol:P256Account',
 };
 
 async function verifyOurs(): Promise<boolean> {

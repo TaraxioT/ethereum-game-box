@@ -7,16 +7,22 @@ import {IERC5267} from "@openzeppelin/contracts/interfaces/IERC5267.sol";
 import {IPermissionedRegistry} from "./IENSv2.sol";
 
 /// @title IGameBoxNames
-/// @notice The registrar of `gamebox.eth`. It holds `REGISTRAR | RENEW | SET_PARENT` on the root of `gamebox.eth`'s
-///         own `UserRegistry` and nothing else, so that registry is emancipated. It registers:
+/// @notice The registrar of `gamebox.eth`. It holds `REGISTRAR | RENEW` and their admins on the root of
+///         `gamebox.eth`'s own `UserRegistry` and nothing else, so that registry is emancipated. It locks the canonical
+///         parent of every registry it creates (it takes `SET_PARENT` only to call `setParent`, then revokes it), and
+///         `handOverRegistrar` moves its registry roles to a successor. It registers:
 ///         - Box names (`<box>.gamebox.eth`), which expire with the Box's licence. Each gets its own
-///           `PermissionedResolver`. `GameBoxNames` writes `boxKey` and `status`, the operator writes `commission`,
-///           `location`, `description` and `games`, and the Box writes `lastSeen` and `game`.
+///           `PermissionedResolver`. `GameBoxNames` writes `addr`, `boxKey` and `status`, the operator writes
+///           `commission`, `location`, `description` and `games`, and the Box's `P256Account` writes `lastSeen` and
+///           `game`.
+///         - Pop-up Box names (`popup-<label>.gamebox.eth`), with their own expiry and their Box's resolver: each is
+///           linked (`linkToNode`) to its Box's record, so it serves exactly the Box's records until it lapses.
 ///         - Player names (`<player>.gamebox.eth`), which never expire. Each gets its own resolver, on which the badge
 ///           holds every role and `PlayerStats` holds `SET_TEXT` on `stats` alone. `GameBoxNames` holds nothing on it.
 ///         - Game names (`<game>.gamebox.eth`), each with its own title registry holding the soulbound title
 ///           `champion.<game>.gamebox.eth`.
-/// @dev Roles (OpenZeppelin `AccessControl`): `DEFAULT_ADMIN_ROLE` adds games and sets the stats writer,
+/// @dev Roles (OpenZeppelin `AccessControl`): `DEFAULT_ADMIN_ROLE` adds games, sets the stats writer and hands the
+///      registry roles over,
 ///      `LICENSOR_ROLE` issues and manages Box licences, `REFEREE_ROLE` crowns champions (and is the role
 ///      `PlayerStats` takes results from). The badge's consent to a name is EIP-712
 ///      `ClaimName(string label,address badge,uint256 deadline)`, domain `Game Box Names`, version `1`.
@@ -31,7 +37,7 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
 
     /// @notice A Box licence.
     /// @param operator Owns the Box's name and writes its four operator keys.
-    /// @param account The Box's `BoxAccount`: the name's `addr`, and the writer of `lastSeen` and `game`.
+    /// @param account The Box's `P256Account`: the name's `addr`, and the writer of `lastSeen` and `game`.
     /// @param qx The x coordinate of the Box's P-256 key.
     /// @param qy The y coordinate of the Box's P-256 key.
     /// @param status The Box's standing.
@@ -44,6 +50,14 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
         bytes32 qy;
         BoxStatus status;
         address resolver;
+        uint64 expiry;
+    }
+
+    /// @notice A pop-up Box name.
+    /// @param ofBox The label of the Box whose record it serves, or empty if the label was never a pop-up.
+    /// @param expiry When it lapses, read from the registry.
+    struct Popup {
+        string ofBox;
         uint64 expiry;
     }
 
@@ -85,6 +99,10 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     event BoxStatusChanged(string label, BoxStatus status);
     /// @notice A Box's account and P-256 key changed.
     event BoxKeyChanged(string label, address indexed account, bytes32 qx, bytes32 qy);
+    /// @notice A pop-up Box name was registered, linked to its Box's record.
+    event PopupRegistered(string label, string ofBox, address indexed operator, uint64 expiry);
+    /// @notice The registry roles moved to `next`, on `gamebox.eth`'s registry and every title registry.
+    event RegistrarHandedOver(address indexed next);
     /// @notice A badge claimed a player name.
     event PlayerClaimed(string label, address indexed badge, address resolver);
     /// @notice A game was added with its title registry.
@@ -106,7 +124,9 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     error BadgeHasName(address badge, string label);
     /// @notice No Box was ever registered under the label.
     error UnknownBox(string label);
-    /// @notice The label belongs (or belonged) to a Box licence, so no player may claim it.
+    /// @notice The Box's licence has lapsed.
+    error BoxNotLive(string label);
+    /// @notice The label belongs (or belonged) to a Box licence or a pop-up, so no player may claim it.
     error LabelHeldByBox(string label);
     /// @notice The account holds no player name.
     error NotAPlayer(address account);
@@ -127,6 +147,8 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     function REFEREE_ROLE() external view returns (bytes32);
     /// @notice The EIP-712 type hash of `ClaimName`.
     function CLAIM_TYPEHASH() external view returns (bytes32);
+    /// @notice The prefix of every pop-up label: `popup-`.
+    function POPUP_PREFIX() external view returns (string memory);
     /// @notice `gamebox.eth`'s own registry, created by the constructor.
     function REGISTRY() external view returns (IPermissionedRegistry);
     /// @notice The resolver of every champion title, created by the constructor. Only `GameBoxNames` writes it.
@@ -137,12 +159,13 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
 
     /// @notice Issues a Box licence: registers `<label>.gamebox.eth` to `operator` until `expiry`, with a new
     ///         resolver. `GameBoxNames` writes `addr` (the Box account), `boxKey` and `status` (`active`), and grants
-    ///         the operator's four keys to `operator` and `lastSeen` and `game` to `account`. The token is
-    ///         non-transferable, and the operator can't re-point its resolver or subregistry. Works again on a label
-    ///         whose licence has lapsed. Needs `LICENSOR_ROLE`.
+    ///         the operator's four keys to `operator` and `lastSeen` and `game` to `account`. On the resolver it keeps
+    ///         `SET_ADDRESS`, `SET_TEXT_ADMIN` and `LINK`, for key rotation and pop-ups; nobody holds `UPGRADE`. The
+    ///         token is non-transferable, and the operator can't re-point its resolver or subregistry. Works again on a
+    ///         label whose licence has lapsed. Needs `LICENSOR_ROLE`.
     /// @param label The Box's label.
-    /// @param operator The operator.
-    /// @param account The Box's `BoxAccount`.
+    /// @param operator The operator (a `P256Account` on the operator's passkey).
+    /// @param account The Box's `P256Account`.
     /// @param qx The x coordinate of the Box's P-256 key.
     /// @param qy The y coordinate of the Box's P-256 key.
     /// @param expiry When the licence lapses.
@@ -168,13 +191,32 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     /// @param status `Active`, `Suspended` or `Revoked`.
     function setBoxStatus(string calldata label, BoxStatus status) external;
 
-    /// @notice Moves a Box to a new account and P-256 key: rewrites `addr` and `boxKey`, and moves `lastSeen` and
-    ///         `game` from the old account to the new one. Needs `LICENSOR_ROLE`.
+    /// @notice Moves a lost Box to a new account and P-256 key: rewrites `addr` and `boxKey`, and moves `lastSeen`
+    ///         and `game` from the old account to the new one, revoking them from the old. `BoxResults` then checks
+    ///         the new key only. Needs `LICENSOR_ROLE`.
     /// @param label The Box's label.
-    /// @param account The new `BoxAccount`.
     /// @param qx The x coordinate of the new key.
     /// @param qy The y coordinate of the new key.
-    function setBoxKey(string calldata label, address account, bytes32 qx, bytes32 qy) external;
+    /// @param account The new `P256Account`.
+    function setBoxKey(string calldata label, bytes32 qx, bytes32 qy, address account) external;
+
+    /// @notice Registers `popup-<label>.gamebox.eth` to `ofBox`'s operator until `expiry`, with `ofBox`'s resolver,
+    ///         and links it (`linkToNode`) to `ofBox`'s record: it serves exactly `ofBox`'s records, while keeping its
+    ///         own expiry. It deploys no resolver. The token is non-transferable. Works again on a label that has
+    ///         lapsed. Needs `LICENSOR_ROLE`.
+    /// @param label The pop-up's own part of the label: `popup-<label>` must keep the label rule, and `label` must not
+    ///        start with a hyphen.
+    /// @param ofBox The label of a live Box.
+    /// @param expiry When the pop-up lapses.
+    /// @return popupLabel `popup-<label>`.
+    function registerPopup(string calldata label, string calldata ofBox, uint64 expiry)
+        external
+        returns (string memory popupLabel);
+
+    /// @notice A pop-up Box name. `ofBox` is empty for a label that was never a pop-up.
+    /// @param popupLabel The pop-up's full label, `popup-<label>`.
+    /// @return The pop-up, with its expiry read from the registry.
+    function getPopup(string calldata popupLabel) external view returns (Popup memory);
 
     /// @notice A Box's P-256 key.
     /// @param label The Box's label.
@@ -191,7 +233,8 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     ///         badge holds every role, and `PlayerStats` holds `SET_TEXT` on `stats` alone. `GameBoxNames` holds no
     ///         role on the name or the resolver afterwards. Open to anyone; the badge's consent is its signature.
     /// @param label The player's label.
-    /// @param badge The badge (any wallet that signs EIP-712).
+    /// @param badge The badge: any wallet that signs EIP-712, or a contract account (such as an agent's
+    ///        `P256Account`) that answers ERC-1271.
     /// @param deadline The last timestamp the claim may run at.
     /// @param signature The badge's `ClaimName` signature: ECDSA, or ERC-1271 for a contract wallet.
     /// @return resolver The name's resolver.
@@ -240,6 +283,13 @@ interface IGameBoxNames is IAccessControl, IERC5267 {
     /// @param game The game's label.
     /// @return The title.
     function getTitle(string calldata game) external view returns (Title memory);
+
+    /// @notice Moves `REGISTRAR | RENEW` and their admins on `gamebox.eth`'s registry, and `REGISTRAR | RENEW |
+    ///         UNREGISTER` and their admins on every title registry, to `next`, and revokes them from this contract.
+    ///         This is how a later contract takes over issuing names without touching any of them; `gamebox.eth`'s
+    ///         registry stays emancipated. Needs `DEFAULT_ADMIN_ROLE`.
+    /// @param next The successor registrar.
+    function handOverRegistrar(address next) external;
 
     /// @notice Sets the `stats` writer that new player resolvers grant `SET_TEXT` on `stats` to. Existing names keep
     ///         theirs. Needs `DEFAULT_ADMIN_ROLE`.

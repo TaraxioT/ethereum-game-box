@@ -2,14 +2,20 @@
 pragma solidity 0.8.26;
 
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {WebAuthn} from "@openzeppelin/contracts/utils/cryptography/WebAuthn.sol";
+
+import {IP256Account} from "../../src/box/IP256Account.sol";
+import {P256Account} from "../../src/box/P256Account.sol";
 
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
 import {RegistryRoles, ResolverRoles} from "../../src/names/IENSv2.sol";
 import {NamesFork} from "./NamesFork.sol";
 
-/// @notice Writes `packages/shared/src/names/vectors.json`: the three digests for fixed inputs, as the contracts
-///         compute them, with an ECDSA signature of the claim and P-256 signatures (raw digest, low `s`) of the other
-///         two, and the role table. `vectors.test.ts` checks `messages.ts` and `roles.ts` against it byte for byte.
+/// @notice Writes `packages/shared/src/names/vectors.json`: the digests for fixed inputs, as the contracts compute
+///         them, with an ECDSA signature of the claim, P-256 signatures (raw digest, low `s`) of the others, a passkey
+///         (WebAuthn) signature of the `Execute`, and the role table. Every signature here is also run through the
+///         contract that checks it. `vectors.test.ts` checks `messages.ts`, `webauthn.ts` and `roles.ts` against it
+///         byte for byte.
 contract VectorsTest is NamesFork {
     string internal constant PATH = "../packages/shared/src/names/vectors.json";
 
@@ -23,11 +29,15 @@ contract VectorsTest is NamesFork {
     function test_writeVectors() public {
         uint256 p256Key_ = p256Key("egb-vector-box");
         (bytes32 qx, bytes32 qy) = p256Public(p256Key_);
+        // The vector account: the factory's account for the vector key.
+        P256Account vectorAccount = P256Account(payable(accounts.deploy(qx, qy)));
 
         string memory json = "vectors";
         vm.serializeString(json, "chainId", vm.toString(block.chainid));
         vm.serializeString(json, "claimName", _claim());
-        vm.serializeString(json, "execute", _execute(p256Key_));
+        vm.serializeString(json, "execute", _execute(vectorAccount, p256Key_));
+        vm.serializeString(json, "batch", _batch(vectorAccount, p256Key_));
+        vm.serializeString(json, "webAuthn", _webAuthn(vectorAccount, p256Key_));
         vm.serializeString(json, "result", _result(p256Key_));
         vm.serializeString(json, "primaryName", _primaryName());
         string memory p = "p256";
@@ -52,12 +62,13 @@ contract VectorsTest is NamesFork {
         return vm.serializeBytes(o, "signature", abi.encodePacked(r, s, v));
     }
 
-    function _execute(uint256 key) internal returns (string memory) {
+    function _execute(P256Account account_, uint256 key) internal returns (string memory) {
         bytes memory data = hex"deadbeef";
-        bytes32 digest = demoBox.executeDigest(TARGET, 5, data, 7, DEADLINE);
+        bytes32 digest = account_.executeDigest(TARGET, 5, data, 7, DEADLINE);
         (bytes32 r, bytes32 s) = p256Sign(key, digest);
         string memory o = "execute";
-        vm.serializeAddress(o, "account", address(demoBox));
+        vm.serializeAddress(o, "factory", address(accounts));
+        vm.serializeAddress(o, "account", address(account_));
         vm.serializeAddress(o, "target", TARGET);
         vm.serializeString(o, "value", "5");
         vm.serializeBytes(o, "data", data);
@@ -65,7 +76,58 @@ contract VectorsTest is NamesFork {
         vm.serializeString(o, "deadline", vm.toString(DEADLINE));
         vm.serializeBytes32(o, "digest", digest);
         vm.serializeBytes32(o, "r", r);
-        return vm.serializeBytes32(o, "s", s);
+        vm.serializeBytes32(o, "s", s);
+        assertEq(account_.isValidSignature(digest, abi.encodePacked(r, s)), account_.isValidSignature.selector);
+        return vm.serializeBytes(o, "signature", abi.encodePacked(r, s));
+    }
+
+    function _vectorCalls() internal pure returns (IP256Account.Call[] memory calls) {
+        calls = new IP256Account.Call[](2);
+        calls[0] = IP256Account.Call(TARGET, 0, hex"deadbeef");
+        calls[1] = IP256Account.Call(WINNER, 1, hex"");
+    }
+
+    function _batch(P256Account account_, uint256 key) internal returns (string memory) {
+        IP256Account.Call[] memory calls = _vectorCalls();
+        bytes32 digest = account_.batchDigest(calls, 8, DEADLINE);
+        (bytes32 r, bytes32 s) = p256Sign(key, digest);
+        string memory o = "batch";
+        vm.serializeAddress(o, "account", address(account_));
+        vm.serializeAddress(o, "target0", calls[0].target);
+        vm.serializeString(o, "value0", vm.toString(calls[0].value));
+        vm.serializeBytes(o, "data0", calls[0].data);
+        vm.serializeAddress(o, "target1", calls[1].target);
+        vm.serializeString(o, "value1", vm.toString(calls[1].value));
+        vm.serializeBytes(o, "data1", calls[1].data);
+        vm.serializeString(o, "nonce", "8");
+        vm.serializeString(o, "deadline", vm.toString(DEADLINE));
+        vm.serializeBytes32(o, "dataHash", keccak256(abi.encode(calls)));
+        vm.serializeBytes32(o, "digest", digest);
+        assertEq(account_.isValidSignature(digest, abi.encodePacked(r, s)), account_.isValidSignature.selector);
+        return vm.serializeBytes(o, "signature", abi.encodePacked(r, s));
+    }
+
+    /// @dev A passkey's signature of the `Execute` vector's digest, checked by the account itself.
+    function _webAuthn(P256Account account_, uint256 key) internal returns (string memory) {
+        bytes memory data = hex"deadbeef";
+        bytes32 digest = account_.executeDigest(TARGET, 5, data, 7, DEADLINE);
+        WebAuthn.WebAuthnAuth memory auth =
+            webAuthnAuth(key, Assertion("webauthn.get", abi.encodePacked(digest), FLAGS_UP_UV_BE_BS));
+        bytes memory signature = encodeWebAuthn(auth);
+        vm.deal(address(account_), 5);
+        vm.etch(TARGET, hex"00"); // a target that accepts the call, so the account runs it
+        vm.warp(DEADLINE);
+        account_.execute(TARGET, 5, data, 7, DEADLINE, signature);
+        string memory o = "webAuthn";
+        vm.serializeBytes32(o, "digest", digest);
+        vm.serializeBytes(o, "authenticatorData", auth.authenticatorData);
+        // As hex: forge would parse the JSON text into an object.
+        vm.serializeBytes(o, "clientDataJSON", bytes(auth.clientDataJSON));
+        vm.serializeUint(o, "challengeIndex", auth.challengeIndex);
+        vm.serializeUint(o, "typeIndex", auth.typeIndex);
+        vm.serializeBytes32(o, "r", auth.r);
+        vm.serializeBytes32(o, "s", auth.s);
+        return vm.serializeBytes(o, "signature", signature);
     }
 
     function _result(uint256 key) internal returns (string memory) {

@@ -4,14 +4,13 @@ pragma solidity 0.8.26;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {BoxAccount} from "../../src/box/BoxAccount.sol";
+import {P256Account} from "../../src/box/P256Account.sol";
 import {IBoxResults} from "../../src/names/IBoxResults.sol";
 import {
     IEnhancedAccessControl,
     IPermissionedRegistry,
     IPermissionedResolver,
     IRegistry,
-    IUniversalResolver,
     ResolverRoles
 } from "../../src/names/IENSv2.sol";
 import {IGameBoxNames} from "../../src/names/IGameBoxNames.sol";
@@ -114,9 +113,9 @@ contract BoxesTest is NamesFork {
     function test_onlyTheEightBoxKeysAreGranted() public {
         vm.recordLogs();
         address resolver = registerBox(BOX, 30 days);
-        BoxAccount next = new BoxAccount(bytes32(uint256(1)), bytes32(uint256(2)));
+        P256Account next = new P256Account(bytes32(uint256(1)), bytes32(uint256(2)));
         vm.prank(admin);
-        names.setBoxKey(BOX, address(next), bytes32(uint256(1)), bytes32(uint256(2)));
+        names.setBoxKey(BOX, bytes32(uint256(1)), bytes32(uint256(2)), address(next));
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         string[8] memory keys = _keys();
@@ -130,7 +129,7 @@ contract BoxesTest is NamesFork {
             if (resource == 0) {
                 // The setup grant: GameBoxNames' own root roles.
                 assertEq(address(uint160(uint256(logs[i].topics[2]))), address(names));
-                assertEq(newRoles, ResolverRoles.SET_TEXT_ADMIN | ResolverRoles.SET_ADDRESS);
+                assertEq(newRoles, ResolverRoles.SET_TEXT_ADMIN | ResolverRoles.SET_ADDRESS | ResolverRoles.LINK);
                 continue;
             }
             bool known;
@@ -146,9 +145,9 @@ contract BoxesTest is NamesFork {
 
     function test_setBoxKeyMovesTheBoxKeys() public {
         IPermissionedResolver resolver = IPermissionedResolver(registerBox(BOX, 30 days));
-        BoxAccount next = new BoxAccount(bytes32(uint256(1)), bytes32(uint256(2)));
+        P256Account next = new P256Account(bytes32(uint256(1)), bytes32(uint256(2)));
         vm.prank(admin);
-        names.setBoxKey(BOX, address(next), bytes32(uint256(1)), bytes32(uint256(2)));
+        names.setBoxKey(BOX, bytes32(uint256(1)), bytes32(uint256(2)), address(next));
         assertEq(resolveAddr(BOX_NAME), address(next));
         bytes memory name = NameLib.dnsName(BOX);
         vm.prank(address(demoBox));
@@ -167,8 +166,9 @@ contract BoxesTest is NamesFork {
         bytes memory data =
             abi.encodeCall(IPermissionedResolver.setText, (NameLib.dnsName(BOX), "lastSeen", "1762400000"));
         uint256 deadline = block.timestamp + 60;
-        (bytes32 r, bytes32 s) = p256Sign(boxKey, demoBox.executeDigest(resolver, 0, data, 1, deadline));
-        demoBox.execute(resolver, 0, data, 1, deadline, r, s);
+        demoBox.execute(
+            resolver, 0, data, 1, deadline, rawSign(boxKey, demoBox.executeDigest(resolver, 0, data, 1, deadline))
+        );
         assertEq(resolveText(BOX_NAME, "lastSeen"), "1762400000");
     }
 
@@ -249,8 +249,8 @@ contract BoxesTest is NamesFork {
         assertEq(resolveText(BOX_NAME, "location"), "Mumbai");
     }
 
-    /// @dev A licence lapses: the name stops resolving through the Universal Resolver, and a second operator registers
-    ///      the label with a resolver of its own.
+    /// @dev A licence lapses: the name stops resolving to the Box (it falls back to the default record), and a second
+    ///      operator registers the label with a resolver of its own.
     function test_lapseThenASecondOperator() public {
         address firstResolver = registerBox(BOX, 1 days);
         uint256 firstToken = registry.getTokenId(NameLib.id(BOX));
@@ -261,14 +261,14 @@ contract BoxesTest is NamesFork {
         vm.warp(block.timestamp + 1 days);
         assertEq(resolveAddr(BOX_NAME), address(0));
         assertEq(resolveText(BOX_NAME, "location"), "");
-        assertEq(
-            resolveError(BOX_NAME), abi.encodeWithSelector(IUniversalResolver.ResolverNotFound.selector, dns(BOX_NAME))
-        );
+        // The lapsed name falls back to gamebox.eth's default record.
+        assertEq(resolveResolver(BOX_NAME), gameboxResolver);
+        assertEq(resolveText(BOX_NAME, "description"), "This Game Box name is free.");
 
         address second = account("operator-2");
         uint256 secondKey = p256Key("egb-test-box-2");
         (bytes32 qx, bytes32 qy) = p256Public(secondKey);
-        BoxAccount secondBox = new BoxAccount(qx, qy);
+        P256Account secondBox = new P256Account(qx, qy);
         vm.prank(admin);
         address secondResolver =
             names.registerBox(BOX, second, address(secondBox), qx, qy, uint64(block.timestamp + 30 days));

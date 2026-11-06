@@ -1,11 +1,12 @@
 // The three EIP-712 messages of the Game Box names, fixed in the contracts:
 // - `ClaimName`: a badge's consent to a player name, checked by `GameBoxNames` (ECDSA or ERC-1271).
-// - `Execute`: a call the Box's P-256 key signs for its `BoxAccount`.
+// - `Execute`: a call (or a batch of calls) a `P256Account`'s key signs: the Box's HYP2003, a passkey or a Worker key.
 // - `Result`: a match result the Box's P-256 key signs for `BoxResults`.
 // Each `*TypedData` function returns what a wallet signs (`eth_signTypedData_v4`, viem `signTypedData`), and each
-// `*Digest` function returns the 32 bytes the contract checks the signature against.
+// `*Digest` function returns the 32 bytes the contract checks the signature against. A P-256 key signs that digest
+// raw, or as a passkey's challenge (`webauthn.ts`).
 
-import { type Address, type Hex, hashTypedData, keccak256 } from 'viem';
+import { type Address, type Hex, encodeAbiParameters, hashTypedData, keccak256 } from 'viem';
 
 import { chainId as deploymentsChainId } from './deployments.ts';
 
@@ -51,11 +52,24 @@ export interface ClaimName {
   deadline: bigint;
 }
 
-/** A call for a `BoxAccount` to run. The Box signs `keccak256(data)` as `dataHash`. */
-export interface Execute {
+/** One call for a `P256Account` to run. */
+export interface Call {
   target: Address;
   value: bigint;
   data: Hex;
+}
+
+/** A call for a `P256Account` to run (`execute`). The key signs `keccak256(data)` as `dataHash`. Any unused nonce works
+ *  once. `target` may be the account itself, for `rotateKey`. */
+export interface Execute extends Call {
+  nonce: bigint;
+  /** Unix seconds. */
+  deadline: bigint;
+}
+
+/** Calls for a `P256Account` to run in order, all or none, under one signature (`executeBatch`). */
+export interface ExecuteBatch {
+  calls: readonly Call[];
   nonce: bigint;
   /** Unix seconds. */
   deadline: bigint;
@@ -85,7 +99,7 @@ export function claimNameTypedData(message: ClaimName, gameBoxNames: Address, ch
   } as const;
 }
 
-/** `Execute`, for the `BoxAccount` at `account`. */
+/** `Execute`, for the `P256Account` at `account`. */
 export function executeTypedData(call: Execute, account: Address, chainId = deploymentsChainId) {
   const { target, value, data, nonce, deadline } = call;
   return {
@@ -94,6 +108,30 @@ export function executeTypedData(call: Execute, account: Address, chainId = depl
     primaryType: 'Execute',
     message: { target, value, dataHash: keccak256(data), nonce, deadline },
   } as const;
+}
+
+/** `abi.encode(calls)` as Solidity encodes a `P256Account.Call[]`: what a batch's `dataHash` hashes. */
+export function encodeCalls(calls: readonly Call[]): Hex {
+  return encodeAbiParameters(
+    [
+      {
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    [calls],
+  );
+}
+
+/** `Execute` for `executeBatch` on the `P256Account` at `account`: `target` is the account, `value` 0 and `dataHash`
+ *  `keccak256(encodeCalls(calls))`. */
+export function executeBatchTypedData(batch: ExecuteBatch, account: Address, chainId = deploymentsChainId) {
+  const { calls, nonce, deadline } = batch;
+  return executeTypedData({ target: account, value: 0n, data: encodeCalls(calls), nonce, deadline }, account, chainId);
 }
 
 /** `Result`, for `BoxResults` at `boxResults`. */
@@ -111,9 +149,14 @@ export function claimNameDigest(message: ClaimName, gameBoxNames: Address, chain
   return hashTypedData(claimNameTypedData(message, gameBoxNames, chainId));
 }
 
-/** The digest `BoxAccount.executeDigest` returns. The Box signs it with P-256. */
+/** The digest `P256Account.executeDigest` returns. The account's key signs it with P-256. */
 export function executeDigest(call: Execute, account: Address, chainId = deploymentsChainId): Hex {
   return hashTypedData(executeTypedData(call, account, chainId));
+}
+
+/** The digest `P256Account.batchDigest` returns. The account's key signs it with P-256. */
+export function executeBatchDigest(batch: ExecuteBatch, account: Address, chainId = deploymentsChainId): Hex {
+  return hashTypedData(executeBatchTypedData(batch, account, chainId));
 }
 
 /** The digest `BoxResults.resultDigest` returns. The Box signs it with P-256. */

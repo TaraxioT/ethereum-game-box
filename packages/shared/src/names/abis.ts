@@ -87,6 +87,19 @@ export const gameBoxNamesAbi = [
   },
   {
     "type": "function",
+    "name": "POPUP_PREFIX",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "REFEREE_ROLE",
     "inputs": [],
     "outputs": [
@@ -390,6 +403,37 @@ export const gameBoxNamesAbi = [
   },
   {
     "type": "function",
+    "name": "getPopup",
+    "inputs": [
+      {
+        "name": "popupLabel",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IGameBoxNames.Popup",
+        "components": [
+          {
+            "name": "ofBox",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "expiry",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getRoleAdmin",
     "inputs": [
       {
@@ -464,6 +508,19 @@ export const gameBoxNamesAbi = [
       },
       {
         "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "handOverRegistrar",
+    "inputs": [
+      {
+        "name": "next",
         "type": "address",
         "internalType": "address"
       }
@@ -657,6 +714,35 @@ export const gameBoxNamesAbi = [
   },
   {
     "type": "function",
+    "name": "registerPopup",
+    "inputs": [
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "ofBox",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "expiry",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "popupLabel",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renewBox",
     "inputs": [
       {
@@ -719,11 +805,6 @@ export const gameBoxNamesAbi = [
         "internalType": "string"
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "qx",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -732,6 +813,11 @@ export const gameBoxNamesAbi = [
         "name": "qy",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -1019,6 +1105,50 @@ export const gameBoxNamesAbi = [
   },
   {
     "type": "event",
+    "name": "PopupRegistered",
+    "inputs": [
+      {
+        "name": "label",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "ofBox",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "expiry",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RegistrarHandedOver",
+    "inputs": [
+      {
+        "name": "next",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoleAdminChanged",
     "inputs": [
       {
@@ -1135,6 +1265,17 @@ export const gameBoxNamesAbi = [
         "type": "address",
         "internalType": "address"
       },
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BoxNotLive",
+    "inputs": [
       {
         "name": "label",
         "type": "string",
@@ -1901,16 +2042,6 @@ export const demoLicencesAbi = [
         "name": "names",
         "type": "address",
         "internalType": "contract IGameBoxNames"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "box",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -1922,8 +2053,8 @@ export const demoLicencesAbi = [
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "stateMutability": "view"
@@ -1943,19 +2074,6 @@ export const demoLicencesAbi = [
   },
   {
     "type": "function",
-    "name": "OPERATOR",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "POPUP_TERM",
     "inputs": [],
     "outputs": [
@@ -1963,19 +2081,6 @@ export const demoLicencesAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "PREFIX",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
       }
     ],
     "stateMutability": "view"
@@ -1992,7 +2097,7 @@ export const demoLicencesAbi = [
     ],
     "outputs": [
       {
-        "name": "boxLabel",
+        "name": "popupLabel",
         "type": "string",
         "internalType": "string"
       }
@@ -2004,7 +2109,7 @@ export const demoLicencesAbi = [
     "name": "PopupOpened",
     "inputs": [
       {
-        "name": "boxLabel",
+        "name": "popupLabel",
         "type": "string",
         "indexed": false,
         "internalType": "string"
@@ -2017,22 +2122,11 @@ export const demoLicencesAbi = [
       }
     ],
     "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "InvalidLabel",
-    "inputs": [
-      {
-        "name": "label",
-        "type": "string",
-        "internalType": "string"
-      }
-    ]
   }
 ] as const;
 
-/** `BoxAccount` (`contracts/out/BoxAccount.sol`). */
-export const boxAccountAbi = [
+/** `P256Account` (`contracts/out/P256Account.sol`). */
+export const p256AccountAbi = [
   {
     "type": "constructor",
     "inputs": [
@@ -2057,6 +2151,52 @@ export const boxAccountAbi = [
     "type": "function",
     "name": "EXECUTE_TYPEHASH",
     "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "batchDigest",
+    "inputs": [
+      {
+        "name": "calls",
+        "type": "tuple[]",
+        "internalType": "struct IP256Account.Call[]",
+        "components": [
+          {
+            "name": "target",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "value",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
@@ -2139,14 +2279,9 @@ export const boxAccountAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "r",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [
@@ -2154,6 +2289,57 @@ export const boxAccountAbi = [
         "name": "result",
         "type": "bytes",
         "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeBatch",
+    "inputs": [
+      {
+        "name": "calls",
+        "type": "tuple[]",
+        "internalType": "struct IP256Account.Call[]",
+        "components": [
+          {
+            "name": "target",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "value",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
       }
     ],
     "stateMutability": "nonpayable"
@@ -2199,6 +2385,30 @@ export const boxAccountAbi = [
   },
   {
     "type": "function",
+    "name": "isValidSignature",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "magicValue",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "nonceUsed",
     "inputs": [
       {
@@ -2218,6 +2428,84 @@ export const boxAccountAbi = [
   },
   {
     "type": "function",
+    "name": "onERC1155BatchReceived",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "onERC1155Received",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "publicKey",
     "inputs": [],
     "outputs": [
@@ -2230,6 +2518,43 @@ export const boxAccountAbi = [
         "name": "qy",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rotateKey",
+    "inputs": [
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -2272,6 +2597,44 @@ export const boxAccountAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "ExecutedBatch",
+    "inputs": [
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "dataHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "KeyRotated",
+    "inputs": [
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "DeadlineExpired",
     "inputs": [
@@ -2305,7 +2668,7 @@ export const boxAccountAbi = [
   },
   {
     "type": "error",
-    "name": "SelfCall",
+    "name": "OnlySelf",
     "inputs": []
   },
   {
@@ -2316,6 +2679,114 @@ export const boxAccountAbi = [
         "name": "str",
         "type": "string",
         "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroKey",
+    "inputs": []
+  }
+] as const;
+
+/** `P256AccountFactory` (`contracts/out/P256AccountFactory.sol`). */
+export const p256AccountFactoryAbi = [
+  {
+    "type": "function",
+    "name": "accountOf",
+    "inputs": [
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "deploy",
+    "inputs": [
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AccountDeployed",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "Create2EmptyBytecode",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FailedDeployment",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": [
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   }
@@ -3449,6 +3920,38 @@ export const permissionedResolverAbi = [
   },
   {
     "type": "function",
+    "name": "getRecordCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRecordId",
+    "inputs": [
+      {
+        "name": "node",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "grantRoles",
     "inputs": [
       {
@@ -3602,6 +4105,42 @@ export const permissionedResolverAbi = [
         "name": "calls",
         "type": "bytes[]",
         "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "linkToNode",
+    "inputs": [
+      {
+        "name": "sourceName",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "targetNode",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "linkToRecord",
+    "inputs": [
+      {
+        "name": "sourceName",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "recordId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -3831,6 +4370,31 @@ export const permissionedResolverAbi = [
   },
   {
     "type": "event",
+    "name": "Linked",
+    "inputs": [
+      {
+        "name": "recordId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "node",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "name",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ResourceArgument",
     "inputs": [
       {
@@ -3994,6 +4558,11 @@ export const permissionedResolverAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidRecord",
+    "inputs": []
   },
   {
     "type": "error",

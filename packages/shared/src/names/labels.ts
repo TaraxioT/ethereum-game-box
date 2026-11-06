@@ -7,7 +7,7 @@ export const PARENT_NAME = 'gamebox.eth';
 export const LABEL_MIN_LENGTH = 3;
 export const LABEL_MAX_LENGTH = 32;
 
-/** Every pop-up Box's label starts with this; `DemoLicences.openPopup(label)` adds it. */
+/** Every pop-up Box's label starts with this; `GameBoxNames.registerPopup(label, ofBox, expiry)` adds it. */
 export const POPUP_PREFIX = 'popup-';
 
 /** Why `label` breaks the rule, in a few words for a person, or `null` if it is a valid label. */
