@@ -1,0 +1,19 @@
+diff --git a/src/libopensc/card-epass2003.c b/src/libopensc/card-epass2003.c
+index 81906bc..ae49bd9 100644
+--- a/src/libopensc/card-epass2003.c
++++ b/src/libopensc/card-epass2003.c
+@@ -3255,11 +3255,9 @@ epass2003_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
+ 				data->pin1.len);
+ 		LOG_TEST_RET(card->ctx, r, "verify pin failed");
+ 
+-		r = get_external_key_retries(card, 0x80 | kid, &retries);
+-		if (retries < pin_low)
+-			sc_log(card->ctx, "Verification failed (remaining tries: %d)", retries);
+-
+-		LOG_TEST_RET(card->ctx, r, "verify pin failed");
++		/* gbx: HYP2003 answers the follow-up retries query with 6988 and then
++		 * drops the SM session (and the login), so skip it after a good verify. */
++		(void)pin_low;
+ 	}
+ 
+ 	if (r == SC_SUCCESS) {
