@@ -1,0 +1,16 @@
+// Deploy the standalone public dashboard through Cloudflare Workers Static Assets.
+// George Mathew's account, confirmed in the Cloudflare dashboard.
+{
+  "$schema": "https://unpkg.com/wrangler@4.158.0/config-schema.json",
+  "name": "gameboxdashboard",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": true,
+  "preview_urls": false,
+  "build": {
+    "command": "node scripts/build.mjs"
+  },
+  "assets": {
+    "directory": "./dist"
+  }
+}
