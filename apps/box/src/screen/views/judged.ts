@@ -21,7 +21,7 @@ export interface SplitWords {
   readonly lines: readonly string[];
 }
 
-/** Result's words for a store match: each seat's share against its `stake`, or every stake back with why. */
+/** Result's words for a store match: each player's share against their `stake`, or every stake back with why. With more than two, the plate has no room for a line each: their panels say. */
 export function splitWords(judged: Judged | null, stake: number, names: readonly (string | null)[]): SplitWords {
   if (judged?.step === "refunded") {
     return { banner: "REFUNDED · EVERY STAKE WENT BACK", seats: names.map(() => ({ status: `REFUNDED · ${stake} USDC BACK`, tone: "done" })), lines: judged.reason ? [judged.reason] : [] };
@@ -30,6 +30,6 @@ export function splitWords(judged: Judged | null, stake: number, names: readonly
   return {
     banner: "THE JUDGE SPLIT THE POT",
     seats: paid.map((share) => ({ status: `+${share} USDC`, tone: share > stake ? "win" : share < stake ? "lose" : "done" })),
-    lines: paid.map((share, seat) => `${names[seat] ?? `Player ${seat + 1}`} +${share} USDC`),
+    lines: names.length > 2 ? [] : paid.map((share, seat) => `${names[seat] ?? `Player ${seat + 1}`} +${share} USDC`),
   };
 }

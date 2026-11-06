@@ -1,5 +1,6 @@
 // The Badges tab: identify and roll the badge on a station, the roster, injected taps at each seat, and, with the
 // fake receiver, the simulated badges to place on and lift off the stations.
+import { SEATS, type Seat } from "@egb/sdk";
 import type { Tab } from "./stations.ts";
 import type { IdentifyReply, InjectReply, RollReply, TapsReply } from "./wire.ts";
 import { button, h, ms, post, rows, show } from "./dom.ts";
@@ -21,7 +22,7 @@ function picker(): { el: HTMLSelectElement; set(options: readonly [value: string
   };
 }
 
-function readCard(seat: 0 | 1, station: () => string): HTMLElement {
+function readCard(seat: Seat, station: () => string): HTMLElement {
   const out = h("output", "result");
   const identify = button("Identify", () =>
     show(out, async () => {
@@ -38,7 +39,7 @@ function readCard(seat: 0 | 1, station: () => string): HTMLElement {
   return h("section", `card seat-${seat}`, h("h2", "", `Station P${seat + 1}`), h("p", "hint", "Reads the badge resting on the station."), h("div", "row", identify, roll), out);
 }
 
-function injectCard(seat: 0 | 1, badges: ReturnType<typeof picker>): HTMLElement {
+function injectCard(seat: Seat, badges: ReturnType<typeof picker>): HTMLElement {
   const out = h("output", "result");
   const address = h("input");
   address.placeholder = "or an address 0x…";
@@ -54,8 +55,10 @@ function injectCard(seat: 0 | 1, badges: ReturnType<typeof picker>): HTMLElement
 
 export function badgesTab(): Tab {
   let taps: TapsReply | null = null;
-  const station = (seat: 0 | 1) => () => taps?.stations[seat] ?? "";
-  const pickers = [picker(), picker()] as const;
+  const station = (seat: Seat) => () => taps?.stations[seat] ?? "";
+  const pickers = SEATS.map(() => picker());
+  const reads = SEATS.map((seat) => readCard(seat, station(seat)));
+  const injects = SEATS.map((seat, i) => injectCard(seat, pickers[i] as ReturnType<typeof picker>));
   const rosterBody = h("tbody");
   const roster = h("table", "", h("thead", "", h("tr", "", ...["Label", "Address (key 2)", "UID", "First seen"].map((t) => h("th", "", t)))), rosterBody);
 
@@ -68,8 +71,8 @@ export function badgesTab(): Tab {
   const el = h(
     "div",
     "tab",
-    h("div", "cards", readCard(0, station(0)), readCard(1, station(1))),
-    h("div", "cards", injectCard(0, pickers[0]), injectCard(1, pickers[1])),
+    h("div", "cards", ...reads),
+    h("div", "cards", ...injects),
     h("section", "card wide", h("h2", "", "Roster"), roster),
     fake,
   );
@@ -80,22 +83,21 @@ export function badgesTab(): Tab {
     const key = JSON.stringify(reply.fake);
     if (key === fakeKey) return;
     fakeKey = key;
-    const [p1, p2] = reply.stations;
+    const seats = reply.stations;
     fakeBody.replaceChildren(
       ...reply.fake.badges.map((b) =>
         h(
           "div",
           "row",
-          h("span", "badge-name", `${b.name} ${b.station ? `on ${b.station === p1 ? "P1" : "P2"}` : ""}`),
-          button("On P1", () => fakeOp({ op: "place", badge: b.name, st: p1 })),
-          button("On P2", () => fakeOp({ op: "place", badge: b.name, st: p2 })),
+          h("span", "badge-name", `${b.name} ${b.station ? `on P${seats.indexOf(b.station) + 1}` : ""}`),
+          ...seats.map((st, i) => button(`On P${i + 1}`, () => fakeOp({ op: "place", badge: b.name, st }))),
           button("Lift", () => fakeOp({ op: "lift", badge: b.name })),
         ),
       ),
       h(
         "div",
         "row",
-        ...[p1, p2].flatMap((st, i) => [
+        ...seats.flatMap((st, i) => [
           button(`P${i + 1} link down`, () => fakeOp({ op: "linkDown", st })),
           button(`P${i + 1} link up`, () => fakeOp({ op: "linkUp", st })),
         ]),
@@ -110,6 +112,8 @@ export function badgesTab(): Tab {
       taps = reply;
       const options = reply.roster.map((r) => [r.label, r.label.toUpperCase()] as [string, string]);
       for (const p of pickers) p.set(options);
+      // A card for each seat this Box has.
+      for (const cards of [reads, injects]) cards.forEach((card, seat) => (card.hidden = seat >= reply.stations.length));
       rows(rosterBody, reply.roster.map((r) => [r.label.toUpperCase(), r.key2, r.uid, r.firstSeen.replace("T", " ").slice(0, 19)]));
       drawFake(reply);
     },

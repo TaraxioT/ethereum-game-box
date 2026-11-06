@@ -16,7 +16,7 @@ import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
-import { other, type DuelSeat } from "@egb/sdk";
+import { isDuelSeat, other, type DuelSeat } from "@egb/sdk";
 import { MAX_WAIT_MS, MIN_WAIT_MS, reactionMs } from "./rules.ts";
 import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";
@@ -415,14 +415,14 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     update(state: BoxState, event: BoxEvent) {
       if (state.phase === "stake") {
         // Both have signed: the stakes are on their way into the pot.
-        if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
+        if (event.type === "tap" && event.accepted && isDuelSeat(event.seat)) figures[event.seat].twitch();
         showWire(state);
         if (!walked) void walkOut();
         return;
       }
       const s = quickDraw(state);
       if (!s) return;
-      if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
+      if (event.type === "tap" && event.accepted && isDuelSeat(event.seat)) figures[event.seat].twitch();
       if (event.type === "cue" && event.cue === "draw" && shown === "wait") {
         shown = "draw";
         void draw(false);

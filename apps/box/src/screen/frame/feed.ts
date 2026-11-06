@@ -1,7 +1,7 @@
 // What a built game's frame is told, from the Box's state and events. Pure: the view (view.ts) posts what this makes.
-import type { FrameEvent, FrameSeat, GameManifest, ToFrame } from "@egb/sdk";
+import { isDuelSeat, type FrameEvent, type FrameSeat, type GameManifest, type ToFrame } from "@egb/sdk";
 import { playerLabel } from "../../core/badges.ts";
-import type { BoxEvent, BoxState } from "../../core/types.ts";
+import type { BoxEvent, BoxState, SeatState } from "../../core/types.ts";
 
 /** A built game's match as its frame sees it. */
 export interface FrameMatch {
@@ -25,13 +25,17 @@ export const builtMatch: FrameSource = (state) => {
   return manifest ? { id, manifest, state: rules, over: match.outcome !== null } : null;
 };
 
-/** Each seat's player as the frame names it: its ENS label once read, else the badge's own. */
+/** A seat's player as the frame names it: their ENS label once read, else the badge's own. */
+const frameSeat = ({ badge, ens }: SeatState): FrameSeat => ({ name: badge ? playerLabel(badge, ens) : null });
+
+/** A built game's two seats. */
 export function frameSeats(state: BoxState): readonly [FrameSeat, FrameSeat] {
-  const seat = (i: 0 | 1): FrameSeat => {
-    const { badge, ens } = state.seats[i];
-    return { name: badge ? playerLabel(badge, ens) : null };
-  };
-  return [seat(0), seat(1)];
+  return [frameSeat(state.seats[0]), frameSeat(state.seats[1])];
+}
+
+/** A store match's players, in seat order. A seat left empty isn't one. */
+export function framePlayers(state: BoxState): readonly FrameSeat[] {
+  return state.seats.filter((seat) => seat.badge).map(frameSeat);
 }
 
 export function frameInit(match: FrameMatch, state: BoxState, now: number, calm: boolean): Extract<ToFrame, { t: "init" }> {
@@ -44,7 +48,7 @@ export function frameInit(match: FrameMatch, state: BoxState, now: number, calm:
  */
 export function frameEvent(prev: FrameMatch | null, next: FrameMatch, event: BoxEvent): FrameEvent | null {
   if (next.over && !prev?.over) return { type: "over" };
-  if (event.type === "tap" && event.accepted) return { type: "tap", seat: event.seat };
+  if (event.type === "tap" && event.accepted && isDuelSeat(event.seat)) return { type: "tap", seat: event.seat };
   if (next.state !== prev?.state) return { type: "step" };
   return null;
 }

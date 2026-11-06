@@ -19,7 +19,7 @@ import type { DuelSeat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
 import { playerLabel, playerName } from "../../core/badges.ts";
 import { el, place } from "../../screen/shell/dom.ts";
-import { DUEL_SEATS } from "@egb/sdk";
+import { DUEL_SEATS, isDuelSeat } from "@egb/sdk";
 import { DEAL_MS, frontIndex, frontRemainingMs } from "./rules.ts";
 import { createScene, type ScenePlaces } from "./scene.ts";
 import { createRolodex, type NoteTone, type Placement } from "./rolodex.ts";
@@ -267,14 +267,14 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       if (state.phase === "stake") {
         // Both have signed: the stakes are on their way into the pot.
         band(state);
-        if (event.type === "tap") standing.tap(event.seat, event.accepted);
+        if (event.type === "tap" && isDuelSeat(event.seat)) standing.tap(event.seat, event.accepted);
         premarket.show(state);
         return;
       }
       const match = state.match;
       if (!match || match.play.game !== "stock-duel") return;
       band(state);
-      if (event.type === "tap") standing.tap(event.seat, event.accepted);
+      if (event.type === "tap" && isDuelSeat(event.seat)) standing.tap(event.seat, event.accepted);
       if (event.type === "phase" && event.from === "stake") {
         ctx.sound.play("bell");
         void premarket.open();

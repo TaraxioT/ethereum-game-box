@@ -53,7 +53,7 @@ export function createSimLink(options: { seed?: number } = {}): SimLink {
 
   function demoBadgeFor(seat: Seat): Badge | null {
     const seats = core.state().seats;
-    const seated = seats[seat].badge;
+    const seated = seats[seat]?.badge;
     if (seated) return seated;
     return DEMO_BADGES.find((badge) => !seats.some((slot) => sameBadge(slot.badge, badge))) ?? null;
   }

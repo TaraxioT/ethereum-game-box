@@ -3,13 +3,13 @@
 import type { FrameWord } from "../../core/types.ts";
 import type { ViewContext } from "../views/view.ts";
 import type { BundlePowers, BundleSource } from "./bundle-view.ts";
-import { frameSeats } from "./feed.ts";
+import { framePlayers } from "./feed.ts";
 
 /** The store game playing in the Box's state, and the finished taps the core hands it. */
 export const storeMatch: BundleSource = {
   match(state) {
     const play = state.match?.play;
-    return play?.game === "store" ? { hash: play.bundle, title: play.title, players: frameSeats(state) } : null;
+    return play?.game === "store" ? { hash: play.bundle, title: play.title, players: framePlayers(state) } : null;
   },
   tap: (event) => (event.type === "game-tap" ? { seat: event.seat, at: event.at, roll: event.roll } : null),
 };

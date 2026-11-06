@@ -1,5 +1,5 @@
 // <egb-txbar>: the transaction strip. A panel-style frame whose top line names the transaction ("TOP UP +100 USDC",
-// "NAME", "STAKE 2×10 USDC", "PAYOUT 20 USDC", "RESULT", "REFUND 20 USDC") beside a hash cell (the shortened hash,
+// "NAME", "STAKE 2×10 USDC", or 3× or 4×, "PAYOUT 20 USDC", "RESULT", "REFUND 20 USDC") beside a hash cell (the shortened hash,
 // linked to its Etherscan page; empty until the relayer has sent it, and always in the demo, which has none); under it
 // the four steps, SIGNED › SENT › IN BLOCK n › PAID, each lit in the system's light once reached (the one just reached
 // flickers once), the rest dim. A failed transaction lights the strip in the alert colour and says FAILED for PAID.
@@ -15,15 +15,15 @@ const STEPS: readonly Exclude<TxStep, "failed">[] = ["signed", "sent", "in-block
 const WORDS: Record<Exclude<TxStep, "failed">, string> = { signed: "SIGNED", sent: "SENT", "in-block": "IN BLOCK", paid: "PAID" };
 const CHAMFER = 12;
 
-/** The transaction's kind and amount, as the strip names it. An open with no seat carries both stakes. */
-function kindOf(tx: Tx): string {
+/** The transaction's kind and amount, as the strip names it. An open with no seat carries every player's stake. */
+function kindOf(tx: Tx, players: number): string {
   switch (tx.kind) {
     case "topup":
       return `TOP UP +${tx.amount} USDC`;
     case "claim":
       return "NAME";
     case "open":
-      return tx.seat === null ? `STAKE 2×${tx.amount / 2} USDC` : `STAKE ${tx.amount} USDC`;
+      return tx.seat === null ? `STAKE ${players}×${tx.amount / players} USDC` : `STAKE ${tx.amount} USDC`;
     case "settle":
       return tx.amount > 0 ? `PAYOUT ${tx.amount} USDC` : "RESULT";
     case "refund":
@@ -91,13 +91,14 @@ export class EgbTxbar extends HTMLElement {
     fitFrame(this.#bar, { chamfer: CHAMFER, ticks: true });
   }
 
-  show(tx: Tx): void {
+  /** `players`: how many a match has, which an open with no seat is split between. */
+  show(tx: Tx, players: number): void {
     const failed = tx.step === "failed";
     // A failure lights what it reached; its last step reads FAILED.
     const at = failed ? STEPS.length - 1 : STEPS.indexOf(tx.step);
     const hidden = this.#out;
     this.#out = false;
-    this.#kind.textContent = kindOf(tx);
+    this.#kind.textContent = kindOf(tx, players);
     this.#bar.classList.toggle("failed", failed);
     const paidStep = this.#steps[STEPS.length - 1];
     if (paidStep) paidStep.textContent = failed ? "FAILED" : WORDS.paid;

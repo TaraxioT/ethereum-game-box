@@ -3,6 +3,7 @@
 // held), so a player can tell it in mono through a small speaker. A seat's sound leans to its side of the screen and
 // is pitched or voiced differently from the other seat's, since the speaker is mono. Badge taps are short (under
 // ~400 ms) and louder than screen touches; fanfares and the match's end run longer.
+import { sideOf } from "@egb/sdk";
 import type { Seat } from "../../core/types.ts";
 import type { Synth } from "./synth.ts";
 
@@ -52,7 +53,7 @@ const N = {
 
 /** Player 1's value, Player 2's, and the value for nobody's (Player 1's unless given). */
 const bySeat = (seat: Seat | null | undefined, one: number, two: number, none = one): number =>
-  seat === 0 ? one : seat === 1 ? two : none;
+  seat === undefined || seat === null ? none : sideOf(seat) === 0 ? one : two;
 
 const clamp01 = (x: number | undefined): number => Math.max(0, Math.min(1, x ?? 0));
 
@@ -124,7 +125,7 @@ export const SOUNDS: readonly SoundEntry[] = [
     meaning: "A badge takes a seat on Home or Join",
     sounds: "A two-note bell chime: Player 1 a fifth (C, G), Player 2 a sixth (E, C) that completes the chord",
     play(s, o, t, { seat }) {
-      const [a, b] = seat === 1 ? [N.E6, N.C7] : [N.C6, N.G6];
+      const [a, b] = bySeat(seat, 0, 1) === 1 ? [N.E6, N.C7] : [N.C6, N.G6];
       s.thump(o, t, 180, 90, 0.2, 0.08);
       s.noise(o, t, { filter: "highpass", freq: 5000, dur: 0.03, gain: 0.05 });
       s.bell(o, t, a, 0.1, 0.35);

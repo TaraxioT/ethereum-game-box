@@ -19,5 +19,10 @@ export function isDuelSeat(seat: Seat): seat is DuelSeat {
   return seat === 0 || seat === 1;
 }
 
+/** Which side of the Box a seat stands on, as a two-seat game's seat: Players 1 and 3 on the left, 2 and 4 on the right. */
+export function sideOf(seat: Seat): DuelSeat {
+  return seat === 0 || seat === 2 ? 0 : 1;
+}
+
 /** One each for a list of seats: always the first two, and up to two more. */
 export type Seated<T> = readonly [T, T, ...T[]];

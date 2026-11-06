@@ -1,4 +1,4 @@
-// A seat's panel on a page: a chamfered frame in the seat's colour round a socket of two rings in a dial of ticks, holding the badge's
+// A seat's panel on a page, with `small` beside others when three or four show: a chamfered frame in the seat's colour round a socket of two rings in a dial of ticks, holding the badge's
 // LED blockie, the player's ENS name (`nova` bright, `.gamebox.eth` dim; the badge's own label until it is read), the
 // title it holds or the championship it leads (by that name's own ENS name, which resolves to the player), its stats (wins, losses and draws in the focused game, and its USDC, read from chain,
 // popping in when the badge taps) and one status line ("TAP YOUR BADGE", "SIGNED", "WINNER"). Lit when the story is

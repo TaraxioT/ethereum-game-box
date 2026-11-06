@@ -17,6 +17,7 @@ import { storeMatch, storePowers } from "../frame/bundle-feed.ts";
 import { frameView } from "../frame/view.ts";
 import { builtMatch } from "../frame/feed.ts";
 import { isTeamGame } from "../../core/catalogue.ts";
+import { allSigned } from "../../core/seats.ts";
 
 /** A built game's screen: its own, in the sandboxed frame. */
 const builtScreen = frameView(builtMatch);
@@ -43,11 +44,11 @@ export const routes: Routes = (state) => {
     case "join":
       return { key: "join", pose: "page", view: joinView };
     case "stake": {
-      // Both signed for a team game: its stakes are going into the pot, and the game's own screen shows the wait (the
+      // Everyone signed for a team game: its stakes are going into the pot, and the game's own screen shows the wait (the
       // gunslingers pace out, the market's pre-open). The key is the one the match will play under, so the same
       // screen carries on into it without a move.
       const focus = state.focus;
-      if (isTeamGame(focus) && state.seats.every((s) => s.signed)) return teamRoute(focus);
+      if (isTeamGame(focus) && allSigned(state.seats)) return teamRoute(focus);
       return { key: "stake", pose: "page", view: stakeView };
     }
     case "playing": {

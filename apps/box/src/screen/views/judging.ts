@@ -7,19 +7,14 @@ import type { EgbKey } from "../parts/key.ts";
 import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
-import { createSeatPanel } from "./seat-panel.ts";
+import { createSeatRow, seatsInPlay } from "./seat-row.ts";
 import { judgingWords } from "./judged.ts";
 
 export function judgingView(ctx: ViewContext): View {
   const { layout, link, sound } = ctx;
-  const page = pageLayout(layout);
+  const page = pageLayout(layout, seatsInPlay(link.state()));
   const root = el("div", "page judging");
-  const panels = ([0, 1] as const).map((s) => {
-    const panel = createSeatPanel(s);
-    place(panel.el, page.seats[s]);
-    root.append(panel.el);
-    return panel;
-  });
+  const row = createSeatRow(root, layout);
 
   const plate = document.createElement("egb-panel") as EgbPanel;
   plate.classList.add("page-plate", "stake-plate");
@@ -44,7 +39,8 @@ export function judgingView(ctx: ViewContext): View {
     const words = judgingWords(play?.game === "store" ? play.judged : null);
     head.textContent = words.head;
     detail.textContent = words.detail;
-    state.seats.forEach((s, i) => panels[i]?.set(s, "WAITING FOR THE JUDGE", "idle"));
+    row.show(seatsInPlay(state));
+    state.seats.forEach((s, i) => row.panel(i)?.set(s, "WAITING FOR THE JUDGE", "idle"));
   }
 
   return {
