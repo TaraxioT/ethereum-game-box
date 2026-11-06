@@ -31,8 +31,8 @@ then both badges' verified rolls choose the stat, and the higher number takes th
 
 ## The flow
 
-Join → Stake → deal → pick → reveal (the dial turns to the stat, the cards turn over, the seals come down) → the next
-pick, or over → Result.
+Join → Stake → pre-market while the stakes go in (the opening bell rings when they are in a block) → deal → pick →
+reveal (the dial turns to the stat, the cards turn over, the seals come down) → the next pick, or over → Result.
 
 ## The screen
 
@@ -43,6 +43,11 @@ stat wheel over two wells, where the played cards land face down and turn over a
 The game draws the top band itself: each player, their USDC stake and round pips, the round and the pot. The built
 screen keeps it in a frame: each hand as a column of graphite cards whose front card lifts in the seat's colour, a
 white stat chip over the two played cards at the reveal, the score at the top, and a slab naming the winner.
+
+Before the deal, while both stakes go into the pot, a pre-market slab sits over the wells: status lamps for the
+transaction (signed, sent, in a block), its hash and seconds, and an amber ticker tape of the chain's own numbers (block,
+gas, pot). It never shows a stock's numbers. When the stakes are in a block the opening bell rings, the slab reads
+MARKET OPEN and goes, and the deal begins.
 
 The comps it was built to, at the Pi's 1280×800: [the match](look/slab-match.png) and
 [the reveal](look/slab-reveal.png).

@@ -5,6 +5,11 @@
 //
 // The dimming runs from the standoff's start over the longest possible wait, and the heartbeat quickens once the
 // shortest wait has passed. Both are the same for every match, so neither gives away when the draw comes.
+//
+// Before that, while both stakes go into the pot (the routes bring this screen up on the second signature), the two
+// stand back to back by the sign, pace ten paces apart as the sign counts them, turn, and each raises a revolver and
+// thumbs its hammer back. A brass wire plate over the sign follows the transaction. The standoff begins when the
+// stakes are in a block: if that comes before the walk is done, the two hurry to their marks.
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
@@ -16,6 +21,8 @@ import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";
 import { createSign } from "./sign.ts";
 import { createFigure } from "./figure.ts";
+import { latestOpen, OPEN_STEPS, openLine, openStepIndex } from "../../screen/views/open-tx.ts";
+import type { Tx } from "../../core/types.ts";
 
 interface Geometry {
   readonly scene: SceneSpec;
@@ -24,6 +31,8 @@ interface Geometry {
   readonly figures: readonly [Rect, Rect];
   readonly plates: readonly [Rect, Rect];
   readonly banner: Rect;
+  /** The wire plate that follows the stakes going in, over the sign. */
+  readonly wire: Rect;
 }
 
 // The Box's overlay holds the top ~130 px (landscape) / ~150 px (portrait); everything here stands below it.
@@ -34,6 +43,7 @@ const GEOMETRY: Record<Orientation, Geometry> = {
     figures: [{ x: 30, y: 318, w: 260, h: 390 }, { x: 990, y: 318, w: 260, h: 390 }],
     plates: [{ x: 40, y: 712, w: 240, h: 66 }, { x: 1000, y: 712, w: 240, h: 66 }],
     banner: { x: 340, y: 594, w: 600, h: 92 },
+    wire: { x: 400, y: 136, w: 480, h: 64 },
   },
   portrait: {
     scene: { width: 720, height: 1080, horizon: 720, sun: { x: 360, y: 734, r: 232 } },
@@ -41,6 +51,7 @@ const GEOMETRY: Record<Orientation, Geometry> = {
     figures: [{ x: 0, y: 660, w: 220, h: 330 }, { x: 500, y: 660, w: 220, h: 330 }],
     plates: [{ x: 12, y: 994, w: 200, h: 66 }, { x: 508, y: 994, w: 200, h: 66 }],
     banner: { x: 40, y: 560, w: 640, h: 92 },
+    wire: { x: 110, y: 256, w: 500, h: 64 },
   },
 };
 
@@ -55,6 +66,7 @@ function geometryFor(layout: Layout): Geometry {
     figures: [shiftRect(g.figures[0], dx), shiftRect(g.figures[1], dx)],
     plates: [shiftRect(g.plates[0], dx), shiftRect(g.plates[1], dx)],
     banner: shiftRect(g.banner, dx),
+    wire: shiftRect(g.wire, dx),
   };
 }
 
@@ -83,6 +95,17 @@ const BEAT_VIGNETTE: Keyframe[] = [
   { opacity: 0.5, transform: "scale(1)", offset: 0.48 },
   { opacity: 0.5, transform: "scale(1)" },
 ];
+
+/** The walk-out: ten paces apart from back to back, a turn, and each checks the gun, Player 2 a beat after. */
+const PACES = 10;
+const PACE_MS = 540;
+const FIRST_PACE_MS = 700;
+const TURN_MS = 320;
+const COCK_GAP_MS = 380;
+/** How close the two stand back to back, either side of the sign's post (stage pixels between their middles). */
+const BACK_TO_BACK = 96;
+/** How long the two take to reach their marks when the stakes land before the walk is done. */
+const HURRY_MS = 380;
 
 /** What a seat's plate reads at the end. */
 function verdict(s: QuickDrawState, seat: Seat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
@@ -130,7 +153,25 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   const bannerText = el("span", "qd-banner-text");
   banner.append(el("span", "qd-banner-nail qd-banner-nail--l"), bannerText, el("span", "qd-banner-nail qd-banner-nail--r"));
 
-  root.append(scene.el, ...figures.map((f) => f.el), dim, vignette, flash, flashLine, sign.el, ...plates, banner);
+  // The wire: a brass plate on a bracket that taps out the stakes' transaction while the two walk out.
+  const wire = el("div", "qd-wire");
+  place(wire, g.wire);
+  const wireHead = el("span", "qd-wire-head");
+  const wireSteps = el("span", "qd-wire-steps");
+  const stepEls = OPEN_STEPS.map(({ label }) => {
+    const item = el("span", "qd-wire-step", label);
+    wireSteps.append(item);
+    return item;
+  });
+  const wireLine = el("span", "qd-wire-line");
+  wire.append(wireHead, wireSteps, wireLine);
+
+  // A tumbleweed blows across behind the walk, once.
+  const weed = el("div", "qd-weed");
+  place(weed, { x: -80, y: g.scene.horizon + 18, w: 56, h: 56 });
+
+  // The figures stand in front of the sign: they start back to back at its post.
+  root.append(scene.el, weed, dim, vignette, flash, flashLine, sign.el, ...figures.map((f) => f.el), ...plates, banner, wire);
 
   let shown: QuickDrawPhase | null = null;
   let drawn = false;
@@ -138,6 +179,112 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   let heart: Animation[] = [];
   let quicken: ReturnType<typeof setTimeout> | undefined;
   let dimming: Animation | null = null;
+  /** The walk-out: `walking` while it runs (a newer phase stops it), `walked` once it began on this screen. */
+  let walking = false;
+  let walked = false;
+  let wireTx: Tx | null = null;
+  let wireSince = 0;
+  let wireTicker: ReturnType<typeof setInterval> | null = null;
+
+  /** How far each figure's mark is from where it stands back to back by the sign (stage pixels). */
+  const startOffsets = ([0, 1] as const).map((seat) => {
+    const r = g.figures[seat];
+    const middle = g.sign.x + g.sign.w / 2 + (seat === 0 ? -BACK_TO_BACK / 2 : BACK_TO_BACK / 2);
+    return middle - (r.x + r.w / 2);
+  });
+
+  function drawWire(): void {
+    if (wireTx) wireLine.textContent = openLine(wireTx, wireSince);
+  }
+
+  function showWire(state: BoxState): void {
+    const open = latestOpen(state);
+    if (!open || open.step === "failed") return;
+    if (!wireTx || wireTx.id !== open.id) wireSince = Date.now();
+    wireTx = open;
+    wireHead.textContent = `${state.stake * 2} USDC GOING INTO THE POT`;
+    const at = openStepIndex(open);
+    stepEls.forEach((item, i) => {
+      item.toggleAttribute("done", i <= at);
+      item.toggleAttribute("current", i === at + 1);
+    });
+    drawWire();
+    wireTicker ??= setInterval(drawWire, 1000);
+    if (!wire.classList.contains("is-up")) {
+      wire.classList.add("is-up");
+      void play(wire, [{ opacity: 0, transform: "translateY(-14px)" }, { opacity: 1, transform: "none" }], { duration: 360, easing: "ease-out" });
+    }
+  }
+
+  function hideWire(): void {
+    if (wireTicker !== null) clearInterval(wireTicker);
+    wireTicker = null;
+    if (!wire.classList.contains("is-up")) return;
+    wire.classList.remove("is-up");
+    void play(wire, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-10px)" }], { duration: 300, easing: "ease-in" });
+  }
+
+  /** The walk-out, from back to back by the sign to the cocked guns. Stops wherever it is once `walking` drops. */
+  async function walkOut(): Promise<void> {
+    walking = true;
+    walked = true;
+    sign.reset();
+    if (ctx.calm) {
+      for (const f of figures) f.stand(0, false);
+      sign.say("READY");
+      return;
+    }
+    figures.forEach((f, seat) => f.stand(startOffsets[seat] ?? 0, true));
+    sign.say("PACES");
+    void play(weed, [
+      { transform: "translate(0, 0) rotate(0deg)" },
+      { transform: `translate(${g.scene.width * 0.3}px, -22px) rotate(300deg)`, offset: 0.28 },
+      { transform: `translate(${g.scene.width * 0.55}px, 0) rotate(560deg)`, offset: 0.5 },
+      { transform: `translate(${g.scene.width * 0.8}px, -14px) rotate(820deg)`, offset: 0.74 },
+      { transform: `translate(${g.scene.width + 160}px, 0) rotate(1120deg)` },
+    ], { duration: 9000, delay: 900, easing: "linear" });
+    await wait(FIRST_PACE_MS);
+    for (let pace = 1; pace <= PACES; pace++) {
+      if (!walking || !alive) return;
+      const paces = figures.map((f, seat) => {
+        const start = startOffsets[seat] ?? 0;
+        const from = start * (1 - (pace - 1) / PACES);
+        const to = start * (1 - pace / PACES);
+        return f.pace(from, to, PACE_MS, (pace % 2) as 0 | 1);
+      });
+      // The heels land just before the pace ends: the count and the step sound with them.
+      setTimeout(() => {
+        if (!walking || !alive) return;
+        ctx.sound.play("pace");
+        sign.say(String(pace));
+      }, PACE_MS * 0.86);
+      await Promise.all(paces);
+    }
+    if (!walking || !alive) return;
+    await Promise.all(figures.map((f) => f.plant(160)));
+    if (!walking || !alive) return;
+    sign.say("TURN");
+    await Promise.all(figures.map((f) => f.turn(TURN_MS)));
+    await wait(260);
+    if (!walking || !alive) return;
+    await Promise.all(figures.map(async (f, seat) => {
+      await wait(seat * COCK_GAP_MS);
+      if (!walking || !alive) return;
+      await f.cock(() => ctx.sound.play("cock", { seat: seat as Seat }));
+    }));
+    if (!walking || !alive) return;
+    sign.say("READY");
+    for (const f of figures) f.breathe();
+  }
+
+  /** The stakes are in: the walk-out stops, and the two get to their marks if they aren't there yet. */
+  async function endWalk(): Promise<void> {
+    hideWire();
+    if (!walking) return;
+    walking = false;
+    if (ctx.calm) return;
+    await Promise.all(figures.map((f) => f.arrive(HURRY_MS)));
+  }
 
   function stopHeart(): void {
     clearTimeout(quicken);
@@ -156,7 +303,13 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   function standoff(s: QuickDrawState): void {
     drawn = false;
     sign.reset();
-    for (const f of figures) f.idle();
+    void endWalk().then(() => {
+      if (!alive || shown !== "wait") return;
+      for (const f of figures) {
+        f.idle();
+        f.breathe();
+      }
+    });
     for (const node of [...plates, banner]) for (const a of node.getAnimations()) a.cancel();
     stopHeart();
     dimming?.cancel();
@@ -259,6 +412,13 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     el: root,
 
     update(state: BoxState, event: BoxEvent) {
+      if (state.phase === "stake") {
+        // Both have signed: the stakes are on their way into the pot.
+        if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
+        showWire(state);
+        if (!walked) void walkOut();
+        return;
+      }
       const s = quickDraw(state);
       if (!s) return;
       if (event.type === "tap" && event.accepted) figures[event.seat].twitch();
@@ -271,6 +431,8 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
 
     dispose() {
       alive = false;
+      walking = false;
+      if (wireTicker !== null) clearInterval(wireTicker);
       stopHeart();
       for (const a of root.getAnimations({ subtree: true })) a.cancel();
     },

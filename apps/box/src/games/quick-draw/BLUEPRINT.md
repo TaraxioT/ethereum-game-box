@@ -29,14 +29,24 @@ the first badge to touch its station after the turn wins, and a badge that touch
 
 ## The flow
 
-Join (both badges tap) → Stake (both tap to sign) → the standoff → the result held ~2.4 s → Result. A seated badge's
+Join (both badges tap) → Stake (both tap to sign) → the walk-out while the stakes go in → the standoff → the result
+held ~2.4 s → Result. A seated badge's
 tap within `REMATCH_TAP_MS` = 4000 ms of the result asks for a rematch (the team game).
 
 ## The screen
 
+While both stakes go into the pot (from the second signature until the open is in a block), the team screen plays
+the walk-out: the two stand back to back at the sign's post, pace ten paces apart as the sign counts them, turn, and
+each raises a revolver and thumbs its hammer back (a click), then holsters it; the sign reads READY and a brass wire
+plate over it follows the transaction. The standoff starts when the stakes land: a walk not yet done hurries to the
+marks. Nothing in the walk-out is timed to the draw.
+
 The team screen draws the standoff in flat layered silhouette: the light dims from the standoff's start over the
 longest possible wait (the same for every match, so it never gives the turn away), the sign turns over on its pins,
-the winner fires and a brass plate under each figure shows its reaction time. The built screen keeps the idea with
+the winner fires and smoke curls off the barrel, the loser is hit (rocks back, the hat flies, the knees go, the figure
+falls forward), and a brass plate under each figure shows its reaction time. Each gunslinger is drawn in layers that
+move on their own (legs, body, the gun arm's three poses, hat): Player 1 in a duster and cattleman's hat, Player 2 in
+a short jacket, chaps and a flat-crowned hat. The built screen keeps the idea with
 the Box's parts: a metal plate reading WAIT… that turns to a brass DRAW!, a dimming dusk, an amber `<egb-seg>`
 reaction time under each seat, and a brass plate naming the winner. Both turn the sign on the Box's clock at
 `drawAt`, not when the next state arrives.

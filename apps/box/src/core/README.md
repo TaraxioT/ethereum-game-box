@@ -46,8 +46,9 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
   named badges (`stakeNeedsName`: Sepolia's `DuelPot` refuses `NotAPlayer`), is refused and opens the lobby on that
   badge, with Back returning to Stake.
 - **Open.** When both seats have signed, the stakes go to the pot (`open`, a Box-signed `Stake` with the round from
-  `nextRound`) and the Box waits on Stake, the Stake screen showing the open's progress (SIGNED › SENT › IN BLOCK, with
-  its hash and Etherscan link), until the open is in a block: then the match begins. Taps and Back do nothing while
+  `nextRound`) and the Box waits on Stake until the open is in a block: then the match begins. The screen shows the wait
+  in the game's own screen (Quick Draw's walk-out, Stock Duel's pre-market), with the open's progress (SIGNED › SENT ›
+  IN BLOCK, its hash and the seconds so far). Taps and Back do nothing while
   it waits. An open that fails before its block sends both seats back to sign again, with nothing staked; one that
   fails after the match began (the relayer gave up on it) leaves the match played for nothing.
 - **Result.** After the end hold the result (`settle`, the same round) goes once the pot has landed, so it settles the

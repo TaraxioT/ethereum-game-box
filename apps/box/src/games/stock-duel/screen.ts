@@ -5,11 +5,14 @@
 // stays under a slab naming the winner. The game draws the top band itself (the route's "full" pose): the players,
 // their stakes and pips, the round and the pot.
 //
+// Before the match, while both stakes go into the pot, it shows the pre-market (premarket.ts) and rings the opening
+// bell when they are in a block; the deal follows.
+//
 // It draws from `state.match.play` and animates the moment each state change brings. The drums follow the clock, so
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.
 import "./stock-duel.css";
 import type { BoxState } from "../../core/types.ts";
-import { shiftPoint, shiftRect, type Layout, type Point } from "../../screen/shell/layout.ts";
+import { shiftPoint, shiftRect, type Layout, type Point, type Rect } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
@@ -22,6 +25,7 @@ import { createRolodex, type NoteTone, type Placement } from "./rolodex.ts";
 import { createDial } from "./dial.ts";
 import { createReveal, type RevealPlaces } from "./reveal.ts";
 import { createStanding, type Player, type StandingPlaces } from "./score.ts";
+import { createPremarket } from "./premarket.ts";
 
 interface Geometry {
   readonly scene: ScenePlaces;
@@ -29,6 +33,8 @@ interface Geometry {
   readonly dial: { readonly centre: Point; readonly radius: number };
   readonly reveal: RevealPlaces;
   readonly standing: StandingPlaces;
+  /** The pre-market slab, over the wells while the stakes go in. */
+  readonly premarket: Rect;
 }
 
 // Landscape: the players and the round across the top band, a Rolodex down each side, and the tray between them with
@@ -52,6 +58,7 @@ const LANDSCAPE: Geometry = {
     mid: { x: 440, y: 20, w: 400, h: 84 },
     banner: { x: 444, y: 140, w: 392, h: 166 },
   },
+  premarket: { x: 444, y: 344, w: 392, h: 300 },
 };
 
 // Portrait: the players across the top, the two Rolodexes side by side under them, and the tray along the bottom
@@ -75,6 +82,7 @@ const PORTRAIT: Geometry = {
     mid: { x: 110, y: 96, w: 500, h: 44 },
     banner: { x: 130, y: 590, w: 460, h: 112 },
   },
+  premarket: { x: 130, y: 716, w: 460, h: 300 },
 };
 
 /** Each seat's player as the band shows them: the badge's name, or PLAYER n before a badge sits there. */
@@ -111,6 +119,7 @@ function geometryFor(layout: Layout): Geometry {
       mid: shiftRect(g.standing.mid, dx),
       banner: shiftRect(g.standing.banner, dx),
     },
+    premarket: shiftRect(g.premarket, dx),
   };
 }
 
@@ -126,7 +135,8 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   let players: readonly [Player, Player] = playersOf(ctx.link.state());
   const reveal = createReveal(geo.reveal, (seat: Seat) => players[seat].label, ctx.sound);
   const standing = createStanding(geo.standing);
-  root.append(scene.el, dial.el, reveal.el, drums[0].el, drums[1].el, ...standing.els);
+  const premarket = createPremarket(geo.premarket);
+  root.append(scene.el, dial.el, reveal.el, drums[0].el, drums[1].el, premarket.el, ...standing.els);
 
   let shownPlayers = "";
   let last: StockDuelState | null = null;
@@ -164,9 +174,9 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     }
   }
 
-  /** The band's players and stakes, written only when they change. */
+  /** The band's players and stakes, written only when they change. Before the match, the stake being staked. */
   function band(state: BoxState): void {
-    const stake = state.match?.stake ?? null;
+    const stake = state.match?.stake ?? (state.phase === "stake" ? state.stake : null);
     players = playersOf(state);
     const key = `${players[0].name}|${players[1].name}|${stake}`;
     if (key === shownPlayers) return;
@@ -251,10 +261,21 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   return {
     el: root,
     update(state, event) {
+      if (state.phase === "stake") {
+        // Both have signed: the stakes are on their way into the pot.
+        band(state);
+        if (event.type === "tap") standing.tap(event.seat, event.accepted);
+        premarket.show(state);
+        return;
+      }
       const match = state.match;
       if (!match || match.play.game !== "stock-duel") return;
       band(state);
       if (event.type === "tap") standing.tap(event.seat, event.accepted);
+      if (event.type === "phase" && event.from === "stake") {
+        ctx.sound.play("bell");
+        void premarket.open();
+      }
       const s = match.play.state;
       if (s === last) return;
       const prev = last;
@@ -272,6 +293,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       for (const drum of drums) drum.dispose();
       dial.dispose();
       reveal.dispose();
+      premarket.dispose();
     },
   };
 };

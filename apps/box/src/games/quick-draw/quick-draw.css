@@ -99,26 +99,53 @@
 /* --- The figures ------------------------------------------------------------------------------------------------ */
 
 .qd-fig { will-change: transform; }
-.qd-fig--p1 { --seat: var(--p1); --seat-ink: #2a1208; }
-.qd-fig--p2 { --seat: var(--p2); --seat-ink: #061e29; }
-/* The ground shadow under the boots. */
-.qd-fig::before {
-  content: ""; position: absolute; left: 16%; right: 16%; bottom: 0; height: 14px; border-radius: 50%;
+.qd-fig--p1 {
+  --seat: var(--p1); --seat-ink: #2a1208; --seat-far: #1a0a04; --seat-cloth: #6a3c22; --seat-leather: #47220f;
+}
+.qd-fig--p2 {
+  --seat: var(--p2); --seat-ink: #061e29; --seat-far: #021219; --seat-cloth: #1f4c5c; --seat-leather: #3d2414;
+}
+/* The ground shadow under the boots, walking with the figure. */
+.qd-fig-walk::before {
+  content: ""; position: absolute; left: 22%; right: 22%; bottom: 0; height: 14px; border-radius: 50%;
   background: radial-gradient(closest-side, rgb(4 0 10 / 0.6), transparent);
 }
-.qd-fig-art { position: absolute; inset: 0; }
+.qd-fig-walk, .qd-fig-art, .qd-fig-turn, .qd-fig-pose { position: absolute; inset: 0; }
+.qd-fig-walk { will-change: transform; }
 .qd-fig--p2 .qd-fig-art { transform: scaleX(-1); }
-.qd-fig-pose { position: absolute; inset: 0; transform-origin: 50% 97%; }
+.qd-fig-pose { transform-origin: 50% 97%; }
 .qd-fig-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .qd-fig-rim { fill: var(--seat); }
-.qd-fig-body { fill: var(--seat-ink); }
-.qd-fig-mark { fill: var(--seat); }
-/* Both arms turn at the shoulder. */
-.qd-fig-arm-idle, .qd-fig-arm-drawn { transform-origin: 62% 34.5%; }
-.qd-fig-arm-drawn { opacity: 0; }
-.qd-fig-flash { position: absolute; width: 64px; height: 64px; left: calc(100% - 26px); top: calc(36.7% - 32px); opacity: 0; }
+/* The silhouette and the details on it: cloth and leather a shade up from the ink, brass and steel catching the sun. */
+.qd-fig-ink { fill: var(--seat-ink); }
+.qd-fig-far { fill: var(--seat-far); }
+.qd-fig-cloth { fill: var(--seat-cloth); }
+.qd-fig-leather { fill: var(--seat-leather); }
+.qd-fig-seat { fill: var(--seat); }
+.qd-fig-brass { fill: #e0b85e; }
+.qd-fig-steel { fill: #34303c; }
+.qd-fig-wood { fill: #6b3a1c; }
+.qd-fig-line { fill: none; stroke: rgb(255 214 170 / 0.24); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.qd-fig-glint { fill: none; stroke: rgb(255 236 210 / 0.6); stroke-width: 0.9; stroke-linecap: round; }
+.qd-fig-chain { fill: none; stroke: #e0b85e; stroke-width: 1; stroke-dasharray: 1.6 1; }
+.qd-fig-finger { fill: none; stroke: var(--seat-ink); stroke-width: 3.2; stroke-linecap: round; }
+/* The legs swing at the hip; the arms turn at the shoulder; the hammer on its pin. */
+.qd-fig-leg--near { transform-origin: 54% 59.3%; }
+.qd-fig-leg--far { transform-origin: 47% 59.3%; }
+.qd-fig-arm { transform-origin: 62% 35%; }
+.qd-fig-arm-check, .qd-fig-arm-drawn { opacity: 0; }
+.qd-fig-hammer { transform-box: view-box; transform-origin: 156px 109px; }
+.qd-fig-hat { transform-origin: 50% 18%; }
+.qd-fig-flash { position: absolute; width: 64px; height: 64px; left: calc(100% - 26px); top: calc(34.7% - 32px); opacity: 0; }
 .qd-fig-flash-outer { fill: #ffd27a; }
 .qd-fig-flash-core { fill: #fffbea; }
+/* Gun smoke: soft warm-grey puffs from the muzzle. */
+.qd-fig-smoke { position: absolute; left: 100%; top: 34.7%; width: 0; height: 0; }
+.qd-fig-puff {
+  position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(closest-side, rgb(236 214 200 / 0.85), rgb(200 170 160 / 0.4) 60%, transparent);
+  will-change: transform, opacity;
+}
 
 /* --- Wood: layered grain, two knots and a sun-warmed face ----------------------------------------------------- */
 
@@ -278,3 +305,45 @@
 .qd-banner-nail { top: calc(50% - 6px); }
 .qd-banner-nail--l { left: 16px; }
 .qd-banner-nail--r { right: 16px; }
+
+/* --- The walk-out: the wire plate over the sign and a tumbleweed --------------------------------------------- */
+
+/* A brass plate on two iron brackets that taps out the stakes' transaction: what is going in, its steps (the one it
+   waits on breathing), its hash and the seconds so far. */
+.qd-wire {
+  opacity: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  border-radius: 5px; color: var(--brass-ink);
+  background: linear-gradient(180deg, var(--brass-hi), var(--brass) 30%, var(--brass-mid) 70%, var(--brass-lo));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -2px 0 var(--brass-edge), 0 3px 0 #3b2608, 0 8px 12px rgb(6 2 12 / 0.5);
+}
+.qd-wire.is-up { opacity: 1; }
+.qd-wire::before, .qd-wire::after {
+  content: ""; position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px;
+  background: linear-gradient(180deg, #5a5662, #24212b);
+}
+.qd-wire::before { left: 40px; }
+.qd-wire::after { right: 40px; }
+.qd-wire-head, .qd-wire-step, .qd-wire-line { text-shadow: 0 1px 0 rgb(255 246 214 / 0.6); }
+.qd-wire-head { font: 900 15px/1 var(--display); letter-spacing: 0.08em; }
+.qd-wire-steps { display: flex; gap: 6px; }
+.qd-wire-step {
+  padding: 2px 7px; border-radius: 3px; font: 700 11px/1.2 var(--mono); letter-spacing: 0.12em; opacity: 0.45;
+  box-shadow: inset 0 0 0 1px rgb(59 38 8 / 0.5);
+}
+.qd-wire-step[done] { opacity: 1; background: rgb(59 38 8 / 0.16); }
+.qd-wire-step[current] { animation: qd-wire-breathe 0.9s ease-in-out infinite alternate; }
+@keyframes qd-wire-breathe { from { opacity: 0.4; } to { opacity: 0.95; } }
+.qd-wire-line { font: 700 12px/1 var(--mono); font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+/* A tumbleweed: a ball of tangled dry twigs, in the near ground's silhouette. */
+.qd-weed {
+  border-radius: 50%; will-change: transform;
+  background:
+    radial-gradient(circle, transparent 22%, #2a1220 23% 27%, transparent 28% 46%, #2a1220 47% 51%, transparent 52% 64%, #2a1220 65% 69%, transparent 70%),
+    repeating-conic-gradient(from 8deg, #2a1220 0 5deg, transparent 5deg 23deg),
+    repeating-conic-gradient(from 17deg at 38% 60%, #2a1220 0 3deg, transparent 3deg 31deg);
+  -webkit-mask: radial-gradient(circle, #000 66%, transparent 71%);
+  mask: radial-gradient(circle, #000 66%, transparent 71%);
+}
+
+@media (prefers-reduced-motion: reduce) { .qd-wire-step[current] { animation: none; } }

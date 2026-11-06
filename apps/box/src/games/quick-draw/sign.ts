@@ -6,8 +6,10 @@ export interface Sign {
   readonly el: HTMLElement;
   /** Turns the plate over to DRAW with a swing that settles; `instant` shows it already turned. */
   flip(instant?: boolean): Promise<void>;
-  /** Back to WAIT…. */
+  /** Back to WAIT…, unturned. */
   reset(): void;
+  /** Paints another word on the unturned face (the paces counted out before the standoff), until `reset`. */
+  say(word: string): void;
   /** The plate jumps on its pins: a tap came before the draw. */
   rattle(): void;
 }
@@ -42,6 +44,8 @@ function face(kind: "wait" | "draw", word: string): HTMLElement {
   return node;
 }
 
+const WAIT_WORD = "WAIT…";
+
 export function createSign(): Sign {
   const root = el("div", "qd-sign");
   const post = el("div", "qd-sign-post qd-wood qd-wood--upright");
@@ -51,7 +55,14 @@ export function createSign(): Sign {
   for (const side of ["l", "r"]) board.append(el("span", `qd-sign-pin qd-sign-pin--${side}`));
   const slot = el("div", "qd-sign-slot");
   const plate = el("div", "qd-sign-plate");
-  plate.append(face("wait", "WAIT…"), face("draw", "DRAW"));
+  const waitFace = face("wait", WAIT_WORD);
+  plate.append(waitFace, face("draw", "DRAW"));
+  let word = WAIT_WORD;
+  const paint = (next: string): void => {
+    if (next === word) return;
+    word = next;
+    waitFace.firstElementChild?.replaceWith(painted(next));
+  };
   slot.append(plate);
   board.append(slot);
   root.append(post, el("span", "qd-sign-foot"), board);
@@ -86,6 +97,18 @@ export function createSign(): Sign {
     reset() {
       flipped = false;
       cancel();
+      paint(WAIT_WORD);
+    },
+
+    say(next) {
+      paint(next);
+      // The new word knocks the plate on its pins.
+      void play(plate, [
+        { transform: "rotateX(0deg)" },
+        { transform: "rotateX(-12deg)", offset: 0.3 },
+        { transform: "rotateX(5deg)", offset: 0.65 },
+        { transform: "rotateX(0deg)" },
+      ], { duration: 300, easing: "ease-out" });
     },
 
     rattle() {

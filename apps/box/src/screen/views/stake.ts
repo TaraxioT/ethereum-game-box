@@ -1,9 +1,9 @@
 // Stake: pick the stake (USDC) on the light keys, see the game's trust tier, then each player taps to sign the entry.
-// Both signed, one Box-signed transaction moves both stakes into the pot on Sepolia, and the plate shows it on its
-// way (signed, sent, in a block, with its hash and the seconds it has taken) until it is in a block and the match
-// begins. One that fails says so, and both players sign again. A seat short of the stake is told to tap: its tap
+// Both signed, one Box-signed transaction moves both stakes into the pot on Sepolia; the game's own screen shows it on
+// its way (the routes send both signatures there) until it is in a block and the match begins. One that fails comes
+// back here and says so, and both players sign again. A seat short of the stake is told to tap: its tap
 // takes it to the lobby to top up. A game that isn't on chain (a built game) plays for nothing.
-import type { BoxState, GameInfo, SeatState, Tx } from "../../core/types.ts";
+import type { BoxState, GameInfo, SeatState } from "../../core/types.ts";
 import { isTeamGame } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -11,20 +11,13 @@ import type { EgbPanel } from "../parts/panel.ts";
 import { el, place } from "../shell/dom.ts";
 import { pageLayout } from "./page-layout.ts";
 import { createSeatPanel, type SeatTone } from "./seat-panel.ts";
+import { latestOpen } from "./open-tx.ts";
 
 const TIER: Record<GameInfo["tier"], string> = {
   refereed: "REFEREED · THE BOX SAW IT, ITS STAKE BACKS ITS WORD",
   verified: "VERIFIED · THE CHAIN CHECKS THE RESULT",
 };
 
-/** The open's steps the plate walks through while the match waits on it. */
-const STEPS: readonly { readonly step: Tx["step"]; readonly label: string }[] = [
-  { step: "signed", label: "SIGNED" },
-  { step: "sent", label: "SENT" },
-  { step: "in-block", label: "IN BLOCK" },
-];
-
-const short = (hash: string): string => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
 
 export function stakeView(ctx: ViewContext): View {
   const { layout, link, sound } = ctx;
@@ -51,50 +44,6 @@ export function stakeView(ctx: ViewContext): View {
     link.send({ type: "back" });
   });
   root.append(plate, keys);
-
-  // The plate while the pot opens: what is locking, its steps, and its hash and seconds so far.
-  const wait = el("div", "stake-wait");
-  const waitHead = el("div", "stake-wait-head");
-  const waitSteps = el("div", "stake-wait-steps");
-  const stepEls = STEPS.map(({ label }) => {
-    const item = el("span", "stake-wait-step", label);
-    waitSteps.append(item);
-    return item;
-  });
-  const waitLine = el("div", "stake-wait-line");
-  wait.append(waitHead, waitSteps, waitLine);
-  /** Redraws the seconds while the open is on its way. */
-  let ticker: ReturnType<typeof setInterval> | null = null;
-  let waiting: Tx | null = null;
-
-  /** When this screen saw the open signed (the screen's clock), for the seconds it has taken. */
-  let waitSince = 0;
-
-  function drawWait(): void {
-    if (!waiting) return;
-    const seconds = Math.floor((Date.now() - waitSince) / 1000);
-    waitLine.textContent = waiting.hash ? `${short(waiting.hash)} · ${seconds} s` : `${seconds} s`;
-  }
-
-  function showWait(open: Tx, total: number): void {
-    if (!waiting || waiting.id !== open.id) waitSince = Date.now();
-    waiting = open;
-    waitHead.textContent = `LOCKING ${total} USDC IN THE POT`;
-    const at = STEPS.findIndex(({ step }) => step === open.step);
-    stepEls.forEach((item, i) => {
-      item.toggleAttribute("done", i <= at || open.step === "paid");
-      item.toggleAttribute("current", i === at + 1);
-    });
-    drawWait();
-    if (wait.parentElement !== plate) plate.replaceChildren(wait);
-    ticker ??= setInterval(drawWait, 1000);
-  }
-
-  function stopWait(): void {
-    waiting = null;
-    if (ticker !== null) clearInterval(ticker);
-    ticker = null;
-  }
 
   const game = link.state().games.find((g) => g.id === link.state().focus);
   /** Team games stake USDC on chain; a built game plays for nothing. */
@@ -134,10 +83,8 @@ export function stakeView(ctx: ViewContext): View {
     }
     back.toggleAttribute("disabled", anySigned);
     const opening = state.seats.every((s) => s.signed);
-    const open = state.txs.findLast((tx) => tx.kind === "open") ?? null;
+    const open = latestOpen(state);
     plate.toggleAttribute("alert", false);
-    if (opening && money && open && open.step !== "failed") return showWait(open, state.stake * 2);
-    stopWait();
     if (!anySigned && money && open?.step === "failed") {
       plate.toggleAttribute("alert", true);
       plate.textContent = `THE STAKES DIDN'T GO IN${open.error ? ` · ${open.error.toUpperCase()}` : ""} · TAP BOTH BADGES TO TRY AGAIN`;
@@ -154,6 +101,5 @@ export function stakeView(ctx: ViewContext): View {
       if (event.type === "tap" && event.accepted) panels[event.seat]?.pulse();
       draw(state);
     },
-    dispose: stopWait,
   };
 }

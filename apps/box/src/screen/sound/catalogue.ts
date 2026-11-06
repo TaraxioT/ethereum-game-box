@@ -11,7 +11,7 @@ export type SoundGroup = "badge" | "game" | "screen" | "box";
 /** Every sound by name, in the order the sound board plays them. */
 export const SOUND_NAMES = [
   "touch", "wake", "join", "again", "card", "sign", "open", "refused", "ignored", "rematch", "refund",
-  "draw", "shot", "false-start", "tie", "step", "play", "let-go", "deal", "reel", "land", "flip", "count", "round-won", "over", "round",
+  "pace", "cock", "draw", "shot", "false-start", "tie", "step", "play", "let-go", "bell", "deal", "reel", "land", "flip", "count", "round-won", "over", "round",
   "ui-focus", "ui-select", "ui-back", "ui-up", "ui-down",
   "boot", "block", "error",
 ] as const;
@@ -219,6 +219,31 @@ export const SOUNDS: readonly SoundEntry[] = [
 
   // ── The games ───────────────────────────────────────────────────────────────────────────────────────────────────
   {
+    name: "pace", group: "game", label: "A pace",
+    meaning: "Quick Draw: the gunslingers' boots land as they pace apart while the stakes go in",
+    sounds: "A boot heel on dry ground with a faint jingle of spurs",
+    play(s, o, t) {
+      s.thump(o, t, 110, 55, 0.3, 0.08);
+      s.noise(o, t, { filter: "lowpass", freq: 1400, to: 300, dur: 0.09, gain: 0.22 });
+      s.noise(o, t + 0.01, { filter: "bandpass", freq: 2600, dur: 0.05, gain: 0.05, q: 1.2 });
+      s.bell(o, t + 0.03, 3900, 0.012, 0.12);
+      s.bell(o, t + 0.07, 4700, 0.008, 0.1);
+    },
+  },
+  {
+    name: "cock", group: "game", seated: true, label: "Hammer back",
+    meaning: "Quick Draw: a gunslinger thumbs the revolver's hammer back before the standoff",
+    sounds: "A two-part metal click, the cylinder turning and the hammer catching. Player 1 lower, Player 2 higher",
+    play(s, o, t, { seat }) {
+      const k = bySeat(seat, 0.9, 1.15);
+      s.noise(o, t, { filter: "bandpass", freq: 3200 * k, dur: 0.018, gain: 0.2, q: 3, attack: 0.001 });
+      s.tone(o, t, { type: "square", freq: 1900 * k, dur: 0.012, gain: 0.03, attack: 0.001 });
+      s.noise(o, t + 0.07, { filter: "bandpass", freq: 4600 * k, dur: 0.022, gain: 0.26, q: 4, attack: 0.001 });
+      s.tone(o, t + 0.07, { type: "square", freq: 2700 * k, dur: 0.014, gain: 0.035, attack: 0.001 });
+      s.thump(o, t + 0.07, 400 * k, 260 * k, 0.06, 0.03);
+    },
+  },
+  {
     name: "draw", group: "game", label: "DRAW",
     meaning: "Quick Draw: the sign turns to DRAW",
     sounds: "A card-flip whoosh up into a sharp crack of an accent",
@@ -293,6 +318,18 @@ export const SOUNDS: readonly SoundEntry[] = [
       s.tone(o, t, { freq: 700 * k, to: 220 * k, dur: 0.22, gain: 0.07, attack: 0.01 });
       s.tone(o, t, { type: "triangle", freq: 350 * k, to: 120 * k, dur: 0.2, gain: 0.04, attack: 0.01 });
       s.noise(o, t, { filter: "lowpass", freq: 1500, to: 200, dur: 0.2, gain: 0.05, attack: 0.02 });
+    },
+  },
+  {
+    name: "bell", group: "game", label: "Opening bell",
+    meaning: "Stock Duel: the stakes are in a block and the market opens",
+    sounds: "A trading floor's opening bell: a fast run of bright struck strokes on one bell",
+    play(s, o, t) {
+      for (let i = 0; i < 8; i++) {
+        const at = t + i * 0.085;
+        s.bell(o, at, N.E6, 0.07 - i * 0.004, 0.5);
+        s.noise(o, at, { filter: "highpass", freq: 5000, dur: 0.01, gain: 0.04, attack: 0.001 });
+      }
     },
   },
   {
