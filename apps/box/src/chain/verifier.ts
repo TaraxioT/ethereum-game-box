@@ -1,6 +1,6 @@
 // The verifier (`apps/verifier`, EGB_VERIFIER_URL): `POST /judge` takes a match's signed log, and `GET /judge/<box>/<round>`
 // says how it is going. What it answers about money is read here and shown, but only the chain pays: a wrong answer can't
-// move a stake.
+// move a stake, or take a pot off the sweep.
 import type { JudgeRequest, JudgeStatus } from "@egb/shared/store";
 import type { Hex } from "viem";
 

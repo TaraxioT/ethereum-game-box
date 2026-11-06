@@ -40,9 +40,10 @@ A closed match goes to the verifier (`EGB_VERIFIER_URL`, `apps/verifier`), not t
 from the core's entries, signs a `Judge` ("Game Box Verifier" v1, its verifying contract the `StorePot`) over the
 keccak256 of its exact JSON text, and sends that same text to `POST /judge`. A verifier that is down or busy is asked
 again, with the same request, every 2 seconds. Then `GET /judge/<box>/<round>` is followed every 2 seconds to `paid`,
-`refunded` or `failed`. Paid or refunded closes the round. Failed, a refusal, or 20 minutes with no end to it
-(`JUDGE_GIVE_UP_MS`, past the verifier's two runs and its payment) leave the pot open for the core's Refund and the
-sweep. Only the chain pays: what the verifier says is shown, and it can't move a stake.
+`refunded` or `failed`. Failed, a refusal, or 20 minutes with no end to it (`JUDGE_GIVE_UP_MS`, past the verifier's two
+runs and its payment) go to the core's Refund. Only the chain pays: what the verifier says is shown, and it can't move a
+stake or end a pot. Whatever it says, the round stays on the file for the sweep, which reads the chain: it forgets a pot
+that is over, and refunds one that isn't.
 
 Reads go to `SEPOLIA_RPC_URL`: USDC balances, `GameBoxNames.nameOf`, the pot and rounds, the head for the block clock,
 and a game's title (`champion.<game>.gamebox.eth`: `addr`, `streak`) and open championship (`Championships.openCup`, then

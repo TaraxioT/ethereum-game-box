@@ -4,7 +4,8 @@
 //   keeps the pot unless the open was refused outright, so the sweep refunds it if nobody else does, even one whose open
 //   looked failed and landed.
 // - judge: the log's exact JSON text and a `Judge` over its hash to the verifier, which is then asked how it is going
-//   until it has paid, refunded or failed. A verifier that never answers is given up on: the pot stays open for the sweep.
+//   until it has paid, refunded or failed. A verifier that never answers is given up on. Its word is only shown: the pot
+//   stays on the rounds file for the sweep either way.
 // - refund: `POST /store/refund`, for anyone once the pot's delay has run.
 // - topup: `POST /store/topup`.
 import type { MatchLog } from "@egb/sdk";
@@ -111,12 +112,8 @@ export function createStoreChain(options: StoreChainOptions): StoreChainPort {
       const ask = (): void => {
         void verifier.status(box, round).then((status) => {
           const update = status && judgedOf(status);
-          if (update && tell(update)) {
-            // Failed: nobody paid, so the pot stays on the rounds file for the sweep.
-            if (update.step !== "failed") rounds.closed(round);
-            return;
-          }
-          again(ask);
+          // Whatever it says, the pot stays on the rounds file: only the chain ends one, and the sweep reads the chain.
+          if (!update || !tell(update)) again(ask);
         });
       };
       const send = (request: JudgeRequest): void => {

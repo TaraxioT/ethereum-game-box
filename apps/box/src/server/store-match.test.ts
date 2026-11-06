@@ -180,7 +180,8 @@ describe("a store game on the Box", () => {
     await flush();
     expect(core.state().match?.play).toMatchObject({ judged: { step: "paid", payouts: [20, 0], hash: TX } });
     expect(core.state().seats.map((s) => s.balance)).toEqual([110, 90]);
-    expect(rounds.open("store").size).toBe(0);
+    // Paid as the verifier says: the sweep takes the pot off the file once the chain says so too.
+    expect(rounds.open("store").size).toBe(1);
     expect(relayer.posted.map((p) => p.path)).toEqual(["/store/open"]);
   });
 

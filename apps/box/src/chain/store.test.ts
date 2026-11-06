@@ -267,20 +267,49 @@ describe("the judge on the Sepolia port", () => {
     await r.tick(JUDGE_POLL_MS);
     expect(r.said.map((u) => [u.step, u.hash])).toEqual([["judging", null], ["paying", null], ["paying", TX], ["paid", TX]]);
     expect(r.said.at(-1)).toEqual({ step: "paid", payouts: [15.5, 4.5], hash: TX, etherscan: `https://sepolia.etherscan.io/tx/${TX}`, reason: null });
-    expect(r.rounds.open("store").size).toBe(0);
     await r.tick(JUDGE_POLL_MS * 3);
     expect(r.said).toHaveLength(4);
   });
 
-  it("closes the round on a refund too", async () => {
+  it("says a refund, with why", async () => {
     const r = rig();
-    r.rounds.opened(3, NOW, "store");
     r.store.judge(ORDER, r.hear);
     await flush();
     r.verifier.statuses.set(`${BOX}/3`, status("refunded", { tx: TX, reason: "the agent couldn't judge" }));
     await r.tick(JUDGE_POLL_MS);
     expect(r.said).toMatchObject([{ step: "refunded", payouts: null, reason: "the agent couldn't judge" }]);
-    expect(r.rounds.open("store").size).toBe(0);
+  });
+
+  describe("takes no word of the verifier's as the end of a pot", () => {
+    const told = async (state: "paid" | "refunded") => {
+      const r = rig();
+      r.rounds.opened(3, NOW, "store");
+      r.store.judge(ORDER, r.hear);
+      await flush();
+      r.verifier.statuses.set(`${BOX}/3`, status(state, { tx: TX }));
+      await r.tick(JUDGE_POLL_MS);
+      expect(r.said.map((u) => u.step)).toEqual([state]);
+      expect([...r.rounds.open("store").keys()]).toEqual([3]);
+      return r;
+    };
+
+    it.each(["paid", "refunded"] as const)("refunds a pot still open on chain after a false %s", async (state) => {
+      const r = await told(state);
+      r.reads.openStorePots.add(3);
+      r.clock.advance(REFUND_AFTER_MS);
+      await r.chain.sweep();
+      await flush();
+      expect(r.relayer.posted).toEqual([{ path: "/store/refund", body: { box: BOX, round: "3" } }]);
+    });
+
+    it.each(["paid", "refunded"] as const)("forgets the pot once the chain agrees it is %s", async (state) => {
+      const r = await told(state);
+      r.clock.advance(REFUND_AFTER_MS);
+      await r.chain.sweep();
+      await flush();
+      expect(r.relayer.posted).toEqual([]);
+      expect(r.rounds.open("store").size).toBe(0);
+    });
   });
 
   it("leaves a failed pot for the sweep", async () => {
