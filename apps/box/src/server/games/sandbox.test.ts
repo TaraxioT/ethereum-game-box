@@ -20,6 +20,7 @@ import { tempDir } from "../../builder/forge/test-helpers.ts";
 import { readJson, sendJson } from "../http.ts";
 import { createHandler } from "../routes.ts";
 import { createFrameAssets } from "./assets.ts";
+import { CHROMIUM, headlessFlags, kioskFlags } from "./chromium.ts";
 import { createGameRoutes } from "./routes.ts";
 
 interface Report {
@@ -30,20 +31,6 @@ interface Report {
   readonly stall: number;
 }
 
-function findChromium(): string | null {
-  const cache = path.join(homedir(), "Library/Caches/ms-playwright");
-  const playwright = existsSync(cache)
-    ? readdirSync(cache)
-        .filter((name) => /^chromium-\d+$/.test(name))
-        .sort()
-        .reverse()
-        .map((name) => path.join(cache, name, "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"))
-    : [];
-  const candidates = [process.env.EGB_CHROMIUM, "/usr/bin/chromium", ...playwright, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"];
-  return candidates.find((file): file is string => file !== undefined && existsSync(file)) ?? null;
-}
-
-const CHROMIUM = findChromium();
 /** The outside's address: a real one, as WebRTC gathers from real interfaces and KIOSK_WALLS lets loopback through. */
 const HERE = Object.values(networkInterfaces())
   .flat()
@@ -61,16 +48,6 @@ const MOST_STALL_MS = 1500;
  * either. Only the browser's own start can stop them: no name resolves but the Box's own, and WebRTC has no route out.
  */
 const KIOSK_WALLS = ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost", "--webrtc-ip-handling-policy=disable_non_proxied_udp"];
-
-/** The flags that only place a window on the Pi's display or name its folders: a headless browser has neither. */
-const DISPLAY_ONLY = /^--(kiosk|app|start-fullscreen|window-|user-data-dir|password-store|ozone-platform)/;
-
-/** The flags the Pi's kiosk starts Chromium with, split as systemd splits ExecStart: on spaces, outside double quotes. */
-function kioskFlags(): string[] {
-  const unit = readFileSync(file("../../../../../deploy/pi/units/egb-kiosk.service"), "utf8").replaceAll("\\\n", " ");
-  const start = /^ExecStart=(.*)$/m.exec(unit)?.[1] ?? "";
-  return [...start.matchAll(/"([^"]*)"|\S+/g)].map(([word, quoted]) => quoted ?? word).filter((word) => word.startsWith("--"));
-}
 
 /** A tiny valid PNG. */
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
@@ -511,15 +488,8 @@ describe.skipIf(!CHROMIUM || !HERE)("a bundle's page in a real browser", () => {
     const browser = spawn(
       CHROMIUM ?? "",
       [
-        "--headless=new",
-        `--user-data-dir=${path.join(root, "profile")}`,
+        ...headlessFlags(path.join(root, "profile")),
         `--log-net-log=${logFile}`,
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-background-networking",
-        "--disable-component-update",
-        "--disable-sync",
-        ...kioskFlags().filter((flag) => !DISPLAY_ONLY.test(flag)),
         `http://127.0.0.1:${boxPort}/`,
       ],
       { stdio: "ignore" },

@@ -1,15 +1,19 @@
 // A whole store match on the Box server, on the real chain port over a mocked relayer and verifier, against a stand-in
 // store serving the real Tap Rush bundle: the rack lists it, Join fetches it, the pot opens by its hash, the frame's words
 // reach the log over the link, the log goes to the verifier, and Result shows the split. Then the ways it can go wrong:
-// the index gone, a changed zip, a zip that never arrives, and a Box with no chain for store games.
+// the index gone, a changed zip, a zip that never arrives, and a Box with no chain for store games. Last, Tap Rush in a
+// real browser on the built screen, which is the only place the kiosk's frame and the core really meet. That one is
+// skipped without a Chromium.
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { logProblems, type MatchLog, type Seat } from "@egb/sdk";
+import { logProblems, logTextProblems, type MatchLog, type Seat } from "@egb/sdk";
 import { packBundle, readBundle } from "@egb/sdk/bundle";
 import { P256_VECTOR_KEY } from "@egb/shared/names";
 import type { Address } from "viem";
+import { build } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { END_HOLD_MS, JOIN_SETTLE_MS } from "../core/core.ts";
 import { createSepoliaChain } from "../chain/port.ts";
@@ -19,6 +23,7 @@ import { JUDGE_POLL_MS } from "../chain/store.ts";
 import { memoryReads, mockRelayer, mockVerifier } from "../chain/testing.ts";
 import { fallbackIcon } from "../builder/forge/icon.ts";
 import { softwareSigner } from "../signer/software.ts";
+import { CHROMIUM, headlessFlags } from "./games/chromium.ts";
 import { BUNDLE_HOST } from "./games/page.ts";
 import { FALLBACK_ICON } from "./games/routes.ts";
 import { STORE_INDEX_MS } from "./library/store-index.ts";
@@ -247,5 +252,67 @@ describe("a store game on the Box", () => {
     await tb.box.library.scanned;
     expect(tb.box.bundles).toBeNull();
     expect(tb.box.core.state().games.every((g) => g.kind !== "store")).toBe(true);
+  });
+});
+
+describe.skipIf(!CHROMIUM)("a store game in a real kiosk", () => {
+  /** The Box's real screen, in the folder this Box serves. */
+  async function buildScreen(tb: TestBox): Promise<void> {
+    vi.stubEnv("VITE_EGB_MODE", "box");
+    cleanups.push(async () => void vi.unstubAllEnvs());
+    await build({ root: fileURLToPath(new URL("../", import.meta.url)), configFile: fileURLToPath(new URL("../../vite.config.ts", import.meta.url)), logLevel: "error", build: { outDir: join(tb.dir, "screen") } });
+  }
+
+  function openKiosk(tb: TestBox): void {
+    const chromium = spawn(CHROMIUM ?? "", [...headlessFlags(join(tb.dir, "profile")), tb.box.url], { stdio: "ignore" });
+    cleanups.push(async () => void chromium.kill("SIGKILL"));
+  }
+
+  const SOON = { timeout: 30_000, interval: 100 };
+
+  it("plays Tap Rush: the page hears each tap, and what it says reaches the stations and the log", { timeout: 120_000 }, async () => {
+    const { tb, relayer, verifier } = await rig();
+    const { core } = tb.box;
+    const lines = () => {
+      const play = core.state().match?.play;
+      return play?.game === "store" ? play.lines : [];
+    };
+    await buildScreen(tb);
+
+    await seatAndPlay(tb);
+    await vi.waitFor(() => expect(core.state().fetching).toBe(false));
+    tb.advance(JOIN_SETTLE_MS);
+    await inject(tb, 0, NOVA);
+    await inject(tb, 1, KITE);
+    relayer.advance(relayer.ids()[0]!, "done");
+    await tb.settle(() => core.state().phase === "playing", POLL_MS * 2, 100);
+    expect(lines()).toEqual(["PLAY", "PLAY"]);
+
+    // The kiosk routes the match to the frame, the Box serves the page, and the page's first words come back up the link.
+    openKiosk(tb);
+    await vi.waitFor(() => expect(lines()).toEqual(["TAP!", "TAP!"]), SOON);
+
+    // The page only counts what it heard, and a tap before it has answered the kiosk isn't handed on: tap until it hears.
+    await vi.waitFor(async () => {
+      await inject(tb, 0, NOVA);
+      expect(lines()[0]).toMatch(/^[1-9][0-9]*$/);
+    }, { ...SOON, interval: 250 });
+    await inject(tb, 1, KITE);
+    await vi.waitFor(() => expect(lines()[1]).toBe("1"), SOON);
+    const heard = Number(lines()[0]);
+
+    // Its ten seconds run from the first tap it heard, and then the game ends the match itself.
+    await vi.waitFor(() => expect(core.state().match?.outcome).not.toBeNull(), SOON);
+    expect(lines()).toEqual([`TIME ${heard}`, "TIME 1"]);
+
+    tb.advance(END_HOLD_MS);
+    await flush();
+    await vi.waitFor(() => expect(verifier.requests).toHaveLength(1));
+    const text = verifier.requests[0]?.log ?? "";
+    expect(logTextProblems(text)).toEqual([]);
+    const { entries } = JSON.parse(text) as MatchLog;
+    expect(entries.find((entry) => entry.src === "game")).toMatchObject({ t: "event", name: "score", data: { counts: [heard, 1] } });
+    expect(entries.filter((entry) => entry.t === "tap" && entry.seat === 0).length).toBeGreaterThanOrEqual(heard);
+    expect(entries.at(-1)).toMatchObject({ src: "box", t: "end", why: "game" });
   });
 });

@@ -50,6 +50,7 @@ build is done.
 | `routes.ts` | The handler. | `createGameRoutes({ built, bundles?, assets }): GameRoutes`, `BuiltLookup`, `BundleLookup` |
 | `page.ts` | The frame page, a bundle's page and their CSPs; the Box's origin from a Host header. | `framePage(title)`, `frameCsp(origin)`, `bundleCsp(origin, hash)`, `withBundleHost(html)`, `BUNDLE_HOST`, `boxOrigin(host)` |
 | `assets.ts` | The frames' shared assets, built once. | `createFrameAssets(log): FrameAssets` |
+| `chromium.ts` | For tests: a real browser, started as the Pi's kiosk unit starts it. | `CHROMIUM`, `kioskFlags()`, `headlessFlags(profile)` |
 
 Tests: `routes.test.ts` on a real server over a library with bundled built games: the frame page's CSP, a non-local
 Host refused, CORS and types on everything the frame loads, the parts defining themselves, the icon check, and what a
