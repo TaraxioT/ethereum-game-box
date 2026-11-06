@@ -18,6 +18,7 @@ import { createSimLink } from "./link/sim.ts";
 import { bindTapKeys } from "./demo/keys.ts";
 import { mountDemoTag } from "./demo/demo-tag.ts";
 import { showIntroOnce } from "./demo/intro.ts";
+import { mountLease } from "./kiosk/lease.ts";
 import { mountSettings } from "./kiosk/settings.ts";
 import { mountExitKey } from "./shell/exit-key.ts";
 
@@ -30,6 +31,7 @@ if (location.hash === BOARD_HASH) {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   const link = await connectLive({ url: `${scheme}//${location.host}${LINK_PATH}` });
   startApp(document.body, { link, sound, routes });
+  mountLease(document.body, sound);
   mountSettings(document.body, sound);
   mountExitKey(document.body, link, sound);
 } else {
