@@ -25,8 +25,11 @@ the request at once. Deadlines are 10 minutes.
 The core sends a result only once its pot's open is done, so the pot is there to settle. Rounds live in
 `$EGB_DATA/rounds.json`, written synchronously before a round is used, so none repeats; at start the server moves past
 any round the chain has seen. The file also keeps each pot the Box opened until it settles or is refunded, and every 5
-minutes the server refunds any past its delay (a match lost to a restart or a reset). Store pots share the rounds, and
-the file keeps them apart (`storePots`, left out while there are none), so the sweep refunds each through its own route.
+minutes the server refunds any past its delay (a match lost to a restart or a reset). Only a definite refusal of its
+open (a 4xx, or a key that can't sign) takes a pot off the file at once. Any other failed open may have landed (its
+answer was lost, or the relayer went quiet), so it stays, and the sweep refunds it, or drops it if the chain has no such
+pot. Store pots share the rounds, and the file keeps them apart (`storePots`, left out while there are none), so the
+sweep refunds each through its own route.
 
 ## Store games
 
@@ -52,7 +55,7 @@ The RPC URL carries the node's key, so every error that leaves `reads.ts` has it
 | Module | What it is | API |
 |---|---|---|
 | `port.ts` | The port: requests, rounds, the sweep, the result's lines | `createSepoliaChain(options)`, `stakeOf`, `resultOf`, `seatOf`, `outcomeLines` |
-| `requests.ts` | A request through the relayer: signed, sent and followed to its end | `createRequests(options)`, `POLL_MS`, `GIVE_UP_MS` |
+| `requests.ts` | A request through the relayer: signed, sent and followed to its end | `createRequests(options)`, `RequestEnd`, `POLL_MS`, `GIVE_UP_MS` |
 | `store.ts` | The port's `store`: `StorePot`, Store USDC and the judge | `createStoreChain(options)`, `storeStakeOf`, `matchLogOf`, `JUDGE_POLL_MS`, `JUDGE_GIVE_UP_MS` |
 | `verifier.ts` | The verifier's HTTP API, its answers checked | `verifierAt(url)`, `parseStatus` |
 | `relayer.ts` | The relayer's HTTP API: POSTs answered with a `TxView` or an error | `relayerAt(url)` |
@@ -61,8 +64,9 @@ The RPC URL carries the node's key, so every error that leaves `reads.ts` has it
 | `testing.ts` | For tests: a relayer that records and answers from a script, reads in memory, a verifier told what to say | `mockRelayer`, `memoryReads`, `mockVerifier` |
 
 Tests: `port.test.ts` checks the `Stake`, `Result` and `Seat` the Box signs against the shared digest vectors byte for
-byte (and each posted signature against the vector key), every route's body, the steps to paid or failed, a refusal, a
-key that can't sign, the rounds across a restart, the sweep and the result's lines. `store.test.ts` does the same for a
-store game: `Stake` and `Judge` against the store's vectors, every route's body, the verifier followed to each end, a
-refusal, an outage, one that never answers, and its HTTP API. `server/chain-match.test.ts` plays a whole match through
-this port on the Box server, and `server/store-match.test.ts` a store game's.
+byte (and each posted signature against the vector key), every route's body, the steps to paid or failed, a refusal, an
+open that may have landed, a key that can't sign, the rounds across a restart, the sweep and the result's lines.
+`store.test.ts` does the same for a store game: `Stake` and `Judge` against the store's vectors, every route's body, each
+way an open may have landed, the verifier followed to each end, a refusal, an outage, one that never answers, and its
+HTTP API. `server/chain-match.test.ts` plays a whole match through this port on the Box server, and
+`server/store-match.test.ts` a store game's.

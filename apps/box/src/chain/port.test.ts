@@ -21,7 +21,7 @@ import { createFakeClock } from "../core/fake-clock.ts";
 import { softwareSigner } from "../signer/software.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import { createSepoliaChain, outcomeLines, REFUND_AFTER_MS, resultOf, seatOf, stakeOf } from "./port.ts";
-import { POLL_MS } from "./requests.ts";
+import { GIVE_UP_MS, POLL_MS } from "./requests.ts";
 import { roundsFile } from "./rounds.ts";
 import { memoryReads, mockRelayer } from "./testing.ts";
 
@@ -122,6 +122,46 @@ describe("the Sepolia port on a mocked relayer", () => {
     r.chain.open({ round: 4, game: "quick-draw", badges: [A, B], amount: 5 }, r.watch);
     await flush();
     expect(r.steps).toEqual([{ step: "failed", hash: null, etherscan: null, block: null, error: "a pot for round 4 of mumbai-01 already exists (PotExists)" }]);
+    expect(r.rounds.open().size).toBe(0);
+  });
+
+  it.each([
+    ["the POST's answer was lost", 0, "the relayer can't be reached: timed out"],
+    ["the relayer answered 5xx", 502, "upstream: timed out"],
+  ])("keeps a pot for the sweep when %s, as it may have opened", async (_, status, error) => {
+    const r = rig();
+    r.relayer.refuseNext(status, error);
+    r.chain.open({ round: 4, game: "quick-draw", badges: [A, B], amount: 5 }, r.watch);
+    await flush();
+    expect(r.steps.map((u) => [u.step, u.error])).toEqual([["failed", error]]);
+    expect([...r.rounds.open().keys()]).toEqual([4]);
+    r.relayer.posted.length = 0;
+    r.reads.openPots.add(4);
+    r.clock.advance(REFUND_AFTER_MS);
+    await r.chain.sweep();
+    await flush();
+    expect(r.relayer.posted).toEqual([{ path: "/duel/refund", body: { box: "mumbai-01", round: "4" } }]);
+  });
+
+  it("keeps a pot for the sweep when the relayer goes quiet, or its transaction fails, and drops it if the chain has none", async () => {
+    const r = rig();
+    r.chain.open({ round: 4, game: "quick-draw", badges: [A, B], amount: 5 }, r.watch);
+    await flush();
+    r.relayer.reachable = false;
+    r.clock.advance(GIVE_UP_MS + POLL_MS);
+    await flush();
+    r.relayer.reachable = true;
+    expect(r.steps.at(-1)?.step).toBe("failed");
+    r.chain.open({ round: 5, game: "quick-draw", badges: [A, B], amount: 5 }, r.watch);
+    await flush();
+    r.relayer.advance(r.relayer.ids()[1]!, "failed", { error: "reverted" });
+    await r.poll();
+    expect([...r.rounds.open().keys()]).toEqual([4, 5]);
+    r.relayer.posted.length = 0;
+    r.clock.advance(REFUND_AFTER_MS);
+    await r.chain.sweep();
+    await flush();
+    expect(r.relayer.posted).toEqual([]);
     expect(r.rounds.open().size).toBe(0);
   });
 

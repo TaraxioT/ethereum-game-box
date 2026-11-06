@@ -137,8 +137,8 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
 
   function refundRound(round: number, watch: TxWatch): void {
     void relayer.post("/duel/refund", { box, round: String(round) }).then((reply) =>
-      follow(`refund ${round}`, reply, watch, (paid) => {
-        if (paid) rounds.closed(round);
+      follow(`refund ${round}`, reply, watch, (end) => {
+        if (end === "paid") rounds.closed(round);
       }),
     );
   }
@@ -164,15 +164,16 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
       const stake = stakeOf(box, order, deadline());
       rounds.opened(order.round, clock.now());
       const json = { ...stake, round: String(stake.round), amount: String(stake.amount), deadline: String(stake.deadline) };
-      signed(`open ${order.round}`, stakeDigest(stake, contracts.duelPot), "/duel/open", (sig) => ({ stake: json, ...sig }), watch, (paid) => {
-        if (!paid) rounds.closed(order.round);
+      signed(`open ${order.round}`, stakeDigest(stake, contracts.duelPot), "/duel/open", (sig) => ({ stake: json, ...sig }), watch, (end) => {
+        // Only a refusal proves there's no pot. Any other failure stays for the sweep, which asks the chain.
+        if (end === "refused") rounds.closed(order.round);
       });
     },
     settle(order, watch) {
       const result = resultOf(box, order, deadline());
       const json = { ...result, round: String(result.round), deadline: String(result.deadline) };
-      signed(`result ${order.round}`, resultDigest(result, contracts.boxResults), "/box/result", (sig) => ({ result: json, ...sig }), watch, (paid) => {
-        if (paid) rounds.closed(order.round);
+      signed(`result ${order.round}`, resultDigest(result, contracts.boxResults), "/box/result", (sig) => ({ result: json, ...sig }), watch, (end) => {
+        if (end === "paid") rounds.closed(order.round);
       });
     },
     refund: refundRound,

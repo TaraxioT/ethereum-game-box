@@ -1,7 +1,8 @@
 // The core's store port on Sepolia: `StorePot` and Store USDC through the relayer, and the match's log to the verifier.
 //
 // - open: a `Stake` naming the bundle's hash to `POST /store/open`. Rounds come from the same file as `DuelPot`'s, which
-//   keeps the pot until it is paid, so the sweep refunds it if nobody else does.
+//   keeps the pot unless the open was refused outright, so the sweep refunds it if nobody else does, even one whose open
+//   looked failed and landed.
 // - judge: the log's exact JSON text and a `Judge` over its hash to the verifier, which is then asked how it is going
 //   until it has paid, refunded or failed. A verifier that never answers is given up on: the pot stays open for the sweep.
 // - refund: `POST /store/refund`, for anyone once the pot's delay has run.
@@ -70,14 +71,14 @@ export function createStoreChain(options: StoreChainOptions): StoreChainPort {
       const stake = storeStakeOf(box, order, deadline());
       rounds.opened(order.round, clock.now(), "store");
       const json = { ...stake, round: String(stake.round), amount: String(stake.amount), deadline: String(stake.deadline) };
-      requests.signed(`store open ${order.round}`, storeStakeDigest(stake, storePot), "/store/open", (sig) => ({ stake: json, ...sig }), watch, (paid) => {
-        if (!paid) rounds.closed(order.round);
+      requests.signed(`store open ${order.round}`, storeStakeDigest(stake, storePot), "/store/open", (sig) => ({ stake: json, ...sig }), watch, (end) => {
+        if (end === "refused") rounds.closed(order.round);
       });
     },
     refund(round, watch) {
       void relayer.post("/store/refund", { box, round: String(round) }).then((reply) =>
-        requests.follow(`store refund ${round}`, reply, watch, (paid) => {
-          if (paid) rounds.closed(round);
+        requests.follow(`store refund ${round}`, reply, watch, (end) => {
+          if (end === "paid") rounds.closed(round);
         }),
       );
     },

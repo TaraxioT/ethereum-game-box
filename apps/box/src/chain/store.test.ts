@@ -15,7 +15,7 @@ import type { Judged } from "../core/types.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import { softwareSigner } from "../signer/software.ts";
 import { createSepoliaChain, REFUND_AFTER_MS } from "./port.ts";
-import { POLL_MS } from "./requests.ts";
+import { GIVE_UP_MS, POLL_MS } from "./requests.ts";
 import { roundsFile } from "./rounds.ts";
 import { JUDGE_GIVE_UP_MS, JUDGE_POLL_MS, matchLogOf, storeStakeOf } from "./store.ts";
 import { memoryReads, mockRelayer, mockVerifier } from "./testing.ts";
@@ -116,6 +116,69 @@ describe("a store pot on the Sepolia port", () => {
     expect(r.steps.map((u) => [u.step, u.error])).toEqual([["failed", "BundleNotListed"]]);
     expect(r.rounds.open("store").size).toBe(0);
     expect(JSON.parse(readFileSync(r.file, "utf8"))).toEqual({ next: 1, pots: {} });
+  });
+
+  describe("whose open may have landed", () => {
+    const open = (r: ReturnType<typeof rig>) => r.store.open({ round: 3, bundle, badges: [A, B], amount: 5 }, r.watch);
+    const ways: [string, (r: ReturnType<typeof rig>) => Promise<void>][] = [
+      ["the POST's answer was lost", async (r) => {
+        r.relayer.reachable = false;
+        open(r);
+        await flush();
+        r.relayer.reachable = true;
+      }],
+      ["the relayer answered 5xx", async (r) => {
+        r.relayer.refuseNext(502, "upstream: timed out");
+        open(r);
+        await flush();
+      }],
+      ["the relayer went quiet after taking it", async (r) => {
+        open(r);
+        await flush();
+        r.relayer.reachable = false;
+        await r.tick(GIVE_UP_MS + POLL_MS);
+        r.relayer.reachable = true;
+      }],
+      ["its transaction failed", async (r) => {
+        open(r);
+        await flush();
+        r.relayer.advance(r.relayer.ids()[0]!, "failed", { error: "reverted" });
+        await r.tick(POLL_MS);
+      }],
+    ];
+
+    it.each(ways)("stays for the sweep, which refunds it, when %s", async (_, lose) => {
+      const r = rig();
+      await lose(r);
+      expect(r.steps.at(-1)?.step).toBe("failed");
+      expect([...r.rounds.open("store").keys()]).toEqual([3]);
+      r.relayer.posted.length = 0;
+      r.reads.openStorePots.add(3);
+      r.clock.advance(REFUND_AFTER_MS);
+      await r.chain.sweep();
+      await flush();
+      expect(r.relayer.posted).toEqual([{ path: "/store/refund", body: { box: BOX, round: "3" } }]);
+    });
+
+    it.each(ways)("stays for the sweep, which drops it unrefunded if the chain has no pot, when %s", async (_, lose) => {
+      const r = rig();
+      await lose(r);
+      r.relayer.posted.length = 0;
+      r.clock.advance(REFUND_AFTER_MS);
+      await r.chain.sweep();
+      await flush();
+      expect(r.relayer.posted).toEqual([]);
+      expect(r.rounds.open("store").size).toBe(0);
+    });
+  });
+
+  it("forgets a pot the Box's key couldn't sign for: nothing left the Box", async () => {
+    const r = rig({ sign: () => Promise.reject(new Error("the token is out")), publicKey: () => Promise.reject(new Error("no")), stop: () => {} });
+    r.store.open({ round: 3, bundle, badges: [A, B], amount: 5 }, r.watch);
+    await flush();
+    expect(r.steps.map((u) => [u.step, u.error])).toEqual([["failed", "the token is out"]]);
+    expect(r.relayer.posted).toEqual([]);
+    expect(r.rounds.open("store").size).toBe(0);
   });
 
   it("reads Store USDC apart from USDC, and tops it up through its own route", async () => {

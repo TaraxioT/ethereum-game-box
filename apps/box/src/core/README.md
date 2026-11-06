@@ -62,7 +62,8 @@ bot, which take ids from `core.nextTap()`). Only station taps are evidence for a
   `nextRound`) and the Box waits on Stake until the open is confirmed (the relayer's `done`: a block past the one it is
   in): only then does the match begin. The screen shows the wait in the game's own screen (Quick Draw's walk-out, Stock
   Duel's pre-market), with the open's progress (SIGNED › SENT › IN BLOCK › CONFIRMED, its hash and the seconds so far).
-  Taps and Back do nothing while it waits. An open that fails sends both seats back to sign again, with nothing staked.
+  Taps and Back do nothing while it waits. An open that fails sends both seats back to sign again. If its stakes went
+  in after all (its answer was lost), the chain port keeps the round and refunds them once the delay has run.
 - **Result.** After the end hold the result (`settle`, the same round) goes once the pot has landed, so it settles the
   pot it belongs to; it goes even after a rematch or a reset, and with nothing paid when the pot never opened. Once it
   is paid, `outcome` reads its lines from chain at the receipt (the payout, the title, the championship) into

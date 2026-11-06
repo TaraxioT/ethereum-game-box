@@ -21,19 +21,24 @@ export interface MockRelayer extends Relayer {
   advance(id: string, status: TxView["status"], extra?: Partial<TxView>): void;
   /** Every request id in the order posted. */
   ids(): string[];
+  /** False: nothing gets an answer, as `relayerAt` says it (status 0), though a POST may still have gone out. */
+  reachable: boolean;
 }
 
 const hashOf = (n: number): Hex => `0x${n.toString(16).padStart(64, "0")}`;
+const UNREACHABLE = { status: 0, error: "the relayer can't be reached: timed out" } as const;
 
 export function mockRelayer(): MockRelayer {
   const posted: Posted[] = [];
   const views = new Map<string, TxView>();
   const order: string[] = [];
   let refusal: { status: number; error: string } | null = null;
-  return {
+  const relayer: MockRelayer = {
     posted,
+    reachable: true,
     async post(path, body) {
       posted.push({ path, body: body as Record<string, unknown> });
+      if (!relayer.reachable) return UNREACHABLE;
       if (refusal) {
         const { status, error } = refusal;
         refusal = null;
@@ -47,6 +52,7 @@ export function mockRelayer(): MockRelayer {
       return { status: 202, tx: view } satisfies RelayerReply;
     },
     async tx(id) {
+      if (!relayer.reachable) return UNREACHABLE;
       const view = views.get(id);
       return view ? { status: 200, tx: view } : { status: 404, error: "no request with that id" };
     },
@@ -60,6 +66,7 @@ export function mockRelayer(): MockRelayer {
     },
     ids: () => [...order],
   };
+  return relayer;
 }
 
 export interface MemoryReads extends Reads {

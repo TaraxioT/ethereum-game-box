@@ -595,8 +595,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
    * Both seats signed. A game on chain first moves both stakes into the pot (a Box-signed `Stake`): the Box stays on
    * Stake, showing the open's progress, until it is confirmed on chain (a block past its own: the relayer's `done`,
    * `paid` here), and only then does the match begin; in a block alone isn't enough. An open that fails sends both
-   * players back to sign again, with nothing staked. A store game's stakes go to `StorePot`, the same way. A game off
-   * chain (a built game) begins at once.
+   * players back to sign again. If its stakes went in after all (its answer was lost), the port keeps the round, and
+   * the sweep refunds them. A store game's stakes go to `StorePot`, the same way. A game off chain (a built game)
+   * begins at once.
    */
   function openMatch(): void {
     if (!game) throw new Error("no game was chosen");

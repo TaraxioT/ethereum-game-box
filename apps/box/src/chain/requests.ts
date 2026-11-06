@@ -12,6 +12,13 @@ import type { Relayer, RelayerReply } from "./relayer.ts";
 export const POLL_MS = 1_000;
 export const GIVE_UP_MS = 10 * 60_000;
 
+/**
+ * How a request ended. `refused`: it never reached the chain, because the relayer said no (a 4xx) or the Box couldn't
+ * sign it. `unsure`: it failed in any other way, so only the chain can say what came of it: its answer was lost after
+ * the relayer took it, the relayer stopped answering, or the relayer called it failed.
+ */
+export type RequestEnd = "paid" | "refused" | "unsure";
+
 export interface RequestsOptions {
   readonly signer: BoxSigner;
   readonly relayer: Relayer;
@@ -21,9 +28,9 @@ export interface RequestsOptions {
 
 export interface Requests {
   /** Follows a request until it is done or failed, reporting each new step. */
-  follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (paid: boolean) => void): void;
+  follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (end: RequestEnd) => void): void;
   /** Signs `digest` and posts what `body` builds from the signature; a signer that can't sign fails the request. */
-  signed(what: string, digest: Hex, path: string, body: (sig: { r: Hex; s: Hex }) => unknown, watch: TxWatch, ended?: (paid: boolean) => void): void;
+  signed(what: string, digest: Hex, path: string, body: (sig: { r: Hex; s: Hex }) => unknown, watch: TxWatch, ended?: (end: RequestEnd) => void): void;
   /** Runs `run` after `ms`, unless the port stops first. */
   later(ms: number, run: () => void): void;
   stop(): void;
@@ -58,11 +65,11 @@ export function createRequests({ signer, relayer, clock, log }: RequestsOptions)
     handles.add(handle);
   }
 
-  function follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (paid: boolean) => void): void {
+  function follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (end: RequestEnd) => void): void {
     if (!("tx" in reply)) {
       log(`chain: ${what} refused: ${reply.error}`);
       failed(watch, reply.error);
-      ended?.(false);
+      ended?.(reply.status >= 400 && reply.status < 500 ? "refused" : "unsure");
       return;
     }
     const started = clock.now();
@@ -77,7 +84,7 @@ export function createRequests({ signer, relayer, clock, log }: RequestsOptions)
       }
       if (step === "paid" || step === "failed") {
         log(`chain: ${what} ${step}${view.hash ? ` ${view.hash}` : ""}${view.error ? `: ${view.error}` : ""}`);
-        ended?.(step === "paid");
+        ended?.(step === "paid" ? "paid" : "unsure");
         return true;
       }
       return false;
@@ -90,7 +97,7 @@ export function createRequests({ signer, relayer, clock, log }: RequestsOptions)
           if ("tx" in next && apply(next.tx)) return;
           if (clock.now() - started > GIVE_UP_MS) {
             failed(watch, `no answer from the relayer for request ${id}`);
-            ended?.(false);
+            ended?.("unsure");
             return;
           }
           poll();
@@ -112,7 +119,7 @@ export function createRequests({ signer, relayer, clock, log }: RequestsOptions)
             const reason = error instanceof Error ? error.message : String(error);
             log(`chain: ${what} not signed: ${reason}`);
             failed(watch, reason);
-            ended?.(false);
+            ended?.("refused");
           },
         );
     },
