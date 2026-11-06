@@ -5,8 +5,16 @@ import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process'
 
 /** What is running now, so a run that is interrupted leaves nothing behind. */
 const running = new Set<ChildProcess>();
+/** What clears up after those, once they are killed: whatever they had Docker start, Docker keeps running. */
+const clearUps: (() => void)[] = [];
+
+/** Runs `clearUp`, which must finish before it returns, if a run ends with its processes still up. */
+export const whenCutShort = (clearUp: () => void) => void clearUps.push(clearUp);
+
 const killAll = () => {
+  if (running.size === 0) return;
   for (const { pid } of running) if (pid) process.kill(-pid, 'SIGKILL');
+  for (const clearUp of clearUps) clearUp();
 };
 process.once('exit', killAll);
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {

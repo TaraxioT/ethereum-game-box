@@ -5,8 +5,9 @@ checks what the chain did, on one laptop, with everything real but 0G and the ba
 [`plan/game-store.md`](../../plan/game-store.md).
 
 It deploys nothing, holds no real key and calls no real chain or 0G. A run's keys are made up as it starts. It leaves no
-process or container behind, even when interrupted, and its temporary folder goes when it ends, or with the next run.
-`pnpm test` doesn't run it: it needs the tools below and takes about five minutes.
+process or container behind, even when a signal interrupts it. `kill -9` can't be caught, so the next run clears up after
+that. Its temporary folder goes when it ends, or with the next run. `pnpm test` doesn't run it: it needs the tools below
+and takes about five minutes.
 
 ## What runs
 
@@ -102,3 +103,4 @@ pnpm --filter @egb/store-e2e e2e -t 'publishes Tap Rush|TEE check'
 | `src/ledger.ts` | What the chain says |
 | `src/keys.ts`, `src/ports.ts`, `src/processes.ts`, `src/paths.ts` | A run's keys, its ports, its child processes and the repo's root |
 | `test/store.e2e.ts` | The scenarios |
+| `test/interrupted.e2e.ts`, `test/run-to-interrupt.ts` | That a signal leaves nothing behind, on a small run in its own process |
