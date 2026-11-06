@@ -13,14 +13,20 @@ export interface LedgerFile extends LedgerStore {
 
 const whole = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 
+/** An address → whole EGB map, or null. */
+function amounts(value: unknown): Record<string, number> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.every(([address, amount]) => /^0x[0-9a-fA-F]{40}$/.test(address) && whole(amount))) return null;
+  return Object.fromEntries(entries) as Record<string, number>;
+}
+
 /** A ledger from parsed JSON, or null when it isn't one. */
 export function checkLedger(value: unknown): LedgerData | null {
   if (typeof value !== "object" || value === null) return null;
-  const { balances, escrow } = value as Record<string, unknown>;
-  if (typeof balances !== "object" || balances === null || Array.isArray(balances) || !whole(escrow)) return null;
-  const entries = Object.entries(balances as Record<string, unknown>);
-  if (!entries.every(([address, amount]) => /^0x[0-9a-fA-F]{40}$/.test(address) && whole(amount))) return null;
-  return { balances: Object.fromEntries(entries) as Record<string, number>, escrow };
+  const balances = amounts((value as Record<string, unknown>).balances);
+  const escrow = amounts((value as Record<string, unknown>).escrow);
+  return balances && escrow ? { balances, escrow } : null;
 }
 
 export function createLedgerFile(file: string, log: (text: string) => void): LedgerFile {

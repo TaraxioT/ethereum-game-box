@@ -58,10 +58,10 @@ export type TapEvent =
       readonly error: { readonly code: TapErrorCode; readonly text: string };
     };
 
-/** The simulated ledger as stored: a balance per badge address and the open match's escrow. */
+/** The simulated ledger as stored: a balance per badge address, and the open match's stakes by the badge that put each in. */
 export interface LedgerData {
   readonly balances: Readonly<Record<string, number>>;
-  readonly escrow: number;
+  readonly escrow: Readonly<Record<string, number>>;
 }
 
 /** Where the ledger lives: memory in the browser, $EGB_DATA/ledger.json (written atomically) on the Pi. */
@@ -100,7 +100,15 @@ export interface RulesRunnerPort {
 /** Where finished matches go: the session log on the Pi, nowhere in the demo. */
 export interface MatchLog {
   record(transcript: Transcript): void;
+  /** How many counted results this pair of badges (either seat) has had since `since` (ms since the epoch). */
+  countedSince(badges: readonly [string, string], since: number): number;
 }
+
+/**
+ * Where a tap came from. Only a station's tap is one the Box saw: injected taps (the test page) and the demo's drawn
+ * desk play like any other, but they are not evidence for a counted result.
+ */
+export type TapSource = "station" | "injected";
 
 export interface CorePorts {
   readonly clock: Clock;

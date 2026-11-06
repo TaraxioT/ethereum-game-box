@@ -4,7 +4,7 @@ import type { GameRules, Outcome } from "@egb/sdk";
 import { hash32, shuffle } from "@egb/sdk";
 import { other, SEATS, type Seat } from "@egb/sdk";
 import { DECK, STATS } from "./deck.ts";
-import type { RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
+import type { HeldCard, RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
 
 export const DEAL_MS = 3000;
 export const DIAL_MS = 2800;
@@ -14,6 +14,11 @@ export const REVEAL_MS = 4200;
 export const SHOW_LAG_MS = 240;
 /** How long each card stays at the front of the Rolodex, by round. Later rounds keep the last. */
 export const DWELL_MS: readonly number[] = [2400, 2100, 1800];
+/**
+ * A held card whose roll never came back is let go after this long. The taps end every tap in done or fail well
+ * before it (a roll is under a second; a request times out at 4 s); this only keeps a lost tap from stalling a round.
+ */
+export const HOLD_MAX_MS = 6000;
 
 const HAND_SIZE = 4;
 const ROUNDS_TO_WIN = 2;
@@ -42,13 +47,22 @@ function clockAt(state: StockDuelState, now: number): number {
   return state.phase === "deal" ? state.phaseAt : now;
 }
 
-/** Which card in a seat's hand is at the front: its played card once it has played, else the one the clock shows. */
+/** A seat's held card, unless it has been held past HOLD_MAX_MS. */
+function heldAt(state: StockDuelState, seat: Seat, now: number): HeldCard | null {
+  const held = state.held[seat];
+  return held !== null && now - held.at < HOLD_MAX_MS ? held : null;
+}
+
+/**
+ * Which card in a seat's hand is at the front: its played card once it has played, the card a touch is holding, else
+ * the one the clock shows.
+ */
 export function frontIndex(state: StockDuelState, seat: Seat, now: number): number {
   const hand = state.hands[seat];
   if (hand.length === 0) return 0;
-  const played = state.played[seat];
-  if (played !== null) {
-    const index = hand.indexOf(played);
+  const pinned = state.played[seat] ?? heldAt(state, seat, now)?.card ?? null;
+  if (pinned !== null) {
+    const index = hand.indexOf(pinned);
     if (index >= 0) return index;
   }
   const turns = Math.floor((clockAt(state, now) - state.drumAt[seat]) / state.dwellMs);
@@ -62,7 +76,9 @@ export function frontCard(state: StockDuelState, seat: Seat, now: number): Stock
 /** How long the front card stays in front before the drum turns: the draining ring. Zero once the seat has played. */
 export function frontRemainingMs(state: StockDuelState, seat: Seat, now: number): number {
   if (state.played[seat] !== null || state.hands[seat].length === 0) return 0;
-  const sinceTurn = mod(clockAt(state, now) - state.drumAt[seat], state.dwellMs);
+  // A held card's ring stops where the touch caught it.
+  const at = heldAt(state, seat, now)?.at ?? clockAt(state, now);
+  const sinceTurn = mod(at - state.drumAt[seat], state.dwellMs);
   return state.dwellMs - sinceTurn;
 }
 
@@ -80,6 +96,7 @@ function start(seed: number, now: number): StockDuelState {
     played: [null, null],
     auto: [false, false],
     deadline: null,
+    held: [null, null],
     rolls: [hash32(seed, 0), hash32(seed, 1)],
     stat: null,
     history: [],
@@ -95,6 +112,7 @@ function play(state: StockDuelState, seat: Seat, card: Stock, at: number, auto: 
     ...state,
     played: put(state.played, seat, card),
     auto: put(state.auto, seat, auto),
+    held: put(state.held, seat, null),
     rolls: roll === undefined ? state.rolls : put(state.rolls, seat, roll),
     // One turn of the other drum: it comes back to the same front card, and that card is then played for them.
     deadline: partnerWaiting ? at + state.dwellMs * state.hands[partner].length : state.deadline,
@@ -108,25 +126,45 @@ function closePick(state: StockDuelState, now: number): StockDuelState {
   return { ...state, phase: "dial", phaseAt: now, stat };
 }
 
-/** Plays the front card for a seat whose time ran out. It is judged at the deadline, not at the late `now`. */
+/**
+ * Plays the front card for a seat whose time ran out. It is judged at the deadline, not at the late `now`. A seat
+ * whose chip is on the reader rolling is waited for: its tap plays the card it holds.
+ */
 function settlePick(state: StockDuelState, now: number): StockDuelState {
   const { deadline } = state;
   if (state.phase !== "pick" || deadline === null || now < deadline) return state;
   let next = state;
   for (const seat of SEATS) {
     if (next.played[seat] !== null) continue;
+    if (heldAt(next, seat, now) !== null) return next;
     const card = frontCard(next, seat, deadline);
     if (card !== null) next = play(next, seat, card, deadline, true);
   }
   return closePick(next, now);
 }
 
-function tap(state: StockDuelState, seat: Seat, now: number, roll: number): StockDuelState {
-  const settled = settlePick(state, now);
-  if (settled.phase !== "pick" || settled.played[seat] !== null) return settled;
-  const card = frontCard(settled, seat, Math.max(settled.phaseAt, now - SHOW_LAG_MS));
-  if (card === null) return settled;
-  return closePick(play(settled, seat, card, now, false, roll), now);
+/** The card the player saw in front when the chip touched: the screen shows a new front SHOW_LAG_MS after the turn. */
+function seenAt(state: StockDuelState, seat: Seat, at: number): Stock | null {
+  return frontCard(state, seat, Math.max(state.phaseAt, at - SHOW_LAG_MS));
+}
+
+function touch(state: StockDuelState, seat: Seat, at: number): StockDuelState {
+  if (state.phase !== "pick" || state.played[seat] !== null || state.held[seat] !== null) return state;
+  const card = seenAt(state, seat, at);
+  return card === null ? state : { ...state, held: put(state.held, seat, { card, at }) };
+}
+
+function tap(state: StockDuelState, seat: Seat, at: number, roll: number): StockDuelState {
+  const held = state.held[seat];
+  const settled = settlePick(state, at);
+  if (settled.phase !== "pick" || settled.played[seat] !== null) return release(settled, seat);
+  const card = held?.card ?? seenAt(settled, seat, at);
+  if (card === null) return release(settled, seat);
+  return closePick(play(settled, seat, card, held?.at ?? at, false, roll), at);
+}
+
+function release(state: StockDuelState, seat: Seat): StockDuelState {
+  return state.held[seat] === null ? state : { ...state, held: put(state.held, seat, null) };
 }
 
 /** Compares the two played cards on the chosen stat. Higher wins; equal is a tie. */
@@ -171,6 +209,7 @@ function advance(state: StockDuelState, now: number): StockDuelState {
     played: [null, null],
     auto: [false, false],
     deadline: null,
+    held: [null, null],
     stat: null,
   };
 }
@@ -196,7 +235,16 @@ function tick(state: StockDuelState, now: number): StockDuelState {
 export const rules: GameRules<StockDuelState, StockDuelEvent> = {
   start,
   step(state, event) {
-    return event.type === "tick" ? tick(state, event.now) : tap(state, event.seat, event.now, event.roll);
+    switch (event.type) {
+      case "tick":
+        return tick(state, event.now);
+      case "touch":
+        return touch(state, event.seat, event.now);
+      case "tap":
+        return tap(state, event.seat, event.now, event.roll);
+      case "release":
+        return release(state, event.seat);
+    }
   },
   outcome(state): Outcome | null {
     return state.phase === "over" ? { winner: state.winner } : null;

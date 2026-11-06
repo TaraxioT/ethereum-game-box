@@ -21,6 +21,12 @@ export interface Stock {
 
 export type StockDuelPhase = "deal" | "pick" | "dial" | "reveal" | "over";
 
+/** The front card a touch froze, and when the chip touched. */
+export interface HeldCard {
+  readonly card: Stock;
+  readonly at: number;
+}
+
 export interface RoundRecord {
   readonly cards: readonly [Stock, Stock];
   readonly stat: StatKey;
@@ -47,6 +53,8 @@ export interface StockDuelState {
   readonly auto: readonly [boolean, boolean];
   /** Once one seat has played: when the other's card is played for them. */
   readonly deadline: number | null;
+  /** A seat whose chip is on the reader and still rolling: the card its front showed at the touch, held there. */
+  readonly held: readonly [HeldCard | null, HeldCard | null];
   /** Each seat's latest badge roll (uint32). */
   readonly rolls: readonly [number, number];
   /** Chosen after both cards are down. */
@@ -56,7 +64,14 @@ export interface StockDuelState {
   readonly winner: Seat | null;
 }
 
+/**
+ * A tap is a `touch` (the chip landed: its seat's front card freezes on the card the player saw), then a `tap` once
+ * the chip's verified roll is back (the held card is played at the touch time), or a `release` when it never came
+ * (the Rolodex turns on). `now` on `touch` and `tap` is when the chip touched the reader.
+ */
 export type StockDuelEvent =
   | { readonly type: "tick"; readonly now: number }
-  /** A badge tap: plays the front card. `roll` is the badge's signed random number. */
-  | { readonly type: "tap"; readonly seat: Seat; readonly now: number; readonly roll: number };
+  | { readonly type: "touch"; readonly seat: Seat; readonly now: number }
+  /** Plays the held card (or, with no touch before it, the card in front at `now`). `roll` is the badge's number. */
+  | { readonly type: "tap"; readonly seat: Seat; readonly now: number; readonly roll: number }
+  | { readonly type: "release"; readonly seat: Seat };

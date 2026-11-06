@@ -9,7 +9,9 @@ import type { LinkDown } from "../core/wire.ts";
 import { LINK_PATH } from "../core/wire.ts";
 import { ANCHOR_AT, BLOCK_MS } from "../core/chain.ts";
 import { createFakeClock, type FakeClock } from "../core/fake-clock.ts";
+import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { startBox, type Box } from "./box.ts";
+import type { ReceiverSetting } from "./settings.ts";
 
 /** One second after a block, so the next one lands 11 s in. */
 export const TEST_START = ANCHOR_AT + 1_000 * BLOCK_MS + 1_000;
@@ -26,10 +28,19 @@ export interface TestBox {
   advance(ms: number, step?: number): void;
   /** Steps the clock until `check` passes; fails after `limit` ms of Box time. */
   until(check: () => boolean, limit?: number): void;
+  /** Like `until`, letting I/O (the fake receiver's serial lines) run between steps of `step` ms. */
+  settle(check: () => boolean, limit?: number, step?: number): Promise<void>;
   stop(): Promise<void>;
 }
 
-export async function startTestBox(options: { port?: number; dir?: string } = {}): Promise<TestBox> {
+/** Lets pending I/O callbacks run. */
+export async function flush(rounds = 6): Promise<void> {
+  for (let i = 0; i < rounds; i++) await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+export async function startTestBox(
+  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions } = {},
+): Promise<TestBox> {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "egb-box-")));
   await mkdir(join(dir, "screen", "assets"), { recursive: true });
   await writeFile(join(dir, "screen", "index.html"), PAGE);
@@ -42,11 +53,12 @@ export async function startTestBox(options: { port?: number; dir?: string } = {}
       port: options.port ?? 0,
       dataDir: join(dir, "data"),
       screenDir: join(dir, "screen"),
-      receiver: { kind: "none" },
+      receiver: options.receiver ?? { kind: "none" },
       stations: ["e4ba70", "df3d88"],
     },
     repoRoot: dir,
     clock,
+    ...(options.fake ? { fake: options.fake } : {}),
     log: (text) => logs.push(text),
   });
   return {
@@ -61,6 +73,13 @@ export async function startTestBox(options: { port?: number; dir?: string } = {}
       for (let waited = 0; !check(); waited += 50) {
         if (waited > limit) throw new Error(`timed out in ${box.core.state().phase}`);
         clock.advance(50);
+      }
+    },
+    async settle(check, limit = 60_000, step = 10) {
+      for (let waited = 0; !check(); waited += step) {
+        if (waited > limit) throw new Error(`timed out in ${box.core.state().phase}`);
+        clock.advance(step);
+        await flush(2);
       }
     },
     async stop() {

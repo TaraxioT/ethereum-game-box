@@ -44,9 +44,12 @@ function staking(input: StationInput, seat: Seat): Lines {
 
 function quickDraw(game: QuickDrawState, seat: Seat): Lines {
   if (game.phase === "wait") return lines("WAIT", "tap on DRAW");
-  if (game.phase === "draw") return lines("DRAW!", "tap now");
+  if (game.phase === "draw") {
+    const tapped = game.taps[seat];
+    return tapped === null ? lines("DRAW!", "tap now") : lines("DRAW!", `${Math.round(tapped - game.drawAt)} ms`);
+  }
   const ms = reactionMs(game, seat);
-  const detail = ms !== null ? `${ms} ms` : game.taps[seat] !== null ? "too early" : "no tap";
+  const detail = ms !== null ? `${Math.round(ms)} ms` : game.taps[seat] !== null ? "too early" : "no tap";
   return lines(game.winner === seat ? "WIN" : "LOSE", detail);
 }
 
@@ -107,7 +110,7 @@ export function stationView(input: StationInput, seat: Seat, now: number): Stati
   const extra: { done?: string; sign?: string } = {};
   // The station's own tap feedback names the seated player; a roll is a signature on the chip, so it says so.
   if (badge) extra.done = `DONE|${badgeLabel(badge)}`;
-  if (tapPlan(input, seat) === "random") extra.sign = "HOLD STILL|rolling";
+  if (tapPlan(input, seat, now) === "random") extra.sign = "HOLD STILL|rolling";
   return fitView(`P${seat + 1}`, big, small, extra);
 }
 

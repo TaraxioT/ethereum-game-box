@@ -88,6 +88,8 @@ export interface Match {
   readonly play: MatchPlay;
   /** Set when the game ends. `winner` null is a draw. */
   readonly outcome: { readonly winner: Seat | null } | null;
+  /** When the game ended (ms since the epoch), or null while it runs. */
+  readonly endedAt: number | null;
   /** Each seat has taken its stake back (Refund). */
   readonly refunded: readonly [boolean, boolean];
 }

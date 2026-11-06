@@ -119,6 +119,7 @@ export type ReceiverCommand =
   | { readonly cmd: "state" }
   | { readonly cmd: "press"; readonly id: number }
   | { readonly cmd: "buzz"; readonly st: StationId | "all"; readonly id: number; readonly ms: number; readonly pulses: 1 | 2 | 3 }
+  /** `payload` is the screen's text (`key=value` lines); the command line carries it as hex. */
   | { readonly cmd: "screen"; readonly st: StationId | "all"; readonly id: number; readonly payload: string }
   | { readonly cmd: "nfc"; readonly st: StationId; readonly id: number; readonly op: "apdu" | "sign"; readonly hex: string }
   | { readonly cmd: "nfc"; readonly st: StationId; readonly id: number; readonly op: "reselect" | "list" }

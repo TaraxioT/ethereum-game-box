@@ -53,7 +53,7 @@ describe("the local-origin rule", () => {
 
   it("refuses a POST and a link from another origin", async () => {
     const { box } = await start();
-    const badge = { address: `0x${"ab".repeat(20)}`, name: "NOVA" };
+    const badge = `0x${"ab".repeat(20)}`;
     const evil = await post(box, "/api/taps/inject", { seat: 0, badge }, { origin: "http://evil.example" });
     expect(evil.status).toBe(403);
     expect((await post(box, "/api/taps/inject", { seat: 0, badge })).status).toBe(200);
@@ -123,10 +123,11 @@ describe("the API", () => {
 
   it("caps JSON bodies at 64 KB and refuses what isn't JSON", async () => {
     const { box } = await start();
-    const big = JSON.stringify({ seat: 0, badge: { address: `0x${"ab".repeat(20)}`, name: "NOVA" }, pad: "x".repeat(70_000) });
+    const big = JSON.stringify({ seat: 0, badge: `0x${"ab".repeat(20)}`, pad: "x".repeat(70_000) });
     expect((await post(box, "/api/taps/inject", big)).status).toBe(413);
     expect((await post(box, "/api/taps/inject", "{ nope")).status).toBe(400);
-    expect((await post(box, "/api/taps/inject", { seat: 2, badge: { address: "0x1", name: "" } })).status).toBe(400);
+    expect((await post(box, "/api/taps/inject", { seat: 2, badge: "0x1" })).status).toBe(400);
+    expect((await post(box, "/api/taps/inject", { seat: 0, badge: "NOBODY" })).status).toBe(404);
   });
 
   it("guards the builder's routes with this boot's launcher token", async () => {

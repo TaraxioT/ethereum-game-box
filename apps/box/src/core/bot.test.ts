@@ -84,6 +84,7 @@ describe("bot intents", () => {
       refundBlock: 51,
       play: { game: "quick-draw" as const, state },
       outcome: null,
+      endedAt: null,
       refunded: [false, false] as const,
     };
     const playing = botIntent(box({ phase: "playing", seats: [human(true), bot(true)], match }), NOW, BOT_BADGE);
@@ -162,6 +163,7 @@ describe("bot scheduler", () => {
       refundBlock: 51,
       play: { game: "stock-duel" as const, state: duel },
       outcome: null,
+      endedAt: null,
       refunded: [false, false] as const,
     });
     const tap = vi.fn(() => {

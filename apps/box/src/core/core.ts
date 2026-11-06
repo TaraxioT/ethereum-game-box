@@ -2,12 +2,17 @@
 // views, behind BoxLink. It has no DOM, no Node APIs and no clock of its own: everything comes through CorePorts,
 // so SimLink runs it in the browser, the Box server on the Pi, and tests on a fake clock.
 //
-// Taps come in as TapEvents: a `touch`, then `done` or `fail`. A tap is judged at its touch time. A known badge on a
-// tap that needs no roll is acted on at its touch (Quick Draw); a tap that needs the chip's roll, or a chip the roster
-// didn't know yet, waits for its `done`. A tap that touched before the phase changed never reaches the new phase.
+// Taps come in as TapEvents: a `touch`, then `done` or `fail`. A tap is judged at its touch time.
+//   - Outside a game, a known badge whose tap needs no roll is acted on at its touch; anything else waits for `done`.
+//   - In a game, the game hears the touch at once: Quick Draw takes a known seated badge's touch as its tap, and holds
+//     an unknown chip's touch until its read says whose it is; Stock Duel freezes the card the player saw, plays it on
+//     `done` with the chip's roll, and lets it go on `fail`.
+//   - A tap that touched before the phase changed never reaches the new phase.
+// Every finished match goes to the match log as a transcript; a stake left in escrow from before a restart goes back.
 import type { Seat } from "@egb/sdk";
 import { hash32, other, SEATS } from "@egb/sdk";
-import type { CorePorts, TapEvent, TapPlan, TimerHandle } from "./ports.ts";
+import type { CorePorts, TapEvent, TapPlan, TapSource, TimerHandle } from "./ports.ts";
+import type { TranscriptTap } from "@egb/sdk";
 import type {
   Badge,
   BoxEvent,
@@ -25,13 +30,16 @@ import type {
   TeamGameId,
 } from "./types.ts";
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
+import type { QuickDrawEvent } from "../games/quick-draw/types.ts";
+import type { StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame } from "./catalogue.ts";
 import { blockAt, DRIFT_MS, firstGas, GAS_DRIFT, nextBlockAt, nextGas, BLOCK_MS } from "./chain.ts";
-import { balanceOf, faucet, FAUCET_EGB, lock, refund, settle, type Ledger } from "./ledger.ts";
+import { balanceOf, escrowTotal, faucet, FAUCET_EGB, lock, refund, returnAll, settle, type Ledger } from "./ledger.ts";
+import { transcriptOf } from "./transcript.ts";
 import { createTxBook } from "./txs.ts";
 import { stationViews, type StationInput } from "./stations.ts";
-import { tapPlan } from "./plan.ts";
+import { REMATCH_TAP_MS, tapPlan } from "./plan.ts";
 import { createTimers } from "./timers.ts";
 
 /** Join waits this long with both seats full before moving on to Stake. */
@@ -58,17 +66,25 @@ export interface CoreOptions {
 }
 
 export interface Core extends BoxLink {
-  /** A tap at a station: `touch`, then exactly one `done` or `fail`, sharing a tap id from `nextTap`. */
-  tap(event: TapEvent): void;
+  /**
+   * A tap: `touch`, then exactly one `done` or `fail`, sharing a tap id. Ids are per source: the taps library numbers
+   * the stations' taps, and injected taps take theirs from `nextTap`.
+   */
+  tap(event: TapEvent, source?: TapSource): void;
   /** What the next tap at this seat should ask of the badge. */
   plan(seat: Seat): TapPlan;
-  /** A fresh tap id. Every source of taps (the stations, injected taps, the demo desk) takes its ids here. */
+  /** A fresh id for an injected tap (the test page, the demo's desk and bot). */
   nextTap(): number;
   opponent(): Opponent;
   setOpponent(opponent: Opponent): void;
   /** Off: the Box can't settle the match it is running, so it goes to Refund when the game ends. */
   power(): boolean;
   setPower(on: boolean): void;
+  /**
+   * Back to Home now (the test page). Stakes of a match that hasn't settled go back to their badges; a settlement
+   * already sent lands as it would have.
+   */
+  reset(): void;
   /** Stops every timer. */
   stop(): void;
 }
@@ -84,18 +100,23 @@ interface SeatSlot {
 interface OpenTap {
   readonly seat: Seat;
   readonly at: number;
+  readonly source: TapSource;
   /** The phase change count at the touch: a tap from before the last change is dropped. */
   readonly epoch: number;
   /** Already judged at its touch. */
   acted: boolean;
+  /** The game heard its touch and waits for its done or fail. */
+  held: boolean;
 }
 
-/** What a tap brings to a game: when the chip touched, and its verified roll when the plan was `random`. */
-interface GameTap {
-  readonly seat: Seat;
-  readonly at: number;
-  readonly roll: number | null;
-}
+/**
+ * What a tap brings to a game. `touch`: a chip landed on the seat's reader (whose isn't known yet). `tap`: the seated
+ * badge's chip, touched at `at`, with its verified roll when the plan was `random`. `release`: the touch didn't count.
+ */
+type GameTap =
+  | { readonly kind: "touch"; readonly seat: Seat; readonly at: number }
+  | { readonly kind: "tap"; readonly seat: Seat; readonly at: number; readonly roll: number | null }
+  | { readonly kind: "release"; readonly seat: Seat };
 
 function sameBadge(a: Badge | null, b: Badge | null): boolean {
   return a !== null && b !== null && a.address === b.address;
@@ -142,17 +163,27 @@ function playCues(before: MatchPlay, after: MatchPlay, frontsBefore: readonly (n
   return cues;
 }
 
-/** One game step: a tick (tap null) or a tap. A Stock Duel tap without its badge's roll changes nothing. */
+function quickDrawEvent(tap: GameTap | null, now: number): QuickDrawEvent {
+  if (tap === null) return { type: "tick", now };
+  if (tap.kind === "release") return { type: "release", seat: tap.seat, now };
+  return { type: tap.kind, seat: tap.seat, at: tap.at, now };
+}
+
+/** A Stock Duel tap without its badge's roll can't play a card: it lets the held card go. */
+function stockDuelEvent(tap: GameTap | null, now: number): StockDuelEvent {
+  if (tap === null) return { type: "tick", now };
+  if (tap.kind === "touch") return { type: "touch", seat: tap.seat, now: tap.at };
+  if (tap.kind === "tap" && tap.roll !== null) return { type: "tap", seat: tap.seat, now: tap.at, roll: tap.roll };
+  return { type: "release", seat: tap.seat };
+}
+
+/** One game step: a tick (tap null) or a tap's part. */
 function nextPlay(play: MatchPlay, tap: GameTap | null, now: number): MatchPlay {
   if (play.game === "quick-draw") {
-    const next = quickDraw.step(play.state, tap === null ? { type: "tick", now } : { type: "tap", seat: tap.seat, now: tap.at });
+    const next = quickDraw.step(play.state, quickDrawEvent(tap, now));
     return next === play.state ? play : { game: "quick-draw", state: next };
   }
-  if (tap?.roll === null) return play;
-  const next =
-    tap === null
-      ? stockDuel.step(play.state, { type: "tick", now })
-      : stockDuel.step(play.state, { type: "tap", seat: tap.seat, now: tap.at, roll: tap.roll });
+  const next = stockDuel.step(play.state, stockDuelEvent(tap, now));
   return next === play.state ? play : { game: "stock-duel", state: next };
 }
 
@@ -182,6 +213,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let match: Match | null = null;
   let matchCount = 0;
   let ledger: Ledger = ports.ledger.load();
+  // A stake still in escrow at start belongs to a match the Box no longer has (it stopped mid-match): each stake goes
+  // straight back to the badge that put it in, as the escrow's refund would have paid it.
+  if (escrowTotal(ledger) > 0) setLedger(returnAll(ledger));
   /** EGB on its way to each address: faucet, payout and refund transactions not yet in a block. */
   const incoming = new Map<string, number>();
   const fauceting = new Set<string>();
@@ -190,8 +224,14 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
   let openTxId: number | null = null;
   let opponent: Opponent = bot ? "bot" : "hotseat";
   let power = true;
-  const open = new Map<number, OpenTap>();
+  /** Open taps by source and id. */
+  const open = new Map<string, OpenTap>();
   let tapCount = 0;
+  /** The running match's seed, its game taps, and each seat's first station tap from Stake on (the evidence). */
+  let seed = 0;
+  let matchStartedAt = 0;
+  let matchTaps: TranscriptTap[] = [];
+  const seen: [number | null, number | null] = [null, null];
 
   const head = blockAt(clock.now());
   const chain = { block: head.block, blockAt: head.at, gasGwei: firstGas(rnd) };
@@ -301,7 +341,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     }
     if (to === "home" || to === "stake") match = null;
     if (to === "home") fitSeatsToOpponent();
-    if (to === "stake") fundSeats();
+    if (to === "stake") {
+      seen[0] = null;
+      seen[1] = null;
+      fundSeats();
+    }
     resetIdle();
     emit({ type: "phase", from, to });
     if (to === "join") maybeLeaveJoin();
@@ -347,6 +391,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const left = (incoming.get(address) ?? 0) - amount;
     if (left > 0) incoming.set(address, left);
     else incoming.delete(address);
+  }
+
+  /** The escrow still holds this badge's stake. */
+  function holds(address: string, amount: number): boolean {
+    return (ledger.escrow[address] ?? 0) >= amount;
   }
 
   /** What a badge can stake: its balance plus the money already on its way to it. */
@@ -403,9 +452,11 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (seats[0].signed && seats[1].signed) {
       const both = addresses();
       const amount = stake;
-      openTxId = book.submit({ kind: "open", seat: null, direction: "in", amount: amount * 2 }, () => {
-        setLedger(lock(ledger, both, amount));
+      const id: number = book.submit({ kind: "open", seat: null, direction: "in", amount: amount * 2 }, () => {
+        // A reset while it was on its way leaves the stakes where they are.
+        if (openTxId === id) setLedger(lock(ledger, both, amount));
       }).id;
+      openTxId = id;
     }
     return "accepted";
   }
@@ -417,7 +468,10 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const id = ++matchCount;
     const now = clock.now();
     // The seed takes fresh randomness, so nobody can work out the draw from the seats and the block.
-    const play = startPlay(game, hash32("match", id, one, two, block, ports.random()), now);
+    seed = hash32("match", id, one, two, block, ports.random());
+    const play = startPlay(game, seed, now);
+    matchStartedAt = now;
+    matchTaps = [];
     refunding[0] = false;
     refunding[1] = false;
     match = {
@@ -428,6 +482,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       refundBlock: block + REFUND_AFTER_BLOCKS,
       play,
       outcome: null,
+      endedAt: null,
       refunded: [false, false],
     };
     lastFronts = fronts(play, now);
@@ -448,7 +503,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const after = nextPlay(before, tap, now);
     const changed = after !== before;
     const outcome = changed ? outcomeOf(after) : null;
-    if (changed) match = { ...match, play: after, outcome };
+    if (changed) match = { ...match, play: after, outcome, endedAt: outcome ? now : null };
     const cues = playCues(before, after, lastFronts, now);
     lastFronts = fronts(after, now);
     if (changed) emit({ type: "game" });
@@ -463,10 +518,34 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     return changed;
   }
 
+  /** The finished match, to the match log: after the end hold, so a late tap the game turned away is in it too. */
+  function record(winner: Seat | null, endedAt: number): void {
+    if (!match) return;
+    const [one, two] = addresses();
+    ports.log.record(
+      transcriptOf(
+        {
+          match: match.id,
+          game: match.game,
+          seed,
+          badges: [one, two],
+          stake: match.stake,
+          startedAt: matchStartedAt,
+          endedAt,
+          taps: matchTaps,
+          winner,
+          seen: [seen[0], seen[1]],
+        },
+        ports.log,
+      ),
+    );
+  }
+
   /** After the end hold: settle if the Box has power, else it has missed its settle and Refund opens. */
   function conclude(): void {
     if (!match?.outcome) return;
     const { winner } = match.outcome;
+    record(winner, match.endedAt ?? clock.now());
     if (!power) {
       match = { ...match, refundBlock: Math.max(match.refundBlock, chain.block + REFUND_MIN_WAIT_BLOCKS) };
       setPhase("refund");
@@ -478,7 +557,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     const payees = winner === null ? both.map((a) => [a, amount] as const) : [[both[winner], amount * 2] as const];
     for (const [address, sum] of payees) owe(address, sum);
     book.submit({ kind: "settle", seat: winner, direction: "out", amount: amount * 2 }, () => {
-      setLedger(settle(ledger, both, amount, winner));
+      if (holds(both[0], amount) && holds(both[1], amount)) setLedger(settle(ledger, both, amount, winner));
       for (const [address, sum] of payees) land(address, sum);
     });
     setPhase("result");
@@ -496,7 +575,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     refunding[seat] = true;
     owe(address, amount);
     book.submit({ kind: "refund", seat, direction: "out", amount }, () => {
-      setLedger(refund(ledger, address, amount));
+      // A reset may have handed the stake back already.
+      if (holds(address, amount)) setLedger(refund(ledger, address, amount));
       land(address, amount);
       refunding[seat] = false;
       if (!match || match.id !== id) return;
@@ -513,12 +593,21 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
 
   // ── Taps ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
+  /** A seated badge's tap on the result, once the result has been seen: the same as the screen's Rematch. */
+  function rematchTap(seat: Seat, badge: Badge): TapResult {
+    const endedAt = match?.endedAt ?? null;
+    if (!sameBadge(seats[seat].badge, badge) || endedAt === null || clock.now() - endedAt < REMATCH_TAP_MS) return "ignored";
+    command({ type: "rematch" });
+    return "accepted";
+  }
+
   function handleTap(seat: Seat, badge: Badge, at: number, roll: number | null): TapResult {
     const seatedHere = sameBadge(seats[seat].badge, badge);
     switch (phase) {
       case "boot":
-      case "result":
         return "ignored";
+      case "result":
+        return rematchTap(seat, badge);
       case "attract":
         setPhase("home");
         return "accepted";
@@ -529,10 +618,19 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       case "stake":
         return seatedHere ? sign(seat) : "ignored";
       case "playing":
-        return seatedHere && stepGame({ seat, at, roll }) ? "accepted" : "ignored";
+        return seatedHere ? gameTap({ kind: "tap", seat, at, roll }) : "ignored";
       case "refund":
         return seatedHere ? claimRefund(seat) : "ignored";
     }
+  }
+
+  /** A tap's end in the game: the transcript keeps it, with its touch time and roll. */
+  function gameTap(tap: Extract<GameTap, { kind: "tap" }>): TapResult {
+    const accepted = stepGame(tap);
+    // The Stock Duel tap that played nothing still holds its card: let it go.
+    if (!accepted) stepGame({ kind: "release", seat: tap.seat });
+    matchTaps.push({ seat: tap.seat, at: tap.at, roll: tap.roll, accepted });
+    return accepted ? "accepted" : "ignored";
   }
 
   /** Tells the screen and the station how a tap went: one short buzz for an accepted tap, two for any other. */
@@ -545,39 +643,62 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     if (result === "refused") cue("error");
   }
 
-  function judge(seat: Seat, badge: Badge, at: number, roll: number | null): void {
-    report(seat, handleTap(seat, badge, at, roll));
+  /** A station tap by a seated badge from Stake to the end of the match: evidence the players were at the Box. */
+  function note(entry: OpenTap, badge: Badge): void {
+    if (entry.source !== "station" || (phase !== "stake" && phase !== "playing")) return;
+    if (sameBadge(seats[entry.seat].badge, badge)) seen[entry.seat] ??= entry.at;
   }
 
-  function tap(event: TapEvent): void {
-    switch (event.phase) {
-      case "touch": {
-        const entry: OpenTap = { seat: event.seat, at: event.at, epoch, acted: false };
-        open.set(event.tap, entry);
-        // Judged by its touch: a known badge whose tap needs no roll is acted on now, not when the chip answers.
-        if (event.badge && tapPlan(state, event.seat) !== "random") {
-          entry.acted = true;
-          judge(event.seat, event.badge, event.at, null);
-        }
-        return;
+  function judge(entry: OpenTap, badge: Badge, roll: number | null): void {
+    note(entry, badge);
+    report(entry.seat, handleTap(entry.seat, badge, entry.at, roll));
+  }
+
+  /** The running game hears this touch now: it is a seated badge's, or a chip not read yet. */
+  function inGame(seat: Seat, badge: Badge | null): boolean {
+    const seated = seats[seat].badge;
+    return phase === "playing" && match !== null && match.outcome === null && seated !== null && (badge === null || sameBadge(badge, seated));
+  }
+
+  function touch(event: Extract<TapEvent, { phase: "touch" }>, source: TapSource): void {
+    const entry: OpenTap = { seat: event.seat, at: event.at, source, epoch, acted: false, held: false };
+    open.set(`${source}:${event.tap}`, entry);
+    if (inGame(event.seat, event.badge)) {
+      // Quick Draw judges a known seated badge by its touch; anything else the game holds until the chip is read.
+      if (match?.play.game === "quick-draw" && event.badge) {
+        entry.acted = true;
+        return judge(entry, event.badge, null);
       }
-      case "done": {
-        const entry = open.get(event.tap);
-        open.delete(event.tap);
-        if (!entry || entry.acted) return;
-        // A tap that began before the phase changed (a stake tap whose chip answered after the match opened) would
-        // land in a phase it was never meant for.
-        if (entry.epoch !== epoch) return report(entry.seat, "ignored");
-        judge(entry.seat, event.badge, entry.at, event.roll);
-        return;
-      }
-      case "fail": {
-        const entry = open.get(event.tap);
-        open.delete(event.tap);
-        if (entry && !entry.acted) report(entry.seat, "ignored");
-        return;
-      }
+      entry.held = true;
+      stepGame({ kind: "touch", seat: event.seat, at: event.at });
+      return;
     }
+    // Judged by its touch: a known badge whose tap needs no roll is acted on now, not when the chip answers.
+    if (event.badge && tapPlan(state, event.seat, clock.now()) !== "random") {
+      entry.acted = true;
+      judge(entry, event.badge, null);
+    }
+  }
+
+  function tap(event: TapEvent, source: TapSource = "station"): void {
+    if (event.phase === "touch") return touch(event, source);
+    const key = `${source}:${event.tap}`;
+    const entry = open.get(key);
+    open.delete(key);
+    if (!entry || entry.acted) return;
+    // A tap that began before the phase changed (a stake tap whose chip answered after the match opened) would land
+    // in a phase it was never meant for.
+    if (entry.epoch !== epoch) return report(entry.seat, "ignored");
+    if (event.phase === "fail") {
+      if (entry.held) stepGame({ kind: "release", seat: entry.seat });
+      return report(entry.seat, "ignored");
+    }
+    if (entry.held && !sameBadge(seats[entry.seat].badge, event.badge)) {
+      // Not the seated player's chip after all.
+      stepGame({ kind: "release", seat: entry.seat });
+      return report(entry.seat, "ignored");
+    }
+    judge(entry, event.badge, event.roll);
   }
 
   // ── Screen commands ───────────────────────────────────────────────────────────────────────────────────────────
@@ -680,7 +801,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     },
     send: command,
     tap,
-    plan: (seat) => tapPlan(state, seat),
+    plan: (seat) => tapPlan(state, seat, clock.now()),
     nextTap: () => ++tapCount,
     opponent: () => opponent,
     setOpponent(next) {
@@ -694,6 +815,14 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     power: () => power,
     setPower(on) {
       power = on;
+    },
+    reset() {
+      timers.cancel(tickTimer);
+      tickTimer = null;
+      openTxId = null;
+      // A match that hasn't sent its settlement hands each stake back; one in Result is already paying out.
+      if (phase !== "result" && escrowTotal(ledger) > 0) setLedger(returnAll(ledger));
+      setPhase("home");
     },
     stop() {
       timers.clear();
