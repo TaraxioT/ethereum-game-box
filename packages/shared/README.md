@@ -12,6 +12,7 @@
 | `src/deployments.ts` | Loads `deployments/sepolia.json`, so no app hard-codes an address |
 | `src/chains.ts` | Sepolia and Robinhood Chain settings, with RPC URLs taken from the environment |
 | `src/names/` | The ENS names under `gamebox.eth`, imported as `@egb/shared/names` (below) |
+| `src/swap/` | The tap swap on the GBX/USDC pool, imported as `@egb/shared/swap` (below) |
 
 ## `src/names/`
 
@@ -38,6 +39,14 @@ the EIP-7951 precompile as `h`, never its SHA-256. That is what the HYP2003 does
 `@noble/curves` does with `prehash: false`. The signature must have a low `s` (at most n/2), or the contracts refuse
 it. A software Box key (`DEMO_BOX_P256_KEY`) is a `0x`-prefixed 32-byte hex scalar. On chain the public key is
 `qx`, `qy` (`BoxAccount.publicKey()`), and a Box name's `boxKey` record is `0x04` + x + y.
+
+## `src/swap/`
+
+| Module | Holds |
+|---|---|
+| `tapSwap.ts` | `GameBoxHook`'s EIP-712 `TapSwap` message (the typed data and the digest the Box signs with P-256, like `Execute`) and `tapSwapHookData`, the hook data a tap swap carries to the pool |
+| `vectors.json` | Written by `contracts/test/hook/SwapVectors.t.sol`; `tapSwap.test.ts` checks `tapSwap.ts` against it |
+| `vectors.ts` | `TAP_SWAP_VECTOR`, typed, signed with the names vector Box key |
 
 ## Rules
 
