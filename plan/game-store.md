@@ -212,8 +212,9 @@ arrives, and steps 5 to 7 get their detail from its results.
   a browser.
 - **`read.ts`** starts from the `.game` prototype's reader, in worktree `wf_1c26fd3f-9a5-1`. It accepts one exact zip
   shape and refuses everything else.
-- **`pack.ts`** is the only way to make that shape: sorted names, fixed fields and no timestamps. So `store:publish`
-  takes a folder, not a zip, and the same folder always gives the same hash. A zip made by another tool is refused.
+- **`pack.ts`** is the only way to make that shape: sorted names, fixed fields, no timestamps and every file stored,
+  not compressed. So `store:publish` takes a folder, not a zip, and the same folder always gives the same hash. A zip
+  made by another tool is refused.
 - **`format.ts`** holds the manifest's type, its checks and the limits: 16 MB a zip, 64 files, and `.html`, `.css`,
   `.js`, `.png`, `.jpg`, `.webp`, `.svg`, `.woff2` and `.mp3` only.
 - **Tap Rush** is the sample, in `apps/store/sample/tap-rush/`, with instructions a test can check by hand.

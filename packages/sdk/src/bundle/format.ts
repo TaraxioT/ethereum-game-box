@@ -10,8 +10,6 @@ export const BUNDLE_FORMAT = 1;
 
 export const BUNDLE_LIMITS = {
   zipBytes: 16 * 1024 * 1024,
-  /** Every file inflated, together: the ceiling on a zip bomb. */
-  totalBytes: 32 * 1024 * 1024,
   files: 64,
   nameBytes: 120,
   manifestBytes: 32 * 1024,
@@ -135,13 +133,10 @@ function parseManifest(bytes: Uint8Array): BundleManifest {
 /** Judges a bundle's files, for the packer before a zip and the reader after one. Throws BundleRefused. */
 export function judgeFiles(files: ReadonlyMap<string, Uint8Array>): BundleManifest {
   if (files.size > BUNDLE_LIMITS.files) refuse(`${files.size} files: at most ${BUNDLE_LIMITS.files}`);
-  let total = 0;
-  for (const [name, body] of files) {
+  for (const name of files.keys()) {
     const problem = nameProblem(name);
     if (problem) refuse(problem);
-    total += body.length;
   }
-  if (total > BUNDLE_LIMITS.totalBytes) refuse(`the files come to ${total} B: at most ${BUNDLE_LIMITS.totalBytes} B`);
   if (!files.has(PAGE_FILE)) refuse(`no ${PAGE_FILE}`);
   const manifest = files.get(MANIFEST_FILE);
   if (!manifest) refuse(`no ${MANIFEST_FILE}`);

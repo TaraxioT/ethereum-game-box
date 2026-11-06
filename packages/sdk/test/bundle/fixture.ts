@@ -17,7 +17,7 @@ export const MANIFEST = {
 
 export const manifestBytes = (over: object = {}): Uint8Array => text(JSON.stringify({ ...MANIFEST, ...over }, null, 2));
 
-/** Eight bytes that aren't text, as a stored asset's body. */
+/** Eight bytes that aren't text. */
 const PIXELS = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export const goodFiles = (): Map<string, Uint8Array> =>

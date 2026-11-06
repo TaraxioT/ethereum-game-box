@@ -4,7 +4,7 @@
 makes both write against it, and the Box's core, server and screen read it. Pure TypeScript with no DOM and no Node:
 a built game's rules run in a locked-down Node child and its screen in a sandboxed frame, so nothing here may reach
 for either platform. The one browser-only piece, the screen contract, is its own entry. So is the game bundle format,
-`@egb/sdk/bundle`, which needs WebCrypto and DecompressionStream, and a built game has no use for.
+`@egb/sdk/bundle`, which needs WebCrypto, and a built game has no use for.
 
 ## What goes here
 

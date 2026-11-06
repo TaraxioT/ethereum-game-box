@@ -4,42 +4,19 @@
 //
 // Every header field is either fixed or must agree with the other copy of it. Entries tile the file from byte 0 to the
 // central directory with no gaps, no overlaps and nothing after the end record, so no bytes can hide, be read twice, or
-// mean something else to another tool. Sizes are claims: inflate output is counted and capped, then checked by CRC.
-// Last, the files are packed again and must come back byte for byte. That covers what no field check can see, the
-// deflate streams, which have many valid spellings and, in a Worker on an old compatibility date, room for hidden bytes.
+// mean something else to another tool. Every file is stored, so a compressed one is refused at its header, before a
+// byte is inflated, which is all a zip bomb gets. Each file's CRC is then checked. A read costs one pass over the zip,
+// whatever it holds.
 import { BUNDLE_LIMITS, BundleRefused, judgeFiles, nameProblem, refuse, type OpenedBundle } from "./format.ts";
-import { crc32, FIXED, METHOD, methodOf, SIGNATURE, zipFiles } from "./pack.ts";
+import { crc32, FIXED, SIGNATURE } from "./pack.ts";
 
 const LOCAL_BYTES = 30;
 const CENTRAL_BYTES = 46;
 const END_BYTES = 22;
 
-/** Inflates exactly `size` bytes, stopping the moment there would be more. */
-async function inflate(body: Uint8Array, size: number, name: string): Promise<Uint8Array> {
-  const reader = new Blob([new Uint8Array(body)]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
-  const out = new Uint8Array(size);
-  let got = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (got + value.length > size) refuse(`${name} inflates past its stated size`);
-      out.set(value, got);
-      got += value.length;
-    }
-  } catch (error) {
-    await reader.cancel().catch(() => {});
-    throw error instanceof BundleRefused ? error : new BundleRefused(`${name}: the compressed data is bad`);
-  }
-  if (got !== size) refuse(`${name} inflates to ${got} B, not its stated ${size} B`);
-  return out;
-}
-
 interface Entry {
   readonly name: string;
-  readonly method: number;
   readonly crc: number;
-  readonly packed: number;
   readonly size: number;
   readonly dataAt: number;
 }
@@ -59,7 +36,6 @@ function walk(bytes: Uint8Array): Entry[] {
   if (dirAt + dirBytes !== end) refuse("the directory doesn't end where the end record starts");
 
   const entries: Entry[] = [];
-  let total = 0;
   let cursor = 0;
   let at = dirAt;
   for (let i = 0; i < count; i++) {
@@ -82,30 +58,23 @@ function walk(bytes: Uint8Array): Entry[] {
 
     const method = u16(at + 10);
     const crc = u32(at + 16);
-    const packed = u32(at + 20);
     const size = u32(at + 24);
-    if (method !== methodOf(name)) refuse(`${name}: compression method ${method}`);
-    if (method === METHOD.stored && packed !== size) refuse(`${name}: stored, but its sizes differ`);
-    total += size;
-    if (total > BUNDLE_LIMITS.totalBytes) refuse(`the bundle inflates past ${BUNDLE_LIMITS.totalBytes} B`);
+    if (method !== FIXED.method) refuse(`${name}: compression method ${method}`);
+    if (u32(at + 20) !== size) refuse(`${name}: stored, but its sizes differ`);
 
     const dataAt = cursor + LOCAL_BYTES + nameBytes;
-    if (dataAt + packed > dirAt) refuse(`${name} runs past the entries`);
+    if (dataAt + size > dirAt) refuse(`${name} runs past the entries`);
     const same =
       u32(cursor) === SIGNATURE.local && u16(cursor + 4) === FIXED.needs && u16(cursor + 6) === FIXED.flags && u16(cursor + 8) === method && u16(cursor + 10) === FIXED.time &&
-      u16(cursor + 12) === FIXED.date && u32(cursor + 14) === crc && u32(cursor + 18) === packed && u32(cursor + 22) === size && u16(cursor + 26) === nameBytes && u16(cursor + 28) === 0;
+      u16(cursor + 12) === FIXED.date && u32(cursor + 14) === crc && u32(cursor + 18) === size && u32(cursor + 22) === size && u16(cursor + 26) === nameBytes && u16(cursor + 28) === 0;
     if (!same || !nameRaw.every((b, k) => b === bytes[cursor + LOCAL_BYTES + k])) refuse(`${name}: its local header disagrees with the directory`);
 
-    entries.push({ name, method, crc, packed, size, dataAt });
-    cursor = dataAt + packed;
+    entries.push({ name, crc, size, dataAt });
+    cursor = dataAt + size;
     at += CENTRAL_BYTES + nameBytes;
   }
   if (at !== end || cursor !== dirAt) refuse("bytes between the entries and the directory");
   return entries;
-}
-
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
 async function sha256(bytes: Uint8Array): Promise<`0x${string}`> {
@@ -124,12 +93,9 @@ export async function readBundle(bytes: Uint8Array): Promise<OpenedBundle> {
   }
   const files = new Map<string, Uint8Array>();
   for (const e of entries) {
-    const body = bytes.subarray(e.dataAt, e.dataAt + e.packed);
-    const out = e.method === METHOD.stored ? new Uint8Array(body) : await inflate(body, e.size, e.name);
-    if (crc32(out) !== e.crc) refuse(`${e.name}: its CRC doesn't match`);
-    files.set(e.name, out);
+    const body = new Uint8Array(bytes.subarray(e.dataAt, e.dataAt + e.size));
+    if (crc32(body) !== e.crc) refuse(`${e.name}: its CRC doesn't match`);
+    files.set(e.name, body);
   }
-  const manifest = judgeFiles(files);
-  if (!sameBytes(zipFiles(files), bytes)) refuse("the deflate streams aren't the packer's");
-  return { manifest, files, hash: await sha256(bytes) };
+  return { manifest: judgeFiles(files), files, hash: await sha256(bytes) };
 }
