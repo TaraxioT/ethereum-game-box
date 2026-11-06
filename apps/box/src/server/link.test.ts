@@ -1,6 +1,7 @@
 import http from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
-import type { BoxEvent, BoxLink, BoxState, ScreenCommand } from "../core/types.ts";
+import { LOG_LIMITS, SMALL_CHARS } from "@egb/sdk";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { BoxEvent, BoxLink, BoxState, FrameWord, ScreenCommand } from "../core/types.ts";
 import type { LinkDown } from "../core/wire.ts";
 import { LINK_COALESCE_MS } from "../core/wire.ts";
 import { attachLink, parseCommand } from "./link.ts";
@@ -72,6 +73,7 @@ describe("the screen's link", () => {
       topup: { type: "topup" },
       propose: { type: "propose" },
       claim: { type: "claim" },
+      frame: { type: "frame", word: { t: "event", name: "score", data: { seat: 0 } } },
     };
     for (const command of Object.values(every)) expect(parseCommand(JSON.stringify({ t: "command", command }))).toEqual(command);
   });
@@ -83,6 +85,35 @@ describe("the screen's link", () => {
     expect(parseCommand(JSON.stringify({ t: "command", command: { type: "focus" } }))).toBeNull();
     expect(parseCommand(JSON.stringify({ t: "nope", command: { type: "play" } }))).toBeNull();
     expect(parseCommand("not json")).toBeNull();
+  });
+
+  it("reads a store game's words as strictly as the log needs them", () => {
+    const read = (word: unknown) => parseCommand(JSON.stringify({ t: "command", command: { type: "frame", word } }));
+    const of = (word: FrameWord) => ({ type: "frame", word });
+    expect(read({ t: "end", why: "game" })).toEqual(of({ t: "end", why: "game" }));
+    expect(read({ t: "end", why: "lost" })).toEqual(of({ t: "end", why: "lost" }));
+    expect(read({ t: "end", why: "time" })).toBeNull();
+    expect(read({ t: "buzz", seat: 3 })).toEqual(of({ t: "buzz", seat: 3 }));
+    expect(read({ t: "buzz", seat: 4 })).toBeNull();
+    expect(read({ t: "buzz", seat: 0.5 })).toBeNull();
+    expect(read({ t: "station", seat: 1, text: `héllo${"x".repeat(SMALL_CHARS)}` })).toEqual(of({ t: "station", seat: 1, text: `h?llo${"x".repeat(SMALL_CHARS - 5)}` }));
+    expect(read({ t: "station", seat: 1 })).toBeNull();
+    expect(read({ t: "event", name: "n".repeat(LOG_LIMITS.eventName), data: null })).toEqual(of({ t: "event", name: "n".repeat(LOG_LIMITS.eventName), data: null }));
+    expect(read({ t: "event", name: "n".repeat(LOG_LIMITS.eventName + 1), data: 1 })).toBeNull();
+    expect(read({ t: "event", name: "", data: 1 })).toBeNull();
+    expect(read({ t: "event", name: "line\nbreak", data: 1 })).toBeNull();
+    expect(read({ t: "event", name: "no data" })).toBeNull();
+    expect(read({ t: "event", name: "big", data: "é".repeat(LOG_LIMITS.eventDataBytes / 2) })).toBeNull();
+    expect(read({ t: "tap", seat: 0 })).toBeNull();
+    expect(read("end")).toBeNull();
+  });
+
+  it("carries the largest event a game can post", async () => {
+    const { tb, screen } = await boxWithScreen();
+    const heard = vi.spyOn(tb.box.core, "send");
+    const data = "a".repeat(LOG_LIMITS.eventDataBytes - 2);
+    screen.send({ type: "frame", word: { t: "event", name: "n".repeat(LOG_LIMITS.eventName), data } });
+    await vi.waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
   });
 
   it("coalesces state-only changes at 100 ms, and never holds back an event", async () => {

@@ -8,11 +8,11 @@
 // - refund: `POST /duel/refund`. A pot the Box lost track of (a restart, a reset) is refunded by the sweep once its
 //   delay has run.
 // - topup: `POST /usdc/topup`. claim: a `Seat` to `POST /players/box-claim` (a badge can't sign a `ClaimName`).
+// - store: a store game's money and judge (`store.ts`), once `StorePot` is deployed and the verifier is set.
 import {
   type Result,
   type Seat,
   type Stake,
-  type TxView,
   contractAddress,
   resultDigest,
   seatDigest,
@@ -20,21 +20,20 @@ import {
   usdc,
 } from "@egb/shared/names";
 import type { Address, Hex } from "viem";
-import type { ChainHead, ChainPort, ChainTxUpdate, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
+import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
 import type { BoxSigner } from "../signer/signer.ts";
 import type { Reads, Settled } from "./reads.ts";
-import type { Relayer, RelayerReply } from "./relayer.ts";
+import type { Relayer } from "./relayer.ts";
+import { createRequests } from "./requests.ts";
 import type { Rounds } from "./rounds.ts";
+import { createStoreChain } from "./store.ts";
+import type { Verifier } from "./verifier.ts";
 
 /** How long a signed message stays valid, in seconds. */
 export const DEADLINE_S = 600;
 /** `DuelPot.REFUND_DELAY` (one hour after the open), and a minute's margin for the head's lag. */
 export const REFUND_AFTER_MS = 61 * 60_000;
-/** How often a request's progress is asked for (the match waits on its pot's block, so this is short), and when the
- *  Box stops asking. */
-export const POLL_MS = 1_000;
-export const GIVE_UP_MS = 10 * 60_000;
 /** How often the head is read for the screen's block clock. */
 export const HEAD_MS = 4_000;
 /** How often pots past their refund delay are looked for. */
@@ -51,6 +50,8 @@ export interface SepoliaChainOptions {
   readonly log: (text: string) => void;
   /** The messages' verifying contracts (default: deployments/sepolia.json; tests pass the vectors'). */
   readonly contracts?: { readonly duelPot: Address; readonly boxResults: Address; readonly boxSeats: Address };
+  /** Store games' pot and judge. Absent: this Box has none. */
+  readonly store?: { readonly storePot: Address; readonly verifier: Verifier } | undefined;
 }
 
 export interface SepoliaChain extends ChainPort {
@@ -65,22 +66,6 @@ export interface SepoliaChain extends ChainPort {
 
 const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th"] as const;
 const short = (address: Address): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
-
-/** The relayer's statuses as the tx bar's steps (`done` is paid). */
-function stepOf(view: TxView): ChainTxUpdate["step"] | null {
-  switch (view.status) {
-    case "signed":
-      return null;
-    case "sent":
-      return "sent";
-    case "in-block":
-      return "in-block";
-    case "done":
-      return "paid";
-    case "failed":
-      return "failed";
-  }
-}
 
 function label(game: string): string {
   const found = chainLabel(game);
@@ -132,70 +117,22 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     boxResults: contractAddress("BoxResults"),
     boxSeats: contractAddress("BoxSeats"),
   };
-  /** Polls waiting to run. */
-  const handles = new Set<ReturnType<Clock["after"]>>();
   const deadline = (): bigint => BigInt(Math.floor(clock.now() / 1000) + DEADLINE_S);
-  const failed = (watch: TxWatch, error: string): void => watch({ step: "failed", hash: null, etherscan: null, block: null, error });
+  const requests = createRequests({ signer, relayer, clock, log });
+  const { follow, signed } = requests;
+  const store = options.store && createStoreChain({ box, signer, relayer, requests, reads, rounds, clock, deadline, log, ...options.store });
 
-  /** Follows a request on `/tx/:id` until it is done or failed, reporting each new step. */
-  function follow(what: string, reply: RelayerReply, watch: TxWatch, ended?: (paid: boolean) => void): void {
-    if (!("tx" in reply)) {
-      log(`chain: ${what} refused: ${reply.error}`);
-      failed(watch, reply.error);
-      ended?.(false);
-      return;
+  /** Refunds each pot past its delay that is still open, and forgets one that isn't. */
+  async function sweepPots(pots: ReadonlyMap<number, number>, isOpen: (box: string, round: number) => Promise<boolean>, refund: (round: number) => void): Promise<void> {
+    for (const [round, openedAt] of pots) {
+      if (clock.now() - openedAt < REFUND_AFTER_MS) continue;
+      if (!(await isOpen(box, round).catch(() => true))) {
+        rounds.closed(round);
+        continue;
+      }
+      log(`chain: refunding pot ${round}, left open since ${new Date(openedAt).toISOString()}`);
+      refund(round);
     }
-    const started = clock.now();
-    let last: string | null = null;
-    const apply = (view: TxView): boolean => {
-      const step = stepOf(view);
-      const key = `${step}:${view.hash ?? ""}:${view.block ?? ""}`;
-      if (step && key !== last) {
-        last = key;
-        if (step === "in-block") log(`chain: ${what} in block ${view.block ?? "?"}`);
-        watch({ step, hash: view.hash ?? null, etherscan: view.etherscan ?? null, block: view.block ?? null, error: view.error ?? null });
-      }
-      if (step === "paid" || step === "failed") {
-        log(`chain: ${what} ${step}${view.hash ? ` ${view.hash}` : ""}${view.error ? `: ${view.error}` : ""}`);
-        ended?.(step === "paid");
-        return true;
-      }
-      return false;
-    };
-    if (apply(reply.tx)) return;
-    const id = reply.tx.id;
-    const poll = (): void => {
-      const handle = clock.after(POLL_MS, () => {
-        handles.delete(handle);
-        void relayer.tx(id).then((next) => {
-          if ("tx" in next && apply(next.tx)) return;
-          if (clock.now() - started > GIVE_UP_MS) {
-            failed(watch, `no answer from the relayer for request ${id}`);
-            ended?.(false);
-            return;
-          }
-          poll();
-        });
-      });
-      handles.add(handle);
-    };
-    poll();
-  }
-
-  /** Signs `digest` and posts what `body` builds from the signature; a signer that can't sign fails the request. */
-  function signed(what: string, digest: Hex, path: string, body: (sig: { r: Hex; s: Hex }) => unknown, watch: TxWatch, ended?: (paid: boolean) => void): void {
-    signer
-      .sign(digest)
-      .then((sig) => relayer.post(path, body(sig)))
-      .then(
-        (reply) => follow(what, reply, watch, ended),
-        (error: unknown) => {
-          const reason = error instanceof Error ? error.message : String(error);
-          log(`chain: ${what} not signed: ${reason}`);
-          failed(watch, reason);
-          ended?.(false);
-        },
-      );
   }
 
   function refundRound(round: number, watch: TxWatch): void {
@@ -211,6 +148,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     nextRound: () => rounds.take(),
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
+    store,
     balance: (address) => reads.balance(address),
     async player(address, game) {
       const onChain = chainLabel(game);
@@ -280,19 +218,11 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
       return same;
     },
     async sweep() {
-      for (const [round, openedAt] of rounds.open()) {
-        if (clock.now() - openedAt < REFUND_AFTER_MS) continue;
-        if (!(await reads.potOpen(box, round).catch(() => true))) {
-          rounds.closed(round);
-          continue;
-        }
-        log(`chain: refunding pot ${round}, left open since ${new Date(openedAt).toISOString()}`);
-        refundRound(round, () => {});
-      }
+      await sweepPots(rounds.open(), reads.potOpen, (round) => refundRound(round, () => {}));
+      if (store) await sweepPots(rounds.open("store"), reads.storePotOpen, (round) => store.refund(round, () => {}));
     },
     stop() {
-      for (const handle of handles) clock.cancel(handle);
-      handles.clear();
+      requests.stop();
       signer.stop();
     },
   };

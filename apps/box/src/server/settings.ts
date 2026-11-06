@@ -25,6 +25,14 @@ export interface AdminSetting {
   readonly rpcUrl: string;
 }
 
+/** Where store games come from and who judges them. Null without them: this Box has no store games. */
+export interface StoreSetting {
+  /** `EGB_STORE_URL`: the store's index and bundles. */
+  readonly storeUrl: string;
+  /** `EGB_VERIFIER_URL`: the verifier. */
+  readonly verifierUrl: string;
+}
+
 export interface Settings {
   readonly host: string;
   readonly port: number;
@@ -38,6 +46,7 @@ export interface Settings {
   readonly stations: readonly string[];
   readonly chain: ChainSetting;
   readonly admin: AdminSetting | null;
+  readonly store: StoreSetting | null;
 }
 
 export const DEFAULTS = {
@@ -126,6 +135,17 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     else if (chain.kind !== "sepolia") problems.push("SEPOLIA_RPC_URL must be an http(s) URL");
   }
 
+  const storeUrl = get("EGB_STORE_URL");
+  const verifierUrl = get("EGB_VERIFIER_URL");
+  let store: StoreSetting | null = null;
+  if (storeUrl !== undefined && verifierUrl !== undefined) {
+    if (!isHttpUrl(storeUrl)) problems.push("EGB_STORE_URL must be an http(s) URL");
+    if (!isHttpUrl(verifierUrl)) problems.push("EGB_VERIFIER_URL must be an http(s) URL");
+    store = { storeUrl, verifierUrl };
+  } else if (storeUrl !== undefined || verifierUrl !== undefined) {
+    problems.push("store games need both EGB_STORE_URL and EGB_VERIFIER_URL");
+  }
+
   if (problems.length > 0) throw new SettingsError(problems);
   return {
     host,
@@ -136,5 +156,6 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     stations: stationIds,
     chain,
     admin,
+    store,
   };
 }

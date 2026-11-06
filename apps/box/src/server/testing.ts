@@ -10,7 +10,7 @@ import { LINK_PATH } from "../core/wire.ts";
 import { createFakeClock, type FakeClock } from "../core/fake-clock.ts";
 import type { FakeOptions } from "../taps/fake/fake-receiver.ts";
 import { startBox, type Box, type BoxOptions } from "./box.ts";
-import type { ReceiverSetting } from "./settings.ts";
+import type { ReceiverSetting, Settings } from "./settings.ts";
 
 /** When every test Box's clock starts. */
 export const TEST_START = Date.parse("2026-11-06T10:00:00Z");
@@ -44,7 +44,17 @@ export async function flush(rounds = 6): Promise<void> {
 export const TEST_BUILDER_ENV = { EGB_MODEL: "off", EGB_FORGE_PROVIDER: "sim", PATH: process.env.PATH, HOME: process.env.HOME };
 
 export async function startTestBox(
-  options: { port?: number; dir?: string; receiver?: ReceiverSetting; fake?: FakeOptions; builder?: BoxOptions["builder"]; chain?: BoxOptions["chain"]; exitScreen?: BoxOptions["exitScreen"] } = {},
+  options: {
+    port?: number;
+    dir?: string;
+    receiver?: ReceiverSetting;
+    fake?: FakeOptions;
+    builder?: BoxOptions["builder"];
+    chain?: BoxOptions["chain"];
+    exitScreen?: BoxOptions["exitScreen"];
+    store?: Settings["store"];
+    storeFetch?: typeof fetch;
+  } = {},
 ): Promise<TestBox> {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "egb-box-")));
   await mkdir(join(dir, "screen", "assets"), { recursive: true });
@@ -62,11 +72,13 @@ export async function startTestBox(
       stations: ["e4ba70", "df3d88"],
       chain: { kind: "demo" },
       admin: null,
+      store: options.store ?? null,
     },
     repoRoot: dir,
     clock,
     ...(options.fake ? { fake: options.fake } : {}),
     ...(options.chain ? { chain: options.chain } : {}),
+    ...(options.storeFetch ? { storeFetch: options.storeFetch } : {}),
     log: (text) => logs.push(text),
     builder: { env: TEST_BUILDER_ENV, simSpeed: 0, ...options.builder },
     // Never the real kiosk: a test would close the developer's own unit.

@@ -4,6 +4,7 @@
 //                                check is replaced by the Box's plain icon
 //   GET /games/<id>/screen.js    the game's screen module (playable games only)
 //   GET /games/<id>/frame.html   the frame page, with its own CSP (page.ts) (playable games only)
+//   GET /games/icon.svg          the Box's plain icon, on every store game's cartridge
 //   GET /parts.js, /parts.css, /parts/<font>, /frame.js    the frame's shared assets (assets.ts)
 //
 // The frame's origin is opaque, so everything it loads is a cross-origin request from `null`: module scripts, fonts
@@ -31,6 +32,9 @@ export interface GameRoutesOptions {
 /** Handles the request if it is one of these routes (true), or leaves it to the next handler (false). */
 export type GameRoutes = (req: http.IncomingMessage, res: http.ServerResponse, url: URL) => Promise<boolean>;
 
+/** Where a store game's cartridge finds its art: a bundle brings none in this pass. */
+export const FALLBACK_ICON = "/games/icon.svg";
+
 const ASSET_PATHS = new Set(["/parts.js", "/parts.css", "/frame.js"]);
 const GAME_FILE = /^\/games\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(icon\.svg|screen\.js|frame\.html)$/;
 
@@ -53,6 +57,11 @@ export function createGameRoutes(options: GameRoutesOptions): GameRoutes {
     if (!game && !ASSET_PATHS.has(p) && !p.startsWith("/parts/") && !p.startsWith("/games/")) return false;
     if (req.method !== "GET" && req.method !== "HEAD") {
       sendText(res, 405, "method not allowed");
+      return true;
+    }
+
+    if (p === FALLBACK_ICON) {
+      res.writeHead(200, { ...SHARED, "content-type": "image/svg+xml", "content-security-policy": INERT }).end(fallbackIcon());
       return true;
     }
 

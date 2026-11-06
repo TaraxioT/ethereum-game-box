@@ -20,7 +20,8 @@ import type { ChainTxUpdate, ResultOrder } from "../core/ports.ts";
 import { createFakeClock } from "../core/fake-clock.ts";
 import { softwareSigner } from "../signer/software.ts";
 import type { BoxSigner } from "../signer/signer.ts";
-import { createSepoliaChain, outcomeLines, POLL_MS, REFUND_AFTER_MS, resultOf, seatOf, stakeOf } from "./port.ts";
+import { createSepoliaChain, outcomeLines, REFUND_AFTER_MS, resultOf, seatOf, stakeOf } from "./port.ts";
+import { POLL_MS } from "./requests.ts";
 import { roundsFile } from "./rounds.ts";
 import { memoryReads, mockRelayer } from "./testing.ts";
 
