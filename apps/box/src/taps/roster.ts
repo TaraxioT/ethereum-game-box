@@ -1,8 +1,9 @@
 // The badges this Box has read, by UID: each one's two key addresses and a local label (a short word, `nova`, shown
 // upper-cased on the stations). Identity is the UID: the first tap of a chip reads its keys (get_pkeys) and the roster
-// remembers them, so later taps need no chip command. Until ENS a badge's name is its label, never `.gamebox.eth`.
+// remembers them, so later taps need no chip command. A badge's local label is also the player name the lobby proposes first.
 // Kept in $EGB_DATA/badges.json, written atomically after every change.
 import { readFileSync, renameSync } from "node:fs";
+import { LABELS } from "../core/labels.ts";
 import type { Badge } from "../core/types.ts";
 import { writeFileAtomic } from "../server/files.ts";
 import type { ChipKeys } from "./chip-ops.ts";
@@ -23,12 +24,6 @@ interface RosterFile {
   readonly v: 1;
   readonly badges: readonly RosterEntry[];
 }
-
-/** Labels in the order new badges get them; after these, the words again with a number. */
-const LABELS = [
-  "nova", "orbit", "pixel", "comet", "ember", "flux", "echo", "quark", "vega", "lumen", "onyx", "rune",
-  "zephyr", "jade", "atlas", "cinder", "drift", "sol", "ion", "kite", "lynx", "mesa", "opal", "raven",
-] as const;
 
 export class Roster {
   private readonly file: string;

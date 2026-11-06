@@ -18,6 +18,6 @@ contract AddGames is NamesScript {
     }
 
     function _add(GameBoxNames names, string memory label, uint64 term) internal {
-        if (names.getGame(label).titleRegistry == address(0)) names.addGame(label, term);
+        if (names.getGame(label).titleRegistry == address(0)) names.addGame{gas: CREATE_GAS}(label, term);
     }
 }

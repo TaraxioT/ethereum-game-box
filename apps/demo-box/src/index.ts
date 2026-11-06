@@ -1,19 +1,23 @@
-// The demo Box Worker: `GET /box` and `POST /result`. Every request (and an hourly cron) makes sure the heartbeat
-// alarm is running.
+// The demo Box Worker: the Box (`GET /box`, `POST /stake`, `POST /result`) and its agent (`GET /agent`, `POST /agent/setup`, and
+// the agent's MCP endpoint `POST /mcp`). Every request (and an hourly cron) makes sure the heartbeat alarm is running.
 
 import { corsHeaders, originAllowed } from '@egb/relayer/cors';
 import { guarded } from '@egb/relayer/guard';
 
-import type { DemoBox } from './box.ts';
 import type { Env } from './env.ts';
+import { handleMcp } from './mcp.ts';
+import type { DemoBox } from './object.ts';
 
-export { DemoBox } from './box.ts';
+export { DemoBox } from './object.ts';
 
 const json = (status: number, body: unknown, headers: Record<string, string>) => Response.json(body, { status, headers });
 
 /** The one demo Box. Its replies are plain JSON, so the stub's methods return what the object's do. */
 const demoBox = (env: Env) =>
-  env.DEMO_BOX.get(env.DEMO_BOX.idFromName('demo-box')) as unknown as Pick<DemoBox, 'start' | 'view' | 'report'>;
+  env.DEMO_BOX.get(env.DEMO_BOX.idFromName('demo-box')) as unknown as Pick<
+    DemoBox,
+    'start' | 'view' | 'report' | 'stake' | 'agentView' | 'agentSetup'
+  >;
 
 export default {
   async fetch(request, env) {
@@ -25,12 +29,26 @@ export default {
     return guarded(async () => {
       const box = demoBox(env);
       await box.start();
-      const { pathname } = new URL(request.url);
-      if (pathname === '/box' && request.method === 'GET') return json(200, await box.view(), cors);
-      if (pathname === '/result' && request.method === 'POST') {
-        const body: unknown = await request.json().catch(() => null);
-        const reply = await box.report(body, request.headers.get('cf-connecting-ip') ?? 'unknown');
-        return json(reply.status, reply.body, cors);
+      const route = `${request.method} ${new URL(request.url).pathname}`;
+      switch (route) {
+        case 'GET /box':
+          return json(200, await box.view(), cors);
+        case 'POST /result':
+        case 'POST /stake': {
+          const body: unknown = await request.json().catch(() => null);
+          const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+          const reply = route === 'POST /result' ? await box.report(body, ip) : await box.stake(body, ip);
+          return json(reply.status, reply.body, cors);
+        }
+        case 'GET /agent':
+          return json(200, await box.agentView(), cors);
+        case 'POST /agent/setup': {
+          const reply = await box.agentSetup();
+          return json(reply.status, reply.body, cors);
+        }
+      }
+      if (new URL(request.url).pathname === '/mcp') {
+        return handleMcp(request, { agent: () => box.agentView(), box: () => box.view() }, cors);
       }
       return json(404, { error: 'not found' }, cors);
     }, cors);

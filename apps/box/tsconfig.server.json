@@ -5,5 +5,5 @@
     "types": ["node"],
     "erasableSyntaxOnly": true
   },
-  "include": ["src/server", "src/taps", "src/builder", "src/core"]
+  "include": ["src/server", "src/taps", "src/builder", "src/core", "src/chain", "src/signer"]
 }

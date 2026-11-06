@@ -2,23 +2,43 @@
 // `contracts/test/names/Vectors.t.sol`), and that each vector signature verifies the way the contracts verify it.
 
 import { p256 } from '@noble/curves/nist.js';
-import { hexToBytes } from 'viem';
+import { concat, hexToBytes, keccak256, sha256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 
-import { claimNameDigest, claimNameTypedData, executeDigest, resultDigest } from './messages.ts';
+import {
+  claimNameDigest,
+  claimNameTypedData,
+  encodeCalls,
+  executeBatchDigest,
+  executeDigest,
+  resultDigest,
+  seatDigest,
+  stakeDigest,
+} from './messages.ts';
 import { primaryNameDigest, primaryNameMessage } from './primaryName.ts';
 import { REGISTRY_ROLES, RESOLVER_ROLES } from './roles.ts';
 import {
   CLAIM_NAME_VECTOR,
+  EXECUTE_BATCH_VECTOR,
   EXECUTE_VECTOR,
   P256_VECTOR_KEY,
   PRIMARY_NAME_VECTOR,
   RESULT_VECTOR,
   ROLE_VECTORS,
+  SEAT_VECTOR,
+  STAKE_VECTOR,
+  WEBAUTHN_VECTOR,
 } from './vectors.ts';
+import { encodeWebAuthnSignature, parseDerSignature, rawSignature } from './webauthn.ts';
 
 const HALF_N = 0x7fffffff800000007fffffffffffffffde737d56d38bcf4279dce5617e3192a8n;
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
+/** `r ‖ (n - s)`: the same signature with a high `s`. */
+function rawSignatureHigh(r: `0x${string}`, s: `0x${string}`): `0x${string}` {
+  return `0x${r.slice(2)}${(P256_N - BigInt(s)).toString(16).padStart(64, '0')}`;
+}
 const publicKey = hexToBytes(`0x04${P256_VECTOR_KEY.qx.slice(2)}${P256_VECTOR_KEY.qy.slice(2)}`);
 
 function verifiesLowS(digest: `0x${string}`, r: `0x${string}`, s: `0x${string}`): boolean {
@@ -42,13 +62,95 @@ describe('ClaimName', () => {
 });
 
 describe('Execute', () => {
-  it('matches BoxAccount.executeDigest', () => {
+  it('matches P256Account.executeDigest', () => {
     const { call, account, chainId, digest } = EXECUTE_VECTOR;
     expect(executeDigest(call, account, chainId)).toBe(digest);
   });
 
   it('is a P-256 signature over the raw digest, low s', () => {
     const { digest, r, s } = EXECUTE_VECTOR;
+    expect(verifiesLowS(digest, r, s)).toBe(true);
+  });
+
+  it('encodes the raw form as r ‖ s, and makes s low', () => {
+    const { r, s, signature } = EXECUTE_VECTOR;
+    expect(rawSignature(BigInt(r), BigInt(s))).toBe(signature);
+    expect(rawSignature(BigInt(r), P256_N - BigInt(s))).toBe(signature);
+  });
+});
+
+describe('executeBatch', () => {
+  it('matches P256Account.batchDigest', () => {
+    const { batch, account, chainId, dataHash, digest } = EXECUTE_BATCH_VECTOR;
+    expect(keccak256(encodeCalls(batch.calls))).toBe(dataHash);
+    expect(executeBatchDigest(batch, account, chainId)).toBe(digest);
+  });
+
+  it('is a raw P-256 signature of the batch digest', () => {
+    const { digest, signature } = EXECUTE_BATCH_VECTOR;
+    expect(verifiesLowS(digest, `0x${signature.slice(2, 66)}`, `0x${signature.slice(66)}`)).toBe(true);
+  });
+});
+
+describe('WebAuthn', () => {
+  const { digest, authenticatorData, clientDataJSON, challengeIndex, typeIndex, r, s, signature } = WEBAUTHN_VECTOR;
+  const json = new TextDecoder().decode(hexToBytes(clientDataJSON));
+
+  it('signs the Execute digest as the challenge', () => {
+    expect(digest).toBe(EXECUTE_VECTOR.digest);
+    const challenge = Buffer.from(hexToBytes(digest)).toString('base64url');
+    expect(JSON.parse(json)).toMatchObject({ type: 'webauthn.get', challenge });
+    expect(json.indexOf('"challenge":"')).toBe(challengeIndex);
+    expect(json.indexOf('"type":"webauthn.get"')).toBe(typeIndex);
+  });
+
+  it('is a P-256 signature of sha256(authenticatorData ‖ sha256(clientDataJSON)), user verified', () => {
+    expect(hexToBytes(authenticatorData)[32]! & 0x05).toBe(0x05);
+    const message = sha256(concat([authenticatorData, sha256(clientDataJSON)]));
+    expect(verifiesLowS(message, r, s)).toBe(true);
+  });
+
+  it('encodes the assertion byte for byte as the account takes it', () => {
+    const fromBytes = { authenticatorData: hexToBytes(authenticatorData), clientDataJSON: hexToBytes(clientDataJSON) };
+    expect(encodeWebAuthnSignature({ ...fromBytes, r: BigInt(r), s: BigInt(s) })).toBe(signature);
+    // From text, and from a high s: the same bytes.
+    expect(encodeWebAuthnSignature({ authenticatorData, clientDataJSON: json, r: BigInt(r), s: P256_N - BigInt(s) })).toBe(
+      signature,
+    );
+  });
+
+  it('reads r and s from the DER signature an authenticator returns', () => {
+    const der = p256.Signature.fromBytes(hexToBytes(`0x${r.slice(2)}${s.slice(2)}`), 'compact').toBytes('der');
+    expect(parseDerSignature(der)).toEqual({ r: BigInt(r), s: BigInt(s) });
+    const high = p256.Signature.fromBytes(
+      hexToBytes(rawSignatureHigh(r, s)),
+      'compact',
+    ).toBytes('der');
+    expect(parseDerSignature(high)).toEqual({ r: BigInt(r), s: BigInt(s) });
+    expect(() => parseDerSignature(new Uint8Array([0x30, 0x00]))).toThrow();
+  });
+});
+
+describe('Stake', () => {
+  it('matches DuelPot.stakeDigest', () => {
+    const { stake, duelPot, chainId, digest } = STAKE_VECTOR;
+    expect(stakeDigest(stake, duelPot, chainId)).toBe(digest);
+  });
+
+  it('is a P-256 signature over the raw digest, low s', () => {
+    const { digest, r, s } = STAKE_VECTOR;
+    expect(verifiesLowS(digest, r, s)).toBe(true);
+  });
+});
+
+describe('Seat', () => {
+  it('matches BoxSeats.seatDigest', () => {
+    const { seat, boxSeats, chainId, digest } = SEAT_VECTOR;
+    expect(seatDigest(seat, boxSeats, chainId)).toBe(digest);
+  });
+
+  it('is a P-256 signature over the raw digest, low s', () => {
+    const { digest, r, s } = SEAT_VECTOR;
     expect(verifiesLowS(digest, r, s)).toBe(true);
   });
 });

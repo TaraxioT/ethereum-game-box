@@ -1,4 +1,4 @@
-import { boxAccountAbi } from '@egb/shared/names';
+import { p256AccountAbi } from '@egb/shared/names';
 import type { Abi } from 'viem';
 import { describe, expect, it } from 'vitest';
 
@@ -42,7 +42,7 @@ describe('CORS', () => {
 describe('GET /tx/:id', () => {
   it('follows a request from sent to in-block to done', async () => {
     const world = new World();
-    const { body } = await world.post('/box/execute', executeBody(world));
+    const { body } = await world.post('/account/execute', executeBody(world));
     const id = body.id as string;
     expect((await world.get(`/tx/${id}`)).body).toMatchObject({ status: 'sent', hash: world.chain.sent[0]!.hash });
 
@@ -58,9 +58,9 @@ describe('GET /tx/:id', () => {
 
   it('names the revert of a transaction that failed in its block', async () => {
     const world = new World();
-    const { body } = await world.post('/box/execute', executeBody(world));
+    const { body } = await world.post('/account/execute', executeBody(world));
     world.chain.receipts.set(world.chain.sent[0]!.hash, { status: 'reverted', block: 101 });
-    world.reverts.set('execute', [boxAccountAbi as Abi, 'DeadlineExpired', [1n]]);
+    world.reverts.set('execute', [p256AccountAbi as Abi, 'DeadlineExpired', [1n]]);
     await world.relay.poll();
     expect((await world.get(`/tx/${body.id as string}`)).body).toMatchObject({
       status: 'failed',
@@ -78,7 +78,7 @@ describe('GET /health', () => {
   it('shows the balance, the pending count and the head block', async () => {
     const world = new World();
     world.chain.balances.set(world.relayerAccount.address.toLowerCase(), 4n * 10n ** 17n);
-    await world.post('/box/execute', executeBody(world));
+    await world.post('/account/execute', executeBody(world));
     expect((await world.get('/health')).body).toEqual({
       address: world.relayerAccount.address,
       balance: '400000000000000000',
@@ -98,7 +98,7 @@ describe('errors', () => {
     world.deps.ctx.client.readContract = (async () => {
       throw new Error(`HTTP request failed.\n\nURL: ${url}\nRequest body: {}`);
     }) as typeof original;
-    const res = await world.post('/box/execute', executeBody(world));
+    const res = await world.post('/account/execute', executeBody(world));
     expect(res.status).toBe(502);
     expect(JSON.stringify(res.body)).not.toContain('chainstack');
   });

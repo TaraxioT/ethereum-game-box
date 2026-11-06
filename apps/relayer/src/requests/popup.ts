@@ -1,4 +1,5 @@
-// `POST /box/popup`: opens `popup-<label>.gamebox.eth` with a 10-minute licence, sent as `DemoLicences.openPopup`.
+// `POST /box/popup`: opens `popup-<label>.gamebox.eth` with a 10-minute licence, sent as `DemoLicences.openPopup`. The
+// pop-up is linked to its Box's record, so it serves the Box's records until it expires.
 
 import { demoLicencesAbi, fullName, gameBoxNamesAbi, popupLabel, popupLabelProblem } from '@egb/shared/names';
 import { encodeFunctionData } from 'viem';
@@ -13,14 +14,14 @@ export async function preparePopup(ctx: Context, input: unknown): Promise<Prepar
   if (problem) throw new Refusal(400, `label: ${problem}`);
   const boxLabel = popupLabel(label);
 
-  const box = await ctx.client.readContract({
+  const popup = await ctx.client.readContract({
     address: ctx.addresses.names,
     abi: gameBoxNamesAbi,
-    functionName: 'getBox',
+    functionName: 'getPopup',
     args: [boxLabel],
   });
-  if (box.status !== 0 && BigInt(box.expiry) > BigInt(ctx.now())) {
-    throw new Refusal(409, `${fullName(boxLabel)} is live until ${box.expiry}`, 'LabelAlreadyRegistered');
+  if (BigInt(popup.expiry) > BigInt(ctx.now())) {
+    throw new Refusal(409, `${fullName(boxLabel)} is live until ${popup.expiry}`, 'LabelAlreadyRegistered');
   }
 
   const call = {

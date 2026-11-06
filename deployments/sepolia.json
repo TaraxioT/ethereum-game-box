@@ -1,43 +1,93 @@
 {
   "chainId": 11155111,
   "external": {
-    "USDC": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    "PoolManager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "PoolSwapTest": "0x9B6b46e2c869aa39918Db7f52f5557FE577B6eEe",
+    "PoolModifyLiquidityTest": "0x0C478023803a644c94c4CE1C1e7b9A087e411B0A"
   },
   "contracts": {
-    "GameBoxNames": {
-      "address": "0xb090ae6dD89b25d1B79718853c439D1354Bf62c5",
-      "deployBlock": 12075390,
-      "txHash": "0xcfdbc18db2242855faced12948dec204d0b971542db69e9c5310440583985ce1",
-      "verified": true
-    },
-    "PlayerStats": {
-      "address": "0xed859863f70358e66E5B5e90dF7da43a047c7e14",
-      "deployBlock": 12075391,
-      "txHash": "0x66e031ed203520748a90eb0a380396d9f99dcd2ad0b0e2f810ede2c6f99bb1a3",
-      "verified": true
-    },
-    "BoxResults": {
-      "address": "0x925Fe55Fb22bbe7666eC0Fe14d7d0f3CaEF7ccdA",
-      "deployBlock": 12075392,
-      "txHash": "0xe9056c7cf008866364a53284955b1e60e9b2ab6c53883bc263422a102d0aada7",
-      "verified": true
-    },
-    "DemoBoxAccount": {
-      "address": "0x3dfbC6D78B0D28134178a03041468D0E9A18d082",
-      "deployBlock": 12075393,
-      "txHash": "0xf3036a19289aae9eb9614103171ba300d8cdd463479d761ef2d0855d55b97133",
-      "verified": true
-    },
-    "DemoLicences": {
-      "address": "0x22609BB56f41EA3a995560536d249e5b46c12830",
-      "deployBlock": 12075394,
-      "txHash": "0x4ae926d95c6476be92c23d846265ed5241b497fb0cd33a654033768dcdccc326",
-      "verified": true
-    },
     "GBX": {
       "address": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
       "deployBlock": 12075265,
       "txHash": "0x30576b3df0ea0b74e830207c9f6b56e824e705afec5d9b3f570f84e0baeea59a",
+      "verified": true
+    },
+    "P256AccountFactory": {
+      "address": "0x1fDd35751Be26387DD0B8c26c4A1a79640Cc1E7A",
+      "deployBlock": 12075662,
+      "txHash": "0x1f1e2a24355956e316cb5e289c8e35d0775de0b9ec95f6de0d6e6c64d6b38f8d",
+      "verified": true
+    },
+    "PlayerStats": {
+      "address": "0xd7d328645b77DF958E9B855c226F436ec1187717",
+      "deployBlock": 12075915,
+      "txHash": "0xb63495ad940c557ccc6c44f57a7023ac22944fbe08357e39f593c0e68833c0fc",
+      "verified": true
+    },
+    "BoxResults": {
+      "address": "0x8C50253D4F8eCd770Aa851d8A77Dade8839ff7C3",
+      "deployBlock": 12075919,
+      "txHash": "0xc86763b03c7ca1468ba0b7cca48e40994497c3ea42118588815ff8c028fa3175",
+      "verified": true
+    },
+    "DemoLicences": {
+      "address": "0xC7FEEa9b237705cA45C00D5617290e453a276369",
+      "deployBlock": 12075920,
+      "txHash": "0xd685fbfff1b63c58c667000af9e96b4199f7313c68b6131bafd6e8bf021ba16a",
+      "verified": true
+    },
+    "DemoBoxAccount": {
+      "address": "0xB1eF64e46049585cF76549cbd839E9d09819EA38",
+      "deployBlock": 12075671,
+      "txHash": "0x4afe6c08dfa0716f6aab7a664d4cb1c20e333c762bc6bbae0a6f65679d7622cc",
+      "verified": true
+    },
+    "FakeUSDC": {
+      "address": "0xF3e90E1a0a17A4680e52573b6188D6c94442493B",
+      "deployBlock": 12075916,
+      "txHash": "0x39e792dacff679678e2a6713c66aecf6fd192ce0f2d9fcb0555432a108dbb523",
+      "verified": true
+    },
+    "DuelPot": {
+      "address": "0xcda56510E21aBa78200de62a6C23bc3170CC12a2",
+      "deployBlock": 12075917,
+      "txHash": "0x9c6e2e0d5ca6087847e926dd4044af6000a2feeb2b67487983ea50fe5cf0e886",
+      "verified": true
+    },
+    "Championships": {
+      "address": "0x8222774A2eD41E3c38A188A8143D29EF77957eA0",
+      "deployBlock": 12075918,
+      "txHash": "0x1206903512684284e02c5d3d359436692196ac8a34b8803a56f1cab8341f6ae2",
+      "verified": true
+    },
+    "BoxSeats": {
+      "address": "0x64dD6c471234220B0bf66317fd26e5032ac512cd",
+      "deployBlock": 12075921,
+      "txHash": "0xe28732cfdb29e2b846e0084509d06798a57e4904a87f19b18bb2b2f5879a2289",
+      "verified": true
+    },
+    "MumbaiBoxAccount": {
+      "address": "0xB9d488f985EE62dDFdd5024aE4c3ab526fF8d2D9",
+      "deployBlock": 12075939,
+      "txHash": "0x66c937e2e742fbfa15ee4809385efc8f2ceaf851e7864937a6738a5412eb5845",
+      "verified": true
+    },
+    "GameBoxNames": {
+      "address": "0x07D464bcE29D85A09590666febE37ab4FDC8Ff9a",
+      "deployBlock": 12075914,
+      "txHash": "0xfc47ce3c6e079be88df0ae886b3bff882dc80e43ddc944440c71ce27849aad35",
+      "verified": true
+    },
+    "BoxStaking": {
+      "address": "0x321BF7e789ED168A24fa8ecEb19a602ef2B91E56",
+      "deployBlock": 12076206,
+      "txHash": "0x3a902c8572967175177935a296eda739e00a53abc4887ded4d2d5fa70eb3c13a",
+      "verified": false
+    },
+    "GameBoxHook": {
+      "address": "0xF4BbB7CCF834183d143b3c77C2C96331bb51D080",
+      "deployBlock": 12076211,
+      "txHash": "0x217ce910b2cc563c0d95199759e7d63d4b9c1a6ada874448e09d7b8805eaa41c",
       "verified": false
     }
   },
@@ -45,6 +95,10 @@
     "UniversalResolver": {
       "address": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
       "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UpgradableUniversalResolverProxy.json"
+    },
+    "UniversalHelper": {
+      "address": "0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe",
+      "source": "https://github.com/ensdomains/contracts-v2/blob/deploy/mainnet-v2-20261002/contracts/deployments/sepolia/UniversalHelper.json"
     },
     "RootRegistry": {
       "address": "0xB458D6a3a77919449d03e7A6903C26827c1eC43f",
@@ -84,12 +138,23 @@
     }
   },
   "names": {
-    "registry": "0xE6F0f5e2f77b2aE21B2Df9C9E3b305A9A842594e",
-    "titleResolver": "0x910DE3EC48fBB13fBE2AD578919a0a3e1cdc2960",
-    "gameResolver": "0xb604dD8294F9726C9aAA9AE9E33dE158F7c0dE03",
+    "registry": "0x98541B2bC02d83994E59281a19c2aB6aE744Ea73",
+    "titleResolver": "0x58965FE69938F8B05eecE7E6b9f60b46F0E93fAc",
+    "gameResolver": "0x55230cDf86b62875efeFce1Cc1753C93aD9DcA9F",
     "titles": {
-      "stockduel": "0xee271396124CE5FD69E8D57A4ee93B543Ffb6Ba2",
-      "quickdraw": "0x4211D4aD598Fa488966a71035f6cFb274426201c"
+      "stockduel": "0x42E7284B1C129640C9A58392B8cBC38a38C2E8DA",
+      "quickdraw": "0xB951D0b89c02d4E7cC9587f98313b7F7d2a52CE1"
+    },
+    "gameboxResolver": "0xa4054304EA92A52D96Fc68dacEe3582f9f3Bc3C8"
+  },
+  "pools": {
+    "GBX_USDC": {
+      "currency0": "0x6CBB265b4cddCA37334e4eD3Ce07599CfE1a471A",
+      "currency1": "0xF3e90E1a0a17A4680e52573b6188D6c94442493B",
+      "fee": 8388608,
+      "hooks": "0xF4BbB7CCF834183d143b3c77C2C96331bb51D080",
+      "id": "0x062d1ac7d864146fe4bc977b8cfbb1e3ab25c2871ecbe1a576ef75871caabe66",
+      "tickSpacing": 60
     }
   }
 }

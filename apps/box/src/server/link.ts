@@ -48,6 +48,10 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "home":
     case "refund":
     case "build":
+    case "lobby":
+    case "topup":
+    case "propose":
+    case "claim":
       return { type: c.type };
     case "focus":
       return typeof c.game === "string" && c.game.length <= 64 ? { type: "focus", game: c.game } : null;

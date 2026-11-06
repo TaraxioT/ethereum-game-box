@@ -19,6 +19,24 @@ abstract contract Deployments is Script {
 
     /// @notice Records `addr` as `.contracts.<name>`, created by `new <contractName>`.
     function _save(string memory name, address addr, string memory contractName) internal {
+        _record(name, addr, contractName, VmSafe.BroadcastTxType.Create, addr);
+    }
+
+    /// @notice Records `addr` as `.contracts.<name>`, created by a call to our contract `.contracts.<factoryName>`
+    ///         (its latest broadcast call gives the block and transaction).
+    function _saveCreatedBy(string memory name, address addr, string memory factoryName) internal {
+        _record(name, addr, factoryName, VmSafe.BroadcastTxType.Call, _deployed(factoryName));
+    }
+
+    /// @dev Writes the entry. The block and hash come from the latest broadcast of type `txType` to or by
+    ///      `contractName` whose contract address is `txAddress`.
+    function _record(
+        string memory name,
+        address addr,
+        string memory contractName,
+        VmSafe.BroadcastTxType txType,
+        address txAddress
+    ) private {
         require(block.chainid == 11155111, "Deployments: not Sepolia");
         string memory key = string.concat(".contracts.", name);
         string memory json = vm.readFile(PATH);
@@ -32,12 +50,10 @@ abstract contract Deployments is Script {
             deployBlock = vm.parseJsonUint(json, string.concat(key, ".deployBlock"));
             verified = vm.parseJsonBool(json, string.concat(key, ".verified"));
         }
-        if (txHash == 0) {
-            try vm.getBroadcast(contractName, uint64(block.chainid), VmSafe.BroadcastTxType.Create) returns (
-                VmSafe.BroadcastTxSummary memory b
-            ) {
-                if (b.contractAddress == addr) (txHash, deployBlock) = (b.txHash, b.blockNumber);
-            } catch {}
+        if (txHash == 0) (txHash, deployBlock) = _broadcast(contractName, txType, txAddress);
+        // A contract made by `new C{salt: ...}` (a v4 hook at a mined address) goes through the CREATE2 factory.
+        if (txHash == 0 && txType == VmSafe.BroadcastTxType.Create) {
+            (txHash, deployBlock) = _broadcast(contractName, VmSafe.BroadcastTxType.Create2, txAddress);
         }
 
         string memory entry = string.concat("deployment-", name);
@@ -45,6 +61,18 @@ abstract contract Deployments is Script {
         vm.serializeUint(entry, "deployBlock", deployBlock);
         vm.serializeBytes32(entry, "txHash", txHash);
         vm.writeJson(vm.serializeBool(entry, "verified", verified), PATH, key);
+    }
+
+    /// @dev The hash and block of the latest broadcast of type `txType` to or by `contractName`, if its contract address
+    ///      is `txAddress`; zero otherwise.
+    function _broadcast(string memory contractName, VmSafe.BroadcastTxType txType, address txAddress)
+        private
+        view
+        returns (bytes32 txHash, uint256 deployBlock)
+    {
+        try vm.getBroadcast(contractName, uint64(block.chainid), txType) returns (VmSafe.BroadcastTxSummary memory b) {
+            if (b.contractAddress == txAddress) (txHash, deployBlock) = (b.txHash, b.blockNumber);
+        } catch {}
     }
 
     /// @notice The recorded address of `.contracts.<name>`, or zero if it is missing or has no code.

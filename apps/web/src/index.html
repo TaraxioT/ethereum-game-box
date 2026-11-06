@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#010409">
+<meta name="description" content="Every Game Box name under gamebox.eth, live on ENSv2 Sepolia: your own registry, player names, a lobby in test USDC, soulbound titles, and championships whose records freeze for good.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 28 28%27%3E%3Crect width=%2728%27 height=%2728%27 fill=%27%23010409%27/%3E%3Cpath d=%27M8 1H27V20L20 27H1V8Z%27 fill=%27none%27 stroke=%27%23cfe8f6%27 stroke-width=%271.5%27/%3E%3Cpath d=%27M14 6L20 14L14 22L8 14Z%27 fill=%27none%27 stroke=%27%23fff%27 stroke-width=%271.2%27/%3E%3C/svg%3E">
+<title>gamebox.eth names</title>
+</head>
+<body>
+<header class="top">
+  <a class="mark" href="#/"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M8 1H27V20L20 27H1V8Z" fill="none" stroke="#cfe8f6" stroke-width="1.5"/><path d="M14 6 L20 14 L14 22 L8 14Z" fill="none" stroke="#fff" stroke-width="1.2"/></svg>GAMEBOX.ETH</a>
+  <nav id="nav">
+    <a href="#/" data-route="">Tree</a>
+    <a href="#/players" data-route="players">Players</a>
+    <a href="#/lobby" data-route="lobby">Lobby</a>
+    <a href="#/champions" data-route="champions">Champions</a>
+    <a href="#/championships" data-route="championships">Championships</a>
+    <a href="#/boxes" data-route="boxes">Boxes</a>
+    <a href="#/agent" data-route="agent">Agent</a>
+  </nav>
+  <div class="chain" id="chain"></div>
+</header>
+<div class="wrap">
+  <aside class="rail" id="rail"></aside>
+  <div class="content">
+    <main id="page"></main>
+    <section class="txs" id="txs" aria-live="polite"></section>
+  </div>
+</div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

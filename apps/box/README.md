@@ -12,7 +12,8 @@
 | `src/builder/` | The game builder: the Designer, the Forge (a confined Claude agent in a child process), the bundler and voice |
 | `src/games/` | The team games (Quick Draw, Stock Duel) in the module shape: game.json, rules, screens, icon, blueprint |
 | `src/screen/` | The browser UI, in the Grid look: the Box's screens, the team games' screens, the Designer and Build screens, built games' frames, the demo's DEMO tag |
-| `src/signer/`, `src/chain/` | Later, with the chain: the Box key (a HYP2003 token signer) and Box-signed requests through the relayer |
+| `src/signer/` | The Box key: the HYP2003 token's signer daemon (`deploy/p256-signer/`), and a software key for the simulator and the tests |
+| `src/chain/` | The core's chain port on Sepolia: Box-signed stakes, results, seats, top-ups and refunds through the relayer, followed to paid; reads through the RPC and the Universal Resolver |
 | `src/test-page/` | `/test`: Stations, Badges, Box and Builder tabs to check the Box on the Pi |
 
 ## Scripts
@@ -29,9 +30,13 @@
 
 ## Depends on
 
-`@egb/sdk` for the game contract. Later, `@egb/shared` for message digests, ABIs and addresses. It never holds a private key in code: the Box key stays on
-the token, and the relayer pays the gas.
+`@egb/sdk` for the game contract; `@egb/shared` for the message digests, ABIs and addresses (`deployments/sepolia.json`);
+`viem` for Sepolia. It never holds a private key in code: the Box key stays on the token, and the relayer pays the gas.
 
-## First milestone
+## Stakes on chain
 
-The signer and a heartbeat: the token signs, `src/chain/` sends it through the relayer, and the registry accepts it.
+Players stake fake USDC (5, 10 or 25) on Sepolia. When both seats sign, the match opens at once and the Box sends a
+`Stake` (its round from `rounds.json`) to the relayer's `/duel/open`; the result goes as a `Result` with the same round
+to `/box/result` once the open is done, and one transaction pays the pot, moves the title and scores the championship.
+The tx bar shows each transaction's real hash, linked to Etherscan. The lobby tops a badge up and claims its player
+name. The browser demo runs the same core on the demo chain in memory.

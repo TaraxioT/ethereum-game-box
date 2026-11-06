@@ -46,13 +46,13 @@ How they are built:
 | Part | What it is | Attributes and API | When it moves |
 |---|---|---|---|
 | `<egb-core>` | The core: a blue halo behind it, a dial of 144 fine ticks round an outer ring of light with four notches, 24 arc segments with hot centres inside it, a thin inner ring round a glass disc lit from inside (fine rings, a sheen, a ring of printed words), the Ethereum mark in wireframe (near-black facets edged in hot lines), and two broken orbit rings. | `glass`, `collar`: the inner and outer rings' radii in px. It fills its parent and centres there. `dark`: every line at 8 %, the mark hidden. `swell()`, `coin()`, `ignite(): Promise<void>`. | The orbit rings turn slowly in opposite directions, each its own HTML layer so the compositor turns it. `ignite()`: the segments light clockwise from 12 o'clock 20 ms apart, then the rings, then the mark (~900 ms, boot). `swell()`: a copy of the outer ring grows to 1.18 and fades while the segments bloom once (a transaction landed, a block sealed). `coin()`: the mark turns once on its upright axis, 900 ms (a launch). |
-| `<egb-port>` | A player's node in a top corner: a socket of seat-colour light inside a dial of fine ticks, holding the badge's blockie as an LED grid, the name, a mono balance with an `EGB` label, and a seat-colour underline with a lit lead, ending in a tick. Empty: the socket at 25 % and `TAP BADGE`. | `seat` (`0` reads rightwards from its socket; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `key` (`A`/`L`, Demo mode): a key hint, and hover lifts the socket. `bot`: a `BOT` tag. `set(seat: SeatState)`, `pulse()`, `refuse()`. Designed at 380 × 96; the socket's centre is 52 px in from the outer side, halfway down. | A badge arriving rezzes the socket and name; leaving derezzes the name and dims the socket. Changed balance digits flicker in left to right. `pulse()`: the socket's bloom flashes (a tap). `refuse()`: the module shakes and the socket flashes red (a tap that meant nothing). |
+| `<egb-port>` | A player's node in a top corner: a socket of seat-colour light inside a dial of fine ticks, holding the badge's blockie as an LED grid, the name, a mono balance with a `USDC` label (`…` until the seat's balance is read from chain; the name is the player name on chain once read), and a seat-colour underline with a lit lead, ending in a tick. Empty: the socket at 25 % and `TAP BADGE`. | `seat` (`0` reads rightwards from its socket; `1` mirrors it). `compact`: drawn at 70 % from its top outer corner (the in-game overlay). `key` (`A`/`L`, Demo mode): a key hint, and hover lifts the socket. `bot`: a `BOT` tag. `set(seat: SeatState)`, `pulse()`, `refuse()`. Designed at 380 × 96; the socket's centre is 52 px in from the outer side, halfway down. | A badge arriving rezzes the socket and name; leaving derezzes the name and dims the socket. Changed balance digits flicker in left to right. `pulse()`: the socket's bloom flashes (a tap). `refuse()`: the module shakes and the socket flashes red (a tap that meant nothing). |
 | `<egb-clock>` | The block readout: four corner brackets round `BLOCK` and the head block in glowing mono, `SEPOLIA` under them. | `block` (number). Designed at 276 × 64. | Changed digits flicker in, 60 ms apart. |
 | `<egb-gauge>` | Gas as a bar: 16 segments of system light for 0–5 gwei (one colour, so never a seat's), a mono `1.8 GWEI` under it. | `gwei` (number). Designed at 88 × 48. | The segments that change switch one at a time from the old end toward the new, 30 ms apart. |
 | `<egb-fact>` | A data tag about the focused game: a chamfered frame at idle brightness round a line icon and a word. | `icon`: `players`, `clock`, `coin` or `shield`. Text: the word. `rez(delayMs)`. 44 px tall, width from the word. | `rez()`: after the delay the tag rezzes in (Home rezzes each in turn on a new focus). |
 | `<egb-key>` | A light key: a chamfered frame round a dark face and a Syncopate label at 0.36 × its height, shrunk to fit its width. A real `<button>` inside. | `variant` (`primary` default, `ghost`, `alert`), `selected` (filled solid with light: the chosen stake), `breathe`, `disabled`. Text: the label. Dispatches a normal `click`. `flash()`. Fills its box. | A press flashes the shape white and squeezes it to 0.97. `breathe`: the bloom breathes 0.35 ↔ 1 over 2.4 s (`TAP TO START`; 0.7 under reduced motion). |
 | `<egb-cart>` | A game's program in the rack: a chamfered glass frame with a header (`PRG 01` and three status lights), an art window lit from below with a faint grid and the game's art in light lines (Quick Draw: a hot bolt and sparks; Stock Duel: orange and cyan candlesticks; `new-game`, the Box's blank program: a dashed frame and a plus; a built game: its `icon` filling the window, held still), the title in Syncopate under it. A game without art is sealed: the window hatched, the title dim, a `SOON` tag (`SEALED` for a built game that can't load). | `game` (`quick-draw`, `stock-duel`, `bet-on-x`, `b17`, `new-game`, or a built game's id), `title`, `icon` (a built game's art URL, set as an image's `src`), `sealed`, `slot` (its number in the rack), `focused`, `pressed`. A strip of light runs along its foot and its reflection lies on the floor (`-webkit-box-reflect`, static). Designed at 176 × 186. | `focused`: it lifts 12 px on a spring and only then lights its frame (a sealed one to 50 %), its status lights, its foot strip, a hot foot bar and its title. Losing focus it drops and dims. `pressed`: the frame flashes white and it settles 6 px (launch). |
-| `<egb-txbar>` | The transaction strip: a panel-style frame, the kind and amount (`FAUCET +100 EGB`, `STAKE 2×10 EGB`, `PAYOUT 20 EGB`, `REFUND 10 EGB`) beside the hash (or `SIMULATED`), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | `show()` on a hidden strip rezzes it; each step lights in system light when reached, and the one just reached flickers once. `hide()` derezzes it. |
+| `<egb-txbar>` | The transaction strip: a panel-style frame, the kind and amount (`TOP UP +100 USDC`, `NAME`, `STAKE 2×10 USDC`, `PAYOUT 20 USDC`, `RESULT` for a result whose pot never opened, `REFUND 20 USDC`) beside the hash, shortened and linked to its Etherscan page (empty until the relayer has sent it, and always in the demo, which has no hashes), and the steps `SIGNED › SENT › IN BLOCK n › PAID`. A failed transaction turns the strip red and its last step reads `FAILED`. | `show(tx: Tx)`, `hide()`. Designed at 380 × 52. | `show()` on a hidden strip rezzes it; each step lights in system light when reached, and the one just reached flickers once. `hide()` derezzes it, 3.2 s after paid or failed. |
 | `<egb-panel>` | A panel of light: a chamfered frame at 45 % with hot ticks on its uncut corners round a nearly opaque dark fill. The page plates, the in-game stake chip, the Demo intro, the brief's fields, `SIMULATED` on a sim build. | Its children are its content; sizes from `font-size`. `lit`: the line full with its bloom and the text glowing (the Designer's question in the brief). `--frame-tone` and `--panel-line` (the line's opacity) restyle it. | Never by itself. |
 | `<egb-lcd>` | A log of light: a chamfered glass panel of mono lines in system light, the newest at its foot bright and glowing, the older dimmer above it, the oldest going under a dark band at the top; lines wrap. The agent's words while a game builds, the Designer's status and captions. | `caret` (a blinking block cursor: the machine is working). `push(text, mark?)` (`bad` red, `ok` hot white), `set(lines)`, `clear()`. Fills its box; `font-size` sets the text. | `push`: the lines step up by the new one's height as it fades in. The caret blinks by opacity. |
 | `<egb-seg>` | A number readout: mono digits glowing over a row of unlit ghost `8`s, so a short value still shows the readout's width. The Build screen's clock, and a built game's scores and timers. | `tone` (`sys` default, `p1`, `p2`, or `amber` / `mint` for a game's own look), `digits` (the fewest cells; the value is right-aligned), `value` (attribute or property). `font-size` is the digits' height. | Changed characters flicker in, left to right. |
@@ -96,7 +96,8 @@ Modules go with them, each pure one tested:
   a short fade under reduced motion), `flicker(node)` and the flicker budget (three a second at most). The keyframes
   are pure and tested in `rez.test.ts`.
 - `machine.ts`: the objects that stay across views (Grid, packets, core, ports, clock, gas bar, transaction strip,
-  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`), `coin` (the core turns and
+  the in-game stake chip) and the `Machine` API views use: `pose` (`home`, `page`, `game`, and `full`
+  for a game that draws the whole stage, its top band included, with none of the machine showing), `coin` (the core turns and
   every trace flares), `feed`, `run` (a packet along a named trace, into the core or out of it) and `swell`. It turns transaction steps into moments: a packet from the port when a stake is sent,
   a swell when it lands in a block, a packet out to the port for a payout. It shakes a port on a refused tap and runs
   attract's ambience.
@@ -123,7 +124,7 @@ the page, at `/link` on the same origin. Views read the Box's clock from `link.n
 
 | Module | What it is | API |
 |---|---|---|
-| `sim.ts` | `SimLink`: the core (`src/core/`) in the browser, on the browser's clock, a ledger in memory and the team games, with the bot on Player 2. The screen and the A / L keys tap with a whole tap at once (touch, then done with a fresh roll). | `createSimLink({ seed? }): SimLink` |
+| `sim.ts` | `SimLink`: the core (`src/core/`) in the browser, on the browser's clock, the demo chain (`core/demo-chain.ts`: USDC, pots, results and names in memory, every badge starting with 100 USDC, a head every 12 s, no hashes) and the team games, with the bot on Player 2. The screen and the A / L keys tap with a whole tap at once (touch, then done with a fresh roll). | `createSimLink({ seed? }): SimLink` |
 | `control.ts` | `SimControl`, what Demo mode drives and BoxLink doesn't have: tap a seat, the opponent switch, the power cut. `SimLink = BoxLink & SimControl`. | types |
 | `live.ts` | `LiveLink`: BoxLink over the WebSocket. The whole state on connect, then each event in order; a `state` message after the first is the stations moving (`stations` event). Commands go up only while connected. Reconnects after 250 ms, doubling to 4 s, and starts over from the whole state (an `init` event). | `connectLive({ url, socket?, localNow? }): Promise<LiveLink>` (resolves on the first state) |
 | `offset.ts` | The link's clock offset: the largest `boxNow − localNow` of the last 10 s (a message only ever arrives late). | `createClockOffset()` |
@@ -134,9 +135,10 @@ the page, at `/link` on the same origin. Views read the Box's clock from `link.n
 `views/` are the screens the router mounts. Each is a `ViewFactory` (`view.ts`): it draws from `BoxState`, animates
 on `BoxEvent`s and acts only through `link.send`.
 
-- `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`).
+- `routes.ts`: phase → view and pose (`build` → the game builder; a built game's match → its frame, `frame/`; a Stock
+  Duel match → its screen in the `full` pose, since it draws its own players, score and pot).
 - `attract.ts`: the Box's name, then the programs rezzing left to right, then `TAP TO START`, which then breathes.
-- `home.ts`: the focused game's title, its facts and Play, and the rack (`rack.ts`). Touch or arrow keys focus: the
+- `home.ts`: the focused game's title, its facts (stakes in USDC), Play and `LOBBY` beside it, and the rack (`rack.ts`). Touch or arrow keys focus: the
   old program drops and dims, the new one lifts and lights, a packet runs along its feed into the core, the title
   derezzes and rezzes, the facts rez in turn and the `tick` plays. Enter or Play launches: the key and program flash,
   the core turns and every trace flares. On the Box (`build:box`) the rack ends in the blank NEW GAME program: it
@@ -149,10 +151,19 @@ on `BoxEvent`s and acts only through `link.send`.
   for the stage closes up to fit, as in portrait, where the programs past the fourth then stand off the traces).
 - `join.ts`, `stake.ts`, `result.ts`, `refund.ts`: pages round the core (`page-layout.ts`), each with a seat panel
   per player (`seat-panel.ts`: a seat-colour frame lit when the seat is asked to act or wins, dimmed to 40 % on a
-  loss, `NEEDS n EGB` in red), a panel under the core and keys at the bottom. Result's banner is the winner's colour
-  (a draw in system light). Refund's panel is red, and its `REFUND ALL` key (an `alert` key, once the stakes unlock)
-  sends every refund still owed, so the Box never waits on a player who walked away. Result says `VOID` when a built
-  game's rules failed and both stakes went back.
+  loss, `NEEDS n USDC · TAP TO TOP UP` in red: that seat's tap goes to the lobby), a panel under the core and keys
+  at the bottom. Stakes are USDC on Sepolia for the team games; a built game isn't on chain and plays for nothing
+  (`FREE PLAY`). Result's banner names the winner by their player name in the winner's colour (a draw in system
+  light), and under it the lines the Box read from chain after the result's receipt (the payout, the title, the
+  championship), `reading the result from Sepolia…` until then. Refund's panel is red with a countdown to when the
+  pot unlocks (an hour on Sepolia); then a tap or its `REFUND ALL` key sends one refund that pays both stakes back,
+  and `HOME` leaves sooner (the Box refunds the pot itself once it unlocks). Result says `VOID` when a built game's
+  rules failed.
+- `lobby.ts`: the lobby, from Home's `LOBBY` key or a Stake tap short of the stake. A badge tapped on either station
+  shows its card from chain: its player name, or `NO NAME YET` with a proposed `<label>.gamebox.eth`, `ANOTHER` and
+  `CLAIM`; its USDC and `TOP UP 100 USDC`. Beside it the game's title (its holder and streak) and its open
+  championship (the prize, a countdown to the close, the top five with points and W-D-L), read through the
+  Universal Resolver. `BACK` returns Home, or to Stake. The transaction bar follows each claim and top-up.
 - Game screens live with their games in `src/games/<game>/screen.ts`; a built game's screen runs in the sandboxed
   frame (`frame/`, its own README), which gives it `<egb-key>`, `<egb-fact>`, `<egb-seg>` and `<egb-plate>` (a panel,
   lit unless `metal`; a `metal` key draws as `ghost`, so games written before the Grid keep working).
@@ -261,44 +272,49 @@ How it moves:
 ## Stock Duel
 
 `games/stock-duel/screen.ts` exports `stockDuelScreen`, the `ViewFactory` the router mounts while a Stock Duel match
-plays. It draws from `state.match.play` (game `stock-duel`) on the whole stage, in its own look: a painted study
-that comes alive, a dark wood-panelled room with a warm brass lamp on Player 1's half and a cyan-glass lamp on Player
-2's. The Box's thin overlay sits over the top ~130 px (landscape) / ~150 px (portrait), which holds nothing important.
-Each orientation has its own geometry table in `screen.ts`: landscape stands the Rolodexes at the two ends of the
-desk with the astrolabe between them on the wall; portrait puts the Rolodexes side by side at the top, the
-astrolabe and the tallies in the middle, and the played cards along the bottom.
+plays. It draws from `state.match.play` (game `stock-duel`) on the whole stage, in its own look, the Slab: a dark
+room with each player's colour pooling up from their side, thick graphite slabs lit from above, chunky Unbounded
+type, and the seat colours as fills and rims; no theme, no lines or grid. Its route takes the `full` pose, so the
+game draws the top band itself: each player's slab (the badge's name, or `PLAYER n`, the stake in USDC and a pip per
+round to win), the round and the pot. Each orientation has its own geometry table in `screen.ts`: landscape stands a
+Rolodex down each side with the tray between them (the stat wheel over the two wells); portrait puts the Rolodexes
+side by side under the band and the tray along the bottom. The comp it was built to is in
+`games/stock-duel/look/` (see the blueprint).
 
 | Module | What it is | API |
 |---|---|---|
-| `screen.ts` | The view: places the parts, draws a state as it stands when it mounts, animates each change after that, and runs the drums' frame loop only during the pick. | `stockDuelScreen: ViewFactory` |
-| `scene.ts` | The study, drawn once in CSS: raised wall panels, a rail, a walnut desk with a tooled leather blotter, the two lamps on their arms, each lamp's cone and pool of light, a vignette; brushed paint texture from layered gradients. | `createScene(places): { el, flare(seat, holdMs), hold(seat \| null) }` |
-| `rolodex.ts` | One hand as a classic Rolodex: a black drum with brass bands and knobs on a lacquered stand, the cards on its rail. Every card has an index tab in the stock's colour at its own place across the top, so all the hand's tickers show; the front card is face up with its colour band, ticker, name, a draining ring and a `?` where the stats go. A plinth line says `TAP TO PLAY` or `LAST TURN`. | `createRolodex(seat, placement, sound): { el, show(hand, front, animate, played), turnTo(front), drain(share), deal(hand, front, delays), lift(card): Rect, note(text, hot), dispose() }` |
-| `dial.ts` | The brass astrolabe: a bevelled rim, a band of four engraved stat sectors (`PRICE`, `AVG PRICE`, `24H MOVE`, `LIQUIDITY` in roll order, clockwise from the top left), degree ticks, a dark enamel plate, and the rete (a pierced brass pointer) under a fixed boss. SVG. | `createDial(centre, radius): { el, spin(stat, elapsedMs): Promise<void>, show(stat), rest(), dispose() }` |
-| `reveal.ts` | The played cards on the blotter: face down, a cream manuscript back folded like an envelope with a wax seal (and `AUTO` stamped on it when the card was played for the player); face up, aged paper with ink rules, the ticker and company, the stock's colour as an ink band, the round's stat large and the other three below. Wax seals (SVG): green `FINALIZED`, red `SLASHED`; a brass `TIE · REPLAY` plate for a tie. | `createReveal(rests): { el, place(seat, auto, from), flip(record, animate): Promise<void>, clear(animate), dispose() }` |
-| `score.ts` | The standing: a lacquered tally per seat (`PLAYER n` and three round pips that light in the seat's colour), an engraved `ROUND n` plate, and the end banner. | `createStanding(places): { els, set(score, round, animate), finish(winner, animate) }` |
+| `screen.ts` | The view: places the parts, draws a state as it stands when it mounts, animates each change after that, runs the drums' frame loop only during the pick, and keeps the band's players and stakes current. | `stockDuelScreen: ViewFactory` |
+| `scene.ts` | The room, drawn once in CSS: the dark backdrop lit faintly from above, each seat's colour pooling up from its side (a brighter copy fades in for its moments), and the raised tray in the middle. | `createScene(places): { el, flare(seat, holdMs), hold(seat \| null) }` |
+| `rolodex.ts` | One hand as a Rolodex: graphite cards upright on a drum with seat-colour end caps, over a foot. Every card has an index tab in the stock's colour at its own place across the top, so all the hand's tickers show; each card further back stands higher, a little smaller and darker. The front card shows the stock's colour along its top, the ticker and name, four hidden stats and a `?` the draining ring runs round; a rim in the seat's colour lights it while its player picks. The plinth's pill says `TAP TO PLAY`, `LAST TURN` (lit, breathing) or `CARD DOWN`. | `createRolodex(seat, placement, sound): { el, show(hand, front, animate, played), turnTo(front), drain(share), deal(hand, front, delays), lift(card): Rect, note(text, tone), dispose() }` |
+| `dial.ts` | The stat wheel: a dark disc of four graphite quarters (`PRICE`, `AVG PRICE`, `24H MOVE`, `LIQUIDITY` in roll order, clockwise from the top left), each named beside it, and a white pointer round a hub. At rest the hub shows `?` and a line under the wheel says how the stat is picked. | `createDial(centre, radius): { el, spin(stat, elapsedMs): Promise<void>, show(stat), rest(), dispose() }` |
+| `reveal.ts` | The played cards on the tray: a dark well per seat (it says `LAST TURN` while its seat is on its last turn); face down, a slab in the seat's colour with a big `?` (and `AUTO` when the card was played for the player); face up, the stock's colour across the top with the ticker and company, the round's stat large and the other three below. The winner's card lifts with a seat-colour rim and a `+1 ROUND` badge, the loser's sinks and dims; the line under the cards names who took it, or `TIE · REPLAY`, and during the next pick recalls the last round. | `createReveal(places, label): { el, place(seat, auto, from), waiting(seat, on), flip(record, animate): Promise<void>, recall(record, play), clear(animate), dispose() }` |
+| `score.ts` | The band: a slab per player (a seat-colour square with `P1`/`P2`, the name, the stake, the pips), the round and the pot between them, and the end slab over the wheel. A player's square pops when their tap lands; a refused tap shakes their slab. | `createStanding(places): { els, players(players, stake), set(score, round, animate), finish(winner, animate), tap(seat, accepted) }` |
 | `stock-duel.css` | All its styles, imported by `screen.ts`. | |
 
 How it moves:
 
-- **Deal**: the cards drop onto each drum's rail one at a time, the two drums half a beat apart, the front card last;
-  each lands with a `tick`. Nothing is ever laid out on the desk.
+- **Deal**: the cards drop onto each drum one at a time, the two drums half a beat apart, the front card last; each
+  lands with a `tick`. Nothing is ever laid out on the tray.
 - **Pick**: a frame loop (only in this phase) reads `frontIndex` and `frontRemainingMs` at the Box's clock
   (`link.now()`). When the front card changes the drum indexes one card: the old front card rises and tips back over
-  the top of the drum (rotateX about the rail, edge-on at the midpoint), then stands up again at the back while the
+  the top of the drum (rotateX about its foot, edge-on at the midpoint), then stands up again at the back while the
   others step forward; it always ends upright. While a chip on the reader is still rolling, its seat's front card is
-  held (the rules' `held`): the drum stays on it and its ring stops. The ring drains with transforms only (two half rings turning in clipped windows). A
-  played card lifts off the rail and flies face down onto its rest on the blotter, and that seat's lamp flares. Once
-  one seat has played, the other's plinth reads `LAST TURN`.
-- **Dial**: the astrolabe wakes from dim, the rete spins three turns, swings a few degrees past the stat and settles
-  on it; then the sector lights. A screen joining mid-spin carries on from where the spin has got to.
-- **Reveal**: both cards turn over together (rotateY); then the seals come down, squash and settle (scale and
-  opacity), the winner's pip lights with a pop and its lamp flares; a tie shows the `TIE · REPLAY` plate instead. The
-  next pick clears the desk and the drums close up round the cards that are left.
-- **Over**: the final reveal stays, the engraved brass banner (`PLAYER 1 WINS`, `PLAYER 2 WINS` or `DRAW`, with a
-  seat-coloured rule) drops in, and the winner's lamp stays bright.
+  held (the rules' `held`): the drum stays on it and its ring stops. The ring drains with transforms only (two half
+  rings turning in clipped windows). A played card lifts off the drum and flies face down into its well, the cards
+  behind it step forward, and that seat's glow flares. Once one seat has played, the other's plinth reads `LAST TURN`
+  and so does its well.
+- **Dial**: the wheel wakes (the hub's `?` and the hint go), the pointer spins three turns, swings a few degrees past
+  the stat and settles on it; then its quarter lights white and its name is underlined. A screen joining mid-spin
+  carries on from where the spin has got to.
+- **Reveal**: both cards turn over together (rotateY); then the winner's card lifts on a spring with its rim and
+  badge, the loser's sinks and tilts, the result line pops in, the winner's pip lights with a pop and its glow
+  flares; a tie moves neither card and says `TIE · REPLAY`. The next pick clears the tray, the line recalls the round
+  just played, and the drums close up round the cards that are left.
+- **Over**: the final reveal stays, the end slab (`NOVA WINS` in the winner's colour, or `A DRAW`) drops in over the
+  wheel, the round reads `FINAL`, and the winner's glow stays bright.
 - Sounds: the Box cues `tick` on each drum step, `flip` at the reveal and `seal` when a round scores; the screen adds
   only the deal's `tick`s.
-- Only transform and opacity animate; every shadow and gradient is static. Each card's shade keeps a layer of its
-  own, so a drum step fades it without the Pi rastering both drums' cards again. Under reduced motion it shows end
-  states: the drum jumps to the next card, cards appear on their rests, the rete is already on the stat, the faces and seals
-  are already down.
+- Only transform and opacity animate; every shadow and glow is static and reaches at most 24 px. Each card's shade
+  keeps a layer of its own, and the front card's rim is one layer that stays put while the cards turn under it, so a
+  drum step never rasters a card's shadow again. Under reduced motion it shows end states: the drum jumps to the next
+  card, cards appear in their wells, the pointer is already on the stat, the faces and the outcome are already shown.

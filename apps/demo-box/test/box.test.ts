@@ -1,42 +1,53 @@
 import {
   EXECUTE_VECTOR,
+  type ExecuteRequest,
   P256_VECTOR_KEY,
   RESULT_VECTOR,
+  SEAT_VECTOR,
+  STAKE_VECTOR,
+  executeBatchDigest,
   executeDigest,
   fullName,
   permissionedResolverAbi,
   resultDigest,
+  stakeDigest,
+  usdc,
 } from '@egb/shared/names';
 import { MemoryStore } from '@egb/relayer/test/memory-store';
-import { p256Problem } from '@egb/relayer/verify';
+import { accountSignatureProblem, p256Problem } from '@egb/relayer/verify';
 import { type Address, type Hex, decodeFunctionData, toHex } from 'viem';
 import { packetToBytes } from 'viem/ens';
 import { describe, expect, it } from 'vitest';
 
-import { Box, type Reply } from '../src/box.ts';
+import { Box } from '../src/box.ts';
 import type { BoxChain, BoxInfo } from '../src/chain.ts';
+import type { Reply } from '../src/relayer.ts';
 import { p256Signer } from '../src/signer.ts';
 
 const NOW = 1_800_000_000;
 const ACCOUNT: Address = '0x00000000000000000000000000000000000000B0';
 const RESULTS: Address = '0x00000000000000000000000000000000000000a2';
-const resolverOf = (label: string) => `0x${label.length.toString(16).padStart(40, 'c')}` as Address;
+const POT: Address = '0x00000000000000000000000000000000000000a8';
+const RESOLVER: Address = '0x00000000000000000000000000000000000000C0';
 
 const decode = (data: Hex) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args as [Hex, string, string];
 
-function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Record<string, string>; reply?: (path: string, body: unknown) => Reply } = {}) {
+/** The `[key, value]` writes of a `POST /account/execute` body. */
+const writes = (body: Record<string, unknown>) => {
+  const calls = (body.calls ?? [body.call]) as { target: Address; data: Hex }[];
+  return calls.map((call) => decode(call.data).slice(1));
+};
+
+function setup(options: { box?: Partial<BoxInfo>; game?: string; reply?: (path: string, body: unknown) => Reply } = {}) {
   const boxes: Record<string, BoxInfo> = {
-    'mumbai-01': { account: ACCOUNT, resolver: resolverOf('mumbai-01'), expiry: NOW + 86_400, status: 1 },
+    'demo-01': { account: ACCOUNT, resolver: RESOLVER, expiry: NOW + 86_400, status: 1, ...options.box },
   };
-  for (const [label, info] of Object.entries(options.popups ?? {})) {
-    boxes[label] = { account: ACCOUNT, resolver: resolverOf(label), expiry: NOW + 300, status: 1, ...info };
-  }
   const usedRounds = new Set<string>();
   const chain: BoxChain = {
     box: async (label) => boxes[label] ?? { account: `0x${'00'.repeat(20)}`, resolver: `0x${'00'.repeat(20)}`, expiry: 0, status: 0 },
-    game: async (_box, label) => options.games?.[label] ?? '',
-    roundUsed: async (box, round) => usedRounds.has(`${box}:${round}`),
-    recentPopups: async () => Object.keys(options.popups ?? {}),
+    text: async () => options.game ?? '',
+    roundTaken: async (box, round) => usedRounds.has(`${box}:${round}`),
+    openCup: async () => null,
   };
   const posts: { path: string; body: Record<string, unknown> }[] = [];
   const store = new MemoryStore();
@@ -48,12 +59,16 @@ function setup(options: { popups?: Record<string, Partial<BoxInfo>>; games?: Rec
       chain,
       signer,
       account: ACCOUNT,
-      label: 'mumbai-01',
+      label: 'demo-01',
       defaultGame: 'quickdraw',
       results: RESULTS,
-      post: async (path, body) => {
-        posts.push({ path, body: body as Record<string, unknown> });
-        return options.reply?.(path, body) ?? { status: 202, body: { id: `id-${posts.length}` } };
+      pot: POT,
+      relayer: {
+        post: async (path, body) => {
+          posts.push({ path, body: body as Record<string, unknown> });
+          return options.reply?.(path, body) ?? { status: 202, body: { id: `id-${posts.length}` } };
+        },
+        get: async () => ({ status: 404, body: {} }),
       },
       now: () => NOW,
       nonce: () => nonce++,
@@ -66,58 +81,56 @@ describe('the signer', () => {
     const signer = p256Signer(P256_VECTOR_KEY.privateKey);
     expect(signer.qx).toBe(P256_VECTOR_KEY.qx);
     expect(signer.qy).toBe(P256_VECTOR_KEY.qy);
-    for (const vector of [EXECUTE_VECTOR, RESULT_VECTOR]) {
+    for (const vector of [EXECUTE_VECTOR, RESULT_VECTOR, STAKE_VECTOR, SEAT_VECTOR]) {
       const { r, s } = signer.sign(vector.digest);
       expect(p256Problem(vector.digest, r, s, signer.qx, signer.qy)).toBeNull();
       // RFC 6979 on both sides: the same signature the contracts' test made.
       expect({ r, s }).toEqual({ r: vector.r, s: vector.s });
     }
+    expect(signer.raw(EXECUTE_VECTOR.digest)).toBe(EXECUTE_VECTOR.signature);
   });
 });
 
 describe('the heartbeat', () => {
-  it("signs a BoxAccount.execute of lastSeen on mumbai-01's resolver, over the right digest", async () => {
-    const { box, posts, signer } = setup({ games: { 'mumbai-01': 'quickdraw' } });
-    const ids = await box.heartbeat();
-    expect(ids).toEqual(['id-1']);
+  it("signs a P256Account.execute of lastSeen on mumbai-01's resolver, raw, over the right digest", async () => {
+    const { box, posts, signer } = setup({ game: 'quickdraw' });
+    expect(await box.heartbeat()).toEqual(['id-1']);
     expect(posts).toHaveLength(1);
-    const body = posts[0]!.body as Record<string, string>;
-    expect(posts[0]!.path).toBe('/box/execute');
-    expect(body).toMatchObject({ account: ACCOUNT, target: resolverOf('mumbai-01'), value: '0', deadline: String(NOW + 600) });
-    expect(decode(body.data as Hex)).toEqual([toHex(packetToBytes(fullName('mumbai-01'))), 'lastSeen', String(NOW)]);
-    const call = {
-      target: body.target as Address,
-      value: 0n,
-      data: body.data as Hex,
-      nonce: BigInt(body.nonce!),
-      deadline: BigInt(body.deadline!),
-    };
-    expect(p256Problem(executeDigest(call, ACCOUNT), body.r as Hex, body.s as Hex, signer.qx, signer.qy)).toBeNull();
+    expect(posts[0]!.path).toBe('/account/execute');
+    const body = posts[0]!.body as unknown as ExecuteRequest;
+    expect(body).toMatchObject({ account: ACCOUNT, deadline: String(NOW + 600), call: { target: RESOLVER, value: '0' } });
+    expect(decode(body.call!.data)).toEqual([toHex(packetToBytes(fullName('demo-01'))), 'lastSeen', String(NOW)]);
+    const digest = executeDigest(
+      { ...body.call!, value: 0n, nonce: BigInt(body.nonce), deadline: BigInt(body.deadline) },
+      ACCOUNT,
+    );
+    expect(accountSignatureProblem(digest, body.signature, signer.qx, signer.qy)).toBeNull();
     expect((await box.view()).lastSeen).toBe(NOW);
   });
 
-  it('writes game only where the record differs, and lastSeen on every beat', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'stockduel' } });
+  it('batches game with lastSeen, under one signature, only where the record differs', async () => {
+    const { box, posts, signer } = setup({ game: 'stockduel' });
     await box.heartbeat();
-    expect(posts.map((p) => decode(p.body.data as Hex).slice(1))).toEqual([
+    expect(posts).toHaveLength(1);
+    const body = posts[0]!.body as unknown as ExecuteRequest;
+    expect(writes(posts[0]!.body)).toEqual([
       ['lastSeen', String(NOW)],
       ['game', 'quickdraw'],
     ]);
+    const calls = body.calls!.map((call) => ({ ...call, value: 0n }));
+    const digest = executeBatchDigest({ calls, nonce: BigInt(body.nonce), deadline: BigInt(body.deadline) }, ACCOUNT);
+    expect(accountSignatureProblem(digest, body.signature, signer.qx, signer.qy)).toBeNull();
   });
 
-  it('beats on every live pop-up it runs, and skips the lapsed and the foreign ones', async () => {
-    const { box, posts } = setup({
-      popups: {
-        'popup-live': {},
-        'popup-gone': { expiry: NOW - 1 },
-        'popup-other': { account: '0x00000000000000000000000000000000000000b1' },
-      },
-    });
-    await box.heartbeat();
-    expect([...new Set(posts.map((p) => p.body.target))]).toEqual([resolverOf('mumbai-01'), resolverOf('popup-live')]);
+  it('skips a Box whose licence has lapsed, or that another account runs', async () => {
+    for (const box of [{ expiry: NOW - 1 }, { account: '0x00000000000000000000000000000000000000b1' as Address }]) {
+      const { box: demo, posts } = setup({ box });
+      expect(await demo.heartbeat()).toEqual([]);
+      expect(posts).toHaveLength(0);
+    }
   });
 
-  it('uses a fresh nonce for every write', async () => {
+  it('uses a fresh nonce for every beat', async () => {
     const { box, posts } = setup();
     await box.heartbeat();
     await box.heartbeat();
@@ -129,7 +142,7 @@ describe('the heartbeat', () => {
 describe('POST /result', () => {
   const winner = '0x1111111111111111111111111111111111111111';
   const loser = '0x2222222222222222222222222222222222222222';
-  const report = { box: 'mumbai-01', game: 'quickdraw', winner, loser, draw: false };
+  const report = { box: 'demo-01', game: 'quickdraw', winner, loser, draw: false };
 
   it('signs a Result with the next round and returns the relayer id', async () => {
     const { box, posts, signer } = setup();
@@ -147,19 +160,19 @@ describe('POST /result', () => {
     expect(p256Problem(resultDigest(result, RESULTS), body.r, body.s, signer.qx, signer.qy)).toBeNull();
   });
 
-  it('never repeats a round: in parallel, across restarts, and past rounds already on chain', async () => {
+  it('never repeats a round: in parallel, across restarts, and past rounds with a result or a pot on chain', async () => {
     const { box, make, usedRounds } = setup();
     const replies = await Promise.all([box.report(report, 'a'), box.report(report, 'b'), box.report(report, 'c')]);
     expect(replies.map((r) => r.body.round)).toEqual([1, 2, 3]);
-    usedRounds.add('mumbai-01:4').add('mumbai-01:5');
+    usedRounds.add('demo-01:4').add('demo-01:5');
     expect((await make().report(report, 'd')).body.round).toBe(6);
   });
 
   it('shows the game it reported in the next heartbeat', async () => {
-    const { box, posts } = setup({ games: { 'mumbai-01': 'quickdraw' } });
+    const { box, posts } = setup({ game: 'quickdraw' });
     await box.report({ ...report, game: 'stockduel' }, 'ip');
     await box.heartbeat();
-    expect(decode(posts.at(-1)!.body.data as Hex).slice(1)).toEqual(['game', 'stockduel']);
+    expect(writes(posts.at(-1)!.body).at(-1)).toEqual(['game', 'stockduel']);
   });
 
   it('refuses a malformed report, and a Box it does not run, without signing', async () => {
@@ -187,5 +200,77 @@ describe('POST /result', () => {
       status: 422,
       body: { error: 'the call reverts with NotAPlayer', revert: 'NotAPlayer' },
     });
+  });
+});
+
+describe('POST /stake', () => {
+  const a = '0x1111111111111111111111111111111111111111';
+  const b = '0x2222222222222222222222222222222222222222';
+  const stake = { box: 'demo-01', game: 'stockduel', a, b, amount: '10000000' };
+
+  it('signs a Stake with the next round and sends it to /duel/open', async () => {
+    const { box, posts, signer } = setup();
+    expect(await box.stake(stake, 'ip')).toEqual({ status: 202, body: { id: 'id-1', round: 1 } });
+    expect(posts[0]!.path).toBe('/duel/open');
+    const body = posts[0]!.body as { stake: Record<string, string>; r: Hex; s: Hex };
+    expect(body.stake).toMatchObject({ box: 'demo-01', game: 'stockduel', round: '1', amount: '10000000', deadline: String(NOW + 600) });
+    const signed = {
+      box: 'demo-01',
+      game: 'stockduel',
+      round: 1n,
+      a: body.stake.a as Address,
+      b: body.stake.b as Address,
+      amount: usdc(10),
+      deadline: BigInt(NOW + 600),
+    };
+    expect(p256Problem(stakeDigest(signed, POT), body.r, body.s, signer.qx, signer.qy)).toBeNull();
+  });
+
+  it("settles a staked round with the result of the same round, once", async () => {
+    const { box, posts } = setup();
+    await box.stake(stake, 'ip');
+    await box.report({ box: 'demo-01', game: 'quickdraw', winner: a, loser: b, draw: false }, 'ip');
+    const reply = await box.report({ box: 'demo-01', game: 'stockduel', winner: a, loser: b, draw: false, round: '1' }, 'ip');
+    expect(reply).toEqual({ status: 202, body: { id: 'id-3', round: 1 } });
+    expect(posts.map((p) => [p.path, (p.body.result as { round?: string } | undefined)?.round])).toEqual([
+      ['/duel/open', undefined],
+      ['/box/result', '2'],
+      ['/box/result', '1'],
+    ]);
+    const again = await box.report({ box: 'demo-01', game: 'stockduel', winner: a, loser: b, draw: false, round: 1 }, 'ip');
+    expect(again).toEqual({ status: 409, body: { error: 'round 1 is not an open pot of demo-01.gamebox.eth' } });
+    expect(posts).toHaveLength(3);
+  });
+
+  it('refuses a result for a round it never staked, without signing', async () => {
+    const { box, posts } = setup();
+    expect((await box.report({ box: 'demo-01', game: 'stockduel', winner: a, loser: b, draw: false, round: 7 }, 'ip')).status).toBe(409);
+    expect((await box.report({ box: 'demo-01', game: 'stockduel', winner: a, loser: b, draw: false, round: 0 }, 'ip')).status).toBe(400);
+    expect(posts).toHaveLength(0);
+  });
+
+  it("keeps the round when the relayer refuses the stake, and doesn't record a pot", async () => {
+    const { box, posts } = setup({ reply: () => ({ status: 409, body: { error: 'kite.gamebox.eth holds 9 USDC, under the stake of 10' } }) });
+    expect((await box.stake(stake, 'ip')).status).toBe(409);
+    expect((await box.report({ box: 'demo-01', game: 'stockduel', winner: a, loser: b, draw: false, round: 1 }, 'ip')).status).toBe(409);
+    expect(posts).toHaveLength(1);
+  });
+
+  it('refuses a malformed stake, a stake over 25 USDC, and a Box it does not run, without signing', async () => {
+    const { box, posts } = setup();
+    expect((await box.stake({ ...stake, amount: '25000001' }, 'ip')).body).toEqual({ error: 'amount: at most 25 USDC' });
+    expect((await box.stake({ ...stake, amount: '0' }, 'ip')).status).toBe(400);
+    expect((await box.stake({ ...stake, b: a }, 'ip')).status).toBe(400);
+    expect((await box.stake({ ...stake, game: 'Stock Duel' }, 'ip')).status).toBe(400);
+    expect((await box.stake(null, 'ip')).status).toBe(400);
+    expect((await box.stake({ ...stake, box: 'mumbai-01' }, 'ip')).status).toBe(403);
+    expect(posts).toHaveLength(0);
+  });
+
+  it('allows 10 per IP per hour', async () => {
+    const { box, posts } = setup();
+    for (let i = 0; i < 10; i++) expect((await box.stake(stake, 'ip')).status).toBe(202);
+    expect((await box.stake(stake, 'ip')).status).toBe(429);
+    expect(posts).toHaveLength(10);
   });
 });

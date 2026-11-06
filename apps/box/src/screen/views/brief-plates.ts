@@ -23,7 +23,7 @@ function valueOf(brief: GameBrief, field: Field): string | null {
     case "template":
       return brief.template.replace(/-/g, " ");
     case "stakes":
-      return brief.stakes ? `${brief.stakes.join(" · ")} EGB` : null;
+      return brief.stakes ? `${brief.stakes.join(" · ")} USDC` : null;
     default:
       return brief[field];
   }

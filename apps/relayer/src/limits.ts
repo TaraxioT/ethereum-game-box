@@ -1,7 +1,6 @@
 // Rate limits, as sliding windows of timestamps kept in the Durable Object.
 
-import type { TxKind } from '@egb/shared/names';
-
+import type { Prepared } from './request.ts';
 import type { Store } from './store.ts';
 
 export interface Limit {
@@ -17,8 +16,9 @@ const DAY = 86_400;
 /** A pop-up's licence: a pop-up opened within this window is still live. */
 const POPUP_TERM = 600;
 
-/** The limits a request of `kind` from `ip` counts against. Results and executes are bounded by the Box keys. */
-export function limitsFor(kind: TxKind, ip: string): Limit[] {
+/** The limits a request from `ip` counts against. Executes count per account and top-ups per player; results and
+ *  stakes are bounded by the Box keys, and a refund or a close can succeed only once. */
+export function limitsFor({ kind, account }: Pick<Prepared, 'kind' | 'account'>, ip: string): Limit[] {
   switch (kind) {
     case 'claim':
       return [
@@ -32,8 +32,27 @@ export function limitsFor(kind: TxKind, ip: string): Limit[] {
       ];
     case 'drip':
       return [{ key: 'drip:all', max: 50, windowSeconds: DAY, what: '50 drips per day' }];
+    case 'deploy':
+      return [
+        { key: `deploy:ip:${ip}`, max: 3, windowSeconds: HOUR, what: '3 account deploys per hour from one address' },
+        { key: 'deploy:all', max: 30, windowSeconds: DAY, what: '30 account deploys per day' },
+      ];
     case 'execute':
+      return [
+        { key: `execute:account:${account?.toLowerCase()}`, max: 30, windowSeconds: HOUR, what: '30 calls per hour from one account' },
+        { key: 'execute:all', max: 1500, windowSeconds: DAY, what: '1500 account calls per day' },
+      ];
+    case 'topup':
+      return [
+        { key: `topup:player:${account?.toLowerCase()}`, max: 1, windowSeconds: 600, what: 'one top-up per player per 10 minutes' },
+        { key: 'topup:all', max: 300, windowSeconds: DAY, what: '300 top-ups per day' },
+      ];
+    case 'seat':
+      return [{ key: 'seat:all', max: 200, windowSeconds: DAY, what: '200 Box-vouched names per day' }];
     case 'result':
+    case 'pot-open':
+    case 'pot-refund':
+    case 'cup-close':
       return [];
   }
 }

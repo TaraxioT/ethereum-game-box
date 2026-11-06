@@ -1,341 +1,229 @@
-/* Stock Duel: a painted study. Warm lamplight on Player 1's half, cyan on Player 2's; a Rolodex at each end of the desk,
-   a brass astrolabe between them, cream manuscript cards and wax seals. Only transform and opacity animate; every
-   shadow and gradient is static; the key light is from the top left. */
-.sd { position: absolute; overflow: hidden; font-family: var(--body); color: #2a1a0a; }
-.sd .s0 { --seat: var(--p1); --seat-hi: var(--p1-hi); --lamp: 255 168 82; }
-.sd .s1 { --seat: var(--p2); --seat-hi: var(--p2-hi); --lamp: 70 214 255; }
+/* Stock Duel: the Slab look. A dark room with each player's colour pooling up from their side, thick graphite slabs
+   lit from above, chunky Unbounded type, and the seat colours as fills and rims. Only transform and opacity animate;
+   every shadow and glow is static and reaches at most 24 px. */
+.sd {
+  position: absolute; overflow: hidden; font-family: var(--body); color: #f4f6fb;
+  --ink: #f4f6fb; --ink-2: #a3a9b8; --ink-3: #6b7183;
+  --slab: linear-gradient(180deg, #2b2f3a, #1d2029 55%, #171920);
+  --slab-edge: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 0 rgb(0 0 0 / 0.5);
+  --well: #0d0f14;
+}
+.sd .s0 { --seat: var(--p1); --seat-hi: var(--p1-hi); --seat-deep: #c25a0c; --seat-rgb: 255 155 61; }
+.sd .s1 { --seat: var(--p2); --seat-hi: var(--p2-hi); --seat-deep: #0a8db3; --seat-rgb: 63 217 255; }
 
-/* ---- The study ---- */
-.sd-scene { position: absolute; overflow: hidden; background: #140b07; pointer-events: none; }
-.sd-scene > *, .sd-wall > *, .sd-desk > * { position: absolute; display: block; }
-.sd-wall {
+/* ---- The room ---- */
+.sd-scene { position: absolute; overflow: hidden; pointer-events: none;
   background:
-    radial-gradient(ellipse 45% 70% at 12% 40%, rgb(150 82 32 / 0.32), transparent 70%),
-    radial-gradient(ellipse 45% 70% at 88% 40%, rgb(26 92 112 / 0.3), transparent 70%),
-    radial-gradient(ellipse 30% 40% at 50% 30%, rgb(90 56 30 / 0.35), transparent 75%),
-    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 9px, rgb(255 214 160 / 0.025) 9px 11px, transparent 11px 23px),
-    repeating-linear-gradient(3deg, rgb(255 230 190 / 0.018) 0 2px, transparent 2px 17px),
-    linear-gradient(180deg, #24150d, #1d110a 55%, #150c07);
-}
-/* Raised wall panels: lit top-left edges, dark bottom-right, a groove round each. */
-.sd-panel {
-  border-radius: 6px;
-  background:
-    radial-gradient(ellipse 80% 60% at 35% 25%, rgb(120 72 38 / 0.3), transparent 70%),
-    repeating-linear-gradient(92deg, rgb(0 0 0 / 0.09) 0 1px, transparent 1px 6px, rgb(255 210 160 / 0.03) 6px 7px, transparent 7px 15px),
-    linear-gradient(180deg, #33200f, #24160c 70%, #1c1009);
-  box-shadow:
-    inset 2px 2px 0 rgb(255 205 150 / 0.09), inset -2px -3px 0 rgb(0 0 0 / 0.45),
-    0 0 0 3px #110904, 0 0 0 4px rgb(255 205 150 / 0.05);
-}
-.sd-rail {
-  background: linear-gradient(180deg, #4a2d18, #2c190c 55%, #160c06);
-  box-shadow: inset 0 2px 0 rgb(255 205 150 / 0.2), 0 3px 0 #0b0603, 0 6px 10px rgb(0 0 0 / 0.5);
-}
-.sd-desk {
-  background:
-    radial-gradient(ellipse 60% 80% at 50% 0%, rgb(120 70 34 / 0.25), transparent 70%),
-    repeating-linear-gradient(178.5deg, rgb(255 200 140 / 0.035) 0 2px, transparent 2px 13px),
-    repeating-linear-gradient(181deg, rgb(0 0 0 / 0.1) 0 1px, transparent 1px 7px, rgb(0 0 0 / 0.05) 7px 9px, transparent 9px 19px),
-    linear-gradient(180deg, #4b2b16, #2f1a0c 30%, #1d1007);
-  box-shadow: inset 0 3px 0 rgb(255 205 150 / 0.24), inset 0 5px 0 rgb(0 0 0 / 0.35), 0 -6px 12px rgb(0 0 0 / 0.45);
-}
-/* A leather blotter with a tooled gold rule. */
-.sd-blotter {
-  border-radius: 8px;
-  background:
-    radial-gradient(ellipse 70% 60% at 40% 30%, rgb(60 70 44 / 0.5), transparent 75%),
-    repeating-linear-gradient(35deg, rgb(255 255 255 / 0.015) 0 1px, transparent 1px 5px),
-    linear-gradient(180deg, #1f2616, #151a0f);
-  box-shadow:
-    inset 0 0 0 7px #2a190b, inset 0 0 0 8.5px rgb(214 178 100 / 0.45), inset 0 0 0 12px rgb(0 0 0 / 0.2),
-    0 2px 0 rgb(255 220 170 / 0.12), 0 6px 14px rgb(0 0 0 / 0.5);
-}
-.sd-light { pointer-events: none; }
-.sd-light > * { position: absolute; display: block; }
-.sd-light.bright { opacity: 0; transition: opacity 700ms var(--ease-out); }
-.sd-light.bright.held { opacity: 0.85; }
-.sd-cone { background: linear-gradient(180deg, rgb(var(--lamp) / 0.16), rgb(var(--lamp) / 0.06) 60%, rgb(var(--lamp) / 0)); }
-.sd-pool { border-radius: 50%; background: radial-gradient(closest-side, rgb(var(--lamp) / 0.26), rgb(var(--lamp) / 0.1) 55%, rgb(var(--lamp) / 0)); }
-.sd-light.bright .sd-cone { background: linear-gradient(180deg, rgb(var(--lamp) / 0.2), rgb(var(--lamp) / 0.08) 60%, rgb(var(--lamp) / 0)); }
-.sd-light.bright .sd-pool { background: radial-gradient(closest-side, rgb(var(--lamp) / 0.3), rgb(var(--lamp) / 0.12) 55%, rgb(var(--lamp) / 0)); }
-.sd-vignette { background: radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, rgb(6 3 1 / 0.6)); }
+    radial-gradient(ellipse 700px 420px at 50% 0, rgb(140 150 190 / 0.14), transparent 70%),
+    linear-gradient(180deg, #11131b, #0b0d12 60%, #08090d); }
+.sd-scene > * { position: absolute; display: block; }
+.sd-glow { background: radial-gradient(closest-side, rgb(var(--seat-rgb) / 0.22), rgb(var(--seat-rgb) / 0) 70%); }
+.sd-glow.bright { opacity: 0; transition: opacity 700ms var(--ease-out);
+  background: radial-gradient(closest-side, rgb(var(--seat-rgb) / 0.28), rgb(var(--seat-rgb) / 0) 80%); }
+.sd-glow.bright.held { opacity: 1; }
+.sd-tray { border-radius: 40px; background: linear-gradient(180deg, #171a22, #12141b);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 0 0 1px rgb(0 0 0 / 0.6), 0 24px 24px rgb(0 0 0 / 0.45); }
 
-/* The lamps: a brass dome for Player 1, cyan glass for Player 2, each on an arm from its side wall. */
-.sd-lamp > * { position: absolute; display: block; }
-.sd-lamp-arm {
-  top: 2px; height: 9px; border-radius: 5px;
-  background: linear-gradient(180deg, #f3dc9c, #b58d42 45%, #5f420f);
-  box-shadow: 0 3px 0 rgb(0 0 0 / 0.45);
+/* ---- The top band: the players, the round and the pot ---- */
+.sd-plate {
+  position: absolute; z-index: 4; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-radius: 24px;
+  background: var(--slab); box-shadow: var(--slab-edge), 0 14px 24px rgb(0 0 0 / 0.5);
 }
-.sd-lamp-cap {
-  left: 50%; top: -8px; width: 22px; height: 16px; margin-left: -11px; border-radius: 8px 8px 3px 3px;
-  background: linear-gradient(135deg, #fbe7ad, #b88f43 55%, #5a3d0e);
-  box-shadow: 0 1px 0 #2e1f05;
+.sd-plate.s1 { flex-direction: row-reverse; text-align: right; }
+.sd-avatar {
+  flex: none; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+  font: 900 18px var(--display); color: #12100c;
+  background: linear-gradient(160deg, var(--seat-hi), var(--seat) 45%, var(--seat-deep));
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.45), inset 0 -3px 0 rgb(0 0 0 / 0.25), 0 6px 16px rgb(var(--seat-rgb) / 0.45);
 }
-.sd-lamp-shade { inset: 0; border-radius: 75px 75px 12px 12px / 54px 54px 12px 12px; }
-.sd-lamp.s0 .sd-lamp-shade {
-  background:
-    radial-gradient(ellipse 50% 60% at 32% 22%, rgb(255 248 220 / 0.75), transparent 60%),
-    linear-gradient(160deg, #f6e1a2, #cfa955 35%, #8a6322 70%, #3e2a08);
-  box-shadow: inset 0 -3px 0 #5b3d0c, inset 0 -5px 0 rgb(255 214 140 / 0.5), 0 3px 0 #1f1404;
-}
-.sd-lamp.s1 .sd-lamp-shade {
-  background:
-    radial-gradient(ellipse 40% 50% at 30% 22%, rgb(235 252 255 / 0.85), transparent 60%),
-    linear-gradient(160deg, #b5f1ff, #3fd9ff 30%, #0b7894 66%, #053342);
-  box-shadow: inset 0 -3px 0 #c9a253, inset 0 -5px 0 rgb(181 241 255 / 0.6), 0 3px 0 #031d26;
-}
-/* The bulb's light under the rim: a thin bright line, its short glow, and a brighter copy that flares. */
-.sd-lamp-glow, .sd-lamp-bulb { left: 14px; right: 14px; bottom: -9px; height: 18px; border-radius: 50%; }
-.sd-lamp-glow { background: radial-gradient(closest-side, rgb(255 250 235 / 0.9), rgb(var(--lamp) / 0.6) 55%, rgb(var(--lamp) / 0)); }
-.sd-lamp-bulb {
-  bottom: -16px; height: 32px; left: 0; right: 0; opacity: 0; transition: opacity 700ms var(--ease-out);
-  background: radial-gradient(closest-side, rgb(255 255 245 / 0.95), rgb(var(--lamp) / 0.65) 50%, rgb(var(--lamp) / 0));
-}
-.sd-lamp-bulb.held { opacity: 1; }
+.sd-who { flex: 1; min-width: 0; }
+.sd-who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 20px/1.3 var(--body); letter-spacing: -0.01em; }
+.sd-who span { font: 500 14px var(--mono); color: var(--ink-2); }
+.sd-who em { font-style: normal; color: var(--seat); }
+.sd-pips { display: flex; gap: 8px; }
+.sd-pip { position: relative; width: 26px; height: 26px; border-radius: 9px; background: var(--well);
+  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.7), 0 1px 0 rgb(255 255 255 / 0.08); }
+.sd-pip::after { content: ""; position: absolute; inset: 0; border-radius: 9px; opacity: 0;
+  background: linear-gradient(160deg, var(--seat-hi), var(--seat) 55%, var(--seat-deep));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), 0 4px 12px rgb(var(--seat-rgb) / 0.6); }
+.sd-pip.lit::after { opacity: 1; }
+.sd-mid { position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sd-round { font: 900 30px/1.2 var(--display); letter-spacing: 0.02em; }
+.sd-pot { display: inline-flex; gap: 10px; align-items: baseline; padding: 5px 16px; border-radius: 999px;
+  background: #1a1d26; box-shadow: var(--slab-edge); font: 700 16px var(--mono); }
+.sd-pot i { font: 700 14px var(--display); font-style: normal; color: var(--ink-3); letter-spacing: 0.06em; }
+.sd-pot[hidden] { display: none; }
+[data-orientation="portrait"] .sd-mid { flex-direction: row; justify-content: center; gap: 16px; }
+[data-orientation="portrait"] .sd-round { font-size: 24px; }
+[data-orientation="portrait"] .sd-who b { font-size: 17px; }
 
-/* ---- A Rolodex ---- */
-.sd-rx { position: absolute; transform-origin: 0 0; z-index: 3; }
-.sd-rx > *, .sd-rx-stand > *, .sd-rx-drum > * { position: absolute; display: block; }
-.sd-rx-stand { inset: 0; }
-.sd-rx-leg {
-  top: 288px; width: 14px; height: 50px; border-radius: 4px;
-  background: linear-gradient(90deg, #0b0806, #3d3127 40%, #0a0705);
-  box-shadow: 0 2px 0 #030201;
-}
-.sd-rx-leg.l { left: 13px; }
-.sd-rx-leg.r { right: 13px; }
-.sd-rx-base {
-  left: 6px; right: 6px; top: 330px; height: 36px; border-radius: 8px 8px 12px 12px;
-  background:
-    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.02) 0 1px, transparent 1px 5px),
-    linear-gradient(180deg, #2c221b, #0f0b08 60%, #060403);
-  box-shadow:
-    inset 0 2px 0 rgb(214 178 100 / 0.6), inset 0 3px 0 rgb(0 0 0 / 0.5), inset 0 -2px 0 rgb(0 0 0 / 0.6),
-    0 5px 0 #030201, 0 10px 16px rgb(0 0 0 / 0.55);
-}
-.sd-rx-note {
-  left: 6px; right: 6px; top: 332px; height: 34px; display: grid; place-items: center;
-  font: 700 15px/1 var(--display); letter-spacing: 0.08em; color: rgb(214 178 100 / 0.8);
-  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.7);
-}
-.sd-rx-note:not(:empty) { animation: sd-breathe 1.8s ease-in-out infinite; }
-.sd-rx-note.hot { color: var(--seat-hi); text-shadow: 0 0 2px var(--seat), 0 0 7px var(--seat); animation-duration: 0.9s; }
-@keyframes sd-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+/* The end: a slab over the wheel naming the winner. */
+.sd-banner { position: absolute; z-index: 6; display: grid; place-items: center; align-content: center; gap: 6px; border-radius: 28px;
+  opacity: 0; pointer-events: none; text-align: center;
+  background: var(--slab); box-shadow: var(--slab-edge), 0 0 0 3px var(--seat, #fff), 0 0 24px rgb(var(--seat-rgb, 255 255 255) / 0.5), 0 24px 24px rgb(0 0 0 / 0.55); }
+.sd-banner.on { opacity: 1; }
+.sd-banner b { white-space: nowrap; font: 900 34px/1.1 var(--display); color: var(--seat, var(--ink)); letter-spacing: 0.01em; }
+.sd-banner span { font: 600 16px var(--body); color: var(--ink-2); }
 
-.sd-rx-cards { left: 35px; top: 0; width: 230px; height: 290px; z-index: 1; perspective: 760px; perspective-origin: 50% 92%; }
-.sd-rx-drum {
-  left: 20px; top: 262px; width: 260px; height: 44px; z-index: 2; border-radius: 22px / 18px;
-  background: linear-gradient(180deg, #2b211a 0%, #74624f 16%, #2a201a 34%, #0c0907 70%, #1d1611 100%);
-  box-shadow: inset 0 1px 0 rgb(255 230 190 / 0.3), inset 0 -2px 0 rgb(0 0 0 / 0.6), 0 3px 0 #050302, 0 8px 12px rgb(0 0 0 / 0.5);
-}
-/* Brass bands round the drum: one in the middle, one near each end. */
-.sd-rx-drum::before, .sd-rx-drum::after, .sd-rx-band {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 12px;
-  background: linear-gradient(180deg, #6b4c14 0%, #f3dc9c 18%, #b48c40 40%, #5a3e0d 75%, #8a6826 100%);
-}
-.sd-rx-drum::before { left: 26px; }
-.sd-rx-drum::after { right: 26px; }
-.sd-rx-band { left: 124px; }
-.sd-rx-knob {
-  top: 2px; width: 40px; height: 40px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff1c0, #d4af5f 32%, #8a6424 68%, #3d2a08);
-  box-shadow: inset 0 0 0 5px rgb(0 0 0 / 0.12), 0 0 0 2px #2a1c06, 0 3px 0 #1a1004;
-}
-.sd-rx-knob.l { left: -20px; }
-.sd-rx-knob.r { right: -20px; }
-
-/* A hand card: index-card stock, the stock's colour band and tab, its ticker and name, and a "?" where stats go. */
-.sd-card { position: absolute; left: 0; top: 60px; width: 230px; height: 220px; transform-origin: 50% 100%; }
+/* ---- The Rolodex: the hand upright on a drum ---- */
+.sd-rx { position: absolute; z-index: 3; transform-origin: 0 0; }
+.sd-rx > * { position: absolute; display: block; }
+.sd-rx-cards { left: 42px; top: 168px; width: 300px; height: 250px; z-index: 1; perspective: 760px; perspective-origin: 50% 92%; }
+.sd-card { position: absolute; inset: 0; transform-origin: 50% 100%; }
 .sd-card.gone { visibility: hidden; }
 .sd-rx-cards.moving .sd-card { transition: transform 320ms var(--ease-out) 60ms; }
 .sd-rx-cards.moving .sd-card-shade { transition: opacity 320ms var(--ease-out) 60ms; }
 .sd-card-tab {
-  position: absolute; top: -24px; height: 27px; border-radius: 7px 7px 0 0; text-align: center;
-  font: 700 15px/27px var(--mono); letter-spacing: 0.02em; color: var(--stock-ink); white-space: nowrap; overflow: hidden;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.04) 50%, rgb(0 0 0 / 0.12)), var(--stock);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 1px 0 0 rgb(255 255 255 / 0.18), inset -1px 0 0 rgb(0 0 0 / 0.2);
+  position: absolute; top: -30px; height: 34px; padding-top: 6px; border-radius: 12px 12px 0 0; text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--stock) 82%, white), var(--stock));
+  color: var(--stock-ink); font: 900 14px var(--display); letter-spacing: 0.02em; white-space: nowrap; overflow: hidden;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4);
 }
-.sd-card-body {
-  position: absolute; inset: 0; border-radius: 4px 4px 8px 8px; overflow: hidden;
-  background:
-    linear-gradient(180deg, transparent 75px, rgb(186 62 48 / 0.45) 75px 76.5px, transparent 76.5px),
-    repeating-linear-gradient(180deg, transparent 0 25px, rgb(70 110 170 / 0.14) 25px 26px),
-    radial-gradient(ellipse 80% 70% at 30% 20%, #fffaf0, #f3ead6 60%, #e2d4b6);
-  box-shadow: inset 0 1px 0 #ffffff, inset 0 -3px 0 rgb(120 90 50 / 0.3), 0 0 0 1px rgb(40 25 10 / 0.45), 0 2px 0 rgb(20 10 4 / 0.5);
-}
-.sd-card-band { position: absolute; left: 0; right: 0; top: 0; height: 12px; background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(0 0 0 / 0.1)), var(--stock); }
-.sd-card-ticker { position: absolute; left: 16px; top: 26px; font: 800 30px/1 var(--display); color: #1d140a; letter-spacing: 0.01em; }
-.sd-card-name {
-  position: absolute; left: 16px; top: 59px; max-width: 150px; font: 600 16px/1 var(--body); color: #5c4530;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.sd-card-ask {
-  position: absolute; left: 16px; right: 16px; top: 88px; bottom: 28px; display: grid; place-items: center;
-  border: 1.5px dashed rgb(90 66 36 / 0.35); border-radius: 6px; background: rgb(120 90 50 / 0.05);
-}
-.sd-card-q { font: 900 62px/1 var(--display); color: rgb(70 48 24 / 0.5); text-shadow: 0 1px 0 #fff; }
-/* The shade darkening a card further back. It keeps a layer of its own: fading it on a card's layer while the drum
-   steps made the Pi raster every card of both drums again as the step began and again as it ended (35–60 ms frames). */
-.sd-card-shade { position: absolute; inset: 0; border-radius: 4px 4px 8px 8px; background: #0b0604; opacity: 0; pointer-events: none; will-change: opacity; }
+.sd-card-body { position: absolute; inset: 0; overflow: hidden; border-radius: 22px; background: var(--slab);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(0 0 0 / 0.55), 0 -10px 24px rgb(0 0 0 / 0.45); }
+.sd-card-body::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: var(--stock); }
+.sd-card-ticker { position: absolute; left: 24px; top: 32px; font: 900 50px/1 var(--display); letter-spacing: -0.02em; white-space: nowrap; }
+.sd-card-name { position: absolute; left: 26px; top: 90px; font: 600 17px var(--body); color: var(--ink-2); white-space: nowrap; }
+/* The four stats, hidden: hand cards never show a number. */
+.sd-card-bars { position: absolute; left: 24px; top: 160px; display: flex; gap: 6px; }
+.sd-card-bars i { width: 36px; height: 12px; border-radius: 6px; background: #0f1116; box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.8); }
+.sd-card-ask { position: absolute; left: 202px; top: 116px; width: 80px; height: 80px; border-radius: 50%; background: #0f1116; }
+.sd-card-ask::after { content: "?"; position: absolute; inset: 10px; display: grid; place-items: center; border-radius: 50%;
+  background: #1c1f28; box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.7); font: 900 30px var(--display); color: var(--ink-3); }
+.sd-card-shade { position: absolute; inset: -30px 0 0; border-radius: 22px; background: #07080b; opacity: 0; pointer-events: none; will-change: opacity; }
 
-/* The draining ring at the front card's top right. */
-.sd-ring { left: 205px; top: 84px; width: 46px; height: 46px; z-index: 3; }
+/* The front card's rim, lit while its player is picking. It stays put; the cards turn under it. */
+.sd-rx-rim { left: 40px; top: 166px; width: 304px; height: 216px; z-index: 1; border-radius: 24px; pointer-events: none; opacity: 0;
+  box-shadow: 0 0 0 2px rgb(var(--seat-rgb) / 0.85), 0 0 22px rgb(var(--seat-rgb) / 0.35);
+  transition: opacity 260ms var(--ease-out); }
+.sd-rx.picking .sd-rx-rim { opacity: 1; }
+
+/* The draining ring over the front card's "?": two half rings turning in clipped windows (transforms only). */
+.sd-ring { left: 244px; top: 284px; width: 80px; height: 80px; z-index: 2; opacity: 0; }
 .sd-ring > * { position: absolute; display: block; }
-.sd-ring-track { inset: 0; border-radius: 50%; border: 5px solid rgb(60 38 16 / 0.22); }
-.sd-ring-half { top: 0; width: 23px; height: 46px; overflow: hidden; }
-.sd-ring-half.r { left: 23px; }
+.sd-ring-half { top: 0; width: 40px; height: 80px; overflow: hidden; }
+.sd-ring-half.r { left: 40px; }
 .sd-ring-half.l { left: 0; }
-.sd-ring-arc { top: 0; width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--seat); }
-.sd-ring-half.r .sd-ring-arc { left: -23px; clip-path: inset(0 50% 0 0); }
+.sd-ring-arc { position: absolute; display: block; top: 0; width: 80px; height: 80px; border-radius: 50%; border: 10px solid var(--seat); }
+.sd-ring-half.r .sd-ring-arc { left: -40px; clip-path: inset(0 50% 0 0); }
 .sd-ring-half.l .sd-ring-arc { left: 0; clip-path: inset(0 0 0 50%); }
-.sd-ring-hub { left: 19px; top: 19px; width: 8px; height: 8px; border-radius: 50%; background: var(--seat); box-shadow: 0 0 0 1.5px rgb(40 25 10 / 0.5); }
+.sd-ring-q { inset: 10px; display: grid; place-items: center; font: 900 30px var(--display); color: var(--ink); }
 
-/* ---- The astrolabe ---- */
-.sd-dial { position: absolute; z-index: 2; }
-.sd-dial > * { position: absolute; inset: 0; display: block; }
-.sd-dial svg { display: block; }
-.sd-dial-rete { transform-origin: 50% 50%; }
-.sd-dial-dim { inset: 8px; border-radius: 50%; background: rgb(12 7 3 / 0.55); transition: opacity 500ms var(--ease-out); pointer-events: none; }
-.sd-dial.awake .sd-dial-dim { opacity: 0; }
-.sd-dial-sector { fill: #ffe9a8; opacity: 0; transition: opacity 360ms var(--ease-out); }
-.sd-dial-sector.lit { opacity: 0.62; }
-.sd-dial-ink, .sd-dial-lit { font-family: var(--display); font-weight: 700; letter-spacing: 0.03em; text-anchor: middle; }
-.sd-dial-ink { fill: #3a2606; }
-.sd-dial-lit { fill: rgb(255 246 214 / 0.6); }
-.sd-dial-rule path { stroke: #3a2606; stroke-width: 1.5; }
-.sd-dial-ticks path { stroke: rgb(232 205 133 / 0.7); stroke-width: 1.2; }
-.sd-dial-engraving { fill: none; stroke: rgb(232 205 133 / 0.26); stroke-width: 1; }
+.sd-rx-drum {
+  left: 0; top: 380px; width: 384px; height: 104px; z-index: 3; border-radius: 52px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.2), transparent 22%, transparent 70%, rgb(0 0 0 / 0.5)),
+    linear-gradient(90deg, #15171d, #2e323e 30%, #3a3f4d 50%, #2e323e 70%, #15171d);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.6), 0 24px 24px rgb(0 0 0 / 0.55);
+}
+.sd-rx-drum::before, .sd-rx-drum::after {
+  content: ""; position: absolute; top: 8px; width: 88px; height: 88px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, var(--seat-hi), var(--seat) 40%, var(--seat-deep) 85%);
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.3), 0 0 22px rgb(var(--seat-rgb) / 0.55);
+}
+.sd-rx-drum::before { left: 8px; }
+.sd-rx-drum::after { right: 8px; }
+.sd-rx-axle { position: absolute; left: 110px; right: 110px; top: 44px; height: 16px; border-radius: 8px; background: var(--well);
+  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.9), 0 1px 0 rgb(255 255 255 / 0.08); }
+.sd-rx-foot { left: 60px; top: 474px; width: 264px; height: 40px; z-index: 1; border-radius: 0 0 24px 24px;
+  background: linear-gradient(180deg, #1a1c24, #121319); box-shadow: 0 18px 24px rgb(0 0 0 / 0.6); }
+
+/* The plinth's line: TAP TO PLAY, LAST TURN (hot), CARD DOWN (quiet). */
+.sd-rx-note { left: 0; width: 384px; top: 538px; z-index: 3; display: flex; justify-content: center; }
+.sd-rx-note span { position: relative; padding: 12px 26px; border-radius: 999px; white-space: nowrap; font: 900 20px/1.2 var(--display); letter-spacing: 0.04em; }
+.sd-rx-note span:empty { display: none; }
+.sd-rx-note .tap { background: var(--slab); color: var(--seat); box-shadow: var(--slab-edge), 0 0 0 2px rgb(var(--seat-rgb) / 0.8), 0 10px 20px rgb(0 0 0 / 0.5); }
+.sd-rx-note .hot { color: #12100c; background: linear-gradient(180deg, var(--seat-hi), var(--seat) 50%, var(--seat-deep));
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.5), inset 0 -3px 0 rgb(0 0 0 / 0.2), 0 10px 24px rgb(var(--seat-rgb) / 0.55); }
+.sd-rx-note .hot::after { content: ""; position: absolute; inset: 0; border-radius: 999px; box-shadow: 0 0 24px rgb(var(--seat-rgb) / 0.9);
+  animation: sd-breathe 0.9s ease-in-out infinite alternate; }
+.sd-rx-note .quiet { padding: 10px 22px; background: #171a22; color: var(--ink-3); box-shadow: var(--slab-edge); font-size: 16px; }
+@keyframes sd-breathe { from { opacity: 0.15; } to { opacity: 1; } }
+
+/* ---- The stat wheel: four quarters in roll order, clockwise from the top left ---- */
+.sd-wheel { position: absolute; z-index: 3; }
+.sd-wheel > * { position: absolute; display: block; }
+.sd-wheel-disc { border-radius: 50%; background: var(--well); box-shadow: 0 2px 0 rgb(255 255 255 / 0.08), inset 0 4px 8px rgb(0 0 0 / 0.8); }
+.sd-q { background: var(--slab); box-shadow: var(--slab-edge); }
+.sd-q::after { content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity 360ms var(--ease-out);
+  background: linear-gradient(160deg, #ffffff, #e4e8f2 60%, #b9c0d0); box-shadow: inset 0 1px 0 #fff, 0 0 24px rgb(255 255 255 / 0.45); }
+.sd-q.lit::after { opacity: 1; }
+.sd-q.lit { transform: scale(1.06); transition: transform 360ms var(--ease-spring); }
+.sd-wheel-pointer { width: 0; height: 0; }
+.sd-wheel-pointer::before { content: ""; position: absolute; left: -9px; border: 9px solid transparent; border-top: 0;
+  border-bottom: 34px solid #fff; top: var(--tip); filter: drop-shadow(0 3px 4px rgb(0 0 0 / 0.6)); }
+.sd-wheel-hub { display: grid; place-items: center; border-radius: 50%;
+  background: linear-gradient(180deg, #353a47, #1f222b); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 6px 12px rgb(0 0 0 / 0.7); }
+.sd-wheel-hub::after { content: "?"; font: 900 18px var(--display); color: var(--ink-3); transition: opacity 300ms var(--ease-out); }
+.sd-wheel.awake .sd-wheel-hub::after { opacity: 0; }
+.sd-wheel-label { white-space: nowrap; font: 900 15px/1 var(--display); letter-spacing: 0.03em; color: var(--ink-3); }
+.sd-wheel-label.l { text-align: right; }
+.sd-wheel-label::before { content: attr(data-text); position: absolute; inset: 0 0 auto; color: #fff; opacity: 0; transition: opacity 360ms var(--ease-out); }
+.sd-wheel-label::after { content: ""; display: block; height: 4px; margin-top: 7px; border-radius: 2px; background: #fff;
+  box-shadow: 0 0 12px rgb(255 255 255 / 0.7); transform: scaleX(0); transition: transform 360ms var(--ease-out); }
+.sd-wheel-label.lit::before { opacity: 1; }
+.sd-wheel-label.lit::after { transform: scaleX(1); }
+[data-orientation="portrait"] .sd-wheel-hint { display: none; }
+.sd-wheel-hint { margin: 0; text-align: center; font: 600 15px/1.2 var(--body); color: var(--ink-3); transition: opacity 300ms var(--ease-out); }
+.sd-wheel.awake .sd-wheel-hint { opacity: 0; }
 
 /* ---- The played cards ---- */
-.sd-reveal { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
-.sd-rest { position: absolute; display: block; border-radius: 10px; box-shadow: inset 0 0 0 1.5px rgb(214 178 100 / 0.22), inset 0 0 0 6px rgb(0 0 0 / 0.12); }
-.sd-slot { position: absolute; perspective: 1100px; }
+.sd-reveal { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.sd-reveal > * { position: absolute; }
+.sd-rest { display: grid; place-items: center; border-radius: 24px; background: var(--well); text-align: center;
+  box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.85), 0 1px 0 rgb(255 255 255 / 0.06); }
+.sd-rest-seat { font: 900 44px var(--display); color: #191c24; }
+.sd-rest-wait { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; padding: 0 18px;
+  font: 700 15px/1.3 var(--body); color: var(--ink-3); opacity: 0; transition: opacity 260ms var(--ease-out); }
+.sd-rest-wait b { display: block; margin-bottom: 4px; font: 900 17px var(--display); color: var(--seat); letter-spacing: 0.04em; }
+.sd-rest.waiting .sd-rest-wait { opacity: 1; }
+.sd-rest.waiting .sd-rest-seat { opacity: 0; }
+
+.sd-slot { perspective: 1100px; z-index: 1; }
+.sd-rc-lift { position: absolute; inset: 0; }
 .sd-rc { position: absolute; inset: 0; transform-style: preserve-3d; }
 .sd-rc.down { transform: rotateY(180deg); }
-.sd-rc-back, .sd-rc-face { position: absolute; inset: 0; border-radius: 10px; backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden; }
-.sd-rc-back, .sd-rc-face {
-  box-shadow: inset 0 0 0 1px rgb(120 84 36 / 0.45), inset 0 1px 0 rgb(255 252 240 / 0.9), inset 0 -3px 0 rgb(110 76 30 / 0.3), 0 3px 0 #5a4020, 0 10px 18px rgb(0 0 0 / 0.5);
-}
-/* The back: cream paper folded like an envelope, its flap closed with a wax seal. */
-.sd-rc-back {
-  transform: rotateY(180deg);
+.sd-rc-back, .sd-rc-face { position: absolute; inset: 0; overflow: hidden; border-radius: 24px; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.sd-rc-back { transform: rotateY(180deg) rotate(-2deg);
   background:
-    radial-gradient(ellipse 90% 70% at 30% 20%, rgb(255 252 236 / 0.6), transparent 70%),
-    repeating-linear-gradient(8deg, rgb(120 84 36 / 0.03) 0 1px, transparent 1px 6px),
-    linear-gradient(180deg, #f2e6c8, #e4d3aa 70%, #d6c08e);
-}
-.sd-rc-back > * { position: absolute; display: block; }
-.sd-rc-back::before, .sd-rc-flap { content: ""; position: absolute; left: 0; right: 0; top: 0; }
-.sd-rc-back::before { height: 61%; clip-path: polygon(0 0, 100% 0, 50% 100%); background: rgb(110 76 30 / 0.4); }
-.sd-rc-flap { height: 59%; clip-path: polygon(0 0, 100% 0, 50% 100%); background: linear-gradient(180deg, #f6ecd2, #e8d8b2); }
-.sd-rc-back::after { content: ""; position: absolute; inset: 10px; border-radius: 6px; border: 1.5px solid var(--seat); opacity: 0.75; }
-.sd-rc-wax {
-  left: 50%; top: 59%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #e09a78, #9a3019 45%, #4c1006);
-  box-shadow: inset 0 0 0 6px rgb(0 0 0 / 0.12), inset 0 0 0 7.5px rgb(255 190 160 / 0.25), 0 2px 0 rgb(40 10 4 / 0.6);
-}
-.sd-rc-wax::after {
-  content: ""; position: absolute; inset: 15px; background: rgb(255 200 170 / 0.5);
-  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
-}
-.sd-rc-auto {
-  left: 50%; top: 80%; transform: translate(-50%, -50%); padding: 7px 14px; border-radius: 4px;
-  font: 800 18px/1 var(--display); letter-spacing: 0.14em; color: #a3271b; border: 2.5px solid #a3271b; opacity: 0.85;
-}
-/* The face: aged manuscript paper with ink rules. */
-.sd-rc-face {
-  display: flex; flex-direction: column; padding: 16px 18px;
-  background:
-    radial-gradient(ellipse 70% 50% at 25% 15%, rgb(255 252 236 / 0.7), transparent 70%),
-    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 60%, rgb(150 104 44 / 0.35)),
-    repeating-linear-gradient(180deg, transparent 0 27px, rgb(110 76 30 / 0.12) 27px 28px),
-    linear-gradient(180deg, #f8edd2, #ecdbb2 70%, #dfc898);
-}
-.sd-rc.lost .sd-rc-face::after { content: ""; position: absolute; inset: 0; background: rgb(40 22 8 / 0.2); }
-.sd-rc-head { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 2px 26px 0; text-align: center; }
-.sd-rc-ticker { font: 800 26px/1 var(--display); color: #24170a; letter-spacing: 0.02em; }
-.sd-rc-name {
-  font: 500 18px/1.1 var(--body); font-stretch: 82%; letter-spacing: 0.03em; color: #5e4222;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-}
-.sd-rc-band {
-  display: block; height: 7px; margin: 10px -6px 8px; border-radius: 4px;
-  background: linear-gradient(90deg, transparent, var(--stock) 7%, var(--stock) 93%, transparent);
-  opacity: 0.88;
-}
-.sd-rc-feature {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0 10px;
-  border-bottom: 1.5px solid rgb(110 76 30 / 0.4);
-}
-.sd-rc-feature .sd-rc-label { color: #8a4c12; letter-spacing: 0.1em; }
-.sd-rc-value { font: 700 30px/1 var(--mono); color: #1d1208; letter-spacing: -0.01em; }
-.sd-rc-label { font: 700 14px/1 var(--display); letter-spacing: 0.03em; color: #6b5030; }
-.sd-rc-rows { list-style: none; margin: 0; padding: 0; }
-.sd-rc-rows li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 0 6px; border-bottom: 1px solid rgb(110 76 30 / 0.2); }
-.sd-rc-num { font: 500 15px/1 var(--mono); color: #2a1a0a; }
+    radial-gradient(ellipse 80% 50% at 30% 10%, rgb(255 255 255 / 0.35), transparent 70%),
+    linear-gradient(160deg, var(--seat-hi), var(--seat) 35%, var(--seat-deep));
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.5), inset 0 -4px 0 rgb(0 0 0 / 0.25), 0 24px 24px rgb(0 0 0 / 0.55), 0 0 24px rgb(var(--seat-rgb) / 0.3); }
+.sd-rc-back::before { content: ""; position: absolute; inset: 14px; border-radius: 16px; background: rgb(0 0 0 / 0.14); box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.25); }
+.sd-rc-q { position: absolute; inset: 0; display: grid; place-items: center; font: 900 92px var(--display); color: rgb(255 255 255 / 0.9); text-shadow: 0 4px 0 rgb(0 0 0 / 0.2); }
+.sd-rc-auto { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px;
+  background: rgb(10 11 15 / 0.8); color: #fff; font: 900 14px var(--display); letter-spacing: 0.08em; }
+.sd-rc-face { background: var(--slab); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.6), 0 24px 24px rgb(0 0 0 / 0.55); }
+.sd-rc-head { height: 74px; padding: 14px 16px 0; background: var(--stock); color: var(--stock-ink); }
+.sd-rc-ticker { display: block; font: 900 28px/1 var(--display); white-space: nowrap; }
+.sd-rc-name { font: 700 15px var(--body); opacity: 0.8; white-space: nowrap; }
+.sd-rc-feature { padding: 14px 16px 10px; }
+.sd-rc-label { font: 900 14px var(--display); color: var(--ink-2); letter-spacing: 0.04em; }
+.sd-rc-value { display: block; font: 900 34px/1.15 var(--display); letter-spacing: -0.03em; white-space: nowrap; }
+.sd-rc-rows { list-style: none; margin: 0; padding: 4px 16px 0; }
+.sd-rc-rows li { display: flex; justify-content: space-between; padding: 6px 0; font: 500 14px var(--mono); color: var(--ink-3); box-shadow: 0 -1px 0 rgb(255 255 255 / 0.05); }
+.sd-rc-rows b { font-weight: 500; color: var(--ink-2); }
+/* The round's outcome: the winner's rim and glow, the loser's shade, the winner's badge. */
+.sd-rc-glow { position: absolute; inset: 0; border-radius: 24px; opacity: 0;
+  box-shadow: 0 0 0 3px var(--seat), 0 0 24px rgb(var(--seat-rgb) / 0.6), 0 24px 24px rgb(0 0 0 / 0.5); }
+.sd-rc-dim { position: absolute; inset: 0; border-radius: 24px; background: rgb(6 7 10 / 0.5); opacity: 0; }
+.sd-rc-glow, .sd-rc-dim, .sd-rc-badge { transition: opacity 360ms var(--ease-out); }
+.sd-slot.won .sd-rc-glow, .sd-slot.lost .sd-rc-dim { opacity: 1; }
+.sd-slot.won .sd-rc-value { color: var(--seat); }
+.sd-rc-badge { position: absolute; z-index: 2; left: 50%; top: -22px; padding: 7px 16px; border-radius: 999px; white-space: nowrap; opacity: 0;
+  transform: translateX(-50%); font: 900 15px var(--display); letter-spacing: 0.04em; color: #12100c;
+  background: linear-gradient(180deg, var(--seat-hi), var(--seat)); box-shadow: 0 6px 18px rgb(var(--seat-rgb) / 0.6); }
+.sd-slot.won .sd-rc-badge { opacity: 1; }
 
-/* Wax seals at each card's outer top corner. */
-.sd-seal { position: absolute; top: -40px; width: 120px; height: 120px; z-index: 3; }
-.sd-seal svg { display: block; }
-.sd-slot.s0 .sd-seal { left: -46px; transform: rotate(-8deg); }
-.sd-slot.s1 .sd-seal { right: -46px; transform: rotate(8deg); }
-.sd-seal-word { font-family: var(--display); font-weight: 800; letter-spacing: 0.04em; text-anchor: middle; }
-
-.sd-tie {
-  position: absolute; z-index: 6; transform: translate(-50%, -50%); opacity: 0; white-space: nowrap;
-  padding: 14px 24px; border-radius: 10px; font: 800 22px/1 var(--display); letter-spacing: 0.08em; color: var(--brass-ink);
-  background: linear-gradient(180deg, #f3dc9c, var(--brass) 40%, var(--brass-lo));
-  box-shadow: inset 0 1px 0 var(--brass-hi), inset 0 -3px 0 var(--brass-edge), 0 0 0 2px #3e2a06, 0 4px 0 #2a1c04, 0 10px 16px rgb(0 0 0 / 0.55);
-  text-shadow: 0 1px 0 rgb(255 244 210 / 0.6);
-}
-.sd-tie.on { opacity: 1; }
-
-/* ---- The standing ---- */
-.sd-tally {
-  position: absolute; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
-  border-radius: 10px;
-  background: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.02) 0 1px, transparent 1px 5px), linear-gradient(180deg, #2c2119, #120c09);
-  box-shadow: inset 0 1px 0 rgb(214 178 100 / 0.55), inset 0 -2px 0 rgb(0 0 0 / 0.6), 0 0 0 1.5px #070403, 0 4px 0 #050302, 0 8px 14px rgb(0 0 0 / 0.5);
-}
-.sd-tally-name { font: 800 15px/1 var(--display); letter-spacing: 0.06em; color: var(--seat); text-shadow: 0 0 6px rgb(var(--lamp) / 0.45); }
-.sd-tally-pips { display: flex; gap: 10px; }
-.sd-pip {
-  display: block; width: 18px; height: 18px; border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #2c231c, #0b0705);
-  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.85), 0 1px 0 rgb(255 220 170 / 0.15);
-}
-.sd-pip.lit {
-  background: radial-gradient(circle at 36% 30%, #ffffff, var(--seat-hi) 22%, var(--seat) 58%, rgb(var(--lamp) / 0.55));
-  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 0.55), 0 0 7px var(--seat);
-}
-.sd-round {
-  position: absolute; z-index: 5; display: grid; place-items: center; border-radius: 7px;
-  font: 800 15px/1 var(--display); letter-spacing: 0.1em; color: var(--brass-ink);
-  background: linear-gradient(180deg, #f1d996, var(--brass) 45%, var(--brass-lo));
-  box-shadow: inset 0 1px 0 var(--brass-hi), inset 0 -2px 0 var(--brass-edge), 0 0 0 1.5px #3e2a06, 0 3px 0 #2a1c04, 0 6px 10px rgb(0 0 0 / 0.5);
-  text-shadow: 0 1px 0 rgb(255 244 210 / 0.55);
-}
-.sd-banner {
-  position: absolute; z-index: 20; display: grid; place-items: center; opacity: 0; border-radius: 18px;
-  background:
-    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 4px, rgb(0 0 0 / 0.04) 4px 5px, transparent 5px 9px),
-    radial-gradient(ellipse 60% 80% at 30% 20%, rgb(255 248 220 / 0.55), transparent 70%),
-    linear-gradient(180deg, #f6e3a4, var(--brass) 38%, var(--brass-mid) 70%, var(--brass-lo));
-  box-shadow:
-    inset 0 2px 0 var(--brass-hi), inset 0 -4px 0 var(--brass-edge), 0 0 0 3px #3e2a06, 0 7px 0 #2a1c04, 0 16px 26px rgb(0 0 0 / 0.6);
-}
-.sd-banner.on { opacity: 1; }
-.sd-banner::before {
-  content: ""; position: absolute; inset: 11px; border-radius: 10px; border: 2px solid rgb(74 55 8 / 0.5);
-  box-shadow: 0 1px 0 rgb(255 244 210 / 0.5), inset 0 1px 0 rgb(255 244 210 / 0.4);
-}
-.sd-banner::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 20px; height: 3px; border-radius: 2px; background: var(--brass-edge); }
-.sd-banner[data-winner="0"]::after { background: var(--p1); box-shadow: 0 0 6px var(--p1); }
-.sd-banner[data-winner="1"]::after { background: var(--p2); box-shadow: 0 0 6px var(--p2); }
-.sd-banner-text {
-  font: 900 46px/1 var(--display); letter-spacing: 0.04em; color: #3a2806; white-space: nowrap;
-  text-shadow: 0 1px 0 rgb(255 244 210 / 0.75), 0 -1px 0 rgb(40 26 2 / 0.45);
-}
-.sd[data-orientation="portrait"] .sd-banner-text { font-size: 40px; }
+/* The line under the cards: last round during the pick, this round's result at the reveal. */
+.sd-call { display: grid; place-items: center; align-content: center; text-align: center; opacity: 0; }
+.sd-call.on { opacity: 1; }
+.sd-call.recall { border-radius: 18px; background: #0f1116; box-shadow: inset 0 3px 6px rgb(0 0 0 / 0.8);
+  font: 600 15px/1.3 var(--body); color: var(--ink-3); }
+.sd-call.recall b { font: 900 14px/1.4 var(--display); letter-spacing: 0.06em; color: var(--ink-2); }
+.sd-call.recall em { font-style: normal; font-weight: 700; color: var(--seat, var(--ink)); }
+.sd-call.result b { white-space: nowrap; font: 900 30px/1.2 var(--display); letter-spacing: 0.01em; color: var(--seat, var(--ink)); }
+.sd-call.result span { font: 600 16px var(--body); color: var(--ink-2); }
+[data-orientation="portrait"] .sd-call.result b { font-size: 22px; }
+[data-orientation="portrait"] .sd-call.result span { font-size: 14px; }
+[data-orientation="portrait"] .sd-call.recall { line-height: 1.2; }
