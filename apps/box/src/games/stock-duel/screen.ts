@@ -15,11 +15,11 @@ import "./stock-duel.css";
 import type { BoxState } from "../../core/types.ts";
 import { shiftPoint, shiftRect, type Layout, type Point, type Rect } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
 import { playerLabel, playerName } from "../../core/badges.ts";
 import { el, place } from "../../screen/shell/dom.ts";
-import { SEATS } from "@egb/sdk";
+import { DUEL_SEATS } from "@egb/sdk";
 import { DEAL_MS, frontIndex, frontRemainingMs } from "./rules.ts";
 import { createScene, type ScenePlaces } from "./scene.ts";
 import { createRolodex, type NoteTone, type Placement } from "./rolodex.ts";
@@ -88,7 +88,7 @@ const PORTRAIT: Geometry = {
 
 /** Each seat's player as the band shows them: its ENS name (the badge's own until read), or PLAYER n before one sits. */
 function playersOf(state: BoxState): readonly [Player, Player] {
-  return SEATS.map((seat): Player => {
+  return DUEL_SEATS.map((seat): Player => {
     const badge = state.seats[seat]?.badge;
     const ens = state.seats[seat]?.ens ?? null;
     return badge ? { name: playerName(badge, ens), label: playerLabel(badge, ens) } : { name: `PLAYER ${seat + 1}`, label: `PLAYER ${seat + 1}` };
@@ -96,7 +96,7 @@ function playersOf(state: BoxState): readonly [Player, Player] {
 }
 
 /** The deal drops one card on each drum in turn, the two drums half a beat apart. */
-function dealDelays(seat: Seat, cards: number, elapsedMs: number): number[] {
+function dealDelays(seat: DuelSeat, cards: number, elapsedMs: number): number[] {
   const beat = (DEAL_MS - 600) / Math.max(1, cards);
   return Array.from({ length: cards }, (_, k) => k * beat + seat * (beat / 2) - elapsedMs);
 }
@@ -135,7 +135,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   const dial = createDial(geo.dial.centre, geo.dial.radius, ctx.sound);
   const drums = [createRolodex(0, geo.rolodex[0], ctx.sound), createRolodex(1, geo.rolodex[1], ctx.sound)] as const;
   let players: readonly [Player, Player] = playersOf(ctx.link.state());
-  const reveal = createReveal(geo.reveal, (seat: Seat) => players[seat].label, ctx.sound);
+  const reveal = createReveal(geo.reveal, (seat: DuelSeat) => players[seat].label, ctx.sound);
   const standing = createStanding(geo.standing);
   const premarket = createPremarket(geo.premarket);
   root.append(scene.el, dial.el, reveal.el, drums[0].el, drums[1].el, premarket.el, ...standing.els);
@@ -152,7 +152,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     const s = last;
     if (!alive || !s || s.phase !== "pick") return;
     const now = ctx.link.now();
-    for (const seat of SEATS) {
+    for (const seat of DUEL_SEATS) {
       drums[seat].turnTo(frontIndex(s, seat, now));
       drums[seat].drain(frontRemainingMs(s, seat, now) / s.dwellMs);
     }
@@ -165,7 +165,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   /** What each plinth says: the waiting seat is told to tap and warned once its partner has played (its well says so
    * too); a seat whose card is down is told so until the reveal. */
   function notes(s: StockDuelState): void {
-    for (const seat of SEATS) {
+    for (const seat of DUEL_SEATS) {
       const picking = s.phase === "pick" && s.played[seat] === null;
       const down = (s.phase === "pick" || s.phase === "dial") && s.played[seat] !== null;
       const last = picking && s.deadline !== null;
@@ -191,7 +191,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   function draw(s: StockDuelState): void {
     const now = ctx.link.now();
     reveal.clear(false);
-    for (const seat of SEATS) {
+    for (const seat of DUEL_SEATS) {
       const front = frontIndex(s, seat, now);
       if (s.phase === "deal") drums[seat].deal(s.hands[seat], front, dealDelays(seat, s.hands[seat].length, now - s.phaseAt));
       else drums[seat].show(s.hands[seat], front, false, s.played[seat]);
@@ -199,7 +199,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
     }
     const record = s.history[s.history.length - 1];
     if (s.phase === "pick" || s.phase === "dial") {
-      for (const seat of SEATS) if (s.played[seat] !== null) reveal.place(seat, s.auto[seat], null);
+      for (const seat of DUEL_SEATS) if (s.played[seat] !== null) reveal.place(seat, s.auto[seat], null);
       reveal.recall(record ?? null, s.history.length);
     }
     if (s.phase === "dial" && s.stat !== null) void dial.spin(s.stat, now - s.phaseAt);
@@ -218,7 +218,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
   function step(prev: StockDuelState, s: StockDuelState): void {
     const now = ctx.link.now();
     // Cards put down by this change: each lifts off its drum and slides face down onto the blotter.
-    for (const seat of SEATS) {
+    for (const seat of DUEL_SEATS) {
       const card = s.played[seat];
       if (prev.played[seat] !== null || card === null) continue;
       reveal.place(seat, s.auto[seat], drums[seat].lift(card));
@@ -234,7 +234,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
           reveal.clear(true);
           reveal.recall(s.history[s.history.length - 1] ?? null, s.history.length);
           dial.rest();
-          for (const seat of SEATS) drums[seat].show(s.hands[seat], frontIndex(s, seat, now), true, null);
+          for (const seat of DUEL_SEATS) drums[seat].show(s.hands[seat], frontIndex(s, seat, now), true, null);
         }
         standing.set(s.score, s.round, false);
         return;
@@ -253,7 +253,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
         return;
       }
       case "over":
-        for (const seat of SEATS) drums[seat].show(s.hands[seat], 0, true, null);
+        for (const seat of DUEL_SEATS) drums[seat].show(s.hands[seat], 0, true, null);
         standing.set(s.score, s.round, false);
         standing.finish(s.winner, true);
         scene.hold(s.winner);

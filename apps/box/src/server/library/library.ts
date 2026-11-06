@@ -14,7 +14,7 @@
 // - Listeners hear only real changes to the list.
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { manifestProblems, SEATS, type GameManifest } from "@egb/sdk";
+import { DUEL_SEATS, manifestProblems, type GameManifest } from "@egb/sdk";
 import { TEAM_GAMES } from "../../core/catalogue.ts";
 import type { LibraryPort } from "../../core/ports.ts";
 import type { GameInfo } from "../../core/types.ts";
@@ -58,6 +58,8 @@ export interface LibraryOptions {
   readonly log: (text: string) => void;
   /** What the store offers. Absent: this Box has no store games. */
   readonly store?: StoreIndex | null;
+  /** How many this Box seats, for a store game (EGB_STATIONS): two when absent. */
+  readonly seats?: number;
 }
 
 /** The URL a built game's cartridge art is served at; `v` changes when the file does, so the kiosk never shows a stale one. */
@@ -109,10 +111,11 @@ async function builtEntry(dir: string, sealed: ReadonlyMap<string, string>): Pro
 }
 
 /** A store game as the rack shows it: no folder and no manifest until its bundle is fetched for a match. */
-function storeEntry(listing: RackListing, sealed: ReadonlyMap<string, string>): LibraryEntry {
+function storeEntry(listing: RackListing, sealed: ReadonlyMap<string, string>, seats: number): LibraryEntry {
   const { id, title, stakes, hash, players } = listing;
-  const problem = sealed.get(id) ?? (players.min > SEATS.length ? `it needs ${players.min} players, and this Box seats ${SEATS.length}` : null);
-  const info: GameInfo = { id, kind: "store", title, players: SEATS.length, minutes: 0, stakes, tier: "judged", ready: problem === null, sealed: problem, icon: FALLBACK_ICON, manifest: null, bundle: hash };
+  const problem = sealed.get(id) ?? (players.min > seats ? `it needs ${players.min} players, and this Box seats ${seats}` : null);
+  const most = Math.min(players.max, seats);
+  const info: GameInfo = { id, kind: "store", title, players: most, ...(players.min < most ? { minPlayers: players.min } : {}), minutes: 0, stakes, tier: "judged", ready: problem === null, sealed: problem, icon: FALLBACK_ICON, manifest: null, bundle: hash };
   return { info, dir: null, manifest: null, problem };
 }
 
@@ -124,6 +127,7 @@ async function builtEntries(gamesDir: string, sealed: ReadonlyMap<string, string
 }
 
 export function createLibrary(options: LibraryOptions): Library {
+  const { seats = DUEL_SEATS.length } = options;
   let entries: readonly LibraryEntry[] = TEAM_GAMES.map(catalogueEntry);
   let games: readonly GameInfo[] = TEAM_GAMES;
   let snapshot = listKey(games);
@@ -171,7 +175,7 @@ export function createLibrary(options: LibraryOptions): Library {
     const listed = options.store?.listings() ?? [];
     for (const id of passing) sealed.delete(id);
     passing.clear();
-    const store = listed.filter((l) => !taken.has(l.id)).map((l) => storeEntry(l, sealed));
+    const store = listed.filter((l) => !taken.has(l.id)).map((l) => storeEntry(l, sealed, seats));
     leftOut = [...leftOut, ...listed.flatMap((l) => (taken.has(l.id) ? [[`store:${l.id}`, `the store's ${l.id} is left out: another game already uses its id`] as [string, string]] : []))];
     // A seal lasts as long as the game: one removed (or never there) forgets it.
     const here = [...built, ...store];

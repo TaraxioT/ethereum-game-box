@@ -70,6 +70,7 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "booted":
     case "start":
     case "play":
+    case "begin":
     case "back":
     case "rematch":
     case "home":

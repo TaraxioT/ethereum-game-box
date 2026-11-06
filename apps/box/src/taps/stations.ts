@@ -3,11 +3,11 @@
 // gets LINK_GRACE_MS before it counts as lost: on a lossy radio the receiver can miss a few packets in a row, and
 // failing a tap then would throw away a chip that is still being read.
 //
-// Seats go by link order: the first station to link is Player 1's, the second Player 2's, any later one waits on the
-// bench. A seat is kept through a dropped link's grace; once its station is lost, the seat goes to the bench's
-// earliest-linked station. The receiver's `state` lists stations in the order they first reached it, so a reopened
+// There's a seat for each known station, up to four, and seats go by link order: the first station to link is Player
+// 1's, the second Player 2's, and one linked with every seat taken waits on the bench. A seat is kept through a dropped
+// link's grace; once its station is lost, the seat goes to the bench's earliest-linked station. The receiver's `state` lists stations in the order they first reached it, so a reopened
 // port seats them as before.
-import type { Seat } from "@egb/sdk";
+import { SEATS, type Seat } from "@egb/sdk";
 import type { Clock, TimerHandle } from "../core/ports.ts";
 import type { ReceiverEvent, StationId } from "./lines.ts";
 import { DEFAULT_RADIO_US } from "./receiver-clock.ts";
@@ -73,20 +73,20 @@ export class Stations {
   private readonly clock: Clock;
   private readonly hooks: StationHooks;
   private readonly live = new Map<StationId, Live>();
-  /** Player 1's station, then Player 2's. */
-  private readonly seats: [StationId | null, StationId | null] = [null, null];
+  /** Each seat's station, Player 1's first. */
+  private readonly seats: (StationId | null)[];
   private linkCount = 0;
 
-  /** `known`: stations listed before any links (the fake's); seats still go by link order. */
+  /** `known`: stations listed before any links (the fake's), a seat each; seats still go by link order. */
   constructor(known: readonly StationId[], clock: Clock, hooks: StationHooks) {
     this.clock = clock;
     this.hooks = hooks;
+    this.seats = known.slice(0, SEATS.length).map(() => null);
     for (const st of known) this.station(st);
   }
 
   seatOf(st: StationId): Seat | null {
-    const i = this.seats.indexOf(st);
-    return i === 0 || i === 1 ? i : null;
+    return SEATS.find((seat) => this.seats[seat] === st) ?? null;
   }
 
   stationAt(seat: Seat): StationId | undefined {
@@ -277,7 +277,7 @@ export class Stations {
   private fillSeats(): boolean {
     const waiting = this.bench().sort((a, b) => this.station(a).linkedSeq - this.station(b).linkedSeq);
     let moved = false;
-    for (const seat of [0, 1] as const) {
+    for (const seat of this.seats.keys()) {
       if (this.seats[seat] !== null) continue;
       const st = waiting.shift();
       if (!st) break;

@@ -30,6 +30,7 @@ function box(patch: Partial<BoxState>): BoxState {
     games: TEAM_GAMES,
     focus: "quick-draw",
     seats: [EMPTY, EMPTY],
+    fewest: 2,
     chain: { block: 50, blockAt: NOW, blockMs: 12_000, gasGwei: 1 },
     fetching: false,
     stake: 10,

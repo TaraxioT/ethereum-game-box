@@ -5,7 +5,7 @@
 // On the result, a seated badge's tap is a rematch, but only REMATCH_TAP_MS after the game ended: a chip left on the
 // reader, or slammed down a moment late, mustn't skip the result. A store match's Result waits on the judge, long past
 // its game's end, so there it counts from when Result opened.
-import type { Seat } from "@egb/sdk";
+import { isDuelSeat, type Seat } from "@egb/sdk";
 import type { TapPlan } from "./ports.ts";
 import type { BoxState, Match } from "./types.ts";
 
@@ -28,6 +28,7 @@ function gamePlan(state: PlanInput, match: Match | null, seat: Seat): TapPlan {
   if (play.game === "built") return state.games.find((g) => g.id === play.id)?.manifest?.taps ?? "identify";
   // A store game's bundle says, in its manifest.
   if (play.game === "store") return play.taps;
+  if (!isDuelSeat(seat)) return "none";
   // Quick Draw judges by the touch: who touched, and when.
   if (play.game === "quick-draw") return play.state.phase !== "done" && play.state.taps[seat] === null ? "identify" : "none";
   // Stock Duel's tap plays a card, and its roll picks the stat.
@@ -42,20 +43,21 @@ export function tapPlan(state: PlanInput, seat: Seat, now: number): TapPlan {
     case "judging":
       return "none";
     case "result":
-      return mine.badge && rematchOpen(state.match, now) ? "identify" : "none";
+      return mine?.badge && rematchOpen(state.match, now) ? "identify" : "none";
     case "attract":
-    case "home":
-    case "join":
     case "lobby":
       return "identify";
+    case "home":
+    case "join":
+      return mine ? "identify" : "none";
     case "stake":
-      return mine.badge && !mine.signed ? "identify" : "none";
+      return mine?.badge && !mine.signed ? "identify" : "none";
     case "playing":
-      return mine.badge ? gamePlan(state, state.match, seat) : "none";
+      return mine?.badge ? gamePlan(state, state.match, seat) : "none";
     case "refund": {
       const { match } = state;
-      const open = match !== null && !match.refunded[seat] && now >= match.refundAt;
-      return mine.badge && open ? "identify" : "none";
+      const open = match !== null && !match.refunded.every(Boolean) && now >= match.refundAt;
+      return mine?.badge && open ? "identify" : "none";
     }
   }
 }

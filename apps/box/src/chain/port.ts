@@ -19,6 +19,7 @@ import {
   stakeDigest,
   usdc,
 } from "@egb/shared/names";
+import { DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import type { Address, Hex } from "viem";
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
 import { chainLabel } from "../core/catalogue.ts";
@@ -73,14 +74,22 @@ function label(game: string): string {
   return found;
 }
 
+/** `DuelPot` and `BoxResults` hold two: a team game's two players, whatever an order can list. */
+function pair(badges: readonly Address[]): readonly [Address, Address] {
+  const [a, b] = badges;
+  if (!a || !b || badges.length !== 2) throw new Error("a team game's match has two players");
+  return [a, b];
+}
+
 /** A match's stakes as the Box signs them: badge `a` is Player 1's. `deadline` is unix seconds. */
 export function stakeOf(box: string, order: StakeOrder, deadline: bigint): Stake {
-  return { box, game: label(order.game), round: BigInt(order.round), a: order.badges[0], b: order.badges[1], amount: usdc(order.amount), deadline };
+  const [a, b] = pair(order.badges);
+  return { box, game: label(order.game), round: BigInt(order.round), a, b, amount: usdc(order.amount), deadline };
 }
 
 /** A match's result as the Box signs it: a draw names Player 1 the winner and Player 2 the loser, with `draw` set. */
 export function resultOf(box: string, order: ResultOrder, deadline: bigint): Result {
-  const [a, b] = order.badges;
+  const [a, b] = pair(order.badges);
   const [winner, loser] = order.winner === 1 ? [b, a] : [a, b];
   return { box, game: label(order.game), round: BigInt(order.round), winner, loser, draw: order.winner === null, deadline };
 }
@@ -92,17 +101,18 @@ export function seatOf(box: string, labelText: string, badge: Address, deadline:
 
 /** The lines the result screen shows, from what the chain says the result did. */
 export function outcomeLines(order: ResultOrder, settled: Settled): string[] {
-  const named = (seat: 0 | 1): string => settled.names[seat] ?? short(order.badges[seat]);
+  const badges = pair(order.badges);
+  const named = (seat: DuelSeat): string => settled.names[seat] ?? short(badges[seat]);
   const lines: string[] = [];
   if (order.winner === null) lines.push(settled.pot === null ? "A draw" : `A draw: ${settled.pot} USDC back to each`);
   else lines.push(settled.pot === null ? `${named(order.winner)} wins` : `${named(order.winner)} +${settled.pot * 2} USDC`);
   const { title } = settled;
-  if (order.winner !== null && title && title.holder.toLowerCase() === order.badges[order.winner].toLowerCase()) {
+  if (order.winner !== null && title && title.holder.toLowerCase() === badges[order.winner].toLowerCase()) {
     lines.push(`${named(order.winner)} now holds ${title.name}${title.streak > 1 ? `, streak ${title.streak}` : ""}`);
   }
   if (settled.cup) {
-    for (const seat of [0, 1] as const) {
-      const rank = settled.cup.standings.findIndex((row) => row.addr.toLowerCase() === order.badges[seat].toLowerCase());
+    for (const seat of DUEL_SEATS) {
+      const rank = settled.cup.standings.findIndex((row) => row.addr.toLowerCase() === badges[seat].toLowerCase());
       const row = settled.cup.standings[rank];
       if (row) lines.push(`${settled.cup.label}: ${named(seat)} ${ORDINALS[rank] ?? `${rank + 1}th`}, ${row.points} pts`);
     }
@@ -187,7 +197,7 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     },
     async outcome(order, hash) {
       if (!hash) throw new Error("a result with no hash");
-      return outcomeLines(order, await reads.settled(label(order.game), order.badges, hash));
+      return outcomeLines(order, await reads.settled(label(order.game), pair(order.badges), hash));
     },
     watchHead(listener) {
       let last = 0;

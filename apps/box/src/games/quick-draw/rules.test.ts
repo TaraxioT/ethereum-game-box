@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Seat } from "@egb/sdk";
+import type { DuelSeat } from "@egb/sdk";
 import { MAX_WAIT_MS, MIN_WAIT_MS, READ_WAIT_MS, reactionMs, rules, SETTLE_MS, TOO_SLOW_MS } from "./rules.ts";
 import type { QuickDrawState } from "./types.ts";
 
@@ -11,7 +11,7 @@ function drawn(seed = 1): QuickDrawState {
 }
 
 /** The seated player's chip touched at `at`; the Box hears of it at `now` (just after, by default). */
-const tap = (state: QuickDrawState, seat: Seat, at: number, now = at + 5) => rules.step(state, { type: "tap", seat, at, now });
+const tap = (state: QuickDrawState, seat: DuelSeat, at: number, now = at + 5) => rules.step(state, { type: "tap", seat, at, now });
 const tick = (state: QuickDrawState, now: number) => rules.step(state, { type: "tick", now });
 
 describe("start", () => {

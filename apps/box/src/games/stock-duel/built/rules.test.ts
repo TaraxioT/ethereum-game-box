@@ -1,13 +1,13 @@
 // Stock Duel's built rules: the deal, the drums, a tap plays the card seen at the touch, the rolls choose the stat
 // after both cards are down, the last turn, and the match's end.
 import { describe, expect, it } from "vitest";
-import type { BuiltEvent, Seat } from "@egb/sdk";
+import type { BuiltEvent, DuelSeat } from "@egb/sdk";
 import { STATS } from "./deck.ts";
 import rules, { DEAL_MS, dwellForRound, frontIndex, HAND_SIZE, REVEAL_MS, SHOW_LAG_MS, type StockDuelState } from "./rules.ts";
 
 const T0 = 1_000_000;
 const tick = (now: number): BuiltEvent => ({ type: "tick", now });
-const tap = (seat: Seat, now: number, roll: number): BuiltEvent => ({ type: "tap", seat, now, roll });
+const tap = (seat: DuelSeat, now: number, roll: number): BuiltEvent => ({ type: "tap", seat, now, roll });
 const run = (state: StockDuelState, ...events: BuiltEvent[]) => events.reduce(rules.step, state);
 
 /** The match after the deal, at the start of the pick. */

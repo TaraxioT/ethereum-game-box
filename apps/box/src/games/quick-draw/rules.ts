@@ -9,7 +9,7 @@
 // Nobody touching within TOO_SLOW_MS of the draw stands the standoff again. The speaker never says GO: it lags.
 import type { GameRules, Outcome } from "@egb/sdk";
 import { hash32, mulberry32 } from "@egb/sdk";
-import { other, SEATS, type Seat } from "@egb/sdk";
+import { other, DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import type { QuickDrawEvent, QuickDrawState } from "./types.ts";
 
 /** The shortest and longest wait before the sign flips. */
@@ -24,7 +24,7 @@ export const TOO_SLOW_MS = 4000;
 
 type Pair<T> = readonly [T, T];
 
-function put<T>(pair: Pair<T>, seat: Seat, value: T): Pair<T> {
+function put<T>(pair: Pair<T>, seat: DuelSeat, value: T): Pair<T> {
   return seat === 0 ? [value, pair[1]] : [pair[0], value];
 }
 
@@ -49,24 +49,24 @@ function flipped(state: QuickDrawState, now: number): QuickDrawState {
   return state.phase === "wait" && now >= state.drawAt ? { ...state, phase: "draw" } : state;
 }
 
-function decide(state: QuickDrawState, winner: Seat | null, reason: "first" | "early"): QuickDrawState {
+function decide(state: QuickDrawState, winner: DuelSeat | null, reason: "first" | "early"): QuickDrawState {
   return { ...state, phase: "done", winner, reason, pending: [null, null] };
 }
 
 /** Judges the standoff if its earliest touch is certain by `now`; otherwise leaves it waiting. */
 function judge(before: QuickDrawState, now: number): QuickDrawState {
   const state = flipped(before, now);
-  const tapped = SEATS.filter((seat) => state.taps[seat] !== null);
+  const tapped = DUEL_SEATS.filter((seat) => state.taps[seat] !== null);
   if (tapped.length === 0) {
     const reading = state.pending.some((at) => at !== null);
     const slow = state.phase === "draw" && now >= state.drawAt + TOO_SLOW_MS && !reading;
     return slow ? standoff(state.seed, state.standoff + 1, now) : state;
   }
-  const at = (seat: Seat): number => state.taps[seat] ?? Infinity;
+  const at = (seat: DuelSeat): number => state.taps[seat] ?? Infinity;
   const first = tapped.reduce((a, b) => (at(b) < at(a) ? b : a));
   const firstAt = at(first);
   // A chip still being read that touched earlier may be the first.
-  const earlier = SEATS.some((seat) => {
+  const earlier = DUEL_SEATS.some((seat) => {
     const touched = state.pending[seat];
     return touched !== null && touched < firstAt && now < touched + READ_WAIT_MS;
   });
@@ -106,7 +106,7 @@ export const rules: GameRules<QuickDrawState, QuickDrawEvent> = {
 };
 
 /** A seat's reaction time: its touch after the draw minus the draw time. null for no tap or a touch before the flip. */
-export function reactionMs(state: QuickDrawState, seat: Seat): number | null {
+export function reactionMs(state: QuickDrawState, seat: DuelSeat): number | null {
   const tap = state.taps[seat];
   return tap !== null && tap >= state.drawAt ? tap - state.drawAt : null;
 }

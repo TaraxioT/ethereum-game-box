@@ -1,10 +1,10 @@
 // What every game's rules module provides. Rules are pure: `(state, event) → state`, with time and seeds in events.
-import type { Seat } from "./seat.ts";
+import type { DuelSeat } from "./seat.ts";
 import type { StationView } from "./station.ts";
 
 /** How a finished game ended: a winner, or null for a draw (both stakes go back). */
 export interface Outcome {
-  readonly winner: Seat | null;
+  readonly winner: DuelSeat | null;
 }
 
 export interface GameRules<S, E> {
@@ -21,7 +21,7 @@ export interface GameRules<S, E> {
  */
 export type BuiltEvent =
   | { readonly type: "tick"; readonly now: number }
-  | { readonly type: "tap"; readonly seat: Seat; readonly now: number; readonly roll: number | null };
+  | { readonly type: "tap"; readonly seat: DuelSeat; readonly now: number; readonly roll: number | null };
 
 /** A built game's rules module: pure rules plus what each station shows. */
 export interface BuiltRules<S> extends GameRules<S, BuiltEvent> {

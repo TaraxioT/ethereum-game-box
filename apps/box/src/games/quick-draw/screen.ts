@@ -16,7 +16,7 @@ import type { BoxEvent, BoxState } from "../../core/types.ts";
 import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
-import { other, type Seat } from "@egb/sdk";
+import { other, type DuelSeat } from "@egb/sdk";
 import { MAX_WAIT_MS, MIN_WAIT_MS, reactionMs } from "./rules.ts";
 import type { QuickDrawPhase, QuickDrawState } from "./types.ts";
 import { createScene, type SceneSpec } from "./scene.ts";
@@ -109,7 +109,7 @@ const BACK_TO_BACK = 96;
 const HURRY_MS = 380;
 
 /** What a seat's plate reads at the end. */
-function verdict(s: QuickDrawState, seat: Seat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
+function verdict(s: QuickDrawState, seat: DuelSeat): { readonly ms: number } | { readonly word: string; readonly early: boolean } {
   const tap = s.taps[seat];
   if (tap !== null && tap < s.drawAt) return { word: "TOO EARLY", early: true };
   const ms = reactionMs(s, seat);
@@ -142,7 +142,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
   const sign = createSign();
   place(sign.el, g.sign);
 
-  const makePlate = (seat: Seat): HTMLElement => {
+  const makePlate = (seat: DuelSeat): HTMLElement => {
     const plate = el("div", `qd-plate qd-plate--p${seat + 1}`);
     place(plate, g.plates[seat]);
     return plate;
@@ -271,7 +271,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     await Promise.all(figures.map(async (f, seat) => {
       await wait(seat * COCK_GAP_MS);
       if (!walking || !alive) return;
-      await f.cock(() => ctx.sound.play("cock", { seat: seat as Seat }));
+      await f.cock(() => ctx.sound.play("cock", { seat: seat as DuelSeat }));
     }));
     if (!walking || !alive) return;
     sign.say("READY");
@@ -353,7 +353,7 @@ export const quickDrawScreen: ViewFactory = (ctx): View => {
     await sign.flip(instant);
   }
 
-  function fillPlate(seat: Seat, s: QuickDrawState): void {
+  function fillPlate(seat: DuelSeat, s: QuickDrawState): void {
     const plate = plates[seat];
     const v = verdict(s, seat);
     const value = el("span", "qd-plate-value");

@@ -124,8 +124,8 @@ export async function startBox(options: BoxOptions): Promise<Box> {
   const storeIndex = storeUrl ? createStoreIndex({ url: storeUrl, log, fetcher }) : null;
   if (settings.store && !storeUrl) log("store: no store games: this chain has no StorePot");
   // The library answers with the catalogue until its first scan, which runs after the listen.
-  const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log, store: storeIndex });
-  const bundles = storeUrl ? createBundles({ url: storeUrl, dir: join(settings.dataDir, "store-bundles"), log, seal: library.seal, fetcher }) : null;
+  const library = createLibrary({ teamDir: GAMES_DIR, gamesDir: join(settings.dataDir, "games"), log, store: storeIndex, seats: settings.stations.length });
+  const bundles = storeUrl ? createBundles({ url: storeUrl, dir: join(settings.dataDir, "store-bundles"), log, seal: library.seal, seats: settings.stations.length, listed: (id) => storeIndex?.listings().find((l) => l.id === id)?.players, fetcher }) : null;
   const rules = createRulesHost({
     locate: (id) => library.rules(id),
     log,
@@ -146,7 +146,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     ...(bundles ? { bundles } : {}),
     log: sessions,
     random: () => randomInt(2 ** 32),
-  }, { builder: true });
+  }, { builder: true, stations: settings.stations.length });
   // What the core made of each tap, and every phase it entered: with the taps' own lines, a match can be followed in
   // the log after the fact.
   core.subscribe((_, event) => {
@@ -166,7 +166,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       building: () => builder?.building() ?? false,
       exitScreen: options.exitScreen ?? stopKiosk,
     }),
-    ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind }),
+    ...tapsRoutes({ taps: () => taps, receiver: settings.receiver.kind, seats: settings.stations.length }),
     ...adminRoutes(settings.admin ? adminOnSepolia(settings.admin, log) : null),
     ...boardRoutes(settings.chain.kind === "sepolia" ? settings.chain.rpcUrl : (settings.admin?.rpcUrl ?? null)),
   ];
@@ -224,8 +224,11 @@ export async function startBox(options: BoxOptions): Promise<Box> {
       log,
       ...(options.fake ? { fake: options.fake } : {}),
     });
-    const state = core.state();
-    for (const seat of SEATS) taps.show(seat, state.stations[seat]);
+    const { stations } = core.state();
+    for (const seat of SEATS) {
+      const view = stations[seat];
+      if (view) taps.show(seat, view);
+    }
   }
   // The builder reads its jobs from the disk: it starts after the listen too, and its routes join the handler's then.
   builder = startBuilder({

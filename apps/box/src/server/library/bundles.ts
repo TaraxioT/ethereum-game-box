@@ -9,7 +9,7 @@
 // arrived is sealed only until the library's next scan.
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SEATS } from "@egb/sdk";
+import { DUEL_SEATS } from "@egb/sdk";
 import { BUNDLE_LIMITS, BundleRefused, readBundle, type OpenedBundle } from "@egb/sdk/bundle";
 import type { BundlePort, StoreBundle } from "../../core/ports.ts";
 import { readCapped, TooBig } from "./fetch-capped.ts";
@@ -25,6 +25,10 @@ export interface BundlesOptions {
   readonly log: (text: string) => void;
   /** Seals a game whose fetch failed. `passing`: the zip never arrived, so a later scan may lift it. */
   readonly seal: (id: string, reason: string, passing: boolean) => void;
+  /** How many this Box seats (EGB_STATIONS): two when absent. */
+  readonly seats?: number;
+  /** How many the store lists a game for: Join seats that many, so the zip must agree. */
+  readonly listed?: (id: string) => { readonly min: number; readonly max: number } | undefined;
   readonly fetcher?: typeof fetch;
 }
 
@@ -51,15 +55,18 @@ interface Current {
 }
 
 /** Why a bundle that arrived can't be played here, or null. */
-function problem(opened: OpenedBundle, game: string, hash: string): string | null {
+function problem(opened: OpenedBundle, game: string, hash: string, seats: number, listed: BundlesOptions["listed"]): string | null {
   if (opened.hash !== hash) return "the zip isn't the one listed";
   if (opened.manifest.id !== game) return "the zip names another game";
-  if (opened.manifest.players.min > SEATS.length) return `it needs ${opened.manifest.players.min} players, and this Box seats ${SEATS.length}`;
+  const { min, max } = opened.manifest.players;
+  if (min > seats) return `it needs ${min} players, and this Box seats ${seats}`;
+  const rack = listed?.(game);
+  if (rack && (rack.min !== min || rack.max !== max)) return "the zip seats other numbers than the store lists";
   return null;
 }
 
 export function createBundles(options: BundlesOptions): Bundles {
-  const { url, dir, log, seal, fetcher = fetch } = options;
+  const { url, dir, log, seal, seats = DUEL_SEATS.length, listed, fetcher = fetch } = options;
   let current: Current | null = null;
   let count = 0;
 
@@ -93,7 +100,7 @@ export function createBundles(options: BundlesOptions): Bundles {
       try {
         const opened = await readBundle(await download(hash, mine.stop));
         if (current !== mine) throw new Error("dropped");
-        const wrong = problem(opened, game, hash);
+        const wrong = problem(opened, game, hash, seats, listed);
         if (wrong) throw new BundleRefused(wrong);
         await write(opened, mine.folder);
         if (current !== mine) {

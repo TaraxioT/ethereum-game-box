@@ -3,7 +3,7 @@
 // shows and buzzes through, and what the test page and the bench call.
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { stationView, type Seat, type StationView } from "@egb/sdk";
+import { SEATS, stationView, type Seat, type StationView } from "@egb/sdk";
 import type { Clock, StationsPort, TapEvent, TapPlan } from "../core/ports.ts";
 import type { Badge } from "../core/types.ts";
 import { Acks, type Answer } from "./acks.ts";
@@ -26,8 +26,8 @@ import { TapMachine, type TapCounts } from "./tap-machine.ts";
 export interface TapsOptions {
   /** A /dev/serial/by-id path, `auto` (the receiver's own by-id entry) or `fake` (EGB_RECEIVER). */
   readonly receiver: string;
-  /** The stations known before any link (EGB_STATIONS), which the fake receiver simulates. Seats go by link order: the
-   *  first station to link is Player 1's, the second Player 2's (stations.ts). */
+  /** The stations known before any link (EGB_STATIONS), which the fake receiver simulates: a seat each. Seats go by link
+   *  order: the first station to link is Player 1's, the second Player 2's (stations.ts). */
   readonly stations: readonly StationId[];
   /** $EGB_DATA: the roster is `badges.json` there (`badges.fake.json` for the fake's badges). */
   readonly dataDir: string;
@@ -117,8 +117,8 @@ export interface Taps extends StationsPort {
 /** The receiver gives up on a press after 25 sends 20 ms apart. */
 const PRESS_MS = 1000;
 
-/** A linked station with no seat: both are taken, and it gets the next one free. */
-const BENCH_VIEW: StationView = stationView("", "NEXT", "both seats taken - you're next", { mode: "shut" });
+/** A linked station with no seat: they are all taken, and it gets the next one free. */
+const BENCH_VIEW: StationView = stationView("", "NEXT", "every seat taken - you're next", { mode: "shut" });
 
 export function createTaps(opts: TapsOptions): Taps {
   const log = opts.log ?? ((line: string) => console.error(line));
@@ -152,7 +152,7 @@ export function createTaps(opts: TapsOptions): Taps {
   const nfc = new Nfc({ clock, nextId, send });
   const buzzer = new Buzzer({ acks, nextId, send });
   /** What the core last showed at each seat: a station that takes a seat shows it at once. */
-  const views: [StationView | null, StationView | null] = [null, null];
+  const views = new Map<Seat, StationView>();
   const stations: Stations = new Stations(opts.stations, clock, {
     up(st) {
       if (stations.seatOf(st) === null) screens.show(st, BENCH_VIEW);
@@ -162,13 +162,14 @@ export function createTaps(opts: TapsOptions): Taps {
     lost: (st) => machine.lost(st),
     changed,
     seated() {
-      for (const seat of [0, 1] as const) {
+      for (const seat of SEATS) {
         const st = stations.stationAt(seat);
-        const view = views[seat];
+        const view = views.get(seat);
         if (st && view) screens.show(st, view);
       }
       for (const st of stations.bench()) screens.show(st, BENCH_VIEW);
-      log(`taps: seats P1 ${stations.stationAt(0) ?? "-"}, P2 ${stations.stationAt(1) ?? "-"}${stations.bench().length ? `, bench ${stations.bench().join(" ")}` : ""}`);
+      const held = SEATS.slice(0, opts.stations.length).map((seat) => `P${seat + 1} ${stations.stationAt(seat) ?? "-"}`);
+      log(`taps: seats ${held.join(", ")}${stations.bench().length ? `, bench ${stations.bench().join(" ")}` : ""}`);
     },
   });
   const screens = new Screens({ clock, acks, nextId, send, isUp: (st) => stations.isUp(st) });
@@ -270,7 +271,7 @@ export function createTaps(opts: TapsOptions): Taps {
 
   return {
     show(seat, view: StationView) {
-      views[seat] = view;
+      views.set(seat, view);
       const st = seatStation(seat);
       if (st) screens.show(st, view);
     },

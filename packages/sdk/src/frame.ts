@@ -4,7 +4,7 @@
 // station, a buzz and its end. Messages are plain JSON-safe objects.
 import type { GameManifest } from "./manifest.ts";
 import { LOG_LIMITS } from "./match-log.ts";
-import type { Seat } from "./seat.ts";
+import type { DuelSeat } from "./seat.ts";
 
 export interface FrameSeat {
   /** The badge's label (`NOVA`), or null for an empty seat. */
@@ -16,13 +16,14 @@ export type FrameEvent =
   | { readonly type: "init" }
   | { readonly type: "step" }
   /** A badge touched a station (before its tap finished). */
-  | { readonly type: "touch"; readonly seat: Seat }
+  | { readonly type: "touch"; readonly seat: DuelSeat }
   /** A tap finished and the rules took it. */
-  | { readonly type: "tap"; readonly seat: Seat }
+  | { readonly type: "tap"; readonly seat: DuelSeat }
   | { readonly type: "over" };
 
-/** A badge's tap as a bundle's page hears it. `seat` isn't a `Seat`: a store match seats up to four. */
+/** A badge's tap as a bundle's page hears it. */
 export interface BundleTap {
+  /** Whose tap: a place in the page's `players`. A seat left empty at the Box isn't one, so a place isn't always a `Seat`. */
   readonly seat: number;
   /** When the chip touched the reader: the Box's clock, ms since the epoch. */
   readonly at: number;

@@ -3,7 +3,7 @@
 // PAY_MS after it. No hashes: nothing here is on Sepolia, and the screen shows none. The Box itself runs the real port
 // (`src/chain/`).
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Board, GameId, PlayerCard, PlayerRecord } from "./types.ts";
+import type { Board, DuelSeat, GameId, PlayerCard, PlayerRecord } from "./types.ts";
 import { BLOCK_MS, TOPUP_USDC } from "./core.ts";
 import { chainLabel } from "./catalogue.ts";
 import { createTimers } from "./timers.ts";
@@ -19,7 +19,7 @@ const FIRST_BLOCK = 12_065_134;
 type Address = `0x${string}`;
 
 interface Pot {
-  readonly badges: readonly [Address, Address];
+  readonly badges: readonly Address[];
   readonly amount: number;
 }
 
@@ -30,6 +30,13 @@ export interface DemoChain extends ChainPort {
 }
 
 const short = (address: Address): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+/** The address a result names as its winner. */
+function winnerOf(order: ResultOrder, seat: DuelSeat): `0x${string}` {
+  const winner = order.badges[seat];
+  if (!winner) throw new Error(`round ${order.round} has no seat ${seat}`);
+  return winner;
+}
 
 export function createDemoChain(clock: Clock): DemoChain {
   const timers = createTimers(clock);
@@ -120,17 +127,17 @@ export function createDemoChain(clock: Clock): DemoChain {
       run(`settle ${order.round}`, watch, () => {
         const pot = pots.get(order.round);
         pots.delete(order.round);
-        if (pot) paid.set(order.round, order.winner === null ? pot.amount : pot.amount * 2);
+        if (pot) paid.set(order.round, order.winner === null ? pot.amount : pot.amount * pot.badges.length);
         if (pot && order.winner === null) for (const address of pot.badges) credit(address, pot.amount);
         const label = chainLabel(order.game) ?? order.game;
         if (order.winner === null) {
           for (const address of order.badges) score(label, address, "draws");
           return;
         }
-        const winner = order.badges[order.winner];
+        const winner = winnerOf(order, order.winner);
         score(label, winner, "wins");
-        score(label, order.badges[order.winner === 0 ? 1 : 0], "losses");
-        if (pot) credit(winner, pot.amount * 2);
+        for (const address of order.badges) if (address !== winner) score(label, address, "losses");
+        if (pot) credit(winner, pot.amount * pot.badges.length);
         const title = titles.get(label);
         titles.set(label, { holder: winner, streak: title?.holder === winner ? title.streak + 1 : 1 });
       });
@@ -157,7 +164,7 @@ export function createDemoChain(clock: Clock): DemoChain {
     outcome(order: ResultOrder): Promise<readonly string[]> {
       const amount = paid.get(order.round);
       if (order.winner === null) return Promise.resolve(amount ? [`A draw: ${amount} USDC back to each`] : ["A draw"]);
-      const winner = order.badges[order.winner];
+      const winner = winnerOf(order, order.winner);
       const label = chainLabel(order.game) ?? order.game;
       const title = titles.get(label);
       const lines = [amount ? `${nameOf(winner)} +${amount} USDC` : `${nameOf(winner)} wins`];
