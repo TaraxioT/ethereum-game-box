@@ -13,6 +13,15 @@ export interface ClaimRequest {
   deadline: JsonUint;
   /** The badge's EIP-712 signature (ECDSA, or ERC-1271 for a contract wallet). */
   signature: Hex;
+  primaryName?: PrimaryNameConsent;
+}
+
+/** A badge's ERC-191 consent to its new name as its primary name (`primaryNameMessage` for `<label>.gamebox.eth`).
+ *  The relayer sends `setNameForAddrWithSignature` after the claim's receipt, under the same request id. */
+export interface PrimaryNameConsent {
+  /** Unix seconds; at least a minute and at most `PRIMARY_NAME_MAX_EXPIRY_SECONDS` away when the claim is posted. */
+  expiry: JsonUint;
+  signature: Hex;
 }
 
 /** `POST /box/execute`: a call the Box's P-256 key signed for its `BoxAccount`. */
@@ -55,10 +64,8 @@ export interface DripRequest {
 export type TxKind = 'claim' | 'execute' | 'result' | 'popup' | 'drip';
 export type TxStatus = 'signed' | 'sent' | 'in-block' | 'done' | 'failed';
 
-/** A relayed request's progress: the 202 of every POST route, and `GET /tx/:id`. */
-export interface TxView {
-  id: string;
-  kind: TxKind;
+/** One transaction of a request. */
+export interface TxStep {
   status: TxStatus;
   hash?: Hex;
   etherscan?: string;
@@ -70,6 +77,16 @@ export interface TxView {
   error?: string;
   /** The contract error a mined transaction reverted with. */
   revert?: string;
+}
+
+/** A relayed request's progress: the 202 of every POST route, and `GET /tx/:id`. Its own fields are the main
+ *  transaction's; `status` reaches `done` only once the primary-name step has settled too, and is `failed` only if the
+ *  main transaction failed. */
+export interface TxView extends TxStep {
+  id: string;
+  kind: TxKind;
+  /** A claim's primary-name transaction, when the claim asked for one. */
+  primaryName?: TxStep;
 }
 
 /** Every 4xx/5xx body. `revert` is the contract error an `eth_call` reverted with, decoded by name. */
