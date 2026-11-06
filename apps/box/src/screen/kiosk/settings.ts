@@ -1,5 +1,5 @@
-// The Settings page, on the kiosk's own page only (the one the Box gave its launcher token). A SETTINGS tag in the
-// window's bottom-left corner opens it over the stage; CLOSE, Escape or the tag again shut it. It fits one screen with
+// The Settings page, on the kiosk's own page only (the one the Box gave its launcher token). A gear in the window's
+// top-left corner (clear of the ports and the rack) opens it over the stage; CLOSE, Escape or the tag again shut it. It fits one screen with
 // no scrolling, down to the Pi's 1280×720 (touch can't be trusted to scroll a kiosk):
 // - The head: sound on or off, reload the screen, and EXIT TO DESKTOP (a first tap arms it, a second asks the Box to
 //   close the kiosk's browser, POST /api/box/exit; the Box keeps running).
@@ -94,7 +94,8 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   const tag = framed(el("button", "set-tag"), CHAMFER);
   tag.type = "button";
   tag.setAttribute("aria-label", "Settings");
-  tag.append(el("i", "set-gear"), el("span", "", "SETTINGS"));
+  tag.title = "Settings";
+  tag.append(el("i", "set-gear"));
 
   const page = el("div", "set-page");
   page.hidden = true;

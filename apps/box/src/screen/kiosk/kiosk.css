@@ -1,8 +1,8 @@
-/* The kiosk's own pieces: the SETTINGS tag in the window's bottom-left corner, clear of the rack, and the Settings page
-   it opens over the stage: glass rows of light keys, alert red only for EXIT. */
+/* The kiosk's own pieces: the settings gear in the window's top-left corner, clear of the ports and the rack, and the
+   Settings page it opens over the stage: glass rows of light keys, alert red only for EXIT. */
 .set-tag {
-  position: fixed; left: 16px; bottom: 16px; z-index: 10; height: 36px; display: flex; align-items: center; gap: 10px;
-  padding: 0 14px; margin: 0; border: 0; background: none; cursor: pointer; opacity: 0.55;
+  position: fixed; left: 10px; top: 10px; z-index: 10; width: 44px; height: 44px; display: grid; place-items: center;
+  padding: 0; margin: 0; border: 0; background: none; cursor: pointer; opacity: 0.55;
   font: 600 15px/1 var(--hud-body); letter-spacing: 0.12em; color: var(--fg-2);
 }
 .set-tag > :not(svg, .frame-fill) { position: relative; }
@@ -13,7 +13,7 @@
 .set-tag:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 4px; }
 
 /* A gear: a ring with a dashed rim of teeth. */
-.set-gear { position: relative; width: 14px; height: 14px; border: 2px dotted currentColor; border-radius: 50%; }
+.set-gear { position: relative; width: 18px; height: 18px; border: 2px dotted currentColor; border-radius: 50%; }
 .set-gear::after { content: ""; position: absolute; inset: 2px; border: 1.5px solid currentColor; border-radius: 50%; }
 
 /* The page fills the window and never scrolls: a head of keys, a status line, then two columns. Sized for the Pi's
