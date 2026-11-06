@@ -9,7 +9,7 @@
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.
 import "./stock-duel.css";
 import type { BoxState } from "../../core/types.ts";
-import type { Point } from "../../screen/shell/layout.ts";
+import { shiftPoint, shiftRect, type Layout, type Point } from "../../screen/shell/layout.ts";
 import type { ViewFactory } from "../../screen/views/view.ts";
 import type { Seat } from "@egb/sdk";
 import type { StockDuelState } from "./types.ts";
@@ -95,8 +95,27 @@ function dealDelays(seat: Seat, cards: number, elapsedMs: number): number[] {
 const FLARE_PLAY_MS = 300;
 const FLARE_WIN_MS = 1400;
 
+/** The geometry for `layout`: on the wide stage, the landscape one moved to the middle with the scene drawn across. */
+function geometryFor(layout: Layout): Geometry {
+  if (layout.orientation === "portrait") return PORTRAIT;
+  const dx = layout.inset;
+  if (dx === 0) return LANDSCAPE;
+  const g = LANDSCAPE;
+  return {
+    scene: { ...g.scene, width: layout.width, tray: shiftRect(g.scene.tray, dx), glows: [shiftPoint(g.scene.glows[0], dx), shiftPoint(g.scene.glows[1], dx)] },
+    rolodex: [{ ...g.rolodex[0], x: g.rolodex[0].x + dx }, { ...g.rolodex[1], x: g.rolodex[1].x + dx }],
+    dial: { ...g.dial, centre: shiftPoint(g.dial.centre, dx) },
+    reveal: { rests: [shiftRect(g.reveal.rests[0], dx), shiftRect(g.reveal.rests[1], dx)], call: shiftRect(g.reveal.call, dx) },
+    standing: {
+      plates: [shiftRect(g.standing.plates[0], dx), shiftRect(g.standing.plates[1], dx)],
+      mid: shiftRect(g.standing.mid, dx),
+      banner: shiftRect(g.standing.banner, dx),
+    },
+  };
+}
+
 export const stockDuelScreen: ViewFactory = (ctx) => {
-  const geo: Geometry = ctx.layout.orientation === "portrait" ? PORTRAIT : LANDSCAPE;
+  const geo = geometryFor(ctx.layout);
   const root = el("div", "sd");
   root.dataset.orientation = ctx.layout.orientation;
   place(root, { x: 0, y: 0, w: ctx.layout.width, h: ctx.layout.height });

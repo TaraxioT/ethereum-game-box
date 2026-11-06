@@ -4,7 +4,7 @@
 // touching a player's frame taps that seat, and so does touching their half of the screen in a game.
 import type { Badge, BoxLink, Seat } from "../../core/types.ts";
 import type { Sound, ViewContext } from "../views/view.ts";
-import { layoutFor, orientationFor, type Layout } from "./layout.ts";
+import { layoutForArea, type Layout } from "./layout.ts";
 import { applyFit, createStage, fit, type Fit } from "./stage.ts";
 import { createMachine, type MachineView } from "./machine.ts";
 import { createRouter, type Router, type Routes } from "./router.ts";
@@ -61,7 +61,7 @@ export function startApp(host: HTMLElement, options: AppOptions): void {
   function resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const next = layoutFor(orientationFor(w, h));
+    const next = layoutForArea(w, h);
     placed = fit(next, w, h);
     if (next !== layout) build(next, placed.scale);
     else if (Math.abs(placed.scale - scale) / scale > 0.04) {

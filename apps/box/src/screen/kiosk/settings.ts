@@ -1,11 +1,12 @@
 // The Settings page, on the kiosk's own page only (the one the Box gave its launcher token). A SETTINGS tag in the
-// window's bottom-left corner opens it over the stage; CLOSE, Escape or the tag again shut it. Rows:
-// - THE BOX: sound on or off, reload the screen, and EXIT TO DESKTOP (a first tap arms it, a second asks the Box to
+// window's bottom-left corner opens it over the stage; CLOSE, Escape or the tag again shut it. It fits one screen with
+// no scrolling, down to the Pi's 1280×720 (touch can't be trusted to scroll a kiosk):
+// - The head: sound on or off, reload the screen, and EXIT TO DESKTOP (a first tap arms it, a second asks the Box to
 //   close the kiosk's browser, POST /api/box/exit; the Box keeps running).
-// - CHAMPIONSHIPS and GAMES (with EGB_ADMIN_KEY on the Box, as gamebox.eth's admin, `/api/admin/…`): open a
+// - Two columns, CHAMPIONSHIPS and GAMES with JOBS (with EGB_ADMIN_KEY on the Box, as gamebox.eth's admin, `/api/admin/…`): open a
 //   championship on a game for a few minutes with a prize, close one that has ended, and add a game with its title.
 //   Presets for every choice, since the kiosk has no keyboard; the labels are made up and can be typed over.
-// Every job's progress shows at the foot. None of its pointer or key events reach the stage.
+// None of its pointer or key events reach the stage.
 import "./kiosk.css";
 import { formatSeconds } from "@egb/shared/admin";
 import { ADMIN, type AdminCup, type AdminJob, type AdminReply, type AdminView } from "../../server/admin-wire.ts";
@@ -18,7 +19,9 @@ import { playerWord } from "../views/board.ts";
 const CHAMFER = 10;
 const ARMED_MS = 4_000;
 const POLL_MS = 3_000;
-const JOBS_SHOWN = 4;
+const JOBS_SHOWN = 3;
+/** Championships listed: the open ones, then the latest closed, up to this many. */
+const CUPS_SHOWN = 4;
 
 const RUNS = [
   ["2 MIN", 120],
@@ -131,7 +134,6 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     delete exitKey.dataset.step;
     exitKey.textContent = "EXIT TO DESKTOP";
   };
-  const boxSection = section("The Box", row(soundKey, key("RELOAD SCREEN", () => location.reload()), exitKey));
 
   // --- Championships ---
   const cupGame = el("div", "set-segments");
@@ -142,7 +144,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   const cupsList = el("ul", "set-list");
   const cupsSection = section(
     "Championships",
-    el("p", "set-hint", "Every result on the game scores it until it ends: win 3, draw 1. It can't be cancelled; close it once it has ended to pay the winner and give them the name."),
+    el("p", "set-hint", "Every result on the game scores it: win 3, draw 1. Close it once it ends to pay the winner."),
     row(el("span", "set-label", "GAME"), cupGame),
     row(el("span", "set-label", "RUNS"), run.row),
     row(el("span", "set-label", "PRIZE"), prize.row),
@@ -156,17 +158,22 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   const term = segments(TERMS, 120);
   const gamesSection = section(
     "Games and titles",
-    el("p", "set-hint", "Each game's title, champion.<game>.gamebox.eth, goes to the winner and lapses after its term. A game added here stays on chain for good."),
+    el("p", "set-hint", "Each win takes the game's title; it lapses after its term. A game added stays for good."),
     gamesList,
     row(el("span", "set-label", "TITLE TERM"), term.row),
     row(el("span", "set-label", "NEW GAME"), newGame, key("ADD GAME", () => void act(addGame), "set-key set-go")),
   );
 
   const jobsList = el("ul", "set-list set-jobs");
-  const adminSections = [cupsSection, gamesSection, section("Jobs", jobsList)];
+  const right = el("div", "set-col");
+  right.append(gamesSection, section("Jobs", jobsList));
+  const cols = el("div", "set-cols");
+  cols.append(cupsSection, right);
   const head = el("div", "set-head");
-  head.append(el("h1", "set-heading", "SETTINGS"), key("CLOSE", () => close(), "set-key"));
-  panel.append(head, status, out, boxSection, ...adminSections);
+  const keys = el("div", "set-row");
+  keys.append(soundKey, key("RELOAD", () => location.reload()), exitKey, key("CLOSE", () => close(), "set-key set-go"));
+  head.append(el("h1", "set-heading", "SETTINGS"), keys);
+  panel.append(head, status, out, cols);
   page.append(panel);
   host.append(tag, page);
 
@@ -220,7 +227,7 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
   }
 
   function drawCups(view: AdminView): void {
-    const shown = view.cups.filter((c) => !c.closed || view.cups.indexOf(c) < 3);
+    const shown = [...view.cups.filter((c) => !c.closed), ...view.cups.filter((c) => c.closed)].slice(0, CUPS_SHOWN);
     cupsList.replaceChildren(
       ...shown.map((c: AdminCup) => {
         const ended = c.ends <= view.now;
@@ -257,11 +264,11 @@ export function mountSettings(host: HTMLElement, sound: Sound): void {
     try {
       const reply = await getJson<AdminReply>(ADMIN.status);
       if (!reply.enabled) {
-        for (const s of adminSections) s.hidden = true;
+        cols.hidden = true;
         status.textContent = "No admin key on this Box (EGB_ADMIN_KEY): championships and games can't be changed here.";
         return;
       }
-      for (const s of adminSections) s.hidden = false;
+      cols.hidden = false;
       const v = reply.view;
       status.textContent = [
         `ADMIN ${playerWord(null, reply.address)}`,

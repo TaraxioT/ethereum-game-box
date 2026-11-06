@@ -75,8 +75,11 @@ Modules go with them, each pure one tested:
 
 `shell/` holds the machinery that places, scales and moves the Box's objects.
 
-- `layout.ts`: every anchor in stage pixels, for the 1280×800 landscape stage and the 720×1080 portrait one (core,
-  horizon, ports, clock, gas, title, facts, Play, the four rack slots, the transaction strip). Everything else places
+- `layout.ts`: every anchor in stage pixels, for the 1280×800 landscape stage, the 1422×800 wide one (the landscape
+  anchors moved 71 px right, `inset`, so a 16:9 window such as the Pi's 1280×720 fills with no bars) and the 720×1080
+  portrait one (core, horizon, ports, clock, gas, title, facts, Play, the four rack slots, the transaction strip, the
+  board). `layoutForArea(w, h)` picks one; Quick Draw and Stock Duel shift their 1280×800 places by `inset` and draw
+  their backdrops across the whole width. Everything else places
   itself from these, so traces always land on the parts they feed.
 - `stage.ts`: `fit(layout, w, h)` scales and centres the stage in the space it gets; `createStage`, `applyFit`.
   Tested in `stage.test.ts`.

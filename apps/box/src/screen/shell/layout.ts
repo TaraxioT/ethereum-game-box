@@ -1,5 +1,5 @@
 // Where every object of the Box stands, in stage pixels. The stage is a fixed-size surface (1280×800 landscape,
-// 720×1080 portrait) scaled to fit the window; the Grid, the parts and the views all place themselves from these
+// 1422×800 wide for a 16:9 screen such as the Pi's 1280×720, 720×1080 portrait) scaled to fit the window; the Grid, the parts and the views all place themselves from these
 // anchors, so the traces always land on the parts they feed.
 
 export type Orientation = "landscape" | "portrait";
@@ -20,6 +20,9 @@ export interface Layout {
   readonly orientation: Orientation;
   readonly width: number;
   readonly height: number;
+  /** How far right the 1280-wide landscape design stands on this stage: 0, or `WIDE_INSET` on the wide stage. Games
+   *  designed at 1280×800 shift their places by it and draw their backdrops across the whole width. */
+  readonly inset: number;
   /** The core: the centre of the glass and its radius; the collar's outer radius. */
   readonly core: { readonly centre: Point; readonly glass: number; readonly collar: number };
   /** The Grid's horizon: the back wall stands above it, the floor runs toward the viewer below it. */
@@ -52,6 +55,7 @@ export const LANDSCAPE: Layout = {
   orientation: "landscape",
   width: 1280,
   height: 800,
+  inset: 0,
   core: { centre: { x: 640, y: 318 }, glass: 132, collar: 166 },
   horizon: 540,
   ports: [
@@ -77,6 +81,7 @@ export const PORTRAIT: Layout = {
   orientation: "portrait",
   width: 720,
   height: 1080,
+  inset: 0,
   core: { centre: { x: 360, y: 400 }, glass: 116, collar: 146 },
   horizon: 840,
   ports: [
@@ -98,8 +103,43 @@ export const PORTRAIT: Layout = {
   board: null,
 };
 
+/** `r` moved `dx` to the right. */
+export const shiftRect = (r: Rect, dx: number): Rect => ({ ...r, x: r.x + dx });
+export const shiftPoint = (p: Point, dx: number): Point => ({ ...p, x: p.x + dx });
+const shiftPort = (p: PortAnchor, dx: number): PortAnchor => ({ ...p, module: shiftRect(p.module, dx), ring: shiftPoint(p.ring, dx) });
+
+/** The wide stage's extra width on each side: 1422×800 is 16:9, so it fills a 1280×720 screen at 0.9. */
+export const WIDE_INSET = 71;
+
+/** The landscape layout on the wide stage: every anchor `WIDE_INSET` further right, the Grid across the whole width. */
+export const WIDE: Layout = {
+  ...LANDSCAPE,
+  width: LANDSCAPE.width + 2 * WIDE_INSET,
+  inset: WIDE_INSET,
+  core: { ...LANDSCAPE.core, centre: shiftPoint(LANDSCAPE.core.centre, WIDE_INSET) },
+  ports: [shiftPort(LANDSCAPE.ports[0], WIDE_INSET), shiftPort(LANDSCAPE.ports[1], WIDE_INSET)],
+  clock: shiftRect(LANDSCAPE.clock, WIDE_INSET),
+  gas: shiftRect(LANDSCAPE.gas, WIDE_INSET),
+  title: shiftRect(LANDSCAPE.title, WIDE_INSET),
+  facts: shiftRect(LANDSCAPE.facts, WIDE_INSET),
+  play: shiftRect(LANDSCAPE.play, WIDE_INSET),
+  rack: LANDSCAPE.rack.map((r) => shiftRect(r, WIDE_INSET)),
+  txbar: shiftRect(LANDSCAPE.txbar, WIDE_INSET),
+  board: LANDSCAPE.board && shiftRect(LANDSCAPE.board, WIDE_INSET),
+};
+
 export function layoutFor(orientation: Orientation): Layout {
   return orientation === "portrait" ? PORTRAIT : LANDSCAPE;
+}
+
+/** A window this wide or wider (16:9 is 1.78, 16:10 is 1.6) gets the wide stage. */
+const WIDE_ASPECT = 1.7;
+
+/** The layout that best fills a `width` × `height` window. */
+export function layoutForArea(width: number, height: number): Layout {
+  const orientation = orientationFor(width, height);
+  if (orientation === "portrait") return PORTRAIT;
+  return width / height >= WIDE_ASPECT ? WIDE : LANDSCAPE;
 }
 
 /** Portrait when the space is clearly taller than wide. */

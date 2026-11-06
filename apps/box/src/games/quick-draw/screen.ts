@@ -7,7 +7,7 @@
 // shortest wait has passed. Both are the same for every match, so neither gives away when the draw comes.
 import "./quick-draw.css";
 import type { BoxEvent, BoxState } from "../../core/types.ts";
-import type { Orientation, Rect } from "../../screen/shell/layout.ts";
+import { shiftRect, type Layout, type Orientation, type Rect } from "../../screen/shell/layout.ts";
 import type { View, ViewFactory } from "../../screen/views/view.ts";
 import { el, place, play, wait } from "../../screen/shell/dom.ts";
 import { other, type Seat } from "@egb/sdk";
@@ -43,6 +43,20 @@ const GEOMETRY: Record<Orientation, Geometry> = {
     banner: { x: 40, y: 560, w: 640, h: 92 },
   },
 };
+
+/** The geometry for `layout`: on the wide stage, the landscape one moved to the middle with the land drawn across. */
+function geometryFor(layout: Layout): Geometry {
+  const g = GEOMETRY[layout.orientation];
+  const dx = layout.inset;
+  if (dx === 0) return g;
+  return {
+    scene: { ...g.scene, width: layout.width, sun: { ...g.scene.sun, x: g.scene.sun.x + dx } },
+    sign: shiftRect(g.sign, dx),
+    figures: [shiftRect(g.figures[0], dx), shiftRect(g.figures[1], dx)],
+    plates: [shiftRect(g.plates[0], dx), shiftRect(g.plates[1], dx)],
+    banner: shiftRect(g.banner, dx),
+  };
+}
 
 /** How dark the light gets: by the shortest wait, by the longest, just after the draw, and once it's over. */
 const DIM_AT_MIN = 0.3;
@@ -86,7 +100,7 @@ function quickDraw(state: BoxState): QuickDrawState | null {
 }
 
 export const quickDrawScreen: ViewFactory = (ctx): View => {
-  const g = GEOMETRY[ctx.layout.orientation];
+  const g = geometryFor(ctx.layout);
   const root = el("div", "qd");
 
   const scene = createScene(g.scene);
