@@ -13,11 +13,13 @@ const seats = [0, 1] as const;
 
 /** How long a page's ten seconds, its grace and the Box's hold can take. */
 const MATCH_MS = 45_000;
+/** How long the kiosk's frame can take to hand on a first tap. */
+const FIRST_TAP_MS = 30_000;
 
 const store = (state: BoxState): StorePlay | null => (state.match?.play.game === 'store' ? state.match.play : null);
 
 /** The players' lines on the stations. */
-export const linesOf = (state: BoxState) => store(state)?.lines ?? [];
+const linesOf = (state: BoxState) => store(state)?.lines ?? [];
 
 /** What the verifier has said, as the Box shows it. */
 export const judgedOf = (state: BoxState) => store(state)?.judged ?? null;
@@ -62,7 +64,11 @@ export async function play(box: RunningBox, taps: readonly [number, number]): Pr
   const { link } = box;
   await link.until((state) => linesOf(state).every((line) => line === 'TAP!'), "the page's first words", 60_000);
   // A tap before the page has answered the kiosk isn't handed on, so the first goes until the page has heard one.
-  while (!/^[1-9]/.test(linesOf(link.state())[0] ?? '')) await box.tap(PLAYERS[0].name, 0);
+  const giveUp = Date.now() + FIRST_TAP_MS;
+  while (!/^[1-9]/.test(linesOf(link.state())[0] ?? '')) {
+    if (Date.now() > giveUp) throw new Error('the page never heard a tap');
+    await box.tap(PLAYERS[0].name, 0);
+  }
   const heard = Number(linesOf(link.state())[0]);
   for (let tap = heard; tap < taps[0]; tap++) await box.tap(PLAYERS[0].name, 0);
   for (let tap = 0; tap < taps[1]; tap++) await box.tap(PLAYERS[1].name, 1);

@@ -38,7 +38,6 @@ export function ledger({ client }: Chain, { pot, usdc: token }: Contracts, box: 
 
   return {
     events,
-    balance: (address: Address) => client.readContract({ ...tokenContract, functionName: 'balanceOf', args: [address] }),
     balances: (addresses: readonly Address[]) =>
       Promise.all(addresses.map((address) => client.readContract({ ...tokenContract, functionName: 'balanceOf', args: [address] }))),
     potBalance: () => client.readContract({ ...tokenContract, functionName: 'balanceOf', args: [pot] }),

@@ -3,11 +3,18 @@
 
 import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
 
-/** What is running now, so a run that dies leaves nothing behind. */
+/** What is running now, so a run that is interrupted leaves nothing behind. */
 const running = new Set<ChildProcess>();
-process.on('exit', () => {
+const killAll = () => {
   for (const { pid } of running) if (pid) process.kill(-pid, 'SIGKILL');
-});
+};
+process.once('exit', killAll);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+  process.once(signal, () => {
+    killAll();
+    process.kill(process.pid, signal);
+  });
+}
 
 /** How long a process gets to stop on its own. */
 const STOP_MS = 5000;

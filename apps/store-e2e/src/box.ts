@@ -8,14 +8,13 @@ import path from 'node:path';
 import { CHROMIUM, headlessFlags } from '../../box/src/server/games/chromium.ts';
 import type { RunKeys } from './keys.ts';
 import { type Link, openLink } from './link.ts';
-import { ROOT } from './paths.ts';
+import { DEPLOYMENTS_HOOK, ROOT } from './paths.ts';
 import { local, PORTS } from './ports.ts';
 import { type Child, start } from './processes.ts';
 
 /** The stations, in the order they link: Player 1's, then Player 2's. */
 export const STATIONS = ['e4ba70', 'df3d88'] as const;
 
-const HOOK = path.join(ROOT, 'apps/store-e2e/src/deployments-hook.ts');
 const SIGNER = path.join(ROOT, 'apps/store-e2e/src/p256-signer.ts');
 const MAIN = path.join(ROOT, 'apps/box/src/server/main.ts');
 const READY_MS = 30_000;
@@ -62,7 +61,7 @@ export async function startBox(options: BoxOptions): Promise<RunningBox> {
   const envFile = path.join(work, 'box.env');
   writeFileSync(envFile, '');
 
-  const child: Child = start('the Box', 'node', ['--import', HOOK, MAIN], {
+  const child: Child = start('the Box', 'node', ['--import', DEPLOYMENTS_HOOK, MAIN], {
     cwd: ROOT,
     env: {
       ...process.env,

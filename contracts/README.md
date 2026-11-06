@@ -12,7 +12,7 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 | `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
 | `src/staking/` | Staking to a Box, rewards, commission, and the operator auction |
 | `src/names/` | ENS names under `gamebox.eth`: Boxes, players, titles, championships |
-| `test/` | Forge tests: every rule and every refusal |
+| `test/` | Forge tests: every rule and every refusal. `test/e2e/` holds `StubNames`, which `pnpm store:e2e` runs on instead of `GameBoxNames` |
 | `script/` | Deploy scripts; each writes its addresses to `deployments/sepolia.json` |
 
 ## Setup

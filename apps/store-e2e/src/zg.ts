@@ -3,7 +3,7 @@
 
 import path from 'node:path';
 
-import type { FakeZgSettings } from '@egb/verifier/test/fake-zg';
+import type { FakeZgSettings, SeenChat } from '@egb/verifier/test/fake-zg';
 
 import { ROOT } from './paths.ts';
 import { local, PORTS } from './ports.ts';
@@ -30,6 +30,8 @@ export interface FakeZgControl {
   /** Sets how it behaves from now on: an honest 0G, but for `settings`. */
   script(settings: Partial<FakeZgSettings>): Promise<void>;
   seen(): Promise<ZgSeen>;
+  /** Every chat call so far. */
+  chats(): Promise<SeenChat[]>;
   /** The text of the file at `root`, as it reached 0G Storage. */
   file(root: string): Promise<string>;
   stop(): Promise<void>;
@@ -46,6 +48,7 @@ export async function startZg(): Promise<FakeZgControl> {
     url,
     script: async (settings) => void (await fetch(control, { method: 'POST', body: JSON.stringify({ ...HONEST, ...settings }) })),
     seen: async () => (await fetch(control)).json() as Promise<ZgSeen>,
+    chats: async () => (await fetch(`${control}/chats`)).json() as Promise<SeenChat[]>,
     async file(root) {
       const segments = (await (await fetch(`${control}/segments`)).json()) as Segment[];
       const mine = segments.filter((segment) => segment.root === root).sort((a, b) => a.index - b.index);

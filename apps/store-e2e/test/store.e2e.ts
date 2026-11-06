@@ -3,24 +3,25 @@
 // balances and events. The scenarios share one world and run in order, and the last one stops the verifier.
 
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { MatchLog } from '@egb/sdk';
 import { type StoreIndex, packBundle } from '@egb/sdk/bundle';
-import { type AuditRecord, type JudgeStatus, jsonTextHash } from '@egb/shared/store';
-import { type Hex, type Log, bytesToHex } from 'viem';
+import { type AgentTurn, type AuditRecord, type JudgeStatus, jsonTextHash } from '@egb/shared/store';
+import { SERVING_CONTRACT } from '@egb/verifier/test/fake-zg';
+import { type Address, type Hex, type Log, bytesToHex, createPublicClient, http, recoverMessageAddress } from 'viem';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { INTERNET_PROBES, allBlocked, noSecrets } from '../../verifier/container/test/docker/probes.ts';
+import { allBlocked, noSecrets } from '../../verifier/container/test/docker/probes.ts';
+import { servingAbi } from '../../verifier/src/zg-chain.ts';
 import { killAgent, runningAgents } from '../src/agents.ts';
 import { type RunningBox, ageRounds } from '../src/box.ts';
 import { type Ledger, STATE, ledger, showUsdc, usdc } from '../src/ledger.ts';
 import { BADGES, join, judgedOf, opened, play, sign, stakeAndPlay, toHome } from '../src/match.ts';
 import { outsider } from '../src/outsider.ts';
 import { TAP_RUSH, publish, variantOfTapRush } from '../src/publish.ts';
-import { BOX_LABEL, type World, startWorld } from '../src/world.ts';
+import { BOX_LABEL, type World, ZG_API_KEY, startWorld } from '../src/world.ts';
 
 /** Every match stakes this much each, in whole USDC. */
 const STAKE = 10;
@@ -34,6 +35,18 @@ const UPLOAD_RETRY = { timeout: 150_000, interval: 1000 };
 const REFUND_DELAY_S = 3600;
 /** The Box's own wait: the delay and its margin, and a minute more. */
 const BOX_AGES_MS = 62 * 60_000;
+
+/**
+ * What the agent's shell tries, all at once, as a shell call gets 20 seconds. `wrangler dev`'s sidecar takes every TCP
+ * connection and then drops it, so a connect proves nothing here: each of these needs an answer. In a plain container with
+ * the internet, all four exit 0.
+ */
+const WAYS_OUT = [
+  `timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/80; printf "GET / HTTP/1.0\\r\\n\\r\\n" >&3; head -c 1 <&3 | grep -q .'; echo "http 1.1.1.1 exit=$?"`,
+  `timeout 8 node -e 'fetch("https://1.1.1.1/").then(() => process.exit(0), () => process.exit(1))'; echo "https 1.1.1.1 exit=$?"`,
+  `timeout 5 getent hosts example.com; echo "dns example.com exit=$?"`,
+  `timeout 8 node -e 'fetch("https://example.com").then(() => process.exit(0), () => process.exit(1))'; echo "https example.com exit=$?"`,
+];
 
 /** A byte inside the first file of a zip, past its header. */
 const FLIPPED_BYTE = 60;
@@ -76,6 +89,26 @@ async function recordOnStorage(round: bigint, wait = SOON): Promise<AuditRecord>
   return JSON.parse(text) as AuditRecord;
 }
 
+/** Rechecks a turn's proof as anyone can: the enclave's signature must recover to the key 0G's serving contract lists. */
+async function recheckTurn({ chatId, response }: AgentTurn): Promise<void> {
+  const { proof } = response as { proof: { chatId: string; provider: Address; text: string; signature: Hex } };
+  expect(proof.chatId).toBe(chatId);
+  const zgChain = createPublicClient({ transport: http(`${world.zg.url}/rpc`) });
+  const service = await zgChain.readContract({ address: SERVING_CONTRACT, abi: servingAbi, functionName: 'getService', args: [proof.provider] });
+  expect(await recoverMessageAddress({ message: proof.text, signature: proof.signature })).toBe(service.teeSignerAddress);
+}
+
+/** What 0G saw of every model call so far: only the Worker's proxy can have sent them like this. */
+async function everyChatWentOutPrivate(): Promise<void> {
+  const chats = await world.zg.chats();
+  for (const { trustMode, authorization, body } of chats) {
+    expect(trustMode).toBe('private');
+    expect(authorization).toBe(`Bearer ${ZG_API_KEY}`);
+    expect(body.verify_tee).toBe(true);
+  }
+  say(`all ${chats.length} model calls so far went out Private, with verify_tee and the Worker's key`);
+}
+
 /** The chain says each stake went back to the address it came from, and only that. */
 async function stakesWentBack(event: Log | undefined, before: readonly bigint[]): Promise<void> {
   expect(event).toBeDefined();
@@ -110,7 +143,6 @@ describe('the game store, end to end', () => {
   it('publishes Tap Rush, lists it, and it reaches the rack', async () => {
     const publisher = { storeUrl: world.storeUrl, token: world.keys.publish, chainUrl: world.chain.url, deployments: world.contracts.deployments };
     const lister = { ...publisher, listerKey: world.keys.lister };
-    const scratch = mkdtempSync(path.join(tmpdir(), 'egb-store-e2e-games-'));
 
     const published = await publish(TAP_RUSH, lister);
     published.lines.forEach(say);
@@ -118,8 +150,8 @@ describe('the game store, end to end', () => {
     expect(await chain.listed(tapRush)).toBe(true);
     expect((await chain.events.listed(tapRush)).length).toBe(1);
 
-    sealedGame = (await publish(variantOfTapRush(path.join(scratch, 'sealed'), 'tap-rush-sealed', 'Tap Rush Sealed'), lister)).hash;
-    const unlisted = await publish(variantOfTapRush(path.join(scratch, 'unlisted'), 'tap-rush-unlisted', 'Tap Rush Unlisted'), publisher);
+    sealedGame = (await publish(variantOfTapRush(path.join(world.work, 'sealed'), 'tap-rush-sealed', 'Tap Rush Sealed'), lister)).hash;
+    const unlisted = await publish(variantOfTapRush(path.join(world.work, 'unlisted'), 'tap-rush-unlisted', 'Tap Rush Unlisted'), publisher);
     unlisted.lines.slice(0, 3).forEach(say);
     unlistedGame = unlisted.hash;
     expect(await chain.listed(unlistedGame)).toBe(false);
@@ -160,6 +192,7 @@ describe('the game store, end to end', () => {
     await play(box, [3, 1]);
     const shown = await boxResult();
     expect(shown).toMatchObject({ step: 'paid', payouts: [15, 5] });
+    expect((await fetch(`${box.url}/store/${tapRush}/index.html`)).status).toBe(404);
 
     const [settled] = await chain.events.settled(round);
     expect(settled?.args.payouts).toEqual(split);
@@ -169,7 +202,10 @@ describe('the game store, end to end', () => {
     const pot = await chain.pot(round);
     expect(pot.state).toBe(STATE.settled);
     expect(pot.record).toBe(settled?.args.record);
-    say(`PotSettled ${settled?.transactionHash}: ${usdcList(split)}; balances ${usdcList(await chain.balances(BADGES))}`);
+    expect(await judged(round)).toMatchObject({ state: 'paid', payouts: split.map(String), record: pot.record, tx: settled?.transactionHash });
+    const paidTo = await chain.balances(BADGES);
+    say(`PotSettled ${settled?.transactionHash}: ${usdcList(split)}; balances ${usdcList(paidTo)}`);
+    await box.link.until(({ seats }) => seats.every(({ balance }, seat) => balance === Number(showUsdc(paidTo[seat] as bigint))), 'the balances on the screen');
 
     // The agent really ran in the container, on the Box's real log: its shell read the header back to the model.
     const seen = await world.zg.seen();
@@ -177,8 +213,9 @@ describe('the game store, end to end', () => {
     const record = await recordOnStorage(round);
     const log = JSON.parse(record.log) as MatchLog;
     expect(log.header).toMatchObject({ box: BOX_LABEL, round: String(round), bundle: tapRush, game: 'tap-rush', players: BADGES });
-    const taps = log.entries.filter((entry) => entry.src === 'box' && entry.t === 'tap');
-    expect(taps.filter((tap) => 'seat' in tap && tap.seat === 1)).toHaveLength(1);
+    const taps = log.entries.filter((entry) => entry.t === 'tap');
+    expect(taps.filter((tap) => tap.seat === 0).length).toBeGreaterThanOrEqual(3);
+    expect(taps.filter((tap) => tap.seat === 1)).toHaveLength(1);
     expect(log.entries.at(-1)).toMatchObject({ src: 'box', t: 'end', why: 'game' });
     expect(log.entries.some((entry) => entry.src === 'game' && entry.t === 'event' && entry.name === 'score')).toBe(true);
     expect(record.instructions).toContain('Count each seat');
@@ -186,7 +223,10 @@ describe('the game store, end to end', () => {
     expect(record.verdict).toMatchObject({ kind: 'split', payouts: split.map(String) });
     expect(record.turns.length).toBeGreaterThanOrEqual(2);
     expect(record.turns.every(({ teeVerified }) => teeVerified)).toBe(true);
-    say(`log: ${log.entries.length} entries; ${record.turns.length} model turns, each teeVerified`);
+    await Promise.all(record.turns.map(recheckTurn));
+    say(`log: ${log.entries.length} entries; ${record.turns.length} model turns, each teeVerified, each proof rechecked here`);
+
+    await everyChatWentOutPrivate();
   });
 
   it('refuses a changed zip, at the store, at the Box and at the verifier', async () => {
@@ -282,7 +322,7 @@ describe('the game store, end to end', () => {
   });
 
   it("gives the agent's shell no secrets and no way out, and refunds when it can't judge", async () => {
-    const probes = INTERNET_PROBES.split('\n').map((probe) => `(${probe}) &`).join('\n');
+    const probes = WAYS_OUT.map((probe) => `(${probe}) &`).join('\n');
     await world.zg.script({ shellCommand: `env\n${probes}\nwait` });
     const before = await chain.balances(BADGES);
     const round = await stakeAndPlayFrom();
@@ -432,16 +472,20 @@ describe('the game store, end to end', () => {
 
     // Anyone may do it, with no Box and no relayer: the pot the changed zip left open, from a key that holds nothing.
     const players = before.length;
-    await who.sendToPot('refund', [BOX_LABEL, HELD_ROUND]);
+    await who.refund(HELD_ROUND);
     const [held] = await chain.events.refunded(HELD_ROUND);
     expect(held).toBeDefined();
     expect(await chain.paidOut(held?.transactionHash as Hex)).toHaveLength(players);
     say(`a stranger refunded round ${HELD_ROUND} straight on StorePot in ${held?.transactionHash}`);
     expect((await chain.pot(HELD_ROUND)).state).toBe(STATE.refunded);
 
-    await who.sendToPot('refund', [BOX_LABEL, ATTACKED_ROUND]);
+    await who.refund(ATTACKED_ROUND);
     expect(await chain.potBalance()).toBe(0n);
     say('StorePot holds nothing: every stake of every pot went somewhere it should');
+
+    // The sweep read the chain for the rest, and the Box keeps no pot that is over.
+    await vi.waitFor(() => expect(JSON.parse(readFileSync(box.rounds, 'utf8'))).not.toHaveProperty('storePots'), SOON);
+    await everyChatWentOutPrivate();
   });
 });
 

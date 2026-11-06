@@ -2,7 +2,7 @@
 // the store and the verifier on `wrangler dev`, and a man in the middle in front of the store. The Box comes last, once
 // there is a game for its rack.
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -23,8 +23,12 @@ import { startWorker } from './wrangler.ts';
 import { type FakeZgControl, startZg } from './zg.ts';
 
 export const BOX_LABEL = 'e2e-01';
+/** What the Worker sends the fake 0G: made up, and worth nothing. */
+export const ZG_API_KEY = 'made-up-for-the-fake';
 
 export interface World {
+  /** The run's folder. */
+  readonly work: string;
   readonly chain: Chain;
   readonly keys: RunKeys;
   readonly contracts: Contracts;
@@ -52,7 +56,10 @@ export async function startWorld(): Promise<World> {
   await requirePortsFree();
   removeAgents();
   buildContracts();
-  const work = mkdtempSync(path.join(tmpdir(), 'egb-store-e2e-'));
+  // One folder for every run, as the ports allow only one at a time: an interrupted run's is gone with the next.
+  const work = path.join(tmpdir(), 'egb-store-e2e');
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work);
   const keys = makeKeys();
   const chain = await startChain();
 
@@ -94,7 +101,7 @@ export async function startWorld(): Promise<World> {
     inspectorPort: PORTS.verifierInspector,
     secrets: {
       VERIFIER_PRIVATE_KEY: keys.verifier,
-      ZG_API_KEY: 'made-up-for-the-fake',
+      ZG_API_KEY,
       ZG_STORAGE_KEY: keys.storage,
       SEPOLIA_RPC_URL: chain.url,
     },
@@ -116,6 +123,7 @@ export async function startWorld(): Promise<World> {
   let box: RunningBox | null = null;
 
   return {
+    work,
     chain,
     keys,
     contracts,

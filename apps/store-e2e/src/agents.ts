@@ -10,17 +10,14 @@ const SIDECAR = /-proxy$/;
 
 const docker = (...args: string[]) => execFileSync('docker', args, { encoding: 'utf8' }).trim();
 
-/** Every container of the run's verifier, sidecars too, running or not. */
-function all(): string[] {
-  const names = docker('ps', '--all', '--filter', `name=workerd-${runName('verifier')}-`, '--format', '{{.Names}}');
+/** The run's containers, sidecars too. */
+function listed(...flags: string[]): string[] {
+  const names = docker('ps', ...flags, '--filter', `name=workerd-${runName('verifier')}-`, '--format', '{{.Names}}');
   return names ? names.split('\n') : [];
 }
 
 /** The agent containers running now. */
-export function runningAgents(): string[] {
-  const names = docker('ps', '--filter', `name=workerd-${runName('verifier')}-`, '--format', '{{.Names}}');
-  return (names ? names.split('\n') : []).filter((name) => !SIDECAR.test(name));
-}
+export const runningAgents = () => listed().filter((name) => !SIDECAR.test(name));
 
 /** Kills an agent's container, as a crash would. */
 export function killAgent(name: string): void {
@@ -29,6 +26,6 @@ export function killAgent(name: string): void {
 
 /** Removes whatever a run's containers left behind. */
 export function removeAgents(): void {
-  const names = all();
+  const names = listed('--all');
   if (names.length > 0) docker('rm', '--force', ...names);
 }

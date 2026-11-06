@@ -7,11 +7,10 @@ import { promisify } from 'node:util';
 
 import type { Hex } from 'viem';
 
-import { ROOT } from './paths.ts';
+import { DEPLOYMENTS_HOOK, ROOT } from './paths.ts';
 
 const run = promisify(execFile);
 
-const HOOK = path.join(ROOT, 'apps/store-e2e/src/deployments-hook.ts');
 const SCRIPT = path.join(ROOT, 'apps/store/scripts/publish.ts');
 export const TAP_RUSH = path.join(ROOT, 'apps/store/sample/tap-rush');
 
@@ -31,7 +30,7 @@ export interface Published {
 }
 
 export async function publish(folder: string, { storeUrl, token, chainUrl, deployments, listerKey }: Publisher): Promise<Published> {
-  const { stdout } = await run('node', ['--import', HOOK, SCRIPT, folder], {
+  const { stdout } = await run('node', ['--import', DEPLOYMENTS_HOOK, SCRIPT, folder], {
     cwd: ROOT,
     env: {
       ...process.env,
