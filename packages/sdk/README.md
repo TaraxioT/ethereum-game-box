@@ -17,7 +17,7 @@ for either platform. The one browser-only piece, the screen contract, is its own
 | `runner.ts` | The rules-runner protocol: JSON lines over a built game's child's stdio (`start`, `step`; `ready`, `state`, `error`), and `MAX_MESSAGE` |
 | `frame.ts` | The frame channel: what the kiosk posts a built game's screen (`init`, `update`) and the only things it may post back (`ready`, `error`) |
 | `transcript.ts` | `Transcript`: one line per match in the session log, from which records are rebuilt |
-| `screen.ts` | `@egb/sdk/screen`: `GameScreen`, the default export of a built game's `screen.ts` (browser only) |
+| `screen.ts` | `@egb/sdk/screen`: `GameScreen`, what a built game's `screen.ts` exports by default (browser only) |
 
 ## Rules
 

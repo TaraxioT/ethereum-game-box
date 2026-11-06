@@ -6,7 +6,7 @@
 // The compiler is confined to what a game may read. TypeScript 7's compiler is a native binary, so Node's permission
 // model can't hold it; instead it runs behind its API with every file-system call (read, exists, list, realpath)
 // answered by this module: the game's folder, the SDK's sources, TypeScript's lib files and the temp folder, by real
-// path, and nothing else. Elsewhere nothing exists, so an import of `/home/pi/.config/egb/env.json` (or a type query,
+// path, and nothing else. Elsewhere nothing exists, so importing `/home/pi/.config/egb/env.json` (or a type query,
 // or a reference directive) is "cannot find module", and no key in it ever shows in an error.
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";

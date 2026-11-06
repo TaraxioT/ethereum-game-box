@@ -238,5 +238,5 @@ packages, other SDK paths, and any file but `.ts`, `.js` and `.json` (no CSS, no
 permission model can't hold, so `typecheck.ts` runs it behind its API (`typescript/unstable/async`) with every
 file-system call it makes (read, exists, list, realpath) answered by `confinedFileSystem`: the game's folder, the SDK's
 sources, TypeScript's lib files and the temp folder holding the tsconfig, by real path, and nothing else. Outside them
-nothing exists, so an absolute import of a file elsewhere (a JSON of keys, say), a type query or a symlink out of the
+nothing exists, so an absolute import naming a file elsewhere (a JSON of keys, say), a type query or a symlink out of the
 folder is "cannot find module", and nothing in that file shows in an error. `bundle.test.ts` proves it.
