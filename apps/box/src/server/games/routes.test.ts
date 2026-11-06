@@ -12,7 +12,7 @@ import { FIXTURES, tempDir } from "../../builder/forge/test-helpers.ts";
 import { createLibrary } from "../library/library.ts";
 import { createFrameAssets } from "./assets.ts";
 import { frameCsp } from "./page.ts";
-import { createGameRoutes } from "./routes.ts";
+import { createGameRoutes, FALLBACK_ICON } from "./routes.ts";
 
 const gamesDir = path.join(tempDir("egb-game-routes-"), "games");
 const TEAM_DIR = new URL("../../games", import.meta.url).pathname;
@@ -78,6 +78,15 @@ describe("the built games' routes", () => {
     expect(html).toContain(`<title>Tap &#60;Three&#62;</title>`);
     expect(html.match(/<script[^>]*>/g)).toEqual(['<script type="module" src="/parts.js">', '<script type="module" src="/frame.js">']);
     expect(html).toContain('<link rel="stylesheet" href="/parts.css">');
+  });
+
+  it("serves the plain icon a store game's cartridge shows, to anyone, running nothing", async () => {
+    const res = await get(FALLBACK_ICON);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+    expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
+    expect(await res.text()).toBe(fallbackIcon());
+    expect((await get("/games/other/thing")).status).toBe(404);
   });
 
   it("serves a frame page only to this machine", async () => {

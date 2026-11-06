@@ -172,7 +172,7 @@ export function createLibrary(options: LibraryOptions): Library {
     for (const id of passing) sealed.delete(id);
     passing.clear();
     const store = listed.filter((l) => !taken.has(l.id)).map((l) => storeEntry(l, sealed));
-    leftOut = [...leftOut, ...listed.flatMap((l) => (taken.has(l.id) ? [[l.hash, `the store's ${l.id} is left out: another game already uses its id`] as [string, string]] : []))];
+    leftOut = [...leftOut, ...listed.flatMap((l) => (taken.has(l.id) ? [[`store:${l.id}`, `the store's ${l.id} is left out: another game already uses its id`] as [string, string]] : []))];
     // A seal lasts as long as the game: one removed (or never there) forgets it.
     const here = [...built, ...store];
     for (const id of sealed.keys()) if (!here.some((e) => e.info.id === id)) sealed.delete(id);

@@ -1,11 +1,13 @@
-// The library against the real team games' folders and a temp $EGB_DATA/games of built games.
+// The library against the real team games' folders, a temp $EGB_DATA/games of built games, and a store's index in memory.
 import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TEAM_GAMES } from "../../core/catalogue.ts";
 import { tempDir } from "../../builder/forge/test-helpers.ts";
+import { FALLBACK_ICON } from "../games/routes.ts";
 import { createLibrary, iconUrl } from "./library.ts";
+import type { StoreListing } from "./store-index.ts";
 
 const TEAM_DIR = fileURLToPath(new URL("../../games", import.meta.url));
 
@@ -42,10 +44,13 @@ function install(gamesDir: string, id: string, o: Install = {}): string {
   return dir;
 }
 
-function setup() {
+const listing = (id: string, over: Partial<StoreListing> = {}): StoreListing => ({ id, title: "Tap Rush", players: { min: 2, max: 4 }, stakes: [5, 10, 25], hash: `0x${"ab".repeat(32)}`, ...over });
+
+function setup(listed?: () => readonly StoreListing[]) {
   const gamesDir = path.join(tempDir("egb-library-"), "games");
   const logs: string[] = [];
-  const library = createLibrary({ teamDir: TEAM_DIR, gamesDir, log: (text) => logs.push(text) });
+  const store = listed ? { refresh: async () => {}, listings: listed } : null;
+  const library = createLibrary({ teamDir: TEAM_DIR, gamesDir, log: (text) => logs.push(text), store });
   let changes = 0;
   library.subscribe(() => changes++);
   return { gamesDir, library, logs, changes: () => changes };
@@ -125,6 +130,82 @@ describe("the library", () => {
     install(gamesDir, "lantern-race");
     await library.rescan();
     expect(library.entry("lantern-race")?.info.ready).toBe(true);
+  });
+
+  it("lists the store's games last, with the fallback icon, for as long as its index lasts", async () => {
+    let listed: readonly StoreListing[] = [listing("tap-rush")];
+    const { gamesDir, library, changes } = setup(() => listed);
+    install(gamesDir, "lantern-race");
+    await library.rescan();
+    expect(library.games().map((g) => g.id).slice(-2)).toEqual(["lantern-race", "tap-rush"]);
+    expect(library.games().at(-1)).toEqual({
+      id: "tap-rush",
+      kind: "store",
+      title: "Tap Rush",
+      players: 2,
+      minutes: 0,
+      stakes: [5, 10, 25],
+      tier: "judged",
+      ready: true,
+      sealed: null,
+      icon: FALLBACK_ICON,
+      manifest: null,
+      bundle: listing("tap-rush").hash,
+    });
+    expect(library.entry("tap-rush")).toMatchObject({ dir: null, manifest: null, problem: null });
+    expect(library.rules("tap-rush")).toBeNull();
+    expect(changes()).toBe(1);
+
+    // The index gone: only the store's games go.
+    const others = library.games().slice(0, -1);
+    listed = [];
+    await library.rescan();
+    expect(library.games()).toEqual(others);
+    expect(changes()).toBe(2);
+  });
+
+  it("seals a store game that needs more seats than the Box has", async () => {
+    const { library } = setup(() => [listing("four-square", { players: { min: 3, max: 4 } })]);
+    await library.rescan();
+    expect(library.entry("four-square")?.info).toMatchObject({ ready: false, sealed: "it needs 3 players, and this Box seats 2" });
+  });
+
+  it("gives an id to whoever had it first, and says so", async () => {
+    const { gamesDir, library, logs } = setup(() => [listing("quick-draw"), listing("lantern-race"), listing("tap-rush")]);
+    install(gamesDir, "lantern-race");
+    await library.rescan();
+    expect(library.entry("quick-draw")?.info.kind).toBe("team");
+    expect(library.entry("lantern-race")?.info.kind).toBe("built");
+    expect(library.games().filter((g) => g.kind === "store").map((g) => g.id)).toEqual(["tap-rush"]);
+    expect(logs).toContain("library: the store's quick-draw is left out: another game already uses its id");
+    expect(logs).toContain("library: the store's lantern-race is left out: another game already uses its id");
+  });
+
+  it("seals a store game whose bundle failed, for as long as it is listed", async () => {
+    let listed: readonly StoreListing[] = [listing("tap-rush")];
+    const { library, logs, changes } = setup(() => listed);
+    await library.rescan();
+    library.seal("tap-rush", "its bundle failed: a bad zip");
+    expect(library.entry("tap-rush")?.info).toMatchObject({ ready: false, sealed: "its bundle failed: a bad zip" });
+    expect(changes()).toBe(2);
+    expect(logs).toContain("library: tap-rush is sealed: its bundle failed: a bad zip");
+    await library.rescan();
+    expect(library.entry("tap-rush")?.info.ready).toBe(false);
+
+    listed = [];
+    await library.rescan();
+    listed = [listing("tap-rush")];
+    await library.rescan();
+    expect(library.entry("tap-rush")?.info.ready).toBe(true);
+  });
+
+  it("lifts a passing seal at the next scan", async () => {
+    const { library } = setup(() => [listing("tap-rush")]);
+    await library.rescan();
+    library.seal("tap-rush", "its bundle failed: no route to host", true);
+    expect(library.entry("tap-rush")?.info.ready).toBe(false);
+    await library.rescan();
+    expect(library.entry("tap-rush")?.info).toMatchObject({ ready: true, sealed: null });
   });
 
   it("runs one scan at a time and folds asks into one more", async () => {
