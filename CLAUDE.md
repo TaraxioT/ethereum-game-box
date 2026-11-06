@@ -8,9 +8,10 @@ The project plan is [`plan/index.html`](plan/index.html).
 
 A pnpm monorepo. Each folder's README says what goes in it; read it before adding to that folder.
 
-- `apps/box/`: the Pi server and the screen (`@egb/box`).
+- `apps/box/`: the Box: core, Pi server, taps, game builder, screen and games (`@egb/box`).
 - `apps/relayer/`: the Cloudflare Worker that sends the Box's signed requests (`@egb/relayer`).
 - `apps/web/`: the public site (`@egb/web`).
+- `packages/sdk/`: the contract between the Box and its games (`@egb/sdk`).
 - `packages/shared/`: message digests, the badge entry, ABIs and the deployments loader (`@egb/shared`).
 - `contracts/`: Foundry. Every contract, its forge tests and deploy scripts.
 - `deployments/`: `sepolia.json`, every deployed address.
