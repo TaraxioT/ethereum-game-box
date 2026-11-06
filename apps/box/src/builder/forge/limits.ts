@@ -17,6 +17,11 @@ export const MAX_JOBS_KEPT = 50;
 export const MAX_ERROR_LINES = 30;
 /** The longest `say` shown (the agent's words). */
 export const MAX_SAY_CHARS = 2_000;
+/**
+ * The longest text any one field of a build's event may carry, as the Box keeps, saves and streams it. A compile
+ * event carries the rules check's words, and those quote the game's own error messages.
+ */
+export const MAX_EVENT_TEXT = 4_000;
 
 /** A built game is small: its own files (not .reference), and the size of each. */
 export const MAX_GAME_FILES = 40;

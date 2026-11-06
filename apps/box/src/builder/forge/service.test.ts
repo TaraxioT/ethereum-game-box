@@ -1,16 +1,15 @@
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUNDLE_FILES } from "../bundle/paths.ts";
-import { rulesChildArgs } from "../bundle/rules-check.ts";
 import { createEditLock } from "../designer/lock.ts";
-import type { ForgeEvent } from "../types.ts";
+import { isFinished, type ForgeEvent, type ForgeStatus } from "../types.ts";
 import { forgeDirs } from "./install.ts";
+import { MAX_EVENT_TEXT } from "./limits.ts";
 import { createForge, ForgeRequestError, type ForgeConfig, type Launcher } from "./service.ts";
-import { brief, FIXTURES, inProcess, scripted, tempDir, until } from "./test-helpers.ts";
+import { brief, FIXTURES, inProcess, playRules, scripted, tempDir, until } from "./test-helpers.ts";
 
-const finished = (s: string | undefined) => s === "done" || s === "failed";
+const finished = (s: ForgeStatus | undefined) => s !== undefined && isFinished(s);
 
 function config(over: Partial<ForgeConfig> = {}): ForgeConfig {
   return { dataDir: tempDir("egb-data-"), gameRoots: [FIXTURES], env: { PATH: process.env.PATH, HOME: process.env.HOME }, simSpeed: 0, log: () => {}, ...over };
@@ -24,32 +23,6 @@ function gated() {
     ctx.signal.addEventListener("abort", () => resolve({ ok: false, text: "Stopped." }));
   }));
   return { provider, open: (i: number) => gates[i]?.() };
-}
-
-/** Asks a rules.js child, sandboxed as the rules runner will run it, for a start and two taps. */
-function playRules(rulesJs: string): Promise<Record<string, unknown>[]> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, rulesChildArgs(rulesJs), { stdio: ["pipe", "pipe", "inherit"], env: {} });
-    const replies: Record<string, unknown>[] = [];
-    let buffer = "";
-    const timer = setTimeout(() => (child.kill(), reject(new Error("rules.js didn't answer"))), 10_000);
-    child.stdout.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) replies.push(JSON.parse(line) as Record<string, unknown>);
-      if (replies[0]?.t === "ready" && replies.length === 1) {
-        child.stdin.write(`${JSON.stringify({ t: "start", seq: 0, seed: 42, now: 1_000 })}\n`);
-        child.stdin.write(`${JSON.stringify({ t: "step", seq: 1, event: { type: "tap", seat: 0, now: 1_400, roll: null } })}\n`);
-        child.stdin.write(`${JSON.stringify({ t: "step", seq: 2, event: { type: "tap", seat: 1, now: 1_500, roll: null } })}\n`);
-      }
-      if (replies.length === 4) {
-        clearTimeout(timer);
-        child.kill();
-        resolve(replies);
-      }
-    });
-  });
 }
 
 describe("the Forge service", () => {
@@ -80,11 +53,15 @@ describe("the Forge service", () => {
 
     // The installed game's rules, run exactly as the rules runner will: node --permission, reading only rules.js.
     const installed = path.join(forgeDirs(c.dataDir).games, done.game!);
-    const replies = await playRules(path.join(installed, "dist", BUNDLE_FILES.rules));
+    const { replies } = await playRules(path.join(installed, "dist", BUNDLE_FILES.rules), [
+      { t: "start", seq: 0, seed: 42, now: 1_000 },
+      { t: "step", seq: 1, event: { type: "tap", seat: 0, now: 1_400, roll: null } },
+      { t: "step", seq: 2, event: { type: "tap", seat: 1, now: 1_500, roll: null } },
+    ], 4);
     expect(replies[0]).toEqual({ t: "ready" });
     expect(replies[1]).toMatchObject({ t: "state", seq: 0, state: { startedAt: 1_000, lit: [0, 0], over: false }, outcome: null });
     expect(replies[3]).toMatchObject({ t: "state", seq: 2, state: { lit: [1, 1] }, outcome: null, stations: [{ tag: "P1", big: "1/7" }, { tag: "P2", big: "1/7" }] });
-    expect(typeof replies[3]?.ms).toBe("number");
+    expect(replies[3]).toMatchObject({ ms: expect.any(Number) });
     await forge.stop();
   }, 90_000);
 
@@ -184,5 +161,26 @@ describe("the Forge service", () => {
     expect(existsSync(path.join(games, "team-copy"))).toBe(true);
     expect(changes).toBe(2);
   }, 30_000);
-});
 
+  it("cuts every text an event carries before it keeps, saves or streams it", async () => {
+    const launch: Launcher = (spec, onEvent) => {
+      const job = spec.job.id;
+      onEvent({ type: "compile", job, at: 1, step: "bundle", ok: false, text: "x".repeat(50_000) });
+      onEvent({ type: "result", job, at: 2, ok: false, game: null, error: "e".repeat(50_000) });
+      return { cancel: () => {}, done: Promise.resolve() };
+    };
+    const c = config({ launch });
+    const forge = createForge(c);
+    const live: ForgeEvent[] = [];
+    forge.subscribe((e) => live.push(e));
+    const job = forge.submit(brief(), "claude");
+    await until(() => finished(forge.get(job.id)?.status));
+    const compile = live.find((e) => e.type === "compile");
+    expect(compile?.type === "compile" && compile.text).toBe(`${"x".repeat(MAX_EVENT_TEXT - 1)}…`);
+    expect(forge.get(job.id)?.error).toHaveLength(MAX_EVENT_TEXT);
+    expect(forge.events(job.id)).toEqual(live);
+    await forge.stop();
+    const saved = JSON.parse(readFileSync(path.join(forgeDirs(c.dataDir).jobs, `${job.id}.json`), "utf8")) as { job: { error: string } };
+    expect(saved.job.error).toHaveLength(MAX_EVENT_TEXT);
+  });
+});

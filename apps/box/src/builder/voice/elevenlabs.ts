@@ -3,8 +3,9 @@
 // (budget.ts) and is refused, quietly, when it wouldn't fit: the screen shows a caption, or the player taps a key. The
 // key travels only in a header; logs carry the HTTP status, never the key or the request.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomic } from "../../server/files.ts";
 import { createBudget } from "./budget.ts";
 import type { ElevenLabsVoice, SpokenLine } from "./port.ts";
 
@@ -80,12 +81,9 @@ export function createElevenLabsVoice(o: ElevenLabsOptions): ElevenLabsVoice {
       }
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (!bytes.length) return caption;
-      const path = join(o.dir, file);
-      const tmp = `${path}.${process.pid}.tmp`;
-      writeFileSync(tmp, bytes);
-      renameSync(tmp, path);
-      // Spent only once a clip exists: a failed call isn't billed.
-      chars.spend(text.length);
+      // Spent once ElevenLabs has answered with a clip: it bills the call whether or not the clip reaches the disk.
+      void chars.spend(text.length);
+      await writeFileAtomic(join(o.dir, file), bytes);
       return { text, clip: file };
     } catch (err) {
       console.warn(`[voice] text-to-speech failed: ${(err as Error).name}`);
@@ -142,7 +140,7 @@ export function createElevenLabsVoice(o: ElevenLabsOptions): ElevenLabsVoice {
           return null;
         }
         // Billed whether or not anyone spoke: count it as soon as the call succeeded.
-        seconds.spend(cost);
+        void seconds.spend(cost);
         const j = (await res.json()) as { text?: unknown };
         const text = typeof j.text === "string" ? j.text.trim() : "";
         return text || null;

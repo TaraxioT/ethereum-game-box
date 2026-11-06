@@ -58,7 +58,7 @@ smoke_data=$(mktemp -d)
 log "smoke test on port $port"
 EGB_PORT=$port EGB_DATA=$smoke_data EGB_RECEIVER=fake node apps/box/src/server/main.ts >"$rel/.smoke.log" 2>&1 &
 smoke_pid=$!
-if ! wait_health "$port" "$(setting EGB_SMOKE_WAIT 60)" "$smoke_pid"; then
+if ! wait_health "$port" "$(setting_int EGB_SMOKE_WAIT 60 1)" "$smoke_pid"; then
   tail -n 40 "$rel/.smoke.log" | tee -a "$EGB_DEPLOY_LOG" >&2
   die "smoke test: /api/health did not answer ok"
 fi

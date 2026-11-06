@@ -1,14 +1,13 @@
 // The Builder tab: who builds here and whether it can, the Forge's jobs with their status (cancel one still going,
 // remove a built game), and the builder's event stream as it comes (a job's whole log on request). Its requests carry
 // the launcher token the page got as a top-level navigation, through the screen's own builder link.
-import type { ForgeEvent, ForgeJob } from "../builder/types.ts";
+import { isFinished, type ForgeEvent, type ForgeJob } from "../builder/types.ts";
 import { BUILDER, type BuilderStatus, type CancelReply, type HelloEvent, type JobReply } from "../server/builder-wire.ts";
 import { BuilderError, getJson, hasLauncherToken, openBuilderStream, postJson } from "../screen/views/builder-link.ts";
 import { button, h, show } from "./dom.ts";
 
 /** Lines kept in the live log. */
 const LOG_LINES = 300;
-const FINISHED = new Set(["done", "failed"]);
 
 const time = (at: number): string => new Date(at).toLocaleTimeString("en-GB", { hour12: false });
 
@@ -77,7 +76,7 @@ export function builderTab(): { readonly el: HTMLElement } {
         const actions = h("td", "");
         actions.append(
           button("Events", () => openJob(job.id)),
-          ...(FINISHED.has(job.status)
+          ...(isFinished(job.status)
             ? []
             : [button("Cancel", () => act(async () => ((await postJson<CancelReply>(BUILDER.cancel, { id: job.id })).cancelled ? `cancelling ${job.id}` : `${job.id} can't be cancelled now`)))]),
           ...(job.status === "done" && job.game

@@ -7,6 +7,8 @@ import { calm } from "../shell/dom.ts";
 const BASE = `
 *, *::before, *::after { box-sizing: border-box; }
 :host { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* A part sets its own display on :host, which would otherwise beat the hidden attribute. */
+:host([hidden]) { display: none !important; }
 
 /* An LCD set in a bevelled gunmetal frame, lit from the top left: a bright top edge, a dark bottom edge, the glass
    sunk into it with an inner shadow and a sheen across its top half. --lcd-glass is the glass's colour. */

@@ -31,11 +31,22 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 mkdir -p "$EGB_INCOMING" "$EGB_RELEASES" "$EGB_BIN" "$EGB_STATE"
 
 log() {
-  printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$EGB_DEPLOY_LOG" >&2
+  local line
+  line="$(date '+%F %T') $*"
+  # The file first, and neither write may fail the caller: when a push's ssh drops, stderr is a dead pipe, and a log
+  # line must not be what kills a deploy half way (or the rollback after it).
+  printf '%s\n' "$line" >>"$EGB_DEPLOY_LOG" 2>/dev/null || true
+  printf '%s\n' "$line" >&2 2>/dev/null || true
   # A log that grows forever fills a 32 GB card; keep the newest 2000 lines once it passes 1 MB.
   if [ "$(wc -c <"$EGB_DEPLOY_LOG")" -gt 1048576 ]; then
     tail -n 2000 "$EGB_DEPLOY_LOG" >"$EGB_DEPLOY_LOG.tmp" && mv -f "$EGB_DEPLOY_LOG.tmp" "$EGB_DEPLOY_LOG"
   fi
+}
+
+# Logs each line of stdin (a journal tail, a build log), credentials hidden.
+log_lines() {
+  local line
+  while IFS= read -r line; do log "  $(printf '%s' "$line" | redact)"; done
 }
 
 die() {
@@ -56,22 +67,39 @@ log_once() { # key message
 }
 
 # A setting: the environment first, then ~/.config/egb/env, then the default. The file is parsed, never sourced:
-# it is a systemd EnvironmentFile (KEY=value, # comments, optional quotes), not a shell script.
+# it is a systemd EnvironmentFile (KEY=value, # comments, optional quotes), not a shell script. A quoted value is taken
+# as written; an unquoted one loses a trailing ` # comment` (systemd keeps it, so keep comments on their own lines in
+# the file: this only stops a stray one from reaching a script's arithmetic).
 setting() { # KEY [default]
-  local key=$1 default=${2:-} value
+  local key=$1 default=${2:-} value trimmed
   if [ -n "${!key:-}" ]; then
     printf '%s' "${!key}"
     return 0
   fi
   value=$(sed -n "s/^[[:space:]]*$key=//p" "$EGB_ENV_FILE" 2>/dev/null | tail -n 1 || true)
-  value=${value%\"}
-  value=${value#\"}
-  value=${value%\'}
-  value=${value#\'}
+  trimmed=${value#"${value%%[![:space:]]*}"}
+  case $trimmed in
+    \"*) value=${trimmed#\"}; value=${value%%\"*} ;;
+    \'*) value=${trimmed#\'}; value=${value%%\'*} ;;
+    *) value=$(printf '%s' "$value" | sed -E 's/^[[:space:]]+#.*$//; s/[[:space:]]+#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//') ;;
+  esac
   printf '%s' "${value:-$default}"
 }
 
-box_port() { setting EGB_PORT 8790; }
+# A whole-number setting. Anything else (or less than <min>, default 0) is logged once and the default is used: these
+# feed loop bounds and counts, and a typo must not turn into "keep no releases".
+setting_int() { # KEY default [min]
+  local key=$1 default=$2 min=${3:-0} value
+  value=$(setting "$key" "$default")
+  if [[ $value =~ ^[0-9]{1,9}$ ]] && [ $((10#$value)) -ge "$min" ]; then
+    printf '%s' $((10#$value))
+    return 0
+  fi
+  log_once "bad-$key" "$key=$value in $EGB_ENV_FILE is not a whole number of at least $min; using $default"
+  printf '%s' "$default"
+}
+
+box_port() { setting_int EGB_PORT 8790 1; }
 
 # One field of a release's RELEASE.json (empty when there is none).
 release_field() { # release-dir field
@@ -111,10 +139,28 @@ built_release_for() { # commit
   return 1
 }
 
+# True when GET <path> answers JSON for which the JavaScript expression (over `j`) is true.
+api_true() { # port path expression
+  curl -sf -m 2 "http://127.0.0.1:$1$2" |
+    node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{process.exit(new Function("j","return "+process.argv[1])(JSON.parse(d))===true?0:1)}catch{process.exit(1)}})' "$3"
+}
+
 # True when GET /api/health answers {"ok":true}.
-health_ok() { # port
-  curl -sf -m 2 "http://127.0.0.1:$1/api/health" |
-    node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{process.exit(JSON.parse(d).ok===true?0:1)}catch{process.exit(1)}})'
+health_ok() { api_true "$1" /api/health 'j.ok===true'; }
+
+# True when the server has the tap receiver's serial port open (GET /api/taps: status.receiver.open; status is null with
+# EGB_RECEIVER=none, so a Box without a receiver is never "open").
+receiver_open() { api_true "$1" /api/taps 'j.status?.receiver?.open===true'; }
+
+# Waits up to <seconds> for the receiver to open. The port opens a moment after /api/health answers (the server listens
+# first), and /api/health says nothing about it: a release that breaks the serial code still answers health.
+wait_receiver_open() { # port seconds
+  local i
+  for ((i = 0; i < $2; i++)); do
+    receiver_open "$1" && return 0
+    sleep 1
+  done
+  receiver_open "$1"
 }
 
 # Waits up to <seconds> for /api/health. With a pid it also gives up the moment that process is gone, and an answer
@@ -130,10 +176,25 @@ wait_health() { # port seconds [pid]
 }
 
 # Prints why the Box is busy and returns 0, or returns 1 when it is idle. /api/state says busy:false only between
-# matches; a Box that isn't running has nothing to interrupt. An answer that isn't readable counts as busy.
+# matches. A Box that isn't running has nothing to interrupt, but one whose unit is up and does not answer is not idle
+# (it is slow, mid-boot or mid-match); only a plain 404 (a release without the route) counts as nothing to wait for.
+# An answer that isn't readable counts as busy.
 box_busy_reason() {
-  local json
-  json=$(curl -sf -m 3 "http://127.0.0.1:$(box_port)/api/state" 2>/dev/null) || return 1
+  local reply code json
+  reply=$(curl -s -m 3 -w '\n%{http_code}' "http://127.0.0.1:$(box_port)/api/state" 2>/dev/null || true)
+  code=${reply##*$'\n'}
+  json=${reply%$'\n'*}
+  case $code in
+    200) ;;
+    404) return 1 ;;
+    *)
+      if systemctl --user is-active --quiet egb-server 2>/dev/null; then
+        echo "egb-server is running but does not answer /api/state"
+        return 0
+      fi
+      return 1
+      ;;
+  esac
   printf '%s' "$json" | node -e '
 let d = "";
 process.stdin.on("data", (c) => (d += c)).on("end", () => {
@@ -149,7 +210,7 @@ process.stdin.on("data", (c) => (d += c)).on("end", () => {
 
 # Waits until the Box is idle, at most <seconds> (default EGB_IDLE_WAIT, 900). Returns 1 on timeout.
 wait_idle() { # [seconds]
-  local max=${1:-$(setting EGB_IDLE_WAIT 900)} waited=0 why
+  local max=${1:-$(setting_int EGB_IDLE_WAIT 900)} waited=0 why
   while why=$(box_busy_reason); do
     [ "$waited" -lt "$max" ] || { log "the Box is still busy after ${max}s: $why"; return 1; }
     [ $((waited % 60)) -eq 0 ] && log "waiting for an idle Box: $why"
@@ -166,7 +227,7 @@ lock_deploy() { # [--quiet]
   if ! flock -n 9; then
     [ "${1:-}" = --quiet ] && exit 0
     log "another deploy is running; waiting for it"
-    flock -w "$(setting EGB_LOCK_WAIT 1800)" 9 || die "gave up waiting for the other deploy"
+    flock -w "$(setting_int EGB_LOCK_WAIT 1800)" 9 || die "gave up waiting for the other deploy"
   fi
   export EGB_LOCK_HELD=1
 }
@@ -209,7 +270,7 @@ install_scripts() { # deploy-pi-dir
 # pushed source trees left behind by a push that died.
 prune() {
   local keep live previous dir count=0
-  keep=$(setting EGB_KEEP_RELEASES 5)
+  keep=$(setting_int EGB_KEEP_RELEASES 5 1)
   live=$(current_release)
   previous=$([ -n "$live" ] && release_field "$live" previous || true)
   while read -r dir; do

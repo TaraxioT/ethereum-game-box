@@ -8,7 +8,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { BoxEvent, BoxLink, BoxState, ScreenCommand } from "../core/types.ts";
 import { LINK_COALESCE_MS, LINK_PATH, STATE_ONLY, type LinkDown } from "../core/wire.ts";
 import { coalesce } from "./coalesce.ts";
-import { localOrigin } from "./http.ts";
+import { loopbackHost, sameOrigin } from "./http.ts";
 
 /** A screen that leaves this much unread is dropped; a live page reconnects and starts from a whole state. */
 const MAX_BUFFERED = 1024 * 1024;
@@ -95,7 +95,8 @@ export function attachLink(server: http.Server, box: BoxLink, log: (text: string
       socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
     };
     if (path !== LINK_PATH) return refuse("404 Not Found");
-    if (!localOrigin(req.headers.origin)) return refuse("403 Forbidden");
+    if (!loopbackHost(req.headers.host)) return refuse("421 Misdirected Request");
+    if (!sameOrigin(req.headers.origin, req.headers.host)) return refuse("403 Forbidden");
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   }
   server.on("upgrade", onUpgrade);

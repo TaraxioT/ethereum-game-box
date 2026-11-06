@@ -369,6 +369,46 @@ describe("the core on its ports", () => {
   });
 });
 
+describe("money that never arrives", () => {
+  /** A Quick Draw at 10 EGB each that ended with the Box's power off: on Refund, both refunds claimed and on their way. */
+  function refunding(): Rig {
+    const r = rig({ ledger: { balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} } });
+    toPlaying(r, "quick-draw");
+    r.core.setPower(false);
+    instantTap(r.core, 0, NOVA, 1);
+    until(r, (state) => state.phase === "refund");
+    until(r, (state) => state.chain.block >= (state.match?.refundBlock ?? Infinity));
+    r.core.send({ type: "refund" });
+    expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([10, 10]);
+    return r;
+  }
+
+  it("forgets a refund on its way when a reset hands the stake back, and the late refund pays nothing twice", () => {
+    const r = refunding();
+    r.core.reset();
+    expect(r.core.state().seats.map((seat) => seat.pending)).toEqual([0, 0]);
+    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} });
+    until(r, (state) => state.txs.every((tx) => tx.step === "paid"));
+    expect(r.store.current()).toEqual({ balances: { [NOVA.address]: 20, [KITE.address]: 20 }, escrow: {} });
+  });
+
+  it("stakes more than the real balance only with the faucet's top-up, so the open always locks", () => {
+    const r = refunding();
+    r.core.reset();
+    r.core.setPower(true);
+    r.core.send({ type: "play" });
+    r.core.send({ type: "stake", amount: 25 });
+    instantTap(r.core, 0, NOVA, 1);
+    instantTap(r.core, 1, KITE, 1);
+    until(r, (state) => state.phase === "playing");
+    expect(r.store.current().escrow).toEqual({ [NOVA.address]: 25, [KITE.address]: 25 });
+    instantTap(r.core, 0, NOVA, 1);
+    until(r, (state) => state.phase === "result");
+    until(r, (state) => state.txs.length > 0 && state.txs.every((tx) => tx.step === "paid"));
+    expect(r.store.current().escrow).toEqual({});
+  });
+});
+
 describe("the build phase", () => {
   /** Booted, with NOVA seated, on Home. */
   function onHome(builder: boolean): Rig {

@@ -3,13 +3,13 @@ import { HaloTagError } from "@arx-research/libhalo/api/common";
 import { describe, expect, it } from "vitest";
 import { createFakeClock } from "../core/fake-clock.ts";
 import { readKeys, rollRandom } from "./chip-ops.ts";
-import { NotHaloError, VerifyError } from "./errors.ts";
+import { NfcError, NotHaloError, VerifyError } from "./errors.ts";
 import { SimBadge } from "./fake/sim-badge.ts";
 import { AidMemory, ChipSession, type HaloExec } from "./halo-exec.ts";
 import { Nfc } from "./nfc.ts";
 
 /** A station with `badge` on its reader, answering at once. Returns the session and the APDUs it got. */
-function onReader(badge: SimBadge, opts: { sak?: string; aids?: AidMemory } = {}) {
+function onReader(badge: SimBadge, opts: { sak?: string; aids?: AidMemory; present?: () => boolean; answering?: (hex: string) => void } = {}) {
   const clock = createFakeClock(0);
   const apdus: string[] = [];
   let id = 0;
@@ -19,13 +19,14 @@ function onReader(badge: SimBadge, opts: { sak?: string; aids?: AidMemory } = {}
     send(cmd) {
       if (cmd.cmd !== "nfc" || (cmd.op !== "apdu" && cmd.op !== "sign")) throw new Error(`unexpected ${cmd.cmd}`);
       apdus.push(cmd.hex);
+      opts.answering?.(cmd.hex);
       const hex = badge.apdu(cmd.hex);
       queueMicrotask(() => nfc.answer({ ev: "nfc_res", st: cmd.st, id: cmd.id, op: cmd.op, ok: true, err: 0, hex, us: 1, wait_us: 1, rtt_us: 1, tries: 1 }));
       return true;
     },
   });
   badge.powerUp();
-  const target = { st: "e4ba70", uid: badge.uid, sak: opts.sak ?? "20", selected: false, present: () => true, whenUp: async () => {} };
+  const target = { st: "e4ba70", uid: badge.uid, sak: opts.sak ?? "20", present: opts.present ?? (() => true), whenUp: async () => {} };
   return { session: new ChipSession(nfc, opts.aids ?? new AidMemory(), target, clock), apdus };
 }
 
@@ -87,5 +88,21 @@ describe("the applet select", () => {
     expect(again.apdus.map((a) => a.slice(0, 12))).toEqual(["00A404000748"]);
     // An unseen chip starts with the AID that worked last.
     expect(aids.order("04FFFFFFFFFFFF")).toEqual([1, 0]);
+  });
+
+  it("throws away an answer that comes back after the chip left (it may be another chip's), and sends nothing more", async () => {
+    let here = true;
+    const { session, apdus } = onReader(new SimBadge("ada"), {
+      present: () => here,
+      answering: (hex) => {
+        if (hex.startsWith("B0510000")) here = false;
+      },
+    });
+    const read = readKeys(session.exec);
+    await expect(read).rejects.toBeInstanceOf(NfcError);
+    await expect(read).rejects.toMatchObject({ kind: "no-chip" });
+    expect(apdus).toHaveLength(2);
+    await expect(readKeys(session.exec)).rejects.toMatchObject({ kind: "no-chip" });
+    expect(apdus).toHaveLength(2);
   });
 });

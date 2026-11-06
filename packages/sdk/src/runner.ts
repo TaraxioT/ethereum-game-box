@@ -3,6 +3,12 @@
 import type { BuiltEvent, Outcome } from "./rules.ts";
 import type { StationView } from "./station.ts";
 
+/**
+ * The longest error message a game's code can put in front of the Box: a rules child's `error` reply and a frame's
+ * `error` are cut to it on both ends. Enough for `Name: message`, never a whole stack.
+ */
+export const MAX_MESSAGE = 300;
+
 export type RunnerRequest =
   | { readonly t: "start"; readonly seq: number; readonly seed: number; readonly now: number }
   | { readonly t: "step"; readonly seq: number; readonly event: BuiltEvent };

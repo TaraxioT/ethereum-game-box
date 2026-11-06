@@ -1,14 +1,10 @@
 // A StationView as a station's screen payload: `key=value` lines (firmware/tap-station/protocol.md, Screens), each
 // value cut to what the station shows, at most 200 bytes in all.
-import { BIG_CHARS, SMALL_CHARS, TAG_CHARS, type StationView } from "@egb/sdk";
+import { BIG_CHARS, printable as clip, SMALL_CHARS, TAG_CHARS, type StationView } from "@egb/sdk";
 
-/** The most payload bytes one `screen` carries. */
+/** The most payload bytes one `screen` carries. Every value is printable ASCII (`clip`): a newline would break it. */
 export const PAYLOAD_MAX = 200;
 const OVERRIDES = ["hold", "sign", "done", "fail"] as const;
-const NOT_PRINTABLE = /[^\x20-\x7e]/g;
-
-/** Printable ASCII only (the station would show anything else as `?` anyway; a newline would break the format). */
-const clip = (text: string, max: number): string => text.replace(NOT_PRINTABLE, "?").slice(0, max);
 
 /** An override's `BIG|small`, each side cut to its line; the small side can't carry another `|`. */
 function override(value: string): string {

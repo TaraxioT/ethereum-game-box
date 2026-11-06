@@ -54,8 +54,6 @@ const SHAPES: Readonly<Record<ReceiverEvent["ev"], Readonly<Record<string, Check
     ats: hex,
     read_us: num,
     gap_us: num,
-    sel: opt(hex),
-    sel_us: opt(num),
     tries: num,
     at_us: u32,
   },

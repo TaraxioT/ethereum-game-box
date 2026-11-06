@@ -42,13 +42,21 @@ export function frameView(source: FrameSource): ViewFactory {
     root.append(frame);
     const timeout = setTimeout(() => ready || showFault("the screen never said ready"), READY_TIMEOUT_MS);
 
-    const channel = openFrameChannel(window, frame, (message) => {
-      if (message.t === "error") return showFault(message.message);
-      ready = true;
-      clearTimeout(timeout);
-      const state = ctx.link.state();
-      match = source(state);
-      if (match) channel.post(frameInit(match, state, ctx.link.now(), ctx.calm));
+    const channel = openFrameChannel(window, frame, {
+      message(message) {
+        if (message.t === "error") return showFault(message.message);
+        ready = true;
+        clearTimeout(timeout);
+        const state = ctx.link.state();
+        match = source(state);
+        if (match) channel.post(frameInit(match, state, ctx.link.now(), ctx.calm));
+      },
+      // The game's screen navigated away: whatever page it is on now is no game's frame. It goes, and the plate shows.
+      left() {
+        clearTimeout(timeout);
+        frame.remove();
+        showFault("the screen left its page");
+      },
     });
 
     return {

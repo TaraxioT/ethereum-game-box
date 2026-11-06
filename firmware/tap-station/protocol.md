@@ -16,7 +16,8 @@ change here is a change on both sides.
 - `at_us` is the receiver's `micros()` when the event happened on the receiver (a 32-bit counter: it wraps every
   ~71 minutes, so the Pi compares it modulo 2³²).
 - Every `id` a command carries is the caller's, a decimal from 1 to 2³²−1, and comes back on every line about that
-  command. The receiver's own ids (taps, presses) are its own counters.
+  command. The receiver's own ids (taps, presses) are its own counters. A station's taps count up: the receiver never
+  passes on a tap, `gone` or `signed` older than one it already passed on for that station.
 - Hex is upper or lower case on the way in, upper case on the way out.
 - A field the Pi doesn't know is ignored, so new fields need no server change.
 
@@ -82,7 +83,6 @@ stats e4ba70
 
 ```
 {"ev":"tap","st":"e4ba70","id":5,"uid":"04A1B2C3D4E5F6","atqa":"0044","sak":"20","ats":"78807002","read_us":27400,"gap_us":20500,"tries":1,"at_us":4012345678}
-{"ev":"tap","st":"e4ba70","id":6,"uid":"04A1B2C3D4E5F6","atqa":"0044","sak":"20","ats":"78807002","read_us":27400,"gap_us":20500,"sel":"9000","sel_us":41000,"tries":1,"at_us":4012399000}
 {"ev":"gone","st":"e4ba70","id":5,"uid":"04A1B2C3D4E5F6","at_us":4013345678}
 {"ev":"signed","st":"e4ba70","id":12,"tap":5,"uid":"04A1B2C3D4E5F6","ok":true,"chip_us":402000,"total_us":560000,"at_us":4013000000}
 ```
@@ -90,10 +90,11 @@ stats e4ba70
 - `tap` the moment the PN532 reads a chip, while the motor is already running. ISO-DEP chips (HaLos) come activated,
   with their ATS.
   - `read_us`: the station's µs from the start of the detection that found the chip until the packet left.
-  - `gap_us`: how long the detection before it took. The chip landed in that window, so the Pi takes the touch as
-    `at_us − radio − read_us − gap_us / 2`.
-  - `sel` and `sel_us`, when present: the station selected the HaLo applet itself on detection, and this is the
-    chip's answer (`9000` = selected) and how long it took. Without them the Pi selects the applet itself.
+  - `gap_us`: how long the detection before it took (80 000 at most). The chip landed in that window, so the Pi takes
+    the touch as `at_us − radio − read_us − gap_us / 2`.
+  - The station selects the HaLo applet itself right after an ISO-DEP chip's `tap` has gone out (the SELECT that
+    chip answered last first) and keeps the chip's answer: the Pi's own SELECT with the same bytes (`nfc … apdu`),
+    sent while nothing else has gone to the chip, is answered from it at once.
   - `tries`: radio sends until the receiver's ack.
 - `gone` after two reads in a row without the chip.
 - `signed` after every `sign` request: `chip_us` is that exchange on the reader alone, `total_us` the time since the
@@ -118,7 +119,7 @@ stats e4ba70
 
 - `buzz_ok` / `screen_ok` when the station acked; `rtt_us` is from the first send to the ack. `buzz_fail` /
   `screen_fail` after a second without one, or at once with `bad request` or `no such station linked`. `all` gets
-  one line per linked station (or one `buzz_fail` with `st` `all` when none is linked). A screen replaced by a newer
+  one line per linked station (or, when none is linked, one `buzz_fail` with `st` `all`, and `bad` for `screen all`). A screen replaced by a newer
   one before its ack gets neither line.
 - `nfc_res` answers an `nfc` request. `us` is the station's time on it, `wait_us` the part spent waiting for the
   PN532 and the chip (the rest is the S3's I²C), `rtt_us` the receiver's whole round trip. `apdu` and `sign` answers
@@ -128,7 +129,7 @@ stats e4ba70
   |:-:|---|
   | 1 | no chip answered |
   | 2 | RF error (`pn532` = the PN532's status byte; 255 = the PN532 itself timed out) |
-  | 3 | an APDU with no chip on the reader |
+  | 3 | an APDU with no chip on the reader, or another chip there than the one tapped last before the request |
   | 4 | the PN532 isn't answering |
   | 5 | a bad request |
 
@@ -160,8 +161,9 @@ stats e4ba70
 {"ev":"stats","board":"s3","st":"e4ba70","stack":{"loop":3100,"nfc":2900,"oled":1800,"press":1500},"dropped":0,"send_fails":0,"up_ms":358000}
 ```
 
-`stack` is each task's lowest free stack in bytes since boot. `dropped` counts serial lines dropped for want of room
-in the transmit buffer.
+`stack` is each task's lowest free stack in bytes since boot. `dropped` counts what was lost for want of room: serial lines
+the transmit buffer couldn't take, and packets the loop had no room for (the receiver doesn't ack those, so the
+station sends them again).
 
 ## Screens
 
@@ -188,6 +190,7 @@ Example: `tag=P1\nbig=TAP\nsmall=NOVA` is `7461673d50310a6269673d5441500a736d616
 
 ## The station's own serial port
 
-Each station also answers on its own USB port, for bring-up and screenshots: `press`, `buzz [ms]`, `stats`, and
-`frame`, which prints the OLED as `frame 72 40 <hex>` (row-major, one bit a pixel, most significant bit first; read
-by `tools/frame.py`). It prints `tag uid=… read_us=…` and `tag gone` as chips come and go.
+Each station also answers on its own USB port, for bring-up and screenshots: `press`, `buzz [ms]`, `stats`,
+`bench <what> [n]` (timing runs on the chip on the reader), and `frame`, which prints the OLED as `frame 72 40 <hex>`
+(row-major, one bit a pixel, most significant bit first; read by `tools/frame.py`). It prints `tag uid=… read_us=…`
+and `tag gone` as chips come and go.

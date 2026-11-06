@@ -2,9 +2,10 @@
 // one request at a time, budgets in wall time, every failure a rejection that ends the session, one game at a time.
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { BuiltEvent } from "@egb/sdk";
 import { tempDir } from "../../builder/forge/test-helpers.ts";
+import { sandboxRefusal, SANDBOX_NODE_MAJOR } from "./child.ts";
 import { createRulesHost, RulesError, type RulesHost, type RulesHostOptions } from "./host.ts";
 
 const dir = tempDir("egb-rules-host-");
@@ -54,7 +55,6 @@ describe("the rules host", () => {
   it("starts at prepare, then answers start and steps in order with the child's state and views", async () => {
     const { host } = makeHost({ good: GOOD });
     host.prepare("good");
-    expect(host.running()).toBe("good");
     const first = await host.start("good", 7, 1_000);
     expect(first).toEqual({ state: { seq: 0, event: null }, outcome: null, stations: [{ tag: "P1", big: "TAP", small: "" }, { tag: "P2", big: "WAIT", small: "" }] });
     const steps = await Promise.all([host.step(TICK), host.step({ type: "tap", seat: 1, now: 1_200, roll: null }), host.step(TICK)]);
@@ -80,7 +80,6 @@ describe("the rules host", () => {
     await expect(late).rejects.toMatchObject({ name: "RulesError", code: "budget" });
     expect(performance.now() - t0).toBeLessThan(1_000);
     await expect(queued).rejects.toMatchObject({ code: "budget" });
-    expect(host.running()).toBeNull();
     // The session is over: a later step doesn't start it again.
     await expect(host.step(TICK)).rejects.toBeInstanceOf(RulesError);
     expect(logs.join("\n")).toMatch(/slow took over its 50 ms budget \(a tick step\)/);
@@ -139,25 +138,38 @@ describe("the rules host", () => {
     const { host } = makeHost({ good: GOOD, parked }, { readyTimeoutMs: 5_000 });
     await host.start("parked", 1, 0);
     host.prepare("parked");
-    expect(host.running()).toBe("parked");
     const pending = host.step(TICK);
     host.prepare("good");
     await expect(pending).rejects.toMatchObject({ code: "stopped" });
-    expect(host.running()).toBe("good");
     await expect(host.start("good", 1, 0)).resolves.toBeTruthy();
     // A rematch reuses the live child: start again on the same session.
     await expect(host.start("good", 2, 0)).resolves.toMatchObject({ state: { seq: 1 } });
     const last = host.step(TICK);
     host.stop();
     await expect(last).rejects.toMatchObject({ code: "stopped" });
-    expect(host.running()).toBeNull();
+    await expect(host.step(TICK)).rejects.toMatchObject({ code: "unavailable" });
   });
 
-  it("keeps the children's stderr in a capped log", async () => {
-    const chatty = child("chatty", 'process.stderr.write("x".repeat(5000) + "\\n"); state(req);', 'process.stderr.write("hello from the game\\n"); send({ t: "ready" });');
-    const { host } = makeHost({ chatty }, { stderrChars: 2_000 });
+  it("logs the tail of a failing child's stderr, capped, and nothing of a healthy one's", async () => {
+    const chatty = child("chatty", 'process.stderr.write("x".repeat(5000) + "\\n"); if (req.t === "step") { process.stderr.write("Error: the lantern broke\\n"); process.exit(2); } state(req);', 'process.stderr.write("hello from the game\\n"); send({ t: "ready" });');
+    const { host, logs } = makeHost({ chatty }, { stderrChars: 2_000 });
     await host.start("chatty", 1, 0);
-    await vi.waitFor(() => expect(host.stderr()).toMatch(/^… \(earlier output dropped\)\nx+\n$/));
-    expect(host.stderr().length).toBeLessThan(2_100);
+    expect(logs).toEqual([]);
+    await expect(host.step(TICK)).rejects.toMatchObject({ code: "crash" });
+    const line = logs.find((l) => l.startsWith("rules: chatty exited (2)")) ?? "";
+    expect(line).toMatch(/; its stderr ended:\n… \(earlier output dropped\)\nx+\nError: the lantern broke$/);
+    expect(line.length).toBeLessThan(2_200);
+    expect(line).not.toContain("hello from the game");
+  });
+
+  it("runs no built game on a Node whose permission model doesn't cover the network, and seals each one asked for", async () => {
+    const { host, logs, sealed } = makeHost({ good: GOOD }, { nodeVersion: "24.11.1" });
+    expect(logs).toEqual([`rules: built games need Node ${SANDBOX_NODE_MAJOR} or later (this is Node 24.11.1), whose permission model also refuses the network`]);
+    host.prepare("good");
+    await expect(host.start("good", 1, 0)).rejects.toMatchObject({ code: "unavailable", message: expect.stringMatching(/^can't run: built games need Node 26/) });
+    // Sealed with the reason, at each ask (the library keeps the first).
+    expect(new Set(sealed)).toEqual(new Set([`good: ${logs[0]?.slice("rules: ".length)}`]));
+    expect(sandboxRefusal("26.0.0")).toBeNull();
+    expect(sandboxRefusal(process.versions.node)).toBeNull();
   });
 });

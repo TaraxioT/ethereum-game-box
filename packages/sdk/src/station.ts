@@ -4,6 +4,8 @@
 export const TAG_CHARS = 3;
 export const BIG_CHARS = 10;
 export const SMALL_CHARS = 20;
+/** An override (`hold`, `sign`, `done`, `fail`) is `BIG|small`: both lines and the bar between them. */
+export const OVERRIDE_CHARS = BIG_CHARS + 1 + SMALL_CHARS;
 
 export interface StationView {
   /** Up to 3 characters in the top-left badge (`P1`); empty: none. */
@@ -22,13 +24,14 @@ export interface StationView {
   readonly fail?: string;
 }
 
-const PRINTABLE = /[^\x20-\x7e]/g;
+const UNPRINTABLE = /[^\x20-\x7e]/g;
 
-function clip(text: string, max: number): string {
-  return text.replace(PRINTABLE, "?").slice(0, max);
+/** `text` as the station's font can draw it: printable ASCII (anything else becomes `?`), at most `max` characters. */
+export function printable(text: string, max: number): string {
+  return text.replace(UNPRINTABLE, "?").slice(0, max);
 }
 
 /** A view cut to what the station can show: printable ASCII, each line at its length, `big` upper-cased. */
 export function stationView(tag: string, big: string, small: string, extra: Partial<StationView> = {}): StationView {
-  return { ...extra, tag: clip(tag, TAG_CHARS), big: clip(big, BIG_CHARS).toUpperCase(), small: clip(small, SMALL_CHARS) };
+  return { ...extra, tag: printable(tag, TAG_CHARS), big: printable(big, BIG_CHARS).toUpperCase(), small: printable(small, SMALL_CHARS) };
 }

@@ -20,7 +20,10 @@ export interface TxOrder {
 export interface TxBook {
   /** Signs a transaction; `land` runs when it reaches a block, just before its `in-block` step is reported. */
   submit(order: TxOrder, land: () => void): Tx;
-  /** A block was sealed at `at`: every transaction sent before then goes into it. */
+  /**
+   * A block was sealed at `at`: every transaction sent before then goes into it, even when one's `land` (or a hook)
+   * throws; the first such error is thrown after all of them are in.
+   */
   seal(block: number, at: number): void;
   /** Transactions still on screen, oldest first. */
   list(): readonly Tx[];
@@ -71,12 +74,25 @@ export function createTxBook(hooks: TxHooks, clock: Clock): TxBook {
       return tx;
     },
     seal(block, at) {
+      let failure: unknown = null;
       for (const entry of entries) {
         if (entry.tx.step !== "sent" || entry.sentAt === null || entry.sentAt >= at) continue;
-        entry.land();
-        advance(entry, { step: "in-block", block });
+        // A transaction whose effect throws still goes into its block: left `sent`, it would throw again at every
+        // block, and every transaction after it would wait behind it for ever.
+        try {
+          entry.land();
+        } catch (e) {
+          failure ??= e;
+        }
+        try {
+          advance(entry, { step: "in-block", block });
+        } catch (e) {
+          failure ??= e;
+        }
         timers.after(PAY_MS, () => pay(entry));
       }
+      // Reported once the block is sealed, to whoever runs the chain clock.
+      if (failure !== null) throw failure;
     },
     list() {
       return entries.map((entry) => entry.tx);

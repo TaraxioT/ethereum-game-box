@@ -1,13 +1,12 @@
 // The bundle shape the rules runner relies on: rules.js alone, run as `node --permission --allow-fs-read=<rules.js>
 // rules.js`, speaks the runner protocol; and the checks build_game runs on a folder.
-import { spawn } from "node:child_process";
-import { cpSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { FIXTURES, tempDir } from "../forge/test-helpers.ts";
+import { describe, expect, it, vi } from "vitest";
+import { FIXTURES, playRules as play, tempDir } from "../forge/test-helpers.ts";
 import { bundleGame } from "./bundle.ts";
 import { BUNDLE_FILES, sdkPaths } from "./paths.ts";
-import { checkRulesBundle, rulesChildArgs, stationProblems } from "./rules-check.ts";
+import { checkRulesBundle, stationProblems } from "./rules-check.ts";
 import { typecheckGame } from "./typecheck.ts";
 
 const sdk = sdkPaths();
@@ -17,30 +16,6 @@ function fixtureCopy(): { dir: string; out: string } {
   const dir = path.join(base, "tap-three");
   cpSync(path.join(FIXTURES, "tap-three"), dir, { recursive: true });
   return { dir, out: path.join(base, "out") };
-}
-
-/** Talks to a rules.js child: writes the requests, collects every stdout line until it has `count` replies. */
-function play(rulesJs: string, requests: object[], count: number): Promise<{ replies: Record<string, unknown>[]; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, rulesChildArgs(rulesJs), { stdio: ["pipe", "pipe", "pipe"], env: {} });
-    const replies: Record<string, unknown>[] = [];
-    let out = "";
-    let stderr = "";
-    const timer = setTimeout(() => (child.kill(), reject(new Error(`timed out: ${out} ${stderr}`))), 10_000);
-    child.stderr.on("data", (c: Buffer) => (stderr += c.toString()));
-    child.stdout.on("data", (c: Buffer) => {
-      out += c.toString();
-      const lines = out.split("\n");
-      out = lines.pop() ?? "";
-      for (const l of lines) replies.push(JSON.parse(l) as Record<string, unknown>);
-      if (replies.length === 1 && replies[0]?.t === "ready") for (const r of requests) child.stdin.write(`${JSON.stringify(r)}\n`);
-      if (replies.length >= count) {
-        clearTimeout(timer);
-        child.stdin.end();
-        child.on("exit", () => resolve({ replies, stderr }));
-      }
-    });
-  });
 }
 
 describe("bundling a built game", () => {
@@ -62,7 +37,7 @@ describe("bundling a built game", () => {
     expect(replies[0]).toEqual({ t: "ready" });
     expect(replies[1]).toMatchObject({ t: "state", seq: 0, state: { taps: [0, 0], winner: null }, outcome: null });
     expect(replies[4]).toMatchObject({ t: "state", seq: 3, state: { taps: [0, 3], winner: 1 }, outcome: { winner: 1 } });
-    expect((replies[4]?.stations as { small: string }[]).map((s) => s.small)).toEqual(["LOSE", "WIN"]);
+    expect(replies[4]).toMatchObject({ stations: [{ small: "LOSE" }, { small: "WIN" }] });
     expect(readFileSync(path.join(g.out, BUNDLE_FILES.screen), "utf8")).toMatch(/export\s*\{[^}]*as default/);
   });
 
@@ -73,8 +48,7 @@ describe("bundling a built game", () => {
     expect((await bundleGame(g.dir, g.out, sdk)).ok).toBe(true);
     const { replies, stderr } = await play(path.join(g.out, BUNDLE_FILES.rules), [{ t: "start", seq: 0, seed: 1, now: 0 }], 2);
     expect(replies.map((r) => r.t)).toEqual(["ready", "state"]);
-    expect(stderr).toMatch(/loading/);
-    expect(stderr).toMatch(/noise/);
+    await vi.waitFor(() => expect(stderr()).toMatch(/loading\nnoise/));
   });
 
   it("the rules check plays a test match and words what's wrong", async () => {
@@ -94,6 +68,30 @@ describe("bundling a built game", () => {
     expect(thrown).toEqual(["rules.step threw on step (Player 1's tap): Error: no taps yet"]);
   });
 
+  it("runs rules.js as the rules host does: its heap cap, its line cap, its reply check, error messages cut short", async () => {
+    const dir = tempDir("egb-check-");
+    /** A rules.js by hand: says ready, then runs `onRequest(req)` for each request line. */
+    const rulesJs = (name: string, onRequest: string) => {
+      const file = path.join(dir, `${name}.js`);
+      writeFileSync(file, `const send = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
+send({ t: "ready" });
+let buf = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (c) => { buf += c; for (let i = buf.indexOf("\\n"); i >= 0; i = buf.indexOf("\\n")) { const req = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); ${onRequest} } });
+`);
+      return file;
+    };
+    const long = await checkRulesBundle(rulesJs("long", 'send({ t: "error", seq: req.seq, message: "E".repeat(10_000) });'), "identify");
+    expect(long).toEqual([`rules.start threw on start: ${"E".repeat(300)}`]);
+    expect(await checkRulesBundle(rulesJs("flood", 'process.stdout.write("x".repeat(300 * 1024));'), "identify")).toEqual(["rules.js wrote a line over 256 KB"]);
+    const shapeless = await checkRulesBundle(rulesJs("shapeless", 'send({ t: "state", seq: req.seq, state: 1, outcome: null, stations: [] });'), "identify");
+    expect(shapeless).toEqual(["rules.js broke the protocol: stations(state) must return two views: [Player 1's, Player 2's]"]);
+    const t0 = performance.now();
+    const hoarder = await checkRulesBundle(rulesJs("hoarder", "const hoard = []; for (;;) hoard.push(new Array(1 << 16).fill(1));"), "identify");
+    expect(hoarder).toEqual([expect.stringMatching(/^rules\.js (was killed \(SIGABRT\)|exited \(\d+\)) before answering every request/)]);
+    expect(performance.now() - t0).toBeLessThan(8_000);
+  }, 20_000);
+
   it("type-checks against the SDK and the two default exports", async () => {
     const g = fixtureCopy();
     expect(await typecheckGame(g.dir, sdk)).toMatchObject({ ok: true, errors: [] });
@@ -104,6 +102,35 @@ describe("bundling a built game", () => {
     expect(r.errors).toContainEqual(expect.stringMatching(/^rules\.ts:\d+:\d+ Type 'string' is not assignable to type 'number'\. \(TS2322\)$/));
     expect(r.errors).toContainEqual(expect.stringMatching(/^the game's exports .*has no default export/));
     expect(r.errors.join("\n")).not.toContain(g.dir);
+  });
+
+  it("confines the type checker to the game, the SDK and TypeScript's libs: nothing outside exists, so no key leaks", async () => {
+    const g = fixtureCopy();
+    const outside = tempDir("egb-outside-");
+    const secrets = path.join(outside, "env.json");
+    writeFileSync(secrets, JSON.stringify({ ANTHROPIC_API_KEY_ZQX: "sk-secret", RPC_URL_ZQX: "https://rpc.example/key" }));
+    symlinkSync(secrets, path.join(g.dir, "linked.json"));
+    const rules = readFileSync(path.join(g.dir, "rules.ts"), "utf8");
+    writeFileSync(
+      path.join(g.dir, "rules.ts"),
+      [
+        `import env from ${JSON.stringify(secrets)};`,
+        `import linked from "./linked.json";`,
+        `type Env = typeof import(${JSON.stringify(secrets)});`,
+        `export const a: number = env;`,
+        `export const b: number = linked;`,
+        `export const c: Env = 1;`,
+        `/* é */ export const d: number = "x";`,
+        rules,
+      ].join("\n"),
+    );
+    const r = await typecheckGame(g.dir, sdk);
+    expect(r.ok).toBe(false);
+    const text = r.errors.join("\n");
+    expect(text).not.toMatch(/ZQX|sk-secret|rpc\.example/);
+    expect(r.errors.filter((e) => /Cannot find module/.test(e))).toHaveLength(3);
+    // Columns count characters, as an editor does, not the bytes of an "é" before them.
+    expect(r.errors).toContainEqual("rules.ts:7:22 Type 'string' is not assignable to type 'number'. (TS2322)");
   });
 
   it("station views are judged against the OLED's limits", () => {

@@ -60,10 +60,6 @@ export function glyph(ch: string): Glyph {
   return GLYPHS.get(ch) ?? GLYPHS.get(ch.toUpperCase()) ?? BOX;
 }
 
-export function hasGlyph(ch: string): boolean {
-  return ch === " " || GLYPHS.has(ch) || GLYPHS.has(ch.toUpperCase());
-}
-
 /** Width in panel pixels: glyphs one (scaled) pixel apart. */
 export function textWidth(text: string, scale = 1): number {
   const chars = Array.from(text);

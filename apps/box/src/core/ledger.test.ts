@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanceOf, EMPTY_LEDGER, escrowTotal, faucet, lock, refund, returnAll, settle } from "./ledger.ts";
+import { balanceOf, canLock, EMPTY_LEDGER, escrowTotal, faucet, lock, refund, returnAll, settle } from "./ledger.ts";
 
 const A = "0xa";
 const B = "0xb";
@@ -18,6 +18,13 @@ describe("ledger", () => {
     expect(balanceOf(opened, B)).toBe(90);
     expect(opened.escrow).toEqual({ [A]: 10, [B]: 10 });
     expect(escrowTotal(opened)).toBe(20);
+  });
+
+  it("says when both badges can cover a stake, which lock needs", () => {
+    const funded = faucet(faucet(EMPTY_LEDGER, A, 100), B, 5);
+    expect(canLock(funded, both, 5)).toBe(true);
+    expect(canLock(funded, both, 10)).toBe(false);
+    expect(() => lock(funded, both, 10)).toThrow(RangeError);
   });
 
   it("pays the winner both stakes", () => {

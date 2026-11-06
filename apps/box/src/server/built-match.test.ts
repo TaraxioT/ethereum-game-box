@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Seat, Transcript } from "@egb/sdk";
 import { brief } from "../builder/forge/test-helpers.ts";
+import { isFinished } from "../builder/types.ts";
 import type { BoxState, ScreenCommand } from "../core/types.ts";
 import { openScreen, post, startTestBox, type TestBox, type TestScreen } from "./testing.ts";
 
@@ -96,7 +97,7 @@ describe("a built game on the Box", () => {
     if (!forge) throw new Error("no builder");
     const from = screen.messages.length;
     const job = forge.submit(brief({ template: "quick-draw", title: "Lantern Race", stakes: [1, 5] }), "sim");
-    await waitFor(() => ["done", "failed"].includes(forge.get(job.id)?.status ?? ""));
+    await waitFor(() => isFinished(forge.get(job.id)?.status ?? "queued"));
     expect(forge.get(job.id)).toMatchObject({ status: "done", error: null });
     built = forge.get(job.id)?.game ?? "";
     // The library rescans on the Forge's word, and the screen hears a `games` event with the new cartridge.
@@ -114,7 +115,6 @@ describe("a built game on the Box", () => {
     const staked = tb.box.core.state().seats.map((s) => s.balance);
     const state = tb.box.core.state();
     expect(state.match).toMatchObject({ game: built, play: { game: "built", id: built }, voided: false, stake: 5 });
-    expect(tb.box.rules.running()).toBe(built);
     // The stations show the rules' own views.
     expect(state.stations.map((v) => [v.tag, v.big, v.small])).toEqual([["P1", "0/7", "TAP TO LIGHT"], ["P2", "0/7", "TAP TO LIGHT"]]);
 

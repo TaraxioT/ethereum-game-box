@@ -176,7 +176,9 @@
   border: 1.5px dashed rgb(90 66 36 / 0.35); border-radius: 6px; background: rgb(120 90 50 / 0.05);
 }
 .sd-card-q { font: 900 62px/1 var(--display); color: rgb(70 48 24 / 0.5); text-shadow: 0 1px 0 #fff; }
-.sd-card-shade { position: absolute; inset: 0; border-radius: 4px 4px 8px 8px; background: #0b0604; opacity: 0; pointer-events: none; }
+/* The shade darkening a card further back. It keeps a layer of its own: fading it on a card's layer while the drum
+   steps made the Pi raster every card of both drums again as the step began and again as it ended (35–60 ms frames). */
+.sd-card-shade { position: absolute; inset: 0; border-radius: 4px 4px 8px 8px; background: #0b0604; opacity: 0; pointer-events: none; will-change: opacity; }
 
 /* The draining ring at the front card's top right. */
 .sd-ring { left: 205px; top: 84px; width: 46px; height: 46px; z-index: 3; }

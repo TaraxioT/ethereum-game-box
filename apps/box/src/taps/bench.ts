@@ -38,7 +38,7 @@ export interface BenchOptions {
 
 /** Lines like the ones a game's taps produce, for the parse cost (a tap, a ping and an APDU answer). */
 const SAMPLE_EVENTS: readonly ReceiverEvent[] = [
-  { ev: "tap", st: "e4ba70", id: 5, uid: "04A1B2C3D4E5F6", atqa: "0044", sak: "20", ats: "78807002", read_us: 27400, gap_us: 20500, sel: "9000", sel_us: 41000, tries: 1, at_us: 4012399000 },
+  { ev: "tap", st: "e4ba70", id: 5, uid: "04A1B2C3D4E5F6", atqa: "0044", sak: "20", ats: "78807002", read_us: 27400, gap_us: 20500, tries: 1, at_us: 4012399000 },
   { ev: "ping", st: "e4ba70", rtt_us: 2760, rssi: -37, nfc: true, s3_led: 0, c3_led: 1 },
   { ev: "nfc_res", st: "e4ba70", id: 12, op: "apdu", ok: true, err: 0, hex: "9000", us: 21500, wait_us: 12900, rtt_us: 24800, tries: 1 },
 ];

@@ -76,8 +76,11 @@ const styles = sheet(`
 }
 .groove { --r: calc(var(--g) + 4px); background: #06040d; box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.9); }
 
-/* The glass: a true circle, everything inside clipped to it. */
-.glass { --r: var(--g); overflow: hidden; }
+/* The glass: a true circle, everything inside clipped to it. It, its light and its pool, which swell on every block,
+   and the mark, which turns, stay on layers of their own: an element the browser lifts onto a layer only while it
+   animates makes the GPU raster the glass and everything over it again as the motion starts and again as it ends,
+   which on the Pi costs a 130 ms frame and an 80 ms one per block. */
+.glass { --r: var(--g); overflow: hidden; will-change: transform; }
 .glass > * { position: absolute; }
 .depth {
   inset: 0; border-radius: 50%;
@@ -87,17 +90,19 @@ const styles = sheet(`
 }
 /* The mark's light: a soft volume round it. */
 .light {
+  will-change: opacity;
   left: 12.5%; top: 4.5%; width: 75%; height: 85%; border-radius: 50%; opacity: 0.8;
   background: radial-gradient(closest-side, rgb(214 192 255 / 0.5), rgb(160 124 255 / 0.2) 50%, rgb(120 84 240 / 0.06) 78%, transparent);
 }
 /* The caustic the mark's light focuses on the sphere's floor. */
 .pool {
+  will-change: opacity;
   left: 22%; top: 79%; width: 56%; height: 13%; border-radius: 50%;
   background: radial-gradient(closest-side, rgb(236 222 255 / 0.42), rgb(178 148 255 / 0.18) 50%, transparent);
 }
 .refl { inset: 0; width: 100%; height: 100%; }
 /* The mark, a little above centre. It turns about its upright axis for coin(). */
-.gem { left: 25.3%; top: 14.5%; width: 49.4%; height: 64.5%; }
+.gem { left: 25.3%; top: 14.5%; width: 49.4%; height: 64.5%; will-change: transform; }
 .float { position: absolute; inset: 0; }
 .float svg { display: block; width: 100%; height: 100%; }
 /* The room on the front surface: a curved window across the top, crisp along its upper edge and fading down. */
