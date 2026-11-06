@@ -2,6 +2,7 @@
 // `wrangler dev` in `.dev.vars` (see `.dev.vars.example`); never here.
 {
   "name": "gamebox-relayer",
+  "account_id": "a22fe9411b81705409eb7cdf9be367e3",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "durable_objects": {

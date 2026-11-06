@@ -14,7 +14,8 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { Addresses, Context } from '../src/request.ts';
 import { type Deps, handle } from '../src/routes.ts';
 import { Relay } from '../src/sender.ts';
-import { FakeChain, MemoryStore, Revert } from './fake-chain.ts';
+import { FakeChain, Revert } from './fake-chain.ts';
+import { MemoryStore } from './memory-store.ts';
 
 export const NOW = 1_800_000_000;
 
