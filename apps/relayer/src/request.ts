@@ -85,6 +85,8 @@ export interface Prepared extends Call {
   kind: TxKind;
   /** Whom the per-address rate limits count: an `execute`'s `P256Account`, a top-up's player. */
   account?: Address;
+  /** The Box a store pot's rate limit counts. */
+  box?: string;
   /** Refused while a request holding any of these is pending (a label, a badge, a Box nonce or round). */
   locks: string[];
   /** A claim's primary-name call, sent once the claim is in a block. */

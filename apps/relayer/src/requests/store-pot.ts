@@ -168,7 +168,7 @@ export async function prepareStoreOpen(ctx: Context, input: unknown): Promise<Pr
   }
 
   const call = { to: pot.address, data: encodeFunctionData({ ...pot, functionName: 'open', args: [stake, r, s] }) };
-  return roundCall(ctx, 'store-open', stake, call, { key: digest, until: Number(stake.deadline) });
+  return { ...(await roundCall(ctx, 'store-open', stake, call, { key: digest, until: Number(stake.deadline) })), box: stake.box };
 }
 
 export async function prepareStoreSettle(ctx: Context, input: unknown): Promise<Prepared> {

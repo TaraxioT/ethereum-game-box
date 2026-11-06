@@ -16,10 +16,10 @@ const DAY = 86_400;
 /** A pop-up's licence: a pop-up opened within this window is still live. */
 const POPUP_TERM = 600;
 
-/** The limits a request from `ip` counts against. Executes count per account and top-ups per player and per IP, each
- *  token apart; results and stakes are bounded by the Box keys, verdicts and voids by the verifier's key, and a refund
- *  or a close can succeed only once. */
-export function limitsFor({ kind, account }: Pick<Prepared, 'kind' | 'account'>, ip: string): Limit[] {
+/** The limits a request from `ip` counts against. Executes count per account, top-ups per player and per IP, each token
+ *  apart, and store pots per Box; results and team stakes are bounded by the Box keys, verdicts and voids by the
+ *  verifier's key, and a refund or a close can succeed only once. */
+export function limitsFor({ kind, account, box }: Pick<Prepared, 'kind' | 'account' | 'box'>, ip: string): Limit[] {
   switch (kind) {
     case 'claim':
       return [
@@ -52,11 +52,12 @@ export function limitsFor({ kind, account }: Pick<Prepared, 'kind' | 'account'>,
       ];
     case 'seat':
       return [{ key: 'seat:all', max: 200, windowSeconds: DAY, what: '200 Box-vouched names per day' }];
+    case 'store-open':
+      return [{ key: `store-open:box:${box}`, max: 30, windowSeconds: HOUR, what: '30 store pots per hour from one Box' }];
     case 'result':
     case 'pot-open':
     case 'pot-refund':
     case 'cup-close':
-    case 'store-open':
     case 'store-settle':
     case 'store-void':
     case 'store-refund':

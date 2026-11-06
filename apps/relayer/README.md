@@ -102,8 +102,8 @@ The live smoke test prints the gas each request used, with its Etherscan link.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one
   per badge and 50 per day; account calls 30 per account per hour and 1,500 per day in all; account deploys 3 per IP
   per hour and 30 per day; top-ups one per player per 10 minutes, 60 per IP per day and 300 per day, on each token
-  apart; Box-vouched names 200 per day. Results and stakes come from known Box keys only, verdicts and voids from a key with
-  `VERIFIER_ROLE`, and a refund or a close can succeed only once.
+  apart; store pots 30 per Box per hour; Box-vouched names 200 per day. Results and stakes come from known Box keys
+  only, verdicts and voids from a key with `VERIFIER_ROLE`, and a refund or a close can succeed only once.
 - **Done** means the head is a block past the receipt's; read at the receipt's block (`TxView.block`).
 - The wallet is the deployer's (`sepolia-deployer`). It pays gas, and it is the minter of `FakeUSDC` and Store USDC, for
   the top-ups. Once the admin hand-over is done it holds no other role, but for `StorePot`'s admin and lister roles,

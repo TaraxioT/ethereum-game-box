@@ -207,6 +207,31 @@ describe('POST /store/open', () => {
     expect(again).toMatchObject({ status: 409, body: { error: `a request for pot:${BOX}:1 is already pending` } });
     expect(world.chain.sent).toHaveLength(1);
   });
+
+  it('allows one Box 30 pots an hour, and no more of the wallet', async () => {
+    const { world, players } = match();
+    for (let round = 1n; round <= 30n; round++) {
+      expect((await world.post('/store/open', storeStakeBody(world, players, { round }))).status).toBe(202);
+    }
+    const res = await world.post('/store/open', storeStakeBody(world, players, { round: 31n }));
+    expect(res).toMatchObject({ status: 429, body: { error: 'rate limit: 30 store pots per hour from one Box' } });
+    expect(world.chain.sent).toHaveLength(30);
+  });
+
+  it('counts each Box apart', async () => {
+    const { world, players } = match();
+    await world.store.put(`rate:store-open:box:${BOX}`, Array.from({ length: 30 }, (_, i) => NOW - i));
+    world.boxes.set('delhi-01', world.boxes.get(BOX)!);
+    expect((await world.post('/store/open', storeStakeBody(world, players, { box: 'delhi-01' }))).status).toBe(202);
+    expect((await world.post('/store/open', storeStakeBody(world, players))).status).toBe(429);
+  });
+
+  it('counts only a stake the Box signed, so nobody else can use up its hour', async () => {
+    const { world, players } = match();
+    await world.store.put(`rate:store-open:box:${BOX}`, Array.from({ length: 29 }, (_, i) => NOW - i));
+    expect((await world.post('/store/open', storeStakeBody(world, players, { key: boxKey() }))).status).toBe(401);
+    expect((await world.post('/store/open', storeStakeBody(world, players))).status).toBe(202);
+  });
 });
 
 describe('POST /store/settle', () => {
