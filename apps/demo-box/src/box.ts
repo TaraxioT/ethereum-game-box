@@ -85,8 +85,8 @@ export class Box {
   }
 
   /**
-   * Writes `lastSeen` on its own name and on every live pop-up it runs, and `game` where it differs from the game
-   * the Box is running. Returns the relayer's request ids.
+   * Writes `lastSeen` on its own name and on every live pop-up it runs, and `game` when the game the Box is running
+   * is not the one it last wrote there. Returns the relayer's request ids.
    */
   async heartbeat(): Promise<string[]> {
     const { chain, store, label, defaultGame, post, now } = this.options;
@@ -97,11 +97,15 @@ export class Box {
       if (!this.runs(box) || box.expiry <= at) continue;
       const game = (await store.get<string>(`game:${boxLabel}`)) ?? defaultGame;
       const writes: [string, string][] = [[BOX_KEYS.lastSeen, String(at)]];
-      if ((await chain.game(box, boxLabel)) !== game) writes.push([BOX_KEYS.game, game]);
+      if ((await store.get<string>(`wrote-game:${boxLabel}`)) !== game) writes.push([BOX_KEYS.game, game]);
       for (const [key, value] of writes) {
         const reply = await post('/box/execute', this.signedWrite(box, boxLabel, key, value, at));
-        if (reply.status === 202) ids.push(String(reply.body.id));
-        else console.warn(`heartbeat ${boxLabel} ${key}: ${reply.status} ${String(reply.body.error)}`);
+        if (reply.status !== 202) {
+          console.warn(`heartbeat ${boxLabel} ${key}: ${reply.status} ${String(reply.body.error)}`);
+          continue;
+        }
+        ids.push(String(reply.body.id));
+        if (key === BOX_KEYS.game) await store.put(`wrote-game:${boxLabel}`, value);
       }
     }
     if (ids.length > 0) {

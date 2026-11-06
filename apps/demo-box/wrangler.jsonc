@@ -16,7 +16,7 @@
   "vars": {
     "RELAYER_URL": "https://gamebox-relayer.mathew.workers.dev",
     "BOX_LABEL": "mumbai-01",
-    "DEFAULT_GAME": "quickdraw",
+    "DEFAULT_GAME": "stockduel",
     "ALLOWED_ORIGINS": "https://gamebox-names.pages.dev"
   },
   "observability": { "enabled": true }
