@@ -335,7 +335,7 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--sys)
   .d3 .what { padding-left: 40px; }
   .d1 .nm::before, .d2 .nm::before { left: 6px; } .d3 .nm::before { left: 22px; }
   .d1 .nm { padding-left: 24px; }
-  .note { padding-left: 24px; border-left: 0; position: relative; }
+  .note { padding-left: 24px; border-left: 0; position: relative; right: auto; }
   .note::before { display: block; content: "◆"; position: absolute; left: 8px; top: 0; border: 0; width: auto; font-size: 10px; color: var(--sys-glow); }
   .dl { grid-template-columns: 1fr 1fr; }
   .panel.cup .dl { grid-template-columns: 1fr; }
