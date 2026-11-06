@@ -1,0 +1,23 @@
+{
+  "name": "@egb/demo-box",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@egb/relayer": "workspace:*",
+    "@egb/shared": "workspace:*",
+    "@noble/curves": "2.4.0",
+    "viem": "2.57.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261015.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
