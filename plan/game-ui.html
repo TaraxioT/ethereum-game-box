@@ -81,6 +81,8 @@
   <h1>The Game Box UI, with a Demo mode</h1>
   <div class="lede"><p>The plan for the Box&#39;s touchscreen, built simulated first. Plan live at
 <a href="https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/">https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/</a>. <strong>Demo live at <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a>.</strong></p>
+<p><strong>Since this plan:</strong> PR #20 gave Stock Duel the Slab look, and PR #21 put the Box on chain: stakes are USDC, and the
+<code>box</code> build shows real transactions. Only the <code>demo</code> build still simulates. Read "EGB" below as history.</p>
 </div>
   <nav>
     <a href="#s1">Goal</a>
@@ -286,6 +288,8 @@ seed both players can&#39;t see.</li>
 <li>The result shows each player&#39;s reaction time in milliseconds.</li>
 </ul>
 <h3>Stock Duel</h3>
+<p><strong>Since PR #20:</strong> the Slab look replaces the painting, dial and seals below: a dark room, graphite slabs, chunky
+type and seat colours as fills. The Grid stays on the launcher.</p>
 <p>A painterly <strong>live painting</strong>: a dark study, a warm lamp on Player 1&#39;s side (left), a cyan lamp on Player 2&#39;s
 (right), each pooling light on its player&#39;s half of the desk. Brushed-paper textures from layered gradients.</p>
 <ul>
@@ -321,18 +325,16 @@ can be focused (their title and facts show) but Play stays dark.</p>
       fonts.css           the self-hosted faces
       README.md           every part, documented
       parts/              custom elements: &lt;egb-core&gt; &lt;egb-port&gt; &lt;egb-clock&gt; &lt;egb-gauge&gt; &lt;egb-fact&gt; &lt;egb-key&gt;
-                          &lt;egb-cart&gt; &lt;egb-txbar&gt; &lt;egb-panel&gt;; frame.ts (+ test), digits.ts (+ test),
+                          &lt;egb-cart&gt; &lt;egb-txbar&gt; &lt;egb-panel&gt; &lt;egb-lcd&gt; &lt;egb-seg&gt;; frame.ts (+ test), digits.ts (+ test),
                           gas-level.ts (+ test), blockie.ts (+ test), eth-mark.ts, part.ts, register.ts
       shell/              layout.ts (anchors per orientation), stage.ts, route.ts + traces.ts (geometry),
                           grid.ts (cached canvas), packets.ts, rez.ts (+ test), machine.ts, router.ts, boot.ts,
                           app.ts, sound.ts, dom.ts
       views/              view.ts (the contract), routes.ts, attract.ts, home.ts, rack.ts, join.ts, stake.ts,
-                          result.ts, refund.ts, page-layout.ts, seat-panel.ts
-      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (engine, chain, ledger, txs,
-                          bot, stations, badges, catalogue, control)
+                          result.ts, refund.ts, page-layout.ts, seat-panel.ts, designer.ts, build.ts, builder.ts
+      link/               live.ts (LiveLink), sim.ts (SimLink), control.ts, offset.ts, reuse.ts
       demo/               keys.ts demo-tag.ts intro.ts demo.css
     games/
-      seat.ts game.ts random.ts
       quick-draw/         types.ts, rules.ts (+ test), screen.ts, scene.ts, sign.ts, figure.ts
       stock-duel/         types.ts, rules.ts (+ test), deck.ts, screen.ts, scene.ts, rolodex.ts, dial.ts, reveal.ts,
                           score.ts
@@ -361,8 +363,8 @@ height), a gas value that wanders between 0.8 and 4 gwei, the stock deck with re
 with realistic timing (signed at once, sent ~0.4 s later, in the next block, paid ~1 s after it). Tap stations are
 simulated behind it: <code>SimLink.tap(seat)</code> is how Demo mode&#39;s screen taps and the A / L keys tap, and it is not part
 of <code>BoxLink</code>. Every simulated transaction has no hash, and the screen shows <code>SIMULATED</code> wherever a hash is missing.</li>
-<li><strong><code>LiveLink</code></strong>, a WebSocket to the Box server in <code>src/server/</code>, comes later and implements the same interface. Not
-built in this pass.</li>
+<li><strong><code>LiveLink</code></strong>, a WebSocket to the Box server in <code>src/server/</code>, implements the same interface (<code>link/live.ts</code>). The
+<code>box</code> build runs on it.</li>
 </ul>
 </section>
 
@@ -370,12 +372,12 @@ built in this pass.</li>
 <h2><span class="n">07</span>Demo mode</h2>
 <ul>
 <li><strong>One codebase, one flag</strong>: <code>VITE_EGB_MODE=demo|box</code>. <code>demo</code> lets the screen stand in for the tap stations and adds
-the DEMO tag. <code>box</code> is the bare screen for the Pi&#39;s kiosk browser. Until <code>LiveLink</code> exists, both run on <code>SimLink</code>;
-in <code>box</code> mode both seats are people (no bot), and the screen takes no taps: the real stations (and A / L on a
-laptop) are the only way to tap. The screen fills the whole window in both.</li>
+the DEMO tag. <code>box</code> is the bare screen for the Pi&#39;s kiosk browser. <code>demo</code> runs on <code>SimLink</code>, <code>box</code> on <code>LiveLink</code>;
+in <code>box</code> mode both seats are people (no bot), and the screen takes no taps: the real stations are the only way to
+tap. The screen fills the whole window in both.</li>
 <li><strong>Taps on the screen</strong> (Demo mode only): touching a player&#39;s frame (their port, or their seat panel on a page) taps
 that seat. In a game, a touch on a player&#39;s half of the screen below the overlay taps for them, with a ring of
-their light swelling from the touch. <strong>A</strong> taps Player 1 and <strong>L</strong> Player 2, in both modes; in Demo mode the ports
+their light swelling from the touch. <strong>A</strong> taps Player 1 and <strong>L</strong> Player 2 in Demo mode, where the ports
 show their key.</li>
 <li><strong>Opponent</strong>: <code>VS BOT</code> / <code>HOT SEAT</code> in the DEMO tag. With the bot, Player 2 is the bot&#39;s badge (its port wears a
 <code>BOT</code> tag), taps there do nothing, and the bot taps with human timing: a 0.6–2.2 s think in Stock Duel, a
@@ -443,7 +445,8 @@ transaction progress.</li>
 <li><input checked="" disabled="" type="checkbox"> The demo is live at a public URL: <a href="https://ethereum-game-box.pages.dev/">https://ethereum-game-box.pages.dev/</a>.</li>
 <li><input checked="" disabled="" type="checkbox"> The Grid look on every launcher screen (boot, attract, Home, Join, Stake, Result, Refund, the in-game overlay)
 is deployed to the demo.</li>
-<li><input disabled="" type="checkbox"> 60 fps on the Pi 5 at 1280×800 (checked so far in a laptop browser at 4× CPU throttling).</li>
+<li><input disabled="" type="checkbox"> 60 fps on the Pi 5 at 1280×800 (it held 16.7 ms on the Pi before the Grid merged; the Grid hasn&#39;t been
+measured there).</li>
 </ul>
 </section>
 

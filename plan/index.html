@@ -73,7 +73,7 @@
 <div class="wrap">
 
 <header>
-  <div class="kicker">ETHGlobal Mumbai · Project plan</div>
+  <div class="kicker">ETHGlobal Mumbai · Project plan · Updated 6 November</div>
   <h1>Ethereum Game Box</h1>
   <p class="lede">A game console you play by tapping a badge. Every match is staked and settled on Ethereum, and
     nobody at the table needs ETH, a wallet app or a single pop-up.</p>
@@ -82,6 +82,7 @@
     <a href="#how">How it works</a>
     <a href="#games">Games and the token</a>
     <a href="#partners">Partner tracks</a>
+    <a href="#status">Where we are</a>
     <a href="#build">How we get there</a>
   </nav>
 </header>
@@ -105,14 +106,14 @@
   <h3>What a player does</h3>
   <ol class="steps">
     <li><strong>Walks up and taps.</strong> The Box reads the badge's wallet and sends it test tokens. No ETH needed,
-      ever: the Box pays the gas.</li>
+      ever: the relayer pays the gas.</li>
     <li><strong>Gets a name.</strong> One more tap claims <code>name.gamebox.eth</code>, which follows the player
       from Box to Box.</li>
-    <li><strong>Picks a game and stakes.</strong> A single tap signs the entry and moves the stake into the game
-      contract. The screen shows who is in and what is at stake.</li>
+    <li><strong>Picks a game and stakes.</strong> A single tap commits each player, and the Box moves both stakes into
+      the pot. The screen shows who is in and what is at stake.</li>
     <li><strong>Plays.</strong> Taps are the controls: first to tap, pick a card, lock in a choice.</li>
     <li><strong>Gets paid.</strong> The Box signs the result, the chain checks it and pays the winner, all in about
-      ten seconds. Big wins move titles like <code>champion.stockduel.gamebox.eth</code>.</li>
+      ten seconds. Wins move titles like <code>champion.stockduel.gamebox.eth</code>.</li>
   </ol>
 
   <h3>Who it's for</h3>
@@ -121,8 +122,9 @@
       learn beyond "tap here".</p></div>
     <div class="card"><h4>Operators</h4><p>Anyone can run a Box at a café, an event or at home, stake to it, and earn
       a share of every game played on it.</p></div>
-    <div class="card"><h4>Game makers</h4><p>One game interface: open, settle, refund. Write the rules, and the Box
-      handles badges, stakes and payouts.</p></div>
+    <div class="card"><h4>Game makers</h4><p>One game interface: <code>start</code>, <code>step</code>,
+      <code>outcome</code>, plus a <code>game.json</code>. Write the rules, and the Box handles badges, stakes and
+      payouts. Or describe a game to the Box, and the game builder writes it.</p></div>
   </div>
 
   <h3>What we're building this weekend</h3>
@@ -136,56 +138,60 @@
 
 <section id="how">
   <h2><span class="n">02</span>How it works</h2>
-  <p class="sub">The pieces on the table, the pieces on chain, and the path one match takes between them.</p>
+  <p class="sub">The pieces on the table, the pieces on chain, and the path one match takes between them. This is the
+    design; Where we are says what runs today.</p>
 
   <h3>On the table</h3>
   <div class="grid">
-    <div class="card"><h4>The Box</h4><p>A Raspberry Pi 5 with a touchscreen and a speaker. It runs the games, the
-      screen and the sound, and talks to the chain.</p></div>
+    <div class="card"><h4>The Box</h4><p>A Raspberry Pi 5 with a touchscreen and a Bluetooth speaker. It runs the
+      games, the screen and the sound, and talks to the chain.</p></div>
     <div class="card"><h4>The Box key</h4><p>A HYP2003 USB token. Its P-256 key is made on the chip and never leaves
-      it. Every result, entry and heartbeat the Box sends is signed by it.</p></div>
-    <div class="card"><h4>Tap stations</h4><p>One per player: an ESP32-S3 with an NFC reader, a tiny screen and a
-      buzz motor, linked to the Box wirelessly.</p></div>
-    <div class="card"><h4>Badges</h4><p>Arx HaLo NFC chips. Each holds a wallet key that can sign typed messages
-      (EIP-712) but can never be copied out.</p></div>
+      it. Every stake, seat and result the Box sends is signed by it.</p></div>
+    <div class="card"><h4>Tap stations</h4><p>One per player: an ESP32-S3 with a PN532 NFC reader, a small OLED, an
+      LED and a buzz motor. It talks over ESP-NOW to a receiver on the Pi's USB.</p></div>
+    <div class="card"><h4>Badges</h4><p>Arx HaLo NFC chips. Each holds a wallet key (key 1) that can never be copied
+      out, and an identity key (key 2) that signs random rolls. Today the Box signs stakes and seats, so key 1 signs
+      nothing.</p></div>
   </div>
 
   <h3>In the cloud and on chain</h3>
   <div class="grid">
-    <div class="card"><h4>Relayer</h4><p>A Cloudflare Worker that pays the gas. It sends only what the Box key
-      signed, one transaction at a time per chain, and refuses anything else before spending a wei.</p></div>
-    <div class="card"><h4>Contracts on Sepolia</h4><p>The Box registry, the games, the token and its Uniswap pool,
-      staking, and the names. All on one chain, so everything can call everything.</p></div>
+    <div class="card"><h4>Relayer</h4><p>A Cloudflare Worker that pays the gas. It sends what a Box key or a badge
+      signed, plus a few rate-limited requests such as test-USDC top-ups. It sends one transaction at a time, and
+      refuses anything else before spending a wei.</p></div>
+    <div class="card"><h4>Contracts on Sepolia</h4><p>The names (which also hold the Box registry), the games, the
+      token and its Uniswap pool, and staking. All on one chain, so everything can call everything.</p></div>
     <div class="card"><h4>ENS</h4><p><code>gamebox.eth</code> names every Box and every player, and carries live
       titles like the current champion.</p></div>
-    <div class="card"><h4>Public site</h4><p>Reads ENS and the contracts to show Boxes, players and champions. No
-      backend of its own.</p></div>
+    <div class="card"><h4>Public site</h4><p>Reads ENS and the contracts to show Boxes, players and champions, and
+      sends writes through the relayer. No backend of its own.</p></div>
   </div>
 
   <h3>Why the Box key matters</h3>
   <p>Ethereum can now check P-256 signatures natively (the <code>P256VERIFY</code> precompile, about 7,000 gas). So the
     Box doesn't need a seed phrase or a hot wallet: a cheap hardware token, the same kind used for digital signatures in
-    India, becomes an on-chain identity. Contracts know which Box sent a result, and an operator can rotate or revoke
-    that key at any time.</p>
+    India, becomes an on-chain identity. Contracts know which Box sent a result, and the licensor can rotate or
+    suspend that key at any time.</p>
 
   <h3>One match, end to end</h3>
   <ul class="flow">
-    <li><strong>Badge</strong><span>signs the entry</span></li>
+    <li><strong>Badge</strong><span>taps to stake</span></li>
     <li><strong>Tap station</strong><span>carries the tap</span></li>
     <li><strong>Box</strong><span>checks it, signs with its key</span></li>
     <li><strong>Relayer</strong><span>checks the Box, pays gas</span></li>
     <li><strong>Sepolia</strong><span>moves stakes, pays out</span></li>
   </ul>
   <ol class="steps">
-    <li><strong>Entry.</strong> The badge signs one Permit2 message whose payload is the game entry. The game contract
-      is the only spender, and it rebuilds the message from the entry, so nobody in between can change a thing.</li>
-    <li><strong>Open.</strong> The Box wraps both entries in a request signed by its key. The relayer checks that
-      signature against the registry, then sends it. The game contract pulls both stakes.</li>
+    <li><strong>Entry.</strong> Each player taps to stake. The badge signs nothing: the tap is the consent, and the
+      Box vouches for it.</li>
+    <li><strong>Open.</strong> The Box signs one <code>Stake</code> for both players with its key. The relayer checks
+      the request, then sends it, and <code>DuelPot</code> pulls both stakes.</li>
     <li><strong>Play.</strong> Taps drive the game. Where a game needs chance, both badges add their own signed
       randomness, so neither the Box nor a player picks the outcome.</li>
     <li><strong>Settle.</strong> The Box signs the result. The contract checks the signature, the round and the
-      expiry, then pays the winner in the token they staked.</li>
-    <li><strong>Safety net.</strong> If the Box never settles, both players take their stakes back after a timeout.</li>
+      expiry, then pays the winner in the token they staked. One result pays the pot, moves the title and scores the
+      championship.</li>
+    <li><strong>Safety net.</strong> If the Box never settles, anyone can send both stakes back after an hour.</li>
   </ol>
 
   <h3>What you have to trust</h3>
@@ -200,7 +206,8 @@
 
 <section id="games">
   <h2><span class="n">03</span>Games and the token</h2>
-  <p class="sub">Four games to start with, and the token that ties the games, the Boxes and Uniswap together.</p>
+  <p class="sub">Two games play today and two more are planned, and the token ties the games, the Boxes and Uniswap
+    together. Where we are says what runs today.</p>
 
   <h3>The games</h3>
   <div class="table-scroll">
@@ -208,27 +215,40 @@
     <tr><th>Game</th><th>How it plays</th><th>Tier</th></tr>
     <tr><td><strong>Quick Draw</strong></td><td>The screen says "draw". First tap wins. The simplest game, and the
       first one we build end to end.</td><td>Refereed</td></tr>
-    <tr><td><strong>Stock Duel</strong></td><td>Best of three. Each player picks a stock; the two badges' randomness
-      picks the stat (price, average price, 24-hour move or liquidity), read live from Robinhood Chain's stock pools.
-      Cards flip together; a timer picks for a slow player.</td><td>Refereed, with a public replay proof</td></tr>
+    <tr><td><strong>Stock Duel</strong></td><td>Best of three. Each player plays a stock from a spinning Rolodex; once
+      both cards are down, the two badges' randomness picks the stat (price, average price, 24-hour move or
+      liquidity), read live from Robinhood Chain's stock pools. Cards flip together; a timer plays for a slow player.
+      Today the numbers come from a frozen deck.</td><td>Refereed, with a public replay proof</td></tr>
     <tr><td><strong>Bet on X</strong></td><td>Two players state a claim the chain can check ("gas is under 2 gwei at
-      block N"), offer odds, and both tap. A checker contract settles it from chain state.</td><td>Verified</td></tr>
+      block N"), offer odds, and both tap. A checker contract settles it from chain state. Not built: sealed in the
+      Box's rack.</td><td>Verified</td></tr>
     <tr><td><strong>B17</strong></td><td>A heist on a vault. A bot keeps sending transactions; players buy ranges of
       its future nonce. Wider ranges cost more (width squared), and the narrowest range holding the live nonce takes
-      the vault.</td><td>Verified</td></tr>
+      the vault. Not built: sealed in the Box's rack.</td><td>Verified</td></tr>
   </table>
   </div>
-  <p>Stock Duel is the main game. Its replay proof is the Robinhood block number and the exact pool reads for each
-    round, so anyone can recheck the result.</p>
+  <p>Stock Duel is the main game. Its replay proof will be the Robinhood block number and the exact pool reads for
+    each round, so anyone can recheck the result. It claims no proof while it plays from the frozen deck.</p>
+
+  <h3>The game builder</h3>
+  <p>Anyone can make a new game on the Box, which wasn't in the first plan. A Designer asks one question at a time, by
+    keys, typing or voice. A Forge agent (Claude Sonnet) then writes the game from a Quick Draw or Stock Duel
+    template, confined to one folder, and checks and installs it. Its rules run in a locked-down child process with no
+    network or disk writes, and its screen in a sandboxed frame that only draws. Built games are always Refereed, and
+    play for nothing: they aren't on chain. The
+    first, Rooftop Dash, took 57 seconds on the Pi.</p>
 
   <h3>The token</h3>
-  <p>Games are staked in the Game Box token. It launches through Uniswap's Continuous Clearing Auction, which sets a
+  <p>Games are staked in test USDC, the only USDC we use. The Game Box token, GBX, is what stands behind a Box: one
+    billion minted once, burnable, with no way to mint more. It
+    launches through Uniswap's Continuous Clearing Auction, which sets a
     fair opening price and then seeds a Uniswap v4 pool. That pool carries our own hook, with three fee levels:</p>
   <div class="grid">
     <div class="card"><h4>1%</h4><p>Any normal swap.</p></div>
     <div class="card"><h4>0.25%</h4><p>A swap made with a badge tap at a Box, up to a daily cap tied to that Box's
       stake. Playing in person earns the discount.</p></div>
-    <div class="card"><h4>0%</h4><p>Swaps made by the game contract itself, so the buyback costs nothing.</p></div>
+    <div class="card"><h4>0%</h4><p>Swaps through a router we approve for the game contract, so the buyback costs
+      nothing.</p></div>
   </div>
   <p>The hook also keeps a time-weighted price, which v4 doesn't provide. The buyback and the operator auction use it,
     so neither can be pushed around by one big trade.</p>
@@ -246,7 +266,7 @@
     <li><strong>Operators</strong> win the right to run a Box through an operator auction, priced from the pool's
       time-weighted price. The tokens they bid become the Box's stake.</li>
     <li><strong>Stakers</strong> back a Box they trust and earn from its games. The operator sets a commission between
-      10% and 90%, and a change only takes effect after a delay.</li>
+      10% and 90%. A raise only takes effect after a delay; a cut applies at once.</li>
     <li><strong>Cheating costs stake.</strong> Unstaking waits out a delay, and until it ends, a proven cheat can take
       the Box's stake.</li>
     <li><strong>The lobby</strong> lets a player swap USDC for the token with one tap, at the tap fee, and stake to
@@ -256,7 +276,8 @@
 
 <section id="partners">
   <h2><span class="n">04</span>Partner tracks</h2>
-  <p class="sub">Where each partner's technology carries real weight in the product, and what a judge will see.</p>
+  <p class="sub">Where each partner's technology carries real weight in the product, and what a judge will see. Where
+    we are says what's built.</p>
 
   <h3>Uniswap</h3>
   <ul>
@@ -277,8 +298,13 @@
     <li><strong>Player names</strong> are claimed with a tap and never expire. The badge owns its records, and the
       game may only write its stats.</li>
     <li><strong>Live titles:</strong> <code>champion.stockduel.gamebox.eth</code> moves to each new winner, only after
-      a signed win.</li>
-    <li><strong>The site</strong> reads everything from ENS: no database behind it.</li>
+      a signed win. A title lapses after its term: 7 days for Stock Duel, 15 minutes for Quick Draw.</li>
+    <li><strong>The site</strong> reads names through ENS and lists them from contract events: no database behind
+      it.</li>
+    <li><strong>Pop-ups:</strong> anyone can open a 10-minute Box name, which stands in for a licence until the
+      operator auction.</li>
+    <li><strong>Championships:</strong> a cup like <code>mumbai-cup.stockduel.gamebox.eth</code> keeps live standings.
+      Its winner keeps the name and the prize, and the records freeze.</li>
     <li><strong>Judges see:</strong> they claim a name with their own tap, win a round, and watch the title move to
       them on the site.</li>
   </ul>
@@ -305,8 +331,84 @@
   </div>
 </section>
 
+<section id="status">
+  <h2><span class="n">05</span>Where we are</h2>
+  <p class="sub">What runs today, as of 6 November, what we have to decide, and what comes next.</p>
+
+  <div class="callout"><p><strong>Where it stands:</strong> the Box and the chain are joined. Staked USDC matches,
+    names, titles and championships are wired up on the Pi and live on Sepolia. What's left is a recorded match with
+    hand taps, live prices, and the token's money: the pool, the game fee and the burn.</p></div>
+
+  <h3>What runs today</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Piece</th><th>State</th><th>Detail</th></tr>
+    <tr><td><strong>The Box</strong></td><td>On chain</td><td>The Pi runs the chain port: stakes, results, refunds,
+      top-ups and seats go through the relayer, and the lobby reads live balances, titles and standings. PR #21
+      records no full staked match with hand taps yet.</td></tr>
+    <tr><td><strong>Box key</strong></td><td>Live</td><td>The HYP2003 signer runs on the Pi, and its key matches
+      <code>mumbai-01</code>.</td></tr>
+    <tr><td><strong>Game builder</strong></td><td>On <code>main</code></td><td>It built a game on the Pi and played
+      it. Built games play for nothing: they aren't on chain.</td></tr>
+    <tr><td><strong>Relayer and demo Box</strong></td><td>Live</td><td>The relayer is funded, and the demo Box beats
+      through it every 5 minutes. The real Box sends no heartbeat yet.</td></tr>
+    <tr><td><strong>Names, pots and cups</strong></td><td>Live</td><td><code>gamebox.eth</code>, names, titles, signed
+      results, <code>DuelPot</code>, <code>BoxSeats</code>, <code>Championships</code> and test USDC. ENS and
+      <code>deployments/sepolia.json</code> agree.</td></tr>
+    <tr><td><strong>Public site</strong></td><td>Live</td><td><a
+      href="https://gamebox-names.pages.dev:">https://gamebox-names.pages.dev:</a> the lobby, championships and the
+      five-step Story.</td></tr>
+    <tr><td><strong>Operator site</strong></td><td>Live, off <code>main</code></td><td><a
+      href="https://gamebox-operator.pages.dev">https://gamebox-operator.pages.dev</a> comes from
+      <code>names-operator</code>, which has no PR and holds the older addresses. Operators edit records with a
+      passkey; an admin issues licences.</td></tr>
+    <tr><td><strong>GBX</strong></td><td>Live</td><td>Deployed, with no pool and nothing burned.</td></tr>
+    <tr><td><strong>Staking and the hook</strong></td><td>Deployed</td><td><code>BoxStaking</code> and
+      <code>GameBoxHook</code> run on test USDC. The pool isn't initialized, the hook has no daily cap yet, no game
+      sends them fees, and neither is verified on Etherscan.</td></tr>
+    <tr><td><strong>Stock Duel data</strong></td><td>Not built</td><td>It plays from a frozen deck: no live Robinhood
+      reads and no replay proof.</td></tr>
+    <tr><td><strong>Token flows</strong></td><td>Not built</td><td>The launch auction, the game fee, buyback and burn,
+      and the lobby's swap. The Box's lobby tops up test USDC today.</td></tr>
+    <tr><td><strong>Trust</strong></td><td>Not built</td><td>Pot caps, the challenge window and proof of cheating.
+      Nobody can slash a Box until a dispute contract exists.</td></tr>
+    <tr><td><strong>The network</strong></td><td>Not built</td><td>The operator auction, Bet on X, B17 and
+      0G.</td></tr>
+  </table>
+  </div>
+  <p>Our done rule needs a run on the Pi with real badges, so the staked match is the one to record next.</p>
+
+  <h3>Decisions to make</h3>
+  <ul>
+    <li><strong>How does a game pay its fee?</strong> The design takes a fee from every game, half to the burn and
+      half to the Box. <code>DuelPot</code> pays the winner twice the stake and takes nothing, so nothing reaches
+      <code>notifyFees</code> or a buyback. Milestone 4 can't finish until it does.</li>
+    <li><strong>How does the pool launch?</strong> The design says the auction, which isn't built. Suggested: if time
+      runs short, seed the pool directly. Every fee level still shows on a real swap, and only the auction drops out
+      of the Uniswap story.</li>
+    <li><strong>Can a badge sign a stake?</strong> Today the Box signs for both players, so a Box key alone can move
+      any badge's test USDC. That's fine for test money and not for real money. <code>FakeUSDC</code>'s notes say a
+      badge signs only <code>sign_random</code>, but that is key 2's limit: the Box's notes say key 1 signs anything.
+      Nobody has tried it on our badges, and one test on the Pi settles it.</li>
+  </ul>
+
+  <h3>What comes next</h3>
+  <ol class="steps">
+    <li><strong>Record the staked match.</strong> Two new badges claim names, top up, stake and play to the end with
+      hand taps. That closes milestone 2 and moves a title for milestone 5.</li>
+    <li><strong>Close milestone 1.</strong> Have the real Box send a heartbeat, and show a forged one refused.</li>
+    <li><strong>Make Stock Duel live.</strong> Read Robinhood Chain's pools and record the replay proof for milestone
+      3.</li>
+    <li><strong>Finish the token.</strong> Settle the fee and the launch, initialize the pool, add the buyback and the
+      lobby's swap, and fill in <code>FEEDBACK.md</code>, which has no entries yet.</li>
+    <li><strong>Bring in the operator site.</strong> Move <code>names-operator</code> onto the live addresses and open
+      a PR.</li>
+    <li><strong>Then the network.</strong> Milestone 6 is the first thing to cut.</li>
+  </ol>
+</section>
+
 <section id="build">
-  <h2><span class="n">05</span>How we get there</h2>
+  <h2><span class="n">06</span>How we get there</h2>
   <p class="sub">The order we build in, how we work, and what the demo and submission look like.</p>
 
   <h3>How we work</h3>
@@ -324,23 +426,28 @@
   <h3>Milestones</h3>
   <div class="table-scroll">
   <table>
-    <tr><th>#</th><th>Milestone</th><th>What it adds</th><th>Done when</th></tr>
-    <tr><td>1</td><td><strong>The Box on chain</strong></td><td>The monorepo and deploy pipeline, the Box registry
-      with its P-256 key, and the relayer.</td><td>The Box's token signs a heartbeat on the Pi, the relayer sends it,
-      and a forged one is refused.</td></tr>
+    <tr><th>#</th><th>Milestone</th><th>What it adds</th><th>Done when</th><th>Now</th></tr>
+    <tr><td>1</td><td><strong>The Box on chain</strong></td><td>The monorepo and deploy pipeline, Box licences with a
+      P-256 key, and the relayer.</td><td>The Box's token signs a heartbeat on the Pi, the relayer sends it,
+      and a forged one is refused.</td><td>Part done. The HYP2003 signer runs on the Pi and its key matches
+      <code>mumbai-01</code>. The real Box sends no heartbeat yet.</td></tr>
     <tr><td>2</td><td><strong>First game</strong></td><td>Badges join and get tokens, one-tap staked entry, the game
       escrow with refunds, and Quick Draw.</td><td>Two badges play Quick Draw for stakes without holding any ETH, and
-      the winner is paid.</td></tr>
+      the winner is paid.</td><td>Built and live on the Pi. A staked match with hand taps isn't recorded
+      yet.</td></tr>
     <tr><td>3</td><td><strong>Stock Duel</strong></td><td>Live Robinhood Chain prices, two-badge randomness, best of
       three, and the replay proof.</td><td>A staked match runs on the Box with live prices, and its proof checks
-      out.</td></tr>
+      out.</td><td>Rules and stakes done. No live prices and no replay proof.</td></tr>
     <tr><td>4</td><td><strong>The token</strong></td><td>The auction launch, the fee hook, buyback and burn, lobby
       swaps, and staking to Boxes.</td><td>Each fee level shows on a real swap, and a settled game burns tokens and
-      pays its stakers.</td></tr>
+      pays its stakers.</td><td>GBX, staking and the hook are deployed. The pool isn't initialized, and there's no
+      auction, game fee, buyback or swap lobby.</td></tr>
     <tr><td>5</td><td><strong>Names</strong></td><td>Box and player names, the champion title, and the public
-      site.</td><td>A new player claims a name, wins, and the site shows the title move.</td></tr>
+      site.</td><td>A new player claims a name, wins, and the site shows the title move.</td><td>Names, cups and the
+      site are live, and the site's Story moves a title. A win on the real Box isn't recorded yet.</td></tr>
     <tr><td>6</td><td><strong>The network</strong></td><td>The operator auction, Bet on X, B17, and 0G once credits
-      arrive.</td><td>An operator wins a licence and registers a Box; both new games play a round.</td></tr>
+      arrive.</td><td>An operator wins a licence and registers a Box; both new games play a round.</td><td>Not
+      started, apart from an operator site on a branch.</td></tr>
   </table>
   </div>
 
@@ -352,6 +459,8 @@
     <li>They play best of three against one of us, with live stock prices.</li>
     <li>The winner is paid in seconds, the fee is burned on chain, and the champion title moves on the site.</li>
   </ol>
+    <p>As a fallback, the site's Story shows the ENS half in a browser, with a test badge and the demo
+      Box.</p>
   <p>Before judging: the token, pool and hook are live, the badges are charged, the Box is on stable Wi-Fi, and the
     relayer is funded.</p>
 
@@ -359,7 +468,8 @@
   <ul>
     <li>This repo, public, with a README that points to the exact Uniswap contracts and lines.</li>
     <li><code>FEEDBACK.md</code> and the Uniswap feedback form.</li>
-    <li>The live site's link for ENS, and every contract address.</li>
+    <li>The live site's link for ENS (<a href="https://gamebox-names.pages.dev">https://gamebox-names.pages.dev</a>),
+      and every contract address.</li>
     <li>A demo video under three minutes.</li>
   </ul>
 

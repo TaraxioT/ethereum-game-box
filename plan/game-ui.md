@@ -3,6 +3,9 @@
 The plan for the Box's touchscreen, built simulated first. Plan live at
 https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/. **Demo live at https://ethereum-game-box.pages.dev/.**
 
+**Since this plan:** PR #20 gave Stock Duel the Slab look, and PR #21 put the Box on chain: stakes are USDC, and the
+`box` build shows real transactions. Only the `demo` build still simulates. Read "EGB" below as history.
+
 ## 1. Goal
 
 The Box's touchscreen UI, plus a **Demo mode** of the same UI that runs in any browser with no hardware. The
@@ -121,6 +124,9 @@ A western standoff at dusk, drawn in flat silhouette: a long horizon, two seat-c
 
 ### Stock Duel
 
+**Since PR #20:** the Slab look replaces the painting, dial and seals below: a dark room, graphite slabs, chunky
+type and seat colours as fills. The Grid stays on the launcher.
+
 A painterly **live painting**: a dark study, a warm lamp on Player 1's side (left), a cyan lamp on Player 2's
 (right), each pooling light on its player's half of the desk. Brushed-paper textures from layered gradients.
 
@@ -156,18 +162,16 @@ apps/box/
       fonts.css           the self-hosted faces
       README.md           every part, documented
       parts/              custom elements: <egb-core> <egb-port> <egb-clock> <egb-gauge> <egb-fact> <egb-key>
-                          <egb-cart> <egb-txbar> <egb-panel>; frame.ts (+ test), digits.ts (+ test),
+                          <egb-cart> <egb-txbar> <egb-panel> <egb-lcd> <egb-seg>; frame.ts (+ test), digits.ts (+ test),
                           gas-level.ts (+ test), blockie.ts (+ test), eth-mark.ts, part.ts, register.ts
       shell/              layout.ts (anchors per orientation), stage.ts, route.ts + traces.ts (geometry),
                           grid.ts (cached canvas), packets.ts, rez.ts (+ test), machine.ts, router.ts, boot.ts,
                           app.ts, sound.ts, dom.ts
       views/              view.ts (the contract), routes.ts, attract.ts, home.ts, rack.ts, join.ts, stake.ts,
-                          result.ts, refund.ts, page-layout.ts, seat-panel.ts
-      link/               types.ts (BoxLink, BoxState, BoxEvent, ScreenCommand), sim/ (engine, chain, ledger, txs,
-                          bot, stations, badges, catalogue, control)
+                          result.ts, refund.ts, page-layout.ts, seat-panel.ts, designer.ts, build.ts, builder.ts
+      link/               live.ts (LiveLink), sim.ts (SimLink), control.ts, offset.ts, reuse.ts
       demo/               keys.ts demo-tag.ts intro.ts demo.css
     games/
-      seat.ts game.ts random.ts
       quick-draw/         types.ts, rules.ts (+ test), screen.ts, scene.ts, sign.ts, figure.ts
       stock-duel/         types.ts, rules.ts (+ test), deck.ts, screen.ts, scene.ts, rolodex.ts, dial.ts, reveal.ts,
                           score.ts
@@ -197,18 +201,18 @@ interface BoxLink {
   with realistic timing (signed at once, sent ~0.4 s later, in the next block, paid ~1 s after it). Tap stations are
   simulated behind it: `SimLink.tap(seat)` is how Demo mode's screen taps and the A / L keys tap, and it is not part
   of `BoxLink`. Every simulated transaction has no hash, and the screen shows `SIMULATED` wherever a hash is missing.
-- **`LiveLink`**, a WebSocket to the Box server in `src/server/`, comes later and implements the same interface. Not
-  built in this pass.
+- **`LiveLink`**, a WebSocket to the Box server in `src/server/`, implements the same interface (`link/live.ts`). The
+  `box` build runs on it.
 
 ## 7. Demo mode
 
 - **One codebase, one flag**: `VITE_EGB_MODE=demo|box`. `demo` lets the screen stand in for the tap stations and adds
-  the DEMO tag. `box` is the bare screen for the Pi's kiosk browser. Until `LiveLink` exists, both run on `SimLink`;
-  in `box` mode both seats are people (no bot), and the screen takes no taps: the real stations (and A / L on a
-  laptop) are the only way to tap. The screen fills the whole window in both.
+  the DEMO tag. `box` is the bare screen for the Pi's kiosk browser. `demo` runs on `SimLink`, `box` on `LiveLink`;
+  in `box` mode both seats are people (no bot), and the screen takes no taps: the real stations are the only way to
+  tap. The screen fills the whole window in both.
 - **Taps on the screen** (Demo mode only): touching a player's frame (their port, or their seat panel on a page) taps
   that seat. In a game, a touch on a player's half of the screen below the overlay taps for them, with a ring of
-  their light swelling from the touch. **A** taps Player 1 and **L** Player 2, in both modes; in Demo mode the ports
+  their light swelling from the touch. **A** taps Player 1 and **L** Player 2 in Demo mode, where the ports
   show their key.
 - **Opponent**: `VS BOT` / `HOT SEAT` in the DEMO tag. With the bot, Player 2 is the bot's badge (its port wears a
   `BOT` tag), taps there do nothing, and the bot taps with human timing: a 0.6–2.2 s think in Stock Duel, a
@@ -267,4 +271,5 @@ interface BoxLink {
 - [x] The demo is live at a public URL: https://ethereum-game-box.pages.dev/.
 - [x] The Grid look on every launcher screen (boot, attract, Home, Join, Stake, Result, Refund, the in-game overlay)
       is deployed to the demo.
-- [ ] 60 fps on the Pi 5 at 1280×800 (checked so far in a laptop browser at 4× CPU throttling).
+- [ ] 60 fps on the Pi 5 at 1280×800 (it held 16.7 ms on the Pi before the Grid merged; the Grid hasn't been
+      measured there).
