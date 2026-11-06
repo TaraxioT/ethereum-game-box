@@ -1,7 +1,14 @@
+import { existsSync } from "node:fs";
 import { defineConfig, type Plugin } from "vitest/config";
 
 /** The Box server `pnpm dev:box` talks to (start it with `pnpm start`). */
 const BOX = "http://127.0.0.1:8790";
+
+/** A request for a file under src/ (a team game's own modules in src/games/) is the dev server's, not the Box's. */
+const ownFile = (req: { url?: string }): string | undefined => {
+  const path = req.url?.split("?")[0] ?? "";
+  return path && existsSync(new URL(`src${path}`, import.meta.url)) ? req.url : undefined;
+};
 
 /** Each page's source under src/, and where the Box serves it from: the screen at the root, the test page at /test. */
 const PAGES = { "screen/index.html": "index.html", "test-page/index.html": "test/index.html" } as const;
@@ -46,7 +53,7 @@ export default defineConfig(() => {
     plugins: [pagePaths()],
     build: { outDir: "../dist/screen", emptyOutDir: true, target: "es2023", rollupOptions: { input } },
     // Built games' cartridges and frames are the Box server's too (server/games/): the frame's page, its parts and fonts.
-    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": BOX, "/parts": BOX, "/frame.js": BOX } },
+    server: { proxy: { "/api": BOX, "/link": { target: BOX, ws: true }, "/games": { target: BOX, bypass: ownFile }, "/parts": BOX, "/frame.js": BOX } },
     test: { root: ".", include: ["src/**/*.test.ts"], environment: "node", passWithNoTests: true },
   };
 });
