@@ -73,7 +73,7 @@
 <div class="wrap">
 
 <header>
-  <div class="kicker">ETHGlobal Mumbai · Project plan · Updated 6 November</div>
+  <div class="kicker">ETHGlobal Mumbai · Project plan · Updated 7 November</div>
   <h1>Ethereum Game Box</h1>
   <p class="lede">A game console you play by tapping a badge. Every match is staked and settled on Ethereum, and
     nobody at the table needs ETH, a wallet app or a single pop-up.</p>
@@ -217,8 +217,8 @@
       first one we build end to end.</td><td>Refereed</td></tr>
     <tr><td><strong>Stock Duel</strong></td><td>Best of three. Each player plays a stock from a spinning Rolodex; once
       both cards are down, the two badges' randomness picks the stat (price, average price, 24-hour move or
-      liquidity), read live from Robinhood Chain's stock pools. Cards flip together; a timer plays for a slow player.
-      Today the numbers come from a frozen deck.</td><td>Refereed, with a public replay proof</td></tr>
+      liquidity), read live from Robinhood Chain's stock pools. Cards flip together; a timer plays for a slow
+      player.</td><td>Refereed, with a public replay proof</td></tr>
     <tr><td><strong>Bet on X</strong></td><td>Two players state a claim the chain can check ("gas is under 2 gwei at
       block N"), offer odds, and both tap. A checker contract settles it from chain state. Not built: sealed in the
       Box's rack.</td><td>Verified</td></tr>
@@ -227,8 +227,9 @@
       the vault. Not built: sealed in the Box's rack.</td><td>Verified</td></tr>
   </table>
   </div>
-  <p>Stock Duel is the main game. Its replay proof will be the Robinhood block number and the exact pool reads for
-    each round, so anyone can recheck the result. It claims no proof while it plays from the frozen deck.</p>
+  <p>Stock Duel is the main game. Its replay proof is the Robinhood block number its numbers were read at, so anyone
+    can read the same pools at the same block and recheck the result. A Box without a Robinhood RPC falls back to a
+    frozen deck and claims no proof.</p>
 
   <h3>The game builder</h3>
   <p>Anyone can make a new game on the Box, which wasn't in the first plan. A Designer asks one question at a time, by
@@ -368,8 +369,10 @@
     <tr><td><strong>Staking and the hook</strong></td><td>Deployed</td><td><code>BoxStaking</code> and
       <code>GameBoxHook</code> run on test USDC. The pool isn't initialized, the hook has no daily cap yet, no game
       sends them fees, and neither is verified on Etherscan.</td></tr>
-    <tr><td><strong>Stock Duel data</strong></td><td>Not built</td><td>It plays from a frozen deck: no live Robinhood
-      reads and no replay proof.</td></tr>
+    <tr><td><strong>Stock Duel data</strong></td><td>Built, not on the Pi</td><td>The Box reads the 20 stocks'
+      Uniswap pools on Robinhood Chain mainnet through a Chainstack node every 5 minutes, and each match's transcript
+      records the block. No staked match on the Pi with live prices yet, and no checker that replays a
+      transcript.</td></tr>
     <tr><td><strong>Token flows</strong></td><td>Not built</td><td>The launch auction, the game fee, buyback and burn,
       and the lobby's swap. The Box's lobby tops up test USDC today.</td></tr>
     <tr><td><strong>Trust</strong></td><td>Not built</td><td>Pot caps, the challenge window and proof of cheating.
@@ -401,8 +404,8 @@
     <li><strong>Record the staked match.</strong> Two new badges claim names, top up, stake and play to the end with
       hand taps. That closes milestone 2 and moves a title for milestone 5.</li>
     <li><strong>Close milestone 1.</strong> Have the real Box send a heartbeat, and show a forged one refused.</li>
-    <li><strong>Make Stock Duel live.</strong> Read Robinhood Chain's pools and record the replay proof for milestone
-      3.</li>
+    <li><strong>Play Stock Duel live on the Pi.</strong> Set <code>ROBINHOOD_RPC_URL</code> there, play a staked
+      match with live prices, and recheck its block for milestone 3.</li>
     <li><strong>Finish the token.</strong> Settle the fee and the launch, initialize the pool, add the buyback and the
       lobby's swap, and fill in <code>FEEDBACK.md</code>, which has no entries yet.</li>
     <li><strong>Bring in the operator site.</strong> Move <code>names-operator</code> onto the live addresses and open
@@ -441,7 +444,8 @@
       yet.</td></tr>
     <tr><td>3</td><td><strong>Stock Duel</strong></td><td>Live Robinhood Chain prices, two-badge randomness, best of
       three, and the replay proof.</td><td>A staked match runs on the Box with live prices, and its proof checks
-      out.</td><td>Rules and stakes done. No live prices and no replay proof.</td></tr>
+      out.</td><td>Rules, stakes and live prices done, with the block in each transcript. No staked match on the Pi with
+      live prices, and no replay checker.</td></tr>
     <tr><td>4</td><td><strong>The token</strong></td><td>The auction launch, the fee hook, buyback and burn, lobby
       swaps, and staking to Boxes.</td><td>Each fee level shows on a real swap, and a settled game burns tokens and
       pays its stakers.</td><td>GBX, staking and the hook are deployed. The pool isn't initialized, and there's no

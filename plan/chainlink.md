@@ -67,11 +67,11 @@ chains. A referee hot key is never involved: the trophy is triggered by a cup cl
 - `project.yaml`: targets `ethereum-testnet-sepolia`; secrets for the Robinhood RPC and the quote API key go in
   CRE secrets, never in the repo.
 - `market-close/`: a cron trigger. It reads the 20 pools (`slot0` and liquidity) over HTTP `eth_call`, using the
-  pool list `deck.ts` was built from, and fetches the stock quotes. Nodes reach consensus with median aggregation.
+  pool list in `deployments/robinhood.json` (`@egb/shared/market`), and fetches the stock quotes. Nodes reach consensus with median aggregation.
   It then encodes a report and writes it.
 - `trophy/`: a log trigger on `Championships.CupClosed`. It reads `getCup(id)`, builds a report and writes it.
-- The deck's 20 tickers and their pool addresses move to `packages/shared`, so the Box and the workflow share
-  one list.
+- The deck's 20 tickers and their pools are already in `deployments/robinhood.json`, read by `@egb/shared/market`,
+  so the Box and the workflow share one list.
 - Record both simulations: `cre workflow simulate market-close --broadcast` and the trophy run, with a real
   `CupClosed` transaction hash.
 
