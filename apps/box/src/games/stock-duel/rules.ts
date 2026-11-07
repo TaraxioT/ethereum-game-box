@@ -4,7 +4,7 @@ import type { GameRules, Outcome } from "@egb/sdk";
 import { hash32, shuffle } from "@egb/sdk";
 import { other, DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import { DECK, STATS } from "./deck.ts";
-import type { HeldCard, RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
+import type { HeldCard, LiveDeck, RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
 
 export const DEAL_MS = 3000;
 export const DIAL_MS = 4400;
@@ -83,10 +83,14 @@ export function frontRemainingMs(state: StockDuelState, seat: DuelSeat, now: num
   return state.dwellMs - sinceTurn;
 }
 
-function start(seed: number, now: number): StockDuelState {
-  const deck = shuffle(DECK, seed);
+/** A new match dealt from `live`'s cards (the pools' numbers at its block), or from the frozen deck when it is null. */
+export function startDuel(seed: number, now: number, live: LiveDeck | null): StockDuelState {
+  const cards = live?.cards ?? DECK;
+  const deck = shuffle(cards, seed);
   const dwellMs = dwellForRound(1);
   return {
+    deck: cards,
+    market: live?.source ?? null,
     phase: "deal",
     phaseAt: now,
     round: 1,
@@ -234,7 +238,7 @@ function tick(state: StockDuelState, now: number): StockDuelState {
 }
 
 export const rules: GameRules<StockDuelState, StockDuelEvent> = {
-  start,
+  start: (seed, now) => startDuel(seed, now, null),
   step(state, event) {
     switch (event.type) {
       case "tick":

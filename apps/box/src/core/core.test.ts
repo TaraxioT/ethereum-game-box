@@ -3,7 +3,7 @@
 // a test moves step by step.
 import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
-import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
+import type { ChainHead, ChainPort, LibraryPort, MarketPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
 import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, REREAD_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
@@ -16,7 +16,7 @@ import { instantTap } from "./instant-tap.ts";
 import { reactionMs } from "../games/quick-draw/rules.ts";
 import type { QuickDrawState } from "../games/quick-draw/types.ts";
 import { frontCard, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
-import { STATS } from "../games/stock-duel/deck.ts";
+import { DECK, STATS } from "../games/stock-duel/deck.ts";
 
 const START = Date.parse("2026-11-06T10:00:00Z");
 const [NOVA, KITE, JUNO] = DEMO_BADGES as [Badge, Badge, Badge];
@@ -124,7 +124,13 @@ interface Rig<C extends ChainPort = DemoChain> {
   readonly logged: Transcript[];
 }
 
-function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: { library?: LibraryPort; builder?: boolean } = {}): Rig<C> {
+interface RigOptions {
+  readonly library?: LibraryPort;
+  readonly builder?: boolean;
+  readonly market?: MarketPort;
+}
+
+function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: RigOptions = {}): Rig<C> {
   const clock = createFakeClock(START);
   const rnd = mulberry32(7);
   const shows: [Seat, StationView][] = [];
@@ -136,6 +142,7 @@ function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: {
     stations: { show: (seat, view) => shows.push([seat, view]), buzz: (seat, kind) => buzzes.push([seat, kind]), inUse: () => {} },
     chain,
     library: options.library ?? teamLibrary(),
+    ...(options.market ? { market: options.market } : {}),
     log: { record: (t) => void logged.push(t), countedSince: () => 0 },
     random: () => Math.floor(rnd() * 2 ** 32) >>> 0,
   }, { builder: options.builder ?? false });
@@ -145,7 +152,7 @@ function rigOn<C extends ChainPort>(chainOf: (clock: FakeClock) => C, options: {
 }
 
 /** A Box on the demo's in-memory chain. */
-const rig = (options: { library?: LibraryPort; builder?: boolean } = {}): Rig => rigOn(createDemoChain, options);
+const rig = (options: RigOptions = {}): Rig => rigOn(createDemoChain, options);
 
 /** Lets the chain's reads (promises) land. */
 async function flush(): Promise<void> {
@@ -392,6 +399,30 @@ describe("the core on its ports", () => {
     const dial = duelAt(core.state());
     expect(dial.phase).toBe("dial");
     expect(dial.stat).toBe(STATS[((0xdeadbeef + 3) >>> 0) % STATS.length]);
+  });
+
+  it("deals Stock Duel from the market's live deck and logs the block it was read at", async () => {
+    const source = { chainId: 4663, block: 108_039_821, at: START - 60_000 };
+    const cards = DECK.map((card, i) => ({ ...card, price: 5000 + i }));
+    const r = rig({ market: { deck: () => ({ cards, source }) } });
+    const { core, clock } = r;
+    await toPlaying(r, "stock-duel");
+    const duel = () => {
+      const play = core.state().match?.play;
+      if (play?.game !== "stock-duel") throw new Error("no Stock Duel");
+      return play.state;
+    };
+    expect(duel().market).toEqual(source);
+    for (const card of [...duel().hands[0], ...duel().hands[1]]) expect(card.price).toBeGreaterThanOrEqual(5000);
+    while (!core.state().match?.outcome) {
+      await until(r, () => core.state().match?.outcome != null || duel().phase === "pick");
+      if (core.state().match?.outcome) break;
+      core.tap({ phase: "done", tap: touch(core, 0, NOVA), seat: 0, at: clock.now(), badge: NOVA, roll: 1 });
+      core.tap({ phase: "done", tap: touch(core, 1, KITE), seat: 1, at: clock.now(), badge: KITE, roll: 2 });
+      await until(r, () => core.state().match?.outcome != null || duel().phase !== "pick");
+    }
+    await until(r, (state) => state.phase === "result");
+    expect(r.logged[0]?.market).toEqual({ chainId: 4663, block: 108_039_821 });
   });
 
   it("ends a tap that fails with a refusal and changes nothing", async () => {

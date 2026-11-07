@@ -18,6 +18,7 @@ describe("settings", () => {
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "mumbai-01" },
       admin: null,
       store: null,
+      marketRpcUrl: null,
     });
   });
 
@@ -33,6 +34,7 @@ describe("settings", () => {
         EGB_BOX: "demo-01",
         EGB_STORE_URL: "https://store.example",
         EGB_VERIFIER_URL: "https://verifier.example",
+        ROBINHOOD_RPC_URL: "https://robinhood.example/secret-key",
         ...CHAIN,
       },
       HOME,
@@ -48,6 +50,7 @@ describe("settings", () => {
       chain: { kind: "sepolia", signerCmd: SIGNER, relayerUrl: "https://relayer.example", rpcUrl: "https://rpc.example/v2/secret-key", box: "demo-01" },
       admin: null,
       store: { storeUrl: "https://store.example", verifierUrl: "https://verifier.example" },
+      marketRpcUrl: "https://robinhood.example/secret-key",
     });
     expect(readSettings({ EGB_RECEIVER: "fake" }, HOME, REPO).receiver).toEqual({ kind: "fake" });
     expect(readSettings({ EGB_RECEIVER: "none" }, HOME, REPO).receiver).toEqual({ kind: "none" });

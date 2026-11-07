@@ -65,8 +65,8 @@ import type {
 } from "./types.ts";
 import { rules as quickDraw } from "../games/quick-draw/rules.ts";
 import type { QuickDrawEvent, QuickDrawState } from "../games/quick-draw/types.ts";
-import type { StockDuelEvent } from "../games/stock-duel/types.ts";
-import { frontIndex, rules as stockDuel, SHOW_LAG_MS } from "../games/stock-duel/rules.ts";
+import type { LiveDeck, StockDuelEvent } from "../games/stock-duel/types.ts";
+import { frontIndex, rules as stockDuel, SHOW_LAG_MS, startDuel } from "../games/stock-duel/rules.ts";
 import { defaultStake, DEFAULT_FOCUS, isTeamGame, stakeOf } from "./catalogue.ts";
 import { transcriptOf } from "./transcript.ts";
 import { createTxBook, type TxOrder } from "./txs.ts";
@@ -209,10 +209,11 @@ interface WantedBundle {
   facts: StoreBundle | null;
 }
 
-function startPlay(game: TeamGameId, seed: number, now: number): TeamPlay {
+/** Stock Duel deals `live` (the pools' numbers at a block) when the Box has one, else the frozen deck. */
+function startPlay(game: TeamGameId, seed: number, now: number, live: LiveDeck | null): TeamPlay {
   return game === "quick-draw"
     ? { game, state: quickDraw.start(seed, now) }
-    : { game, state: stockDuel.start(seed, now) };
+    : { game, state: startDuel(seed, now, live) };
 }
 
 function outcomeOf(play: TeamPlay): Match["outcome"] {
@@ -728,7 +729,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     // What was staked plays, whatever the rack says now: a built game can take a store game's id while the stakes go in.
     if (wanted?.facts) return openStore(wanted, wanted.facts, now, opened);
     if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
-    const play = startPlay(chosen as TeamGameId, seed, now);
+    const play = startPlay(chosen as TeamGameId, seed, now, chosen === "stock-duel" ? (ports.market?.deck() ?? null) : null);
     match = opened(play);
     lastFronts = fronts(play, now);
     setPhase("playing");
@@ -1027,6 +1028,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           endedAt,
           taps: matchTaps,
           winner,
+          market: match.play.game === "stock-duel" ? match.play.state.market : null,
           // A store match pays a split, not a winner: its transcript never counts toward records.
           voided: match.voided || match.play.game === "store",
           seen: players().map((seat) => seen[seat]),

@@ -75,6 +75,7 @@ export async function startTestBox(
       chain: { kind: "demo" },
       admin: null,
       store: options.store ?? null,
+      marketRpcUrl: null,
     },
     repoRoot: dir,
     clock,

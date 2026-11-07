@@ -27,6 +27,8 @@ import { relayerAt } from "../chain/relayer.ts";
 import { roundsFile } from "../chain/rounds.ts";
 import { createSepoliaChain, SWEEP_MS, type SepoliaChain } from "../chain/port.ts";
 import { verifierAt } from "../chain/verifier.ts";
+import { createMarketFeed } from "../chain/market.ts";
+import { readMarket, robinhoodClient } from "@egb/shared/market";
 import { processSigner } from "../signer/hyp2003.ts";
 import { stopKiosk } from "./kiosk.ts";
 import { createLogFile } from "./log-file.ts";
@@ -135,6 +137,10 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     // A bundle that doesn't load in its child seals its cartridge.
     onUnloadable: (id, reason) => library.seal(id, reason),
   });
+  // Stock Duel's numbers: Robinhood Chain's pools, read in the background (absent: the frozen deck).
+  const marketUrl = settings.marketRpcUrl;
+  const market = marketUrl ? createMarketFeed({ read: () => readMarket(robinhoodClient(marketUrl)), clock, log }) : null;
+  if (!market) log("market: no ROBINHOOD_RPC_URL: Stock Duel deals the frozen deck");
   let taps: Taps | null = null;
   const core = createCore({
     clock,
@@ -148,6 +154,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     library,
     rules,
     ...(bundles ? { bundles } : {}),
+    ...(market ? { market } : {}),
     log: sessions,
     random: () => randomInt(2 ** 32),
   }, { builder: true, stations: settings.stations.length });
@@ -292,6 +299,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
         clock.cancel(sweeping);
         clock.cancel(storeReads);
         chain.stop?.();
+        market?.stop();
         await Promise.all([sessions.flush(), logFile?.flush()]);
       })();
       return stopping;
