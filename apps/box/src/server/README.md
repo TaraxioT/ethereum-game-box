@@ -24,6 +24,7 @@ named.
 | `P256_SIGNER_CMD` | | The Box key's signer daemon, run with no shell (`deploy/p256-signer/`): `python3 /home/pi/egb/current/deploy/p256-signer/hyp2003_signer.py --serve`. |
 | `RELAYER_URL` | | The relayer that sends the Box's signed requests and pays the gas: `https://gamebox-relayer.mathew.workers.dev`. |
 | `SEPOLIA_RPC_URL` | | A Sepolia RPC for the reads (balances, names, the title, the championship, receipts). It carries the node's key: no error or log line ever shows it. |
+| `ROBINHOOD_RPC_URL` | | Optional: a Robinhood Chain mainnet RPC (a Chainstack node), read only. Stock Duel deals live numbers from the stock pools, read at start and every 5 minutes (`chain/market.ts`); without it, the frozen deck. It carries the node's key: never logged. |
 | `EGB_BOX` | `mumbai-01` | The Box's label under `gamebox.eth`, registered with the token's key. |
 | `EGB_STORE_URL` | | The store (`apps/store`): its index and bundles. With `EGB_VERIFIER_URL`, or a bad setting stops the start. Neither: a Box with no store games. |
 | `EGB_VERIFIER_URL` | | The verifier (`apps/verifier`), which judges store matches. Store games also need the chain settings and `StorePot` in `deployments/sepolia.json`; without those the rack has none, and the log says so. |

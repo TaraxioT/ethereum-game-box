@@ -5,6 +5,7 @@
 // the badges have had fewer than FREE_PER_PAIR_HOUR counted results together in the hour before. Injected taps and Demo mode's screen
 // are no evidence; a result that doesn't count is still logged. Pure.
 import type { DuelSeat, Transcript, TranscriptTap } from "@egb/sdk";
+import type { MarketSource } from "../games/stock-duel/types.ts";
 import type { MatchLog } from "./ports.ts";
 
 export const FREE_MIN_MATCH_MS = 12_000;
@@ -26,6 +27,8 @@ export interface MatchRecord {
   readonly voided: boolean;
   /** The first station tap each player's badge made from Stake on, or null for none. */
   readonly seen: readonly (number | null)[];
+  /** Stock Duel's live numbers: the Robinhood Chain block they were read at. Null for the frozen deck and other games. */
+  readonly market?: MarketSource | null;
 }
 
 /** Whether a match's result counts toward records. */
@@ -49,5 +52,6 @@ export function transcriptOf(record: MatchRecord, log: Pick<MatchLog, "countedSi
     taps: record.taps,
     result: record.voided ? "void" : { winner: record.winner },
     counts: counts(record, log),
+    ...(record.market ? { market: { chainId: record.market.chainId, block: record.market.block } } : {}),
   };
 }

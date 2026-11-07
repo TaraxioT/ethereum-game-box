@@ -1,5 +1,6 @@
-// Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events. The cards and
-// their stats are the deck's (built/deck.ts), shared with Stock Duel's built form.
+// Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events. The cards are
+// the deck's (built/deck.ts), shared with Stock Duel's built form; on a Box that reads Robinhood Chain their numbers
+// are the pools' at a block (live.ts), handed to the rules when the match starts.
 import type { DuelSeat } from "@egb/sdk";
 import type { StatKey, Stock } from "./built/deck.ts";
 
@@ -20,7 +21,25 @@ export interface RoundRecord {
   readonly winner: DuelSeat | null;
 }
 
+/** Where a match's numbers came from: Robinhood Chain's stock pools at a block. */
+export interface MarketSource {
+  readonly chainId: number;
+  readonly block: number;
+  /** The block's time (ms since the epoch). */
+  readonly at: number;
+}
+
+/** The deck with live numbers, and the block they were read at. */
+export interface LiveDeck {
+  readonly cards: readonly Stock[];
+  readonly source: MarketSource;
+}
+
 export interface StockDuelState {
+  /** The deck this match deals from, in deck order: the bars rank a card against it. */
+  readonly deck: readonly Stock[];
+  /** The block the numbers were read at, or null for the frozen deck. */
+  readonly market: MarketSource | null;
   readonly phase: StockDuelPhase;
   /** When the current phase began (ms since the epoch). */
   readonly phaseAt: number;

@@ -16,6 +16,20 @@
 | `src/admin/` | What `gamebox.eth`'s admin does, imported as `@egb/shared/admin` (below) |
 | `src/swap/` | The tap swap on the GBX/USDC pool, imported as `@egb/shared/swap` (below) |
 | `src/store/` | The game store's messages and the verifier's API, imported as `@egb/shared/store` (below) |
+| `src/market/` | Robinhood Chain's stock pools, read only, for Stock Duel's live deck, imported as `@egb/shared/market` (below) |
+
+## `src/market/`
+
+Stock Duel's numbers from Robinhood Chain mainnet (`ROBINHOOD_RPC_URL`, a Chainstack node), never written to. Each deck
+stock's token and its deepest Uniswap pool against USDG (v3 or v4) are in `deployments/robinhood.json`;
+`pnpm market:discover` finds the pools and `pnpm market:read` prints a snapshot.
+
+| Module | Holds |
+|---|---|
+| `deployments.ts` | Loads `deployments/robinhood.json`: `robinhoodAddress(name)`, `stockListings()`, `ROBINHOOD_CHAIN_ID` |
+| `reads.ts` | `robinhoodClient(rpcUrl)`, and `readPools(client, listings, block)`: every pool's sqrt price, in-range liquidity and the token's ERC-8056 `uiMultiplier` at one block, in one multicall |
+| `stats.ts` | Pure: `priceOf` (USD per share), `depthOf` (USD to move the price ±2% at the in-range liquidity, the `liquidity` stat: v4 pools share one PoolManager's balance, so depth is the figure both versions give alike), `quoteOf` (price, the day's mean, the day's move, depth) |
+| `snapshot.ts` | `readMarket(client)`: every quote at the latest block, the day sampled at `SAMPLES` (25) blocks back to 24 hours before, found by `blockAt` |
 
 ## `src/admin/`
 

@@ -13,8 +13,9 @@ import {
   frontIndex,
   frontRemainingMs,
   rules,
+  startDuel,
 } from "./rules.ts";
-import type { Stock, StockDuelState } from "./types.ts";
+import type { LiveDeck, Stock, StockDuelState } from "./types.ts";
 
 const T0 = 5_000_000;
 const PICK_AT = T0 + DEAL_MS;
@@ -77,6 +78,24 @@ describe("start", () => {
       const tickers = [...state.hands[0], ...state.hands[1]].map((card) => card.ticker);
       expect(new Set(tickers).size).toBe(8);
     }
+  });
+});
+
+describe("a live deck", () => {
+  const live: LiveDeck = {
+    cards: DECK.map((card, i) => ({ ...card, price: 1000 + i, liquidity: 50 + i })),
+    source: { chainId: 4663, block: 108_039_821, at: T0 - 60_000 },
+  };
+
+  it("deals the same cards as the frozen deck for a seed, with the live numbers, and names its block", () => {
+    const frozen = rules.start(42, T0);
+    const state = startDuel(42, T0, live);
+    expect(state.hands.map((hand) => hand.map((card) => card.ticker))).toEqual(frozen.hands.map((hand) => hand.map((card) => card.ticker)));
+    for (const card of [...state.hands[0], ...state.hands[1]]) expect(card.price).toBeGreaterThanOrEqual(1000);
+    expect(state.deck).toBe(live.cards);
+    expect(state.market).toEqual(live.source);
+    expect(frozen.market).toBeNull();
+    expect(frozen.deck).toBe(DECK);
   });
 });
 

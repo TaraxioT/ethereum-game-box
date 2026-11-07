@@ -1,6 +1,7 @@
 // The 20-stock deck, and how a card prints its stats. Prices, 24-hour moves and liquidity are numbers recorded from each
-// stock's Uniswap pool against USDG on Robinhood Chain, frozen here so every match deals from the same figures. Part
-// of Stock Duel's built form (a built game imports only its own files), and the team game's deck too.
+// stock's Uniswap pool against USDG on Robinhood Chain, frozen here. Part of Stock Duel's built form (a built game
+// imports only its own files, so it always deals these), and the team game's fallback: on a Box with ROBINHOOD_RPC_URL
+// the team game deals the same cards with the pools' live numbers (../live.ts).
 
 /** The four stats a round can be played on, in roll order: `(roll1 + roll2) % 4` picks one. */
 export type StatKey = "price" | "avgPrice" | "change24h" | "liquidity";

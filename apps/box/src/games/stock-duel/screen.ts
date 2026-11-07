@@ -27,6 +27,7 @@ import { createDial } from "./dial.ts";
 import { createReveal, type RevealPlaces } from "./reveal.ts";
 import { createStanding, type Player, type StandingPlaces } from "./score.ts";
 import { createPremarket } from "./premarket.ts";
+import { rankAgainst } from "./stat-bar.ts";
 
 interface Geometry {
   readonly scene: ScenePlaces;
@@ -283,8 +284,12 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
       if (s === last) return;
       const prev = last;
       last = s;
-      if (prev === null || match.id !== matchId) draw(s);
-      else step(prev, s);
+      rankAgainst(s.deck);
+      if (prev === null || match.id !== matchId) {
+        // A new match's numbers may differ: its cards are made afresh.
+        for (const seat of DUEL_SEATS) drums[seat].show([], 0, false, null);
+        draw(s);
+      } else step(prev, s);
       matchId = match.id;
       // While the wheel picks the stat, the rest of the room dims.
       root.classList.toggle("rolling", s.phase === "dial");

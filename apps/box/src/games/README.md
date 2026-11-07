@@ -49,6 +49,7 @@ down; the higher number takes the round, best of three. Its taps are `random`.
 
 | Module | What it is |
 |---|---|
-| `types.ts` | `StockDuelState` (hands, the drums, played and held cards, rolls, the stat, the history), `StockDuelEvent` (`tick`, `touch`, `tap`, `release`); `Stock` and `StatKey` are the deck's (`built/deck.ts`). |
-| `rules.ts` | `rules`, `frontIndex`, `frontCard`, `frontRemainingMs`, the timings. Tested in `rules.test.ts`. |
-| `deck.ts` | The 20-stock deck with recorded numbers, `STATS`, `STAT_LABEL`, `formatStat`. |
+| `types.ts` | `StockDuelState` (the match's deck and its `market` block, hands, the drums, played and held cards, rolls, the stat, the history), `StockDuelEvent` (`tick`, `touch`, `tap`, `release`), `LiveDeck` and `MarketSource`; `Stock` and `StatKey` are the deck's (`built/deck.ts`). |
+| `rules.ts` | `rules`, `startDuel(seed, now, live)` (a live deck, or the frozen one for null), `frontIndex`, `frontCard`, `frontRemainingMs`, the timings. Tested in `rules.test.ts`. |
+| `deck.ts` | The 20-stock deck with recorded numbers (the fallback), `STATS`, `STAT_LABEL`, `formatStat`. |
+| `live.ts` | `liveDeck(snapshot)`: the deck with a Robinhood Chain market snapshot's numbers (`@egb/shared/market`), and its block. |

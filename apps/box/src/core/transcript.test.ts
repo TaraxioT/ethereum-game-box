@@ -41,4 +41,10 @@ describe("the transcript", () => {
       taps: record.taps, result: { winner: 1 }, counts: true,
     });
   });
+
+  it("names the Robinhood Chain block a live Stock Duel deck was read at, the replay proof", () => {
+    const live = transcriptOf({ ...record, market: { chainId: 4663, block: 108_039_821, at: END - 60_000 } }, none);
+    expect(live.market).toEqual({ chainId: 4663, block: 108_039_821 });
+    expect(transcriptOf({ ...record, market: null }, none)).not.toHaveProperty("market");
+  });
 });

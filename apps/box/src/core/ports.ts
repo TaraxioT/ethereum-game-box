@@ -2,6 +2,7 @@
 // no global clock; a host (SimLink in the browser, the Box server on the Pi) hands it these.
 import type { DuelSeat, Seat, StationView, Transcript, BuiltEvent, LogEntry, Outcome, TapNeed } from "@egb/sdk";
 import type { Badge, Board, GameId, GameInfo, Judged, PlayerCard, Settlement, TxStep } from "./types.ts";
+import type { LiveDeck } from "../games/stock-duel/types.ts";
 
 /** An opaque timer handle. */
 export type TimerHandle = { readonly __timer: true };
@@ -240,6 +241,12 @@ export interface MatchLog {
  */
 export type TapSource = "station" | "injected";
 
+/** Stock Duel's live deck: Robinhood Chain's stock pools, read in the background. */
+export interface MarketPort {
+  /** The latest read's deck, or null before the first read succeeds (the match then deals the frozen deck). */
+  deck(): LiveDeck | null;
+}
+
 export interface CorePorts {
   readonly clock: Clock;
   readonly stations: StationsPort;
@@ -249,6 +256,8 @@ export interface CorePorts {
   readonly rules?: RulesRunnerPort;
   /** Absent: store games can't run (the demo, a Box with no store settings). */
   readonly bundles?: BundlePort;
+  /** Absent: Stock Duel deals the frozen deck (the demo, a Box with no ROBINHOOD_RPC_URL). */
+  readonly market?: MarketPort;
   readonly log: MatchLog;
   /** uint32 randomness for seeds and the lobby's proposed labels (never a game's outcome on a real Box: badges roll those). */
   readonly random: () => number;

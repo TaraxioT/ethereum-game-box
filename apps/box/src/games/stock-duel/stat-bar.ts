@@ -1,18 +1,31 @@
-// A stat as a progress bar: its name, its number, and a bar filled by where the number ranks in the deck, red for
-// the deck's weakest through amber to green for its strongest. Higher wins on every stat, so a fuller bar is a
+// A stat as a progress bar: its name, its number, and a bar filled by where the number ranks in the match's deck, red
+// for the deck's weakest through amber to green for its strongest. Higher wins on every stat, so a fuller bar is a
 // stronger card on that stat. The hand cards show the bars alone; the played cards' faces show the numbers too.
 import type { StatKey, Stock } from "./types.ts";
 import { el } from "../../screen/shell/dom.ts";
-import { DECK, formatStat, STAT_LABEL } from "./deck.ts";
+import { DECK, formatStat, STAT_LABEL, STATS } from "./deck.ts";
 
-/** Each stat's values across the deck, lowest first. */
+/** The deck the bars rank against, and each stat's values across it, lowest first. */
+let ranked: readonly Stock[] = DECK;
+let rankedKey = "";
 const SORTED = new Map<StatKey, readonly number[]>();
+
+const keyOf = (deck: readonly Stock[]): string => deck.map((stock) => STATS.map((stat) => stock[stat]).join(",")).join(";");
+
+/** Ranks the bars against the match's own deck (live numbers differ from match to match). Set before drawing its cards. */
+export function rankAgainst(deck: readonly Stock[]): void {
+  const key = keyOf(deck);
+  if (key === rankedKey) return;
+  ranked = deck;
+  rankedKey = key;
+  SORTED.clear();
+}
 
 /** Where `value` ranks among the deck's values of `stat`: 0 for the lowest, 1 for the highest. */
 export function strengthOf(stat: StatKey, value: number): number {
   let sorted = SORTED.get(stat);
   if (!sorted) {
-    sorted = DECK.map((stock) => stock[stat]).sort((a, b) => a - b);
+    sorted = ranked.map((stock) => stock[stat]).sort((a, b) => a - b);
     SORTED.set(stat, sorted);
   }
   if (sorted.length < 2) return 1;

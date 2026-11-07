@@ -48,6 +48,8 @@ export interface Settings {
   readonly chain: ChainSetting;
   readonly admin: AdminSetting | null;
   readonly store: StoreSetting | null;
+  /** `ROBINHOOD_RPC_URL`: Robinhood Chain mainnet, read only, for Stock Duel's live deck. Null: the frozen deck. */
+  readonly marketRpcUrl: string | null;
 }
 
 export const DEFAULTS = {
@@ -148,6 +150,9 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     problems.push("store games need both EGB_STORE_URL and EGB_VERIFIER_URL");
   }
 
+  const marketRpcUrl = get("ROBINHOOD_RPC_URL") ?? null;
+  if (marketRpcUrl !== null && !isHttpUrl(marketRpcUrl)) problems.push("ROBINHOOD_RPC_URL must be an http(s) URL");
+
   if (problems.length > 0) throw new SettingsError(problems);
   return {
     host,
@@ -159,5 +164,6 @@ export function readSettings(env: Env, home: string, repoRoot: string): Settings
     chain,
     admin,
     store,
+    marketRpcUrl,
   };
 }
