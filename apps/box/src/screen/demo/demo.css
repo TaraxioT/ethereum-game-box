@@ -1,4 +1,5 @@
-/* Demo mode's own pieces: the DEMO tag in the window's corner and the one-time intro. */
+/* Demo mode's own pieces: the DEMO tag in the window's corner, its note and links, the one-time intro, and the
+   wrong-build page a Box server's demo build shows. */
 
 /* The DEMO tag. */
 .demo-tag {
@@ -21,11 +22,25 @@
 .demo-chevron { width: 8px; height: 8px; border: solid var(--fg-3); border-width: 1.5px 1.5px 0 0; transform: translateY(2px) rotate(-45deg); transition: transform 200ms var(--ease-out); }
 .demo-head[aria-expanded="true"] .demo-chevron { transform: translateY(-2px) rotate(135deg); }
 
-.demo-panel { width: 260px; padding: 6px 14px; }
+.demo-panel { width: min(340px, calc(100vw - 32px)); padding: 6px 14px; }
 .demo-panel[hidden] { display: none; }
 .demo-row { position: relative; height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.demo-row + .demo-row { border-top: 1px solid rgb(207 232 246 / 0.08); }
+.demo-row + .demo-row, .demo-about + .demo-row { border-top: 1px solid rgb(207 232 246 / 0.08); }
 .demo-label { font-size: 14px; color: var(--fg-2); }
+
+/* What the demo is, and the links. */
+.demo-about { position: relative; padding: 10px 0 14px; }
+.demo-about-kicker { font-size: 13px; letter-spacing: 0.24em; color: var(--sys-hot); }
+.demo-about-line { margin: 8px 0 0; font: 600 12px/1.45 var(--hud-body); letter-spacing: 0.06em; color: var(--fg-2); }
+.demo-links { margin-top: 12px; }
+.demo-links-title { font-size: 11px; letter-spacing: 0.16em; color: var(--fg-3); }
+.demo-link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.demo-link {
+  display: flex; align-items: center; justify-content: center; height: 30px; padding: 0 8px; border: 1px solid var(--fg-4);
+  font: 600 12px/1 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-2); text-decoration: none; white-space: nowrap;
+}
+.demo-link:hover { border-color: var(--sys); color: var(--fg); box-shadow: 0 0 6px var(--sys-bloom); }
+.demo-link:focus-visible { outline: 2px solid var(--sys-hot); outline-offset: 2px; }
 
 /* A light switch: a pill track and a knob that slides along it. */
 .demo-switch {
@@ -52,7 +67,8 @@
 /* The intro. */
 .demo-intro { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgb(1 4 9 / 0.6); }
 .demo-intro-panel { width: min(560px, 100%); padding: 28px 32px 30px; text-align: center; font-size: 16px; }
-.demo-intro-kicker { font: 600 15px/1 var(--hud-body); letter-spacing: 0.32em; color: var(--fg-3); }
+.demo-intro-kicker { font: 600 15px/1 var(--hud-body); letter-spacing: 0.32em; color: var(--sys-hot); }
+.demo-intro-about { margin: 12px 0 0; font: 600 14px/1.45 var(--hud-body); letter-spacing: 0.06em; color: var(--fg-2); }
 .demo-intro-title {
   margin: 12px 0 18px; font: 700 28px/1.15 var(--hud-display); letter-spacing: 0.02em; color: var(--fg);
   text-shadow: var(--glow-text);
@@ -61,3 +77,12 @@
 .demo-intro-rule { display: block; height: 1px; margin: 18px 0 16px; background: rgb(207 232 246 / 0.25); }
 .demo-intro-note { margin: 0; font: 600 14px/1.4 var(--hud-body); letter-spacing: 0.08em; color: var(--fg-3); }
 .demo-intro-ok { display: block; margin: 24px auto 0; width: 160px; height: 56px; }
+
+/* The wrong-build page. */
+.demo-wrong-build {
+  position: fixed; inset: 0; display: grid; place-content: center; gap: 16px; padding: 16px; text-align: center;
+  background: var(--void); color: var(--fg); font: 600 16px/1.45 var(--hud-body); letter-spacing: 0.08em;
+}
+.demo-wrong-build-title { margin: 0; font: 700 28px/1.15 var(--hud-display); color: var(--alert); }
+.demo-wrong-build-line { margin: 0; color: var(--fg-2); }
+.demo-wrong-build-code { font: 500 16px/1.4 var(--mono); color: var(--sys-hot); }

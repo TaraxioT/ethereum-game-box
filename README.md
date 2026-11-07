@@ -10,13 +10,15 @@
 <p><strong>A tabletop console where friends tap NFC wallet badges to play for prizes on Ethereum.</strong></p>
 
 <p>
+  <a href="https://ethereum-game-box.pages.dev/"><b>Try the browser demo</b></a> &nbsp;·&nbsp;
   <a href="https://gamebox-names.pages.dev"><b>Explore the live names</b></a> &nbsp;·&nbsp;
   <a href="ens-usage.md"><b>ENS integration</b></a> &nbsp;·&nbsp;
   <a href="0g-usage.md"><b>0G integration</b></a> &nbsp;·&nbsp;
   <a href="#run-it-locally"><b>Run it locally</b></a>
 </p>
 
-<sub>Built at ETHGlobal Mumbai 2026. Game Box contracts run on Sepolia. Matches use test USDC.</sub>
+<sub>Built at ETHGlobal Mumbai 2026. Game Box contracts run on Sepolia. Matches use test USDC.<br>
+The browser demo is for verification: it simulates the Box, with nothing on chain. The real Box runs on a Raspberry Pi with NFC badges and a hardware key.</sub>
 
 </div>
 

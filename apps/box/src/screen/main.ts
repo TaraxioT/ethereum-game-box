@@ -1,7 +1,9 @@
 // The screen's entry. One codebase, two builds: `VITE_EGB_MODE=demo` (the default) runs the whole Box in the browser
 // (SimLink), lets the screen stand in for the tap stations and adds the DEMO tag; `box` is the bare screen for the
 // Pi's kiosk, on LiveLink to the Box server that served it. In box mode the real stations tap: neither the screen nor
-// the keyboard taps anything. At `#sounds` either build shows the sound board instead (`sound/board.ts`).
+// the keyboard taps anything. The demo runs only away from a Box: a demo build that a Box server served (its page
+// carries the launcher token) says it is the wrong build instead. At `#sounds` either build shows the sound board
+// instead (`sound/board.ts`).
 import "./fonts.css";
 import "./tokens.css";
 import "./shell/shell.css";
@@ -18,6 +20,8 @@ import { createSimLink } from "./link/sim.ts";
 import { bindTapKeys } from "./demo/keys.ts";
 import { mountDemoTag } from "./demo/demo-tag.ts";
 import { showIntroOnce } from "./demo/intro.ts";
+import { mountWrongBuild } from "./demo/on-box.ts";
+import { hasLauncherToken } from "./views/builder-link.ts";
 import { mountLease } from "./kiosk/lease.ts";
 import { mountSettings } from "./kiosk/settings.ts";
 import { mountExitKey } from "./shell/exit-key.ts";
@@ -34,6 +38,8 @@ if (location.hash === BOARD_HASH) {
   mountLease(document.body, sound);
   mountSettings(document.body, sound);
   mountExitKey(document.body, link, sound);
+} else if (hasLauncherToken()) {
+  mountWrongBuild(document.body);
 } else {
   const sim = createSimLink();
   bindTapKeys(sim);

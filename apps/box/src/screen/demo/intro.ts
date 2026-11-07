@@ -1,15 +1,17 @@
-// The one-time Demo intro: a panel centred over the screen that rezzes in once the boot has finished. How to tap
+// The one-time Demo intro: a panel centred over the screen that rezzes in once the boot has finished. That this is
+// the browser demo, for checking the project, and the real Box runs on hardware (`about.ts`); how to tap
 // without hardware (a player's frame, or their half of the screen in a game; A and L), and where the opponent switch
-// and the power cut are. OK or Escape puts it away for good (localStorage `gamebox-intro=2`). The parts must be
+// and the power cut are, with the links. OK or Escape puts it away for good (localStorage `gamebox-intro=3`). The parts must be
 // registered first.
 import "./demo.css";
 import type { BoxLink } from "../../core/types.ts";
 import { el } from "../shell/dom.ts";
 import { derez, rez } from "../shell/rez.ts";
+import { ABOUT_KICKER, REAL_BOX, THIS_DEMO } from "./about.ts";
 
 const SEEN_KEY = "gamebox-intro";
-/** Bumped when the ways to tap change, so returning visitors see the new ones once. */
-const SEEN = "2";
+/** Bumped when what it says changes, so returning visitors see the new one once. */
+const SEEN = "3";
 
 function seen(): boolean {
   try {
@@ -51,12 +53,15 @@ function show(host: HTMLElement): void {
   ok.className = "demo-intro-ok";
   ok.textContent = "OK";
   panel.append(
-    el("div", "demo-intro-kicker", "DEMO"),
+    el("div", "demo-intro-kicker", ABOUT_KICKER),
+    el("p", "demo-intro-about", REAL_BOX),
+    el("p", "demo-intro-about", THIS_DEMO),
+    el("i", "demo-intro-rule"),
     title,
     el("p", "demo-intro-line", "TOUCH A PLAYER'S FRAME, OR THEIR HALF OF THE SCREEN IN A GAME"),
     el("p", "demo-intro-line", "PRESS A FOR PLAYER 1, L FOR PLAYER 2"),
     el("i", "demo-intro-rule"),
-    el("p", "demo-intro-note", "VS BOT, HOT SEAT AND CUT POWER ARE IN THE DEMO TAG"),
+    el("p", "demo-intro-note", "VS BOT, HOT SEAT, CUT POWER AND THE LINKS ARE IN THE DEMO TAG"),
     ok,
   );
   backdrop.append(panel);

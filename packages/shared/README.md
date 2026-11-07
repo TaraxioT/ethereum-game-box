@@ -97,6 +97,7 @@ its own client, head watch and transaction log.
 | `chain.ts` | `sepoliaClient(urls)` over public RPCs with a fallback (`PUBLIC_SEPOLIA_RPCS`), `ETHERSCAN`, `LOG_CHUNK`, and `watchHead(client)`, the polled head block (`HeadWatch`: `head`, `onHead`, `stop`) |
 | `errors.ts` | Reverts by name, from every names ABI and the ENSv2 slice: `decodeRevert`, `revertData`, `errorName` |
 | `relayer.ts` | `relayerClient(base)` and `demoBoxClient(base)` over HTTP, typed with `names/api.ts`; `ApiRefusal`; the live `RELAYER_URL` and `DEMO_BOX_URL` |
+| `sites.ts` | The project's public pages: `DEMO_URL`, `NAMES_SITE_URL`, `OPERATOR_SITE_URL`, `PLAN_URL`, `SOURCE_URL`, and the lists the browser demo links to, `NAMES_SITE_PAGES` (in the names site's menu order) and `PROJECT_SITES` |
 | `txs.ts` | `txLog({ follow })`: the writes a transaction strip draws (`onTxs`, `relayed`, `direct`), with `Tx`, `TxFailed` and `fromView` |
 
 ## `src/swap/`

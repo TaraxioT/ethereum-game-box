@@ -374,14 +374,19 @@ The sounds, for the Box's views, its games and a Forge-built game's designer, by
 
 ## Demo
 
-`demo/` is what Demo mode adds to the screen, which then stands in for the tap stations a browser doesn't have.
+`demo/` is what Demo mode adds to the screen, which then stands in for the tap stations a browser doesn't have. The
+demo is the public one at https://ethereum-game-box.pages.dev/, there to check the project in a browser; it says so,
+and that the real Box runs on the Pi with badges, stations and the HYP2003 key. It never runs on a Box: a demo build
+that a Box server served (its page carries the launcher token, `views/builder-link.ts`) shows `on-box.ts` instead.
 
 | Module | What it is | API |
 |---|---|---|
-| `demo-tag.ts` | The DEMO tag, always visible, fixed to the window's bottom-right corner: a small chamfered panel reading `DEMO` (or `POWER CUT`, with a red lamp) and a chevron. A tap or Enter rezzes a panel up out of it with `CUT POWER` (a light switch, `sim.setPower`), `OPPONENT` (`VS BOT \| HOT SEAT`, `sim.setOpponent`) and `SOUND` (a switch, `sound.setMuted`). A tap outside, Escape or the chevron derezzes it. It keeps in step with `sim.subscribe`, and its pointer and key events never reach the stage. | `mountDemoTag(host, sim, sound)` |
-| `intro.ts` | The one-time intro: a panel that rezzes in once the boot has finished. `DEMO`, `TWO WAYS TO TAP`, how to tap (a player's frame, or their half of the screen in a game; A and L) and where the DEMO tag's switches are, with an OK key. OK or Escape dismisses it for good (localStorage `gamebox-intro=2`). | `showIntroOnce(host, link)` |
+| `demo-tag.ts` | The DEMO tag, always visible, fixed to the window's bottom-right corner: a small chamfered panel reading `DEMO` (or `POWER CUT`, with a red lamp) and a chevron. A tap or Enter rezzes a panel up out of it with the note and links (`about.ts`), then `CUT POWER` (a light switch, `sim.setPower`), `OPPONENT` (`VS BOT \| HOT SEAT`, `sim.setOpponent`) and `SOUND` (a switch, `sound.setMuted`). A tap outside, Escape or the chevron derezzes it. It keeps in step with `sim.subscribe`, and its pointer and key events never reach the stage. | `mountDemoTag(host, sim, sound)` |
+| `intro.ts` | The one-time intro: a panel that rezzes in once the boot has finished. `DEMO FOR VERIFICATION` and the note (`about.ts`), `TWO WAYS TO TAP`, how to tap (a player's frame, or their half of the screen in a game; A and L) and where the DEMO tag's switches and links are, with an OK key. OK or Escape dismisses it for good (localStorage `gamebox-intro=3`). | `showIntroOnce(host, link)` |
+| `about.ts` | What the demo says about itself: `DEMO FOR VERIFICATION`, that the real Box runs on a Raspberry Pi with NFC badges, tap stations and a hardware key and settles on Sepolia, and that this is its screen and core in the browser, simulated, nothing on chain. Then the links, opening in a new tab: the names site's pages (`NAMES_SITE_PAGES`) and the operator site, the plan and the source (`PROJECT_SITES`), from `@egb/shared/web`. | `aboutSection()`, `ABOUT_KICKER`, `REAL_BOX`, `THIS_DEMO` |
+| `on-box.ts` | The page a demo build shows when a Box server served it: `THIS IS THE BROWSER DEMO'S BUILD` and the kiosk's build command, in place of a simulated Box. | `mountWrongBuild(host)` |
 | `keys.ts` | A taps Player 1, L taps Player 2, in the demo only (the Box has real stations). Held keys, modifier shortcuts and typing in a field don't tap. | `bindTapKeys(sim): () => void` |
-| `demo.css` | The tag's and the intro's styles. | |
+| `demo.css` | The tag's, the note's and links', the intro's and the wrong-build page's styles. | |
 
 Taps on the screen themselves are the app's (`shell/app.ts`, `onSeatTap`); `main.ts` passes `sim.tap` in Demo mode
 only, so in box mode the real stations are the only taps. The simulated Box's hardware side is `SimControl`

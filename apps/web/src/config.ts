@@ -1,5 +1,6 @@
 // Where the site reads and writes. No key ships in the bundle: the RPCs are public Sepolia endpoints (the first that
 // answers wins), and the relayer and the demo Box are public Workers. `VITE_*` overrides them for local work.
+import { OPERATOR_SITE_URL as LIVE_OPERATOR_SITE_URL } from "@egb/shared/web";
 
 const env = import.meta.env;
 
@@ -21,7 +22,7 @@ export const ETHERSCAN = "https://sepolia.etherscan.io";
 
 /** The operator site: where an operator signs in with a passkey and edits its Box's four keys. A separate app
  * (`apps/operator`); this site only links to it and watches the chain for its writes. */
-export const OPERATOR_SITE_URL: string = env.VITE_OPERATOR_SITE_URL ?? "https://gamebox-operator.pages.dev";
+export const OPERATOR_SITE_URL: string = env.VITE_OPERATOR_SITE_URL ?? LIVE_OPERATOR_SITE_URL;
 
 /** The ENS app on Sepolia, which resolves through ENSv2 and shows the names under gamebox.eth. */
 export const ENS_APP_URL = "https://sepolia.app.ens.domains";

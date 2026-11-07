@@ -1,7 +1,8 @@
 // The DEMO tag: always on screen in Demo mode, fixed to the window's bottom-right corner above the stage. Collapsed,
 // it is a small chamfered panel reading DEMO (POWER CUT while the power is cut) with a lamp and a chevron. Opened (a
-// tap, or Enter), a panel rezzes up out of it with three rows: CUT POWER (sim.setPower), OPPONENT, VS BOT or HOT SEAT
-// (sim.setOpponent), and SOUND (sound.setMuted). A tap outside, Escape or the chevron closes it. It keeps in step
+// tap, or Enter), a panel rezzes up out of it: what the demo is and the links to the project's other pages
+// (`about.ts`), then three rows: CUT POWER (sim.setPower), OPPONENT, VS BOT or HOT SEAT (sim.setOpponent), and SOUND
+// (sound.setMuted). A tap outside, Escape or the chevron closes it. It keeps in step
 // with the simulated Box, and none of its pointer or key events reach the stage.
 import "./demo.css";
 import type { Opponent, SimLink } from "../link/control.ts";
@@ -9,6 +10,7 @@ import type { Sound } from "../views/view.ts";
 import { framed } from "../parts/frame.ts";
 import { el } from "../shell/dom.ts";
 import { derez, rez } from "../shell/rez.ts";
+import { aboutSection } from "./about.ts";
 
 const CHAMFER = 10;
 
@@ -60,7 +62,7 @@ export function mountDemoTag(host: HTMLElement, sim: SimLink, sound: Sound): voi
     sound.setMuted(!on);
     sync();
   });
-  panel.append(power.row, opponentRow, soundSwitch.row);
+  panel.append(aboutSection(), power.row, opponentRow, soundSwitch.row);
 
   const head = framed(el("button", "demo-head"), CHAMFER);
   head.type = "button";
