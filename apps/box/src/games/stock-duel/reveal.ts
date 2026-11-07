@@ -1,7 +1,8 @@
 // The round's two played cards on the tray. Each seat has a dark well its card lands in; while a seat is on its last
 // turn its well says so. A played card arrives face down: a slab in the seat's colour with a big "?", and AUTO on it
 // when the card was played for the player. At the reveal both cards turn over together and show their faces: the
-// stock's colour across the top with the ticker and company, the round's stat set large and the other three below.
+// stock's colour across the top with the ticker and company, the round's stat set large and the other three below,
+// each with a bar ranking it against the deck.
 // Then the winner's card lifts with a rim of its seat's colour and a "+1 ROUND" badge, the loser's sinks and dims,
 // and the line under the cards names who took it. A tie says TIE · REPLAY and moves neither card. During the next
 // pick that line recalls the last round. It sounds as it moves: a paper whoosh as the cards turn, a blip for each step
@@ -13,6 +14,7 @@ import type { RoundRecord, StatKey, Stock } from "./types.ts";
 import { calm, el, fitFont, place, play, wait } from "../../screen/shell/dom.ts";
 import { formatStat, STAT_LABEL, STATS } from "./deck.ts";
 import { inkOn } from "./rolodex.ts";
+import { bar, statRow } from "./stat-bar.ts";
 
 const FLY_MS = 560;
 const FLIP_MS = 720;
@@ -116,14 +118,9 @@ export function createReveal(places: RevealPlaces, label: (seat: DuelSeat) => st
     head.append(el("b", "sd-rc-ticker", stock.ticker), el("span", "sd-rc-name", stock.name));
     const feature = el("div", "sd-rc-feature");
     const value = el("b", "sd-rc-value", formatStat(stat, stock[stat]));
-    feature.append(el("span", "sd-rc-label", STAT_LABEL[stat]), value);
+    feature.append(el("span", "sd-rc-label", STAT_LABEL[stat]), value, bar(stat, stock[stat]));
     const rows = el("ul", "sd-rc-rows");
-    for (const key of STATS) {
-      if (key === stat) continue;
-      const row = el("li");
-      row.append(el("span", "", STAT_LABEL[key]), el("b", "", formatStat(key, stock[key])));
-      rows.append(row);
-    }
+    for (const key of STATS) if (key !== stat) rows.append(statRow("li", stock, key, true));
     slot.face.replaceChildren(head, feature, rows, el("i", "sd-rc-dim"));
     // A long number ($1,002.35) shrinks to fit across the card.
     fitToSize(value, places.rests[0].w - VALUE_INSET);

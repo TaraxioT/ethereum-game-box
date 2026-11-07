@@ -24,7 +24,7 @@ then both badges' verified rolls choose the stat, and the higher number takes th
 - Once one seat has played, the other has one turn of its drum (`dwell × cards in hand`); then its front card is
   played for it, with its last roll (the seed's until its badge has rolled).
 - Stat: `STATS[(roll1 + roll2) mod 4]`, chosen only after both cards are down. Chosen first, it would hand the round
-  to whoever plays second.
+  to whoever plays second. The dial phase lasts `DIAL_MS` = 4400 ms while the wheel spins to it.
 - Round: the higher number on that stat takes the round; equal numbers tie and the round is replayed with the next
   cards. Both played cards leave the hands.
 - Match: first to `ROUNDS_TO_WIN` = 2. If a hand runs out first, the leader wins; level is a draw (both stakes back).
@@ -38,8 +38,17 @@ reveal (the dial turns to the stat, the cards turn over, the seals come down) �
 
 The team screen wears the Slab look: a dark room with each player's colour pooling up from their side, thick
 graphite slabs lit from above, chunky Unbounded type, and the seat colours (orange, cyan) as fills and rims. A
-Rolodex stands down each side, the cards upright on a drum with an index tab each; between them a tray holds the
-stat wheel over two wells, where the played cards land face down and turn over at the reveal, the winner's lifting.
+Rolodex stands down each side, the cards upright on a drum with an index tab each. The front card shows its four
+stats as bars, no numbers, each filled by its rank in the deck, red for the deck's weakest through amber to green for
+its strongest, so a player can wait for a strong card; which stat counts is unknown until both are down. Between the
+Rolodexes a tray holds the stat wheel over two wells, where the played cards land face down and turn over at the
+reveal (the round's stat large, the other three as bars), the winner's lifting.
+
+The stat pick is staged: the room dims, a halo pulses round the wheel, the pointer whips round five turns with each
+quarter flashing as it passes, and both badges' rolls scramble under the wheel and lock in one after the other. The
+pointer crawls into the next quarter, hangs, and slips back onto the stat; `MOD 4` joins the rolls, a ring bursts off
+the wheel and it jolts.
+
 The game draws the top band itself: each player, their USDC stake and round pips, the round and the pot. The built
 screen keeps it in a frame: each hand as a column of graphite cards whose front card lifts in the seat's colour, a
 white stat chip over the two played cards at the reveal, the score at the top, and a slab naming the winner.
@@ -77,7 +86,8 @@ The comps it was built to, at the Pi's 1280×800: [the match](look/slab-match.pn
 
 ## Pitfalls
 
-- Never show the numbers during the pick: both hands share one screen.
+- The hand cards show their stats as bars only, never a number, and both players see both hands. That is fine: the
+  stat is not known until both cards are down, and a tap plays only the card in front.
 - A roll takes up to a second on the chip. The team game holds the card from the touch, so a turn never ends under a
   badge that is still rolling. A built game hears of a tap only once its roll is back: a tap whose turn ran out
   meanwhile is too late (its card was played for it). Keep the last turn long (a whole drum turn here).

@@ -7,7 +7,7 @@ import { DECK, STATS } from "./deck.ts";
 import type { HeldCard, RoundRecord, Stock, StockDuelEvent, StockDuelState } from "./types.ts";
 
 export const DEAL_MS = 3000;
-export const DIAL_MS = 2800;
+export const DIAL_MS = 4400;
 export const REVEAL_MS = 4200;
 /** The screen shows a new front card this long after the drum steps (half its turn), so a tap is judged at
  * `now - SHOW_LAG_MS`: the card the player saw in front is the card they play. */

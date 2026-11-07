@@ -1,7 +1,8 @@
 // One player's hand as a Rolodex: the cards stand upright on a graphite drum with the seat's colour in its end caps.
 // Every card has an index tab sticking up from its top edge, each tab at its own place across the card, so all the
-// hand's tickers show at once. The front card is face up: the stock's colour along its top, its ticker and name, four
-// hidden stats and a "?" that the draining ring runs round (hand cards never show a number). The drum indexes one card
+// hand's tickers show at once. The front card is face up: the stock's colour along its top, its ticker and name, a "?"
+// that the draining ring runs round, and its four stats as bars ranked against the deck (no numbers), so a player
+// can wait for a strong card. The drum indexes one card
 // at a time: the front card turns back over the top and lands upright at the back, and the next card is at the front.
 // A played card lifts off the drum toward the tray.
 import type { Rect } from "../../screen/shell/layout.ts";
@@ -10,17 +11,19 @@ import type { DuelSeat } from "@egb/sdk";
 import type { Stock } from "./types.ts";
 import { SHOW_LAG_MS } from "./rules.ts";
 import { calm, el } from "../../screen/shell/dom.ts";
+import { STATS } from "./deck.ts";
+import { statRow } from "./stat-bar.ts";
 
 /** The Rolodex's drawn size, before it is scaled onto the stage. */
 export const ROLODEX_W = 384;
-export const ROLODEX_H = 600;
+export const ROLODEX_H = 640;
 
 const CARDS_X = 42;
-const CARD_TOP = 168;
+const CARD_TOP = 112;
 const CARD_W = 300;
-const CARD_H = 250;
+const CARD_H = 330;
 /** How far each card behind the front stands above the one in front of it, so its top edge and tab show. */
-const STEP = 30;
+const STEP = 26;
 /** Each card further back is drawn this much smaller, for depth. */
 const SHRINK = 0.035;
 /** Tabs sit at four places across a card, one per card of a full hand. */
@@ -30,8 +33,8 @@ const TAB_W = CARD_W / TAB_SLOTS;
 const SHADE_PER_CARD = 0.24;
 const SHADE_MAX = 0.5;
 /** The ticker's widest run across the card, and its largest size. */
-const TICKER_W = 252;
-const TICKER_MAX = 50;
+const TICKER_W = 176;
+const TICKER_MAX = 44;
 /** A drum step: the old front card tips over the top for half of it, the new one is in front at SHOW_LAG_MS. */
 const TURN_MS = SHOW_LAG_MS * 2;
 const DROP_MS = 420;
@@ -124,9 +127,9 @@ export function createRolodex(seat: DuelSeat, at: Placement, sound: Sound): Rolo
     const body = el("div", "sd-card-body");
     const ticker = el("b", "sd-card-ticker", stock.ticker);
     ticker.style.fontSize = `${tickerSize(stock.ticker)}px`;
-    const bars = el("div", "sd-card-bars");
-    bars.append(el("i"), el("i"), el("i"), el("i"));
-    body.append(ticker, el("span", "sd-card-name", stock.name), bars, el("i", "sd-card-ask"));
+    const stats = el("div", "sd-card-stats");
+    stats.append(...STATS.map((stat) => statRow("div", stock, stat, false)));
+    body.append(ticker, el("span", "sd-card-name", stock.name), stats, el("i", "sd-card-ask"));
     const shade = el("i", "sd-card-shade");
     card.append(tab, body, shade);
     cardsBox.append(card);
