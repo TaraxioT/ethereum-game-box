@@ -6,20 +6,24 @@ then both badges' verified rolls choose the stat, and the higher number takes th
 - Kind: team game. Its rules run in the Box's core (`rules.ts`, state in `types.ts`, the deck in `deck.ts`); its
   screen is a kiosk view (`screen.ts`). `built/` is the same game as a built game, the form the Forge starts from;
   the deck lives there (`built/deck.ts`) and the team game deals from it too.
+- Two team games play these rules on the same screen: **Stock Duel** (`stock-duel`, on chain `stockduel`) deals the
+  frozen numbers, and **Stock Duel Uniswap** (`stock-duel-uniswap`, on chain `stockduel-uniswap`) deals the live
+  numbers from Robinhood Chain's Uniswap pools. Only the deck differs.
 - Tier: **refereed**. The stat comes from both badges' signed rolls, but which card a tap played is what the Box saw.
-  The numbers are checkable: the transcript names the Robinhood Chain block they were read at.
+  Stock Duel Uniswap's numbers are checkable: the transcript names the Robinhood Chain block they were read at.
 - Taps: `random`. Each play is a `sign_random` on the badge's key 2, verified on the Pi; the roll comes back with the
   tap.
 
 ## The rule (exact)
 
-- The deck: 20 stocks, each with four stats in roll order: `price`, `avgPrice`, `change24h`, `liquidity`. The numbers
-  are live: the Box reads each stock's Uniswap pool against USDG on Robinhood Chain mainnet (`ROBINHOOD_RPC_URL`,
+- The deck: 20 stocks, each with four stats in roll order: `price`, `avgPrice`, `change24h`, `liquidity`. In Stock
+  Duel the numbers are frozen in `built/deck.ts`, so every match deals from the same figures. In Stock Duel Uniswap
+  they are live: the Box reads each stock's Uniswap pool against USDG on Robinhood Chain mainnet (`ROBINHOOD_RPC_URL`,
   pools in `deployments/robinhood.json`) at start and every 5 minutes, and a match deals the latest read. `price` is
   the pool's spot price per share, `avgPrice` the mean of 25 reads over the last 24 hours, `change24h` the move since
   the first of them, and `liquidity` the pool's depth: the USD it takes to move the price 2% either way. The match
   keeps the block, and its transcript records it (`market`), so anyone can read the same pools at the same blocks. A
-  Box with no Robinhood RPC, or no good read yet, deals the frozen numbers in `built/deck.ts`.
+  Box with no Robinhood RPC, or no good read yet, deals the frozen numbers there too.
 - Deal: `shuffle(DECK, seed)`; Player 1's hand is the first 4 cards, Player 2's the next 4. The deal lasts `DEAL_MS`
   = 3000 ms; the drums don't turn.
 - Pick: each drum shows one card at a time for `DWELL_MS` (2400, 2100, then 1800 ms a card, by round); Player 2's

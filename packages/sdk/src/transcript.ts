@@ -28,8 +28,8 @@ export interface Transcript {
   /** The match counts toward records (free-result rules: every badge tapped, ≥ 12 s, ≤ 12 per pair per hour). */
   readonly counts: boolean;
   /**
-   * Stock Duel's replay proof: the chain and block its numbers were read at (deployments/robinhood.json's pools; the
-   * day's samples run back 24 hours from it). Absent when the match dealt the frozen deck.
+   * Stock Duel Uniswap's replay proof: the chain and block its numbers were read at (deployments/robinhood.json's
+   * pools; the day's samples run back 24 hours from it). Absent when the match dealt the frozen deck.
    */
   readonly market?: { readonly chainId: number; readonly block: number };
 }

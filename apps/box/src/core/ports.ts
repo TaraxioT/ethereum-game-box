@@ -241,7 +241,7 @@ export interface MatchLog {
  */
 export type TapSource = "station" | "injected";
 
-/** Stock Duel's live deck: Robinhood Chain's stock pools, read in the background. */
+/** Stock Duel Uniswap's live deck: Robinhood Chain's stock pools, read in the background. */
 export interface MarketPort {
   /** The latest read's deck, or null before the first read succeeds (the match then deals the frozen deck). */
   deck(): LiveDeck | null;
@@ -256,7 +256,7 @@ export interface CorePorts {
   readonly rules?: RulesRunnerPort;
   /** Absent: store games can't run (the demo, a Box with no store settings). */
   readonly bundles?: BundlePort;
-  /** Absent: Stock Duel deals the frozen deck (the demo, a Box with no ROBINHOOD_RPC_URL). */
+  /** Absent: Stock Duel Uniswap deals the frozen deck (the demo, no ROBINHOOD_RPC_URL). Stock Duel always does. */
   readonly market?: MarketPort;
   readonly log: MatchLog;
   /** uint32 randomness for seeds and the lobby's proposed labels (never a game's outcome on a real Box: badges roll those). */

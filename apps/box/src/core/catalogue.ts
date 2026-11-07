@@ -1,6 +1,6 @@
 // The team games in the Box's rack, in rack order, and the one Home focuses first. Built games join them through
 // the library port.
-import type { GameId, GameInfo, PlayFor, TeamGameId } from "./types.ts";
+import type { GameId, GameInfo, MatchPlay, PlayFor, StockDuelId, TeamGameId } from "./types.ts";
 import type { LibraryPort } from "./ports.ts";
 
 const team = (info: Omit<GameInfo, "kind" | "icon" | "sealed" | "manifest">): GameInfo => ({ ...info, kind: "team", sealed: null, icon: null, manifest: null });
@@ -8,6 +8,7 @@ const team = (info: Omit<GameInfo, "kind" | "icon" | "sealed" | "manifest">): Ga
 export const TEAM_GAMES: readonly GameInfo[] = [
   team({ id: "quick-draw", title: "Quick Draw", players: 2, minutes: 1, stakes: [5, 10, 25], tier: "refereed", ready: true }),
   team({ id: "stock-duel", title: "Stock Duel", players: 2, minutes: 3, stakes: [5, 10, 25], tier: "refereed", ready: true }),
+  team({ id: "stock-duel-uniswap", title: "Stock Duel Uniswap", players: 2, minutes: 3, stakes: [5, 10, 25], tier: "refereed", ready: true }),
   team({ id: "bet-on-x", title: "Bet on X", players: 2, minutes: 5, stakes: [5, 10, 25], tier: "verified", ready: false }),
   team({ id: "b17", title: "B17", players: 2, minutes: 10, stakes: [5, 10, 25], tier: "verified", ready: false }),
 ];
@@ -20,7 +21,11 @@ export function teamLibrary(): LibraryPort {
 }
 
 /** Each team game's label on chain (`stockduel.gamebox.eth`): its stakes, results, title and championships. */
-const CHAIN_LABELS: Readonly<Record<TeamGameId, string>> = { "quick-draw": "quickdraw", "stock-duel": "stockduel" };
+const CHAIN_LABELS: Readonly<Record<TeamGameId, string>> = {
+  "quick-draw": "quickdraw",
+  "stock-duel": "stockduel",
+  "stock-duel-uniswap": "stockduel-uniswap",
+};
 
 /** A game's label on chain, or null for a game that isn't there (a built game plays for nothing). */
 export function chainLabel(id: GameId): string | null {
@@ -34,7 +39,22 @@ export function gameOfLabel(label: string): GameInfo | null {
 
 /** A game whose rules run in the core. */
 export function isTeamGame(id: GameId): id is TeamGameId {
-  return id === "quick-draw" || id === "stock-duel";
+  return id === "quick-draw" || isStockDuel(id);
+}
+
+/** A game that plays Stock Duel's rules and screen. */
+export function isStockDuel(id: GameId): id is StockDuelId {
+  return id === "stock-duel" || id === "stock-duel-uniswap";
+}
+
+/** A Stock Duel game's play (Stock Duel or Stock Duel Uniswap). */
+export function isDuelPlay(play: MatchPlay): play is Extract<MatchPlay, { game: StockDuelId }> {
+  return isStockDuel(play.game);
+}
+
+/** Whether a game deals its cards from Robinhood Chain's live pools: Stock Duel Uniswap alone. */
+export function dealsLive(id: GameId): boolean {
+  return id === "stock-duel-uniswap";
 }
 
 /** What a title match and a championship match stake each, in USDC: amounts of their own, apart from the USDC choices. */

@@ -139,10 +139,10 @@ export async function startBox(options: BoxOptions): Promise<Box> {
     // A bundle that doesn't load in its child seals its cartridge.
     onUnloadable: (id, reason) => library.seal(id, reason),
   });
-  // Stock Duel's numbers: Robinhood Chain's pools, read in the background (absent: the frozen deck).
+  // Stock Duel Uniswap's numbers: Robinhood Chain's pools, read in the background (absent: the frozen deck).
   const marketUrl = settings.marketRpcUrl;
   const market = marketUrl ? createMarketFeed({ read: () => readMarket(robinhoodClient(marketUrl)), clock, log }) : null;
-  if (!market) log("market: no ROBINHOOD_RPC_URL: Stock Duel deals the frozen deck");
+  if (!market) log("market: no ROBINHOOD_RPC_URL: Stock Duel Uniswap deals the frozen deck");
   let taps: Taps | null = null;
   const core = createCore({
     clock,

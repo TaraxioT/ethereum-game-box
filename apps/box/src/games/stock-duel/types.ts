@@ -1,6 +1,7 @@
-// Stock Duel's state and events. The rules (rules.ts) are pure: time and badge rolls arrive in events. The cards are
-// the deck's (built/deck.ts), shared with Stock Duel's built form; on a Box that reads Robinhood Chain their numbers
-// are the pools' at a block (live.ts), handed to the rules when the match starts.
+// Stock Duel's state and events, shared by Stock Duel and Stock Duel Uniswap. The rules (rules.ts) are pure: time and
+// badge rolls arrive in events. The cards are the deck's (built/deck.ts), shared with Stock Duel's built form. Stock
+// Duel deals their frozen numbers; Stock Duel Uniswap, on a Box that reads Robinhood Chain, deals the pools' numbers
+// at a block (live.ts), handed to the rules when the match starts.
 import type { DuelSeat } from "@egb/sdk";
 import type { StatKey, Stock } from "./built/deck.ts";
 

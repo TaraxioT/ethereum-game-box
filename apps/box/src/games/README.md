@@ -39,6 +39,10 @@ goes to the other seat. A decided round is held `ROUND_MS` (3.2 s), then the nex
 Four stocks each on a Rolodex; a tap plays the card in front; both badges' rolls pick the stat after both cards are
 down; the higher number takes the round, best of three. Its taps are `random`.
 
+Two team games play it (`core/catalogue.ts`): **Stock Duel** deals the frozen deck, and **Stock Duel Uniswap** deals
+the same cards with live numbers from Robinhood Chain's Uniswap pools (`live.ts`, through the core's `MarketPort`).
+The rules, the screen and the taps are the same; only the deck differs.
+
 - **A tap in three parts.** `touch` freezes that seat's front card on the card the player saw (`SHOW_LAG_MS` before
   the touch) and stops its ring; `tap` (the chip's verified roll is back) plays the held card at the touch time with
   that roll; `release` (the tap failed) lets the drum turn on.
@@ -52,4 +56,4 @@ down; the higher number takes the round, best of three. Its taps are `random`.
 | `types.ts` | `StockDuelState` (the match's deck and its `market` block, hands, the drums, played and held cards, rolls, the stat, the history), `StockDuelEvent` (`tick`, `touch`, `tap`, `release`), `LiveDeck` and `MarketSource`; `Stock` and `StatKey` are the deck's (`built/deck.ts`). |
 | `rules.ts` | `rules`, `startDuel(seed, now, live)` (a live deck, or the frozen one for null), `frontIndex`, `frontCard`, `frontRemainingMs`, the timings. Tested in `rules.test.ts`. |
 | `deck.ts` | The 20-stock deck with recorded numbers (the fallback), `STATS`, `STAT_LABEL`, `formatStat`. |
-| `live.ts` | `liveDeck(snapshot)`: the deck with a Robinhood Chain market snapshot's numbers (`@egb/shared/market`), and its block. |
+| `live.ts` | `liveDeck(snapshot)`: Stock Duel Uniswap's deck with a Robinhood Chain market snapshot's numbers (`@egb/shared/market`), and its block. |

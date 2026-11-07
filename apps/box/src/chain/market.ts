@@ -1,4 +1,4 @@
-// Stock Duel's live deck: Robinhood Chain's stock pools (ROBINHOOD_RPC_URL), read at start and every MARKET_MS in the
+// Stock Duel Uniswap's live deck: Robinhood Chain's stock pools (ROBINHOOD_RPC_URL), read at start and every MARKET_MS in the
 // background, so a match starts at once on the latest read. A failed read keeps the last good one (the match records
 // the block its numbers came from). The RPC URL carries the node's key, so every error logged here is redacted.
 import type { MarketSnapshot } from "@egb/shared/market";
@@ -32,7 +32,7 @@ export function createMarketFeed({ read, clock, log }: MarketFeedOptions): Marke
       .then((snapshot) => {
         const deck = liveDeck(snapshot);
         if (!deck) throw new Error(`block ${snapshot.block} is missing a deck stock`);
-        if (latest === null) log(`market: Stock Duel deals live from Robinhood Chain (block ${snapshot.block})`);
+        if (latest === null) log(`market: Stock Duel Uniswap deals live from Robinhood Chain (block ${snapshot.block})`);
         latest = deck;
       })
       .catch((error: unknown) => {

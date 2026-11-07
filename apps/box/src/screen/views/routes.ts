@@ -17,7 +17,7 @@ import { bundleFrameView } from "../frame/bundle-view.ts";
 import { storeMatch, storePowers } from "../frame/bundle-feed.ts";
 import { frameView } from "../frame/view.ts";
 import { builtMatch } from "../frame/feed.ts";
-import { isTeamGame } from "../../core/catalogue.ts";
+import { isStockDuel, isTeamGame } from "../../core/catalogue.ts";
 import { allSigned } from "../../core/seats.ts";
 
 /** A built game's screen: its own, in the sandboxed frame. */
@@ -29,8 +29,8 @@ const storeScreen = bundleFrameView(storeMatch, storePowers);
  * before the next, so the key changes between matches. Stock Duel draws its own top band (players, score, pot); Quick
  * Draw plays under the machine's thin overlay. */
 function teamRoute(game: TeamGameId): Route {
-  return game === "stock-duel"
-    ? { key: "team-stock-duel", pose: "full", view: stockDuelScreen }
+  return isStockDuel(game)
+    ? { key: `team-${game}`, pose: "full", view: stockDuelScreen }
     : { key: "team-quick-draw", pose: "game", view: quickDrawScreen };
 }
 
@@ -54,7 +54,7 @@ export const routes: Routes = (state) => {
     }
     case "playing": {
       const game = state.match?.play.game;
-      if (game === "quick-draw" || game === "stock-duel") return teamRoute(game);
+      if (game !== undefined && isTeamGame(game)) return teamRoute(game);
       return { key: `play-${state.match?.id ?? 0}`, pose: "game", view: game === "store" ? storeScreen : builtScreen };
     }
     case "judging":

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, MarketPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
-import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
+import type { Badge, Board, BoxEvent, BoxState, GameInfo, TeamGameId } from "./types.ts";
 import { BOARD_MS, BUILD_IDLE_MS, BUY_USDC, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, REREAD_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
@@ -191,7 +191,7 @@ async function seated<C extends ChainPort>(r: Rig<C>): Promise<void> {
 }
 
 /** Seats NOVA and KITE, picks the game and opens a match at 10 USDC each. */
-async function toPlaying<C extends ChainPort>(r: Rig<C>, game: "quick-draw" | "stock-duel"): Promise<void> {
+async function toPlaying<C extends ChainPort>(r: Rig<C>, game: TeamGameId): Promise<void> {
   const { core } = r;
   await seated(r);
   core.send({ type: "focus", game });
@@ -402,17 +402,19 @@ describe("the core on its ports", () => {
     expect(dial.stat).toBe(STATS[((0xdeadbeef + 3) >>> 0) % STATS.length]);
   });
 
-  it("deals Stock Duel from the market's live deck and logs the block it was read at", async () => {
-    const source = { chainId: 4663, block: 108_039_821, at: START - 60_000 };
-    const cards = DECK.map((card, i) => ({ ...card, price: 5000 + i }));
-    const r = rig({ market: { deck: () => ({ cards, source }) } });
+  const liveSource = { chainId: 4663, block: 108_039_821, at: START - 60_000 };
+  const liveMarket: MarketPort = { deck: () => ({ cards: DECK.map((card, i) => ({ ...card, price: 5000 + i })), source: liveSource }) };
+
+  it("deals Stock Duel Uniswap from the market's live deck and logs the block it was read at", async () => {
+    const r = rig({ market: liveMarket });
     const { core, clock } = r;
-    await toPlaying(r, "stock-duel");
+    await toPlaying(r, "stock-duel-uniswap");
     const duel = () => {
       const play = core.state().match?.play;
-      if (play?.game !== "stock-duel") throw new Error("no Stock Duel");
+      if (play?.game !== "stock-duel-uniswap") throw new Error("no Stock Duel Uniswap");
       return play.state;
     };
+    const source = liveSource;
     expect(duel().market).toEqual(source);
     for (const card of [...duel().hands[0], ...duel().hands[1]]) expect(card.price).toBeGreaterThanOrEqual(5000);
     while (!core.state().match?.outcome) {
@@ -424,6 +426,25 @@ describe("the core on its ports", () => {
     }
     await until(r, (state) => state.phase === "result");
     expect(r.logged[0]?.market).toEqual({ chainId: 4663, block: 108_039_821 });
+    expect(r.logged[0]?.game).toBe("stock-duel-uniswap");
+  });
+
+  it("deals Stock Duel the frozen deck even when the market has a live one", async () => {
+    const r = rig({ market: liveMarket });
+    await toPlaying(r, "stock-duel");
+    const play = r.core.state().match?.play;
+    if (play?.game !== "stock-duel") throw new Error("no Stock Duel");
+    expect(play.state.market).toBeNull();
+    expect(play.state.deck).toBe(DECK);
+  });
+
+  it("deals Stock Duel Uniswap the frozen deck before the market's first read", async () => {
+    const r = rig({ market: { deck: () => null } });
+    await toPlaying(r, "stock-duel-uniswap");
+    const play = r.core.state().match?.play;
+    if (play?.game !== "stock-duel-uniswap") throw new Error("no Stock Duel Uniswap");
+    expect(play.state.market).toBeNull();
+    expect(play.state.deck).toBe(DECK);
   });
 
   it("ends a tap that fails with a refusal and changes nothing", async () => {
@@ -982,7 +1003,7 @@ describe("the lobby", () => {
       await flush();
       r.core.send({ type: "back" });
     }
-    expect(new Set(r.chain.boards)).toEqual(new Set(["quick-draw", "stock-duel"]));
+    expect(new Set(r.chain.boards)).toEqual(new Set(["quick-draw", "stock-duel", "stock-duel-uniswap"]));
     r.core.send({ type: "lobby" });
     await flush();
     expect(r.core.state().board?.title).toEqual({ name: "champion.stockduel.gamebox.eth", holder: "kite.gamebox.eth", streak: 2, expires: Number.MAX_SAFE_INTEGER });

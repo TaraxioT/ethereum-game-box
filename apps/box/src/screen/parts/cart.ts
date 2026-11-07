@@ -43,6 +43,13 @@ const ART: Record<string, string> = {
       )
       .join("")}
   </svg>`,
+  // A pool's x·y = k curve in hot outline, and Player 1's and Player 2's candles read off it.
+  "stock-duel-uniswap": `<svg viewBox="0 0 120 64" aria-hidden="true">
+    <path class="bloom" d="M14 6C22 44 50 56 106 58"/>
+    <path class="hot" d="M14 6C22 44 50 56 106 58"/>
+    <g class="o"><path d="M42 12V20M42 36V42"/><rect x="36" y="20" width="12" height="16"/></g>
+    <g class="c"><path d="M74 4V10M74 30V36"/><rect x="68" y="10" width="12" height="20"/></g>
+  </svg>`,
   // The hall (TITLES & CUPS): a cup in brass light between two crowns, a star over it.
   hall: `<svg viewBox="0 0 120 64" aria-hidden="true">
     <path class="bloom" d="M48 8h24v12a12 12 0 0 1-24 0Z"/>

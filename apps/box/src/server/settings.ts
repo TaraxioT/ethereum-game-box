@@ -48,7 +48,7 @@ export interface Settings {
   readonly chain: ChainSetting;
   readonly admin: AdminSetting | null;
   readonly store: StoreSetting | null;
-  /** `ROBINHOOD_RPC_URL`: Robinhood Chain mainnet, read only, for Stock Duel's live deck. Null: the frozen deck. */
+  /** `ROBINHOOD_RPC_URL`: Robinhood Chain mainnet, read only, for Stock Duel Uniswap's live deck. Null: the frozen deck. */
   readonly marketRpcUrl: string | null;
 }
 

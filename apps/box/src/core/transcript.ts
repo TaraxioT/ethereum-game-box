@@ -27,7 +27,7 @@ export interface MatchRecord {
   readonly voided: boolean;
   /** The first station tap each player's badge made from Stake on, or null for none. */
   readonly seen: readonly (number | null)[];
-  /** Stock Duel's live numbers: the Robinhood Chain block they were read at. Null for the frozen deck and other games. */
+  /** Stock Duel Uniswap's live numbers: the Robinhood Chain block they were read at. Null for the frozen deck and other games. */
   readonly market?: MarketSource | null;
 }
 

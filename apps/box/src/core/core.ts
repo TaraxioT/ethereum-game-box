@@ -67,7 +67,7 @@ import { rules as quickDraw } from "../games/quick-draw/rules.ts";
 import type { QuickDrawEvent, QuickDrawState } from "../games/quick-draw/types.ts";
 import type { LiveDeck, StockDuelEvent } from "../games/stock-duel/types.ts";
 import { frontIndex, rules as stockDuel, SHOW_LAG_MS, startDuel } from "../games/stock-duel/rules.ts";
-import { defaultStake, DEFAULT_FOCUS, isTeamGame, stakeOf } from "./catalogue.ts";
+import { dealsLive, defaultStake, DEFAULT_FOCUS, isDuelPlay, isTeamGame, stakeOf } from "./catalogue.ts";
 import { transcriptOf } from "./transcript.ts";
 import { createTxBook, type TxOrder } from "./txs.ts";
 import { proposeLabel } from "./labels.ts";
@@ -211,7 +211,7 @@ interface WantedBundle {
   facts: StoreBundle | null;
 }
 
-/** Stock Duel deals `live` (the pools' numbers at a block) when the Box has one, else the frozen deck. */
+/** A Stock Duel game deals `live` (the pools' numbers at a block) when it has one, else the frozen deck. */
 function startPlay(game: TeamGameId, seed: number, now: number, live: LiveDeck | null): TeamPlay {
   return game === "quick-draw"
     ? { game, state: quickDraw.start(seed, now) }
@@ -224,7 +224,7 @@ function outcomeOf(play: TeamPlay): Match["outcome"] {
 
 /** Each seat's front card while it is still picking, or null. Changes are the Rolodex's drum steps. */
 function fronts(play: MatchPlay, now: number): readonly [number | null, number | null] {
-  if (play.game !== "stock-duel" || play.state.phase !== "pick") return [null, null];
+  if (!isDuelPlay(play) || play.state.phase !== "pick") return [null, null];
   const duel = play.state;
   const shown = Math.max(duel.phaseAt, now - SHOW_LAG_MS);
   const front = (seat: DuelSeat) => (duel.played[seat] === null ? frontIndex(duel, seat, shown) : null);
@@ -254,7 +254,7 @@ function playCues(before: MatchPlay, after: MatchPlay, frontsBefore: readonly (n
     // The next round is counted in.
     if (was.phase === "round" && is.phase === "count") add("round");
   }
-  if (before.game === "stock-duel" && after.game === "stock-duel") {
+  if (isDuelPlay(before) && isDuelPlay(after)) {
     const frontsAfter = fronts(after, now);
     for (const seat of DUEL_SEATS) {
       const was = frontsBefore[seat];
@@ -288,7 +288,7 @@ function nextPlay(play: TeamPlay, tap: GameTap | null, now: number): TeamPlay {
     return next === play.state ? play : { game: "quick-draw", state: next };
   }
   const next = stockDuel.step(play.state, stockDuelEvent(tap, now));
-  return next === play.state ? play : { game: "stock-duel", state: next };
+  return next === play.state ? play : { game: play.game, state: next };
 }
 
 const viewKey = (view: StationView): string => JSON.stringify(view);
@@ -732,7 +732,8 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     // What was staked plays, whatever the rack says now: a built game can take a store game's id while the stakes go in.
     if (wanted?.facts) return openStore(wanted, wanted.facts, now, opened);
     if (gameOf(chosen)?.kind === "built") return openBuilt(chosen, now, opened);
-    const play = startPlay(chosen as TeamGameId, seed, now, chosen === "stock-duel" ? (ports.market?.deck() ?? null) : null);
+    // Only Stock Duel Uniswap reads the pools: Stock Duel always deals the frozen deck.
+    const play = startPlay(chosen as TeamGameId, seed, now, dealsLive(chosen) ? (ports.market?.deck() ?? null) : null);
     match = opened(play);
     lastFronts = fronts(play, now);
     setPhase("playing");
@@ -1031,7 +1032,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
           endedAt,
           taps: matchTaps,
           winner,
-          market: match.play.game === "stock-duel" ? match.play.state.market : null,
+          market: isDuelPlay(match.play) ? match.play.state.market : null,
           // A store match pays a split, not a winner: its transcript never counts toward records.
           voided: match.voided || match.play.game === "store",
           seen: players().map((seat) => seen[seat]),

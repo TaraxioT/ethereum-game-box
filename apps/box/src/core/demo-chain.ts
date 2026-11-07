@@ -15,7 +15,11 @@ export const PAY_MS = 900;
 /** The demo's pots refund after a minute, not an hour. */
 export const DEMO_REFUND_MS = 60_000;
 /** How long a title lasts after its holder's last win, by chain label: as on Sepolia (`AddGames`). */
-const TITLE_TERM_MS: Readonly<Record<string, number>> = { stockduel: 7 * 24 * 3_600_000, quickdraw: 15 * 60_000 };
+const TITLE_TERM_MS: Readonly<Record<string, number>> = {
+  stockduel: 7 * 24 * 3_600_000,
+  "stockduel-uniswap": 7 * 24 * 3_600_000,
+  quickdraw: 15 * 60_000,
+};
 /** Where the demo's block numbers start: Sepolia's height in November 2026. */
 const FIRST_BLOCK = 12_065_134;
 

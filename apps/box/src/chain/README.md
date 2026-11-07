@@ -65,7 +65,7 @@ The RPC URL carries the node's key, so every error that leaves `reads.ts` has it
 | `verifier.ts` | The verifier's HTTP API, its answers checked | `verifierAt(url)`, `parseStatus` |
 | `relayer.ts` | The relayer's HTTP API: POSTs answered with a `TxView` or an error | `relayerAt(url)` |
 | `reads.ts` | Sepolia reads, URLs redacted from every error | `sepoliaReads(rpcUrl)`, `redact` |
-| `market.ts` | Stock Duel's live deck: Robinhood Chain's stock pools (`ROBINHOOD_RPC_URL`), read at start and every `MARKET_MS`, the last good read kept through a failed one; the core's `MarketPort` | `createMarketFeed(options)`, `MARKET_MS` |
+| `market.ts` | Stock Duel Uniswap's live deck: Robinhood Chain's stock pools (`ROBINHOOD_RPC_URL`), read at start and every `MARKET_MS`, the last good read kept through a failed one; the core's `MarketPort` | `createMarketFeed(options)`, `MARKET_MS` |
 | `rounds.ts` | `rounds.json`: the next round and the open pots | `roundsFile(file)` |
 | `testing.ts` | For tests: a relayer that records and answers from a script, reads in memory, a verifier told what to say | `mockRelayer`, `memoryReads`, `mockVerifier` |
 

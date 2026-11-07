@@ -8,8 +8,10 @@ export type { DuelSeat, Seat, StationView };
 
 /** A game's id: lower-case words joined by `-` (a team game's, or a built game's folder). */
 export type GameId = string;
+/** The games that play Stock Duel's rules: Stock Duel deals the frozen deck, Stock Duel Uniswap the live pools'. */
+export type StockDuelId = "stock-duel" | "stock-duel-uniswap";
 /** The games whose rules run in the core. */
-export type TeamGameId = "quick-draw" | "stock-duel";
+export type TeamGameId = "quick-draw" | StockDuelId;
 
 export interface GameInfo {
   readonly id: GameId;
@@ -159,7 +161,7 @@ export interface StorePlay {
 
 export type MatchPlay =
   | { readonly game: "quick-draw"; readonly state: QuickDrawState }
-  | { readonly game: "stock-duel"; readonly state: StockDuelState }
+  | { readonly game: StockDuelId; readonly state: StockDuelState }
   | BuiltPlay
   | StorePlay;
 

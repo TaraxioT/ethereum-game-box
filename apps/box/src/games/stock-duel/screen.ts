@@ -10,7 +10,7 @@
 //
 // It draws from `state.match.play` and animates the moment each state change brings. The drums follow the clock, so
 // while anyone is picking a frame loop turns them and drains the rings; it stops as soon as nothing moves.
-import { stakeOf } from "../../core/catalogue.ts";
+import { isDuelPlay, stakeOf } from "../../core/catalogue.ts";
 import "./stock-duel.css";
 import type { BoxState } from "../../core/types.ts";
 import { shiftPoint, shiftRect, type Layout, type Point, type Rect } from "../../screen/shell/layout.ts";
@@ -273,7 +273,7 @@ export const stockDuelScreen: ViewFactory = (ctx) => {
         return;
       }
       const match = state.match;
-      if (!match || match.play.game !== "stock-duel") return;
+      if (!match || !isDuelPlay(match.play)) return;
       band(state);
       if (event.type === "tap" && isDuelSeat(event.seat)) standing.tap(event.seat, event.accepted);
       if (event.type === "phase" && event.from === "stake") {
