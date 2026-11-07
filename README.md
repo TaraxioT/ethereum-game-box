@@ -6,6 +6,7 @@
     <a href="https://gamebox-names.pages.dev">Explore the live names</a> ·
     <a href="ens-usage.md">ENS integration</a> ·
     <a href="0g-usage.md">0G integration</a> ·
+    <a href="uniswap-usage.md">Uniswap integration</a> ·
     <a href="#run-it-locally">Run it locally</a>
   </p>
   <p>Built at ETHGlobal Mumbai 2026. Game Box contracts run on Sepolia. Matches use test USDC.</p>
@@ -31,6 +32,8 @@ If a match remains unsettled, anyone can trigger a refund after one hour.
 | NFC chips | HaLo badges hold each player's keys. The Pi reads public keys and verifies chip-signed random rolls through libhalo. | [Chip operations](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/apps/box/src/taps/chip-ops.ts#L36-L83) |
 | Hardware P-256 | A HYP2003 USB token signs name claims, stakes, and results. Its private key stays in the token. Ethereum checks signatures through `P256VERIFY`. | [Token signing](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/deploy/p256-signer/hyp2003_signer.py#L229-L244) · [Onchain verification](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/contracts/src/box/P256.sol#L15-L25) |
 | ENSv2 | Box licenses, player names, expiring champion titles, and cups with live standings. A finished cup becomes a trophy name owned by its winner. | [Box names](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/contracts/src/names/GameBoxNames.sol#L145-L175) · [Cup trophies](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/contracts/src/names/Championships.sol#L116-L140) |
+| Uniswap v4 | `GameBoxHook` sets each GBX/USDC swap's fee: 1%, or 0.25% when a Box's P-256 key signs the swap. It also keeps a TWAP. `GameBoxLobby` is our own v4 router for one-tap GBX buys. | [Hook fee](https://github.com/TaraxioT/ethereum-game-box/blob/edb81c5163d7d70e3f0426af9a441def29f11947/contracts/src/hook/GameBoxHook.sol#L101-L117) · [Box-signed tap fee](https://github.com/TaraxioT/ethereum-game-box/blob/edb81c5163d7d70e3f0426af9a441def29f11947/contracts/src/hook/GameBoxHook.sol#L156-L202) · [Lobby swap](contracts/src/hook/GameBoxLobby.sol#L74-L100) |
+| Uniswap v3/v4 reads | Stock Duel Uniswap deals cards from live Uniswap pools on Robinhood Chain: `slot0` on v3, `StateView` on v4, in one multicall. | [Pool reads](https://github.com/TaraxioT/ethereum-game-box/blob/edb81c5163d7d70e3f0426af9a441def29f11947/packages/shared/src/market/reads.ts#L44-L81) · [Price and depth](https://github.com/TaraxioT/ethereum-game-box/blob/edb81c5163d7d70e3f0426af9a441def29f11947/packages/shared/src/market/stats.ts#L34-L64) |
 | 0G Compute | An AI judge reads store match logs through private inference. The verifier checks each turn's enclave signature before accepting its reply. | [Private inference](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/apps/verifier/src/proxy.ts#L63-L106) · [Enclave checks](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/apps/verifier/src/tee.ts#L94-L112) |
 | 0G Storage | The verifier commits each audit hash on Sepolia and queues the record for upload after settlement. | [Audit upload](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/apps/verifier/src/zg-storage.ts#L112-L132) |
 | Cloudflare | Workers and Durable Objects relay transactions, host the store, and coordinate judging in Containers. The relayer pays the gas. | [Relayer](apps/relayer/README.md) · [Verifier container](https://github.com/TaraxioT/ethereum-game-box/blob/980270430130e4dfa2e884d82997b72c821d12c7/apps/verifier/src/container.ts#L32-L50) |
@@ -45,6 +48,7 @@ The tap is the player's consent to stake. The Box signs the stake with its hardw
 | --- | --- |
 | [Quick Draw](apps/box/src/games/README.md#quick-draw-quick-draw) | The first tap after "draw" wins. |
 | [Stock Duel](apps/box/src/games/README.md#stock-duel-stock-duel) | A best-of-three card game played with stocks. |
+| [Stock Duel Uniswap](uniswap-usage.md) | Stock Duel dealt from live Uniswap pool prices on Robinhood Chain. |
 | [Tap Rush](apps/store/sample/tap-rush/manifest.json) | The most taps in ten seconds wins the pot. A 0G-powered judge counts the Box's recorded taps. |
 | [Rigged game](apps/store/sample/rigged-game/manifest.json) | Deliberately reports inflated scores. The judge compares its claims with the Box's tap log and returns `cannot_judge`, which refunds the stakes. |
 
@@ -73,7 +77,7 @@ The public site reads ENS through the Universal Resolver and discovers names fro
 - **Tap Rush paid out.** `mumbai-01`, round 51, paid a 20 test-USDC pot to the winner. [Settlement transaction](https://sepolia.etherscan.io/tx/0xbaf667d1f6c44ce63687ac615895b28f8b9db7d0cfa98cedf8de4e984c2684a8).
 - **The rigged game refunded.** Round 55 ended with `cannot_judge` and returned each player's 5 test USDC. [Refund transaction](https://sepolia.etherscan.io/tx/0x532eb497e040530385df54ed3f37c2b80f02eb3dd42ea4f704d37d01316c2faa).
 
-See [0G usage](0g-usage.md) for live verifier responses, audit status, and code links. Contract addresses live in [deployments/sepolia.json](deployments/sepolia.json).
+See [Uniswap usage](uniswap-usage.md) for the hook and pool code, and [FEEDBACK.md](FEEDBACK.md) for our Uniswap developer feedback. See [0G usage](0g-usage.md) for live verifier responses, audit status, and code links. Contract addresses live in [deployments/sepolia.json](deployments/sepolia.json).
 
 ## Run it locally
 
@@ -108,7 +112,7 @@ The store's full local integration run is `pnpm store:e2e`. It uses real Workers
 | [apps/store](apps/store/README.md) | Game listings and bundles in R2 |
 | [apps/web](apps/web/README.md) | Public ENS directory, titles, and cups |
 | [apps/demo-box](apps/demo-box/README.md) | Software-key demo Box and ENS heartbeat |
-| [contracts](contracts/README.md) | Names, pots, championships, GBX, licenses, and staking |
+| [contracts](contracts/README.md) | Names, pots, championships, GBX, licenses, staking, and the Uniswap v4 hook |
 | [packages/sdk](packages/sdk/README.md) | Game manifests and match-log protocols |
 | [packages/shared](packages/shared/README.md) · [packages/ui](packages/ui/README.md) | Shared types, ABIs, addresses, and UI |
 | [apps/store-e2e](apps/store-e2e/README.md) | Local store integration scenarios |
