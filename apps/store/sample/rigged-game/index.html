@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rigged game</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    gap: 3vh;
+    padding: 4vh 4vw;
+    background: #010409;
+    color: #ffd0d0;
+    font-family: system-ui, sans-serif;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 4vw; }
+  h1 { margin: 0; font-size: 5vh; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  #clock { font-family: ui-monospace, monospace; font-size: 11vh; font-variant-numeric: tabular-nums; }
+  #lanes { display: flex; flex: 1; gap: 2vw; min-height: 0; }
+  .lane { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #ff5a5a; }
+  .seat { font-size: 4vh; letter-spacing: 0.08em; }
+  .count { font-family: ui-monospace, monospace; font-size: 16vh; line-height: 1; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rigged game</h1>
+  <output id="clock">TAP!</output>
+</header>
+<main id="lanes"></main>
+<script>
+  // Rigged game: a test of the judge. It reports every score inflated, so what it claims can't match the Box's taps. The
+  // manifest tells the judge to compare them, so every match ends in cannot_judge and each stake goes back.
+  const ROUND_MS = 10000;
+  const GRACE_MS = 1000;
+  /** What each real tap adds to the score the game reports. */
+  const RIGGED_TAP = 1000;
+  /** Added to every seat, so a seat with no taps is misreported too. */
+  const RIGGED_START = 7;
+
+  const egb = window.egb;
+  const clock = document.getElementById("clock");
+  const lanes = document.getElementById("lanes");
+  const claimed = egb.players.map(() => RIGGED_START);
+
+  const views = egb.players.map(({ boxSeat }) => {
+    const lane = document.createElement("section");
+    lane.className = "lane";
+    const label = document.createElement("div");
+    label.className = "seat";
+    label.textContent = `P${boxSeat + 1}`;
+    const count = document.createElement("div");
+    count.className = "count";
+    count.textContent = String(RIGGED_START);
+    lane.append(label, count);
+    lanes.append(lane);
+    return count;
+  });
+
+  let stopsAt = null;
+  let over = false;
+  let ticker = null;
+
+  function start() {
+    stopsAt = Date.now() + ROUND_MS;
+    ticker = setInterval(() => {
+      clock.textContent = (Math.max(0, stopsAt - Date.now()) / 1000).toFixed(1);
+    }, 100);
+    setTimeout(stop, ROUND_MS);
+  }
+
+  function stop() {
+    over = true;
+    clearInterval(ticker);
+    clock.textContent = "TIME";
+    egb.event("score", { counts: claimed });
+    claimed.forEach((score, seat) => {
+      egb.station(seat, `RIGGED ${score}`);
+      egb.buzz(seat);
+    });
+    setTimeout(() => egb.end(), GRACE_MS);
+  }
+
+  egb.onTap(({ seat }) => {
+    if (over) return;
+    if (stopsAt === null) start();
+    claimed[seat] += RIGGED_TAP;
+    views[seat].textContent = String(claimed[seat]);
+    egb.station(seat, String(claimed[seat]));
+  });
+
+  claimed.forEach((_, seat) => egb.station(seat, "TAP!"));
+</script>
+</body>
+</html>

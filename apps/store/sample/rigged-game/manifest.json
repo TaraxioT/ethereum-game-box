@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "id": "rigged-game",
+  "title": "Rigged game",
+  "blurb": "A test of the judge: it reports false scores, so every match should refund.",
+  "players": { "min": 2, "max": 4 },
+  "minutes": 1,
+  "stakes": [5],
+  "taps": "identify",
+  "verifier": {
+    "instructions": "This game must prove its score against the Box. Count each seat's taps: the log's entries with src \"box\" and t \"tap\". Then find the one entry with src \"game\", t \"event\" and name \"score\". Its data.counts lists what the game claims each seat scored, in seat order. Compare the two seat by seat. If the score event is missing, or its counts differ from the Box's counts for any seat, the game's report doesn't match the log and the verdict is cannot_judge, with a why that gives both sets of numbers. Only if every seat's counts match exactly, the seat with the most taps gets the whole pot, which is the header's amount times the number of players in base units, and the others get 0."
+  }
+}

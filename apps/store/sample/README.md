@@ -26,3 +26,10 @@ pot: the most `end()` can do is call the match off.
 
 The instructions are exact enough to work out by hand, and `packages/sdk/test/bundle/tap-rush.test.ts` does so. That
 test holds them word for word, so a change to the text that decides the money has to be made there too.
+
+## Rigged game
+
+`rigged-game/`: a test of the judge, not a game to play for real. It looks like Tap Rush, but every score it reports is
+inflated: each tap adds 1000, and each seat starts at 7. Its instructions tell the judge to compare the game's `score`
+event with the Box's taps and return `cannot_judge` if they differ or the event is missing, so a match always ends in a
+retry and then a refund. Only the amount of 5 USDC is on offer.
