@@ -70,6 +70,10 @@ export class Judgement extends DurableObject<Env> {
     return this.judge.audit();
   }
 
+  recordText() {
+    return this.judge.recordText();
+  }
+
   modelTurn(attempt: number, text: string) {
     return this.judge.modelTurn(attempt, text);
   }
