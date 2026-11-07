@@ -387,7 +387,7 @@ export class World {
       returnJudgement: (box, now) => returnJudgement(this.gate, box, now),
       takeCaller: (ip, now) => takeCaller(this.gate, ip, now),
     };
-    return { ctx, doors, verifier: () => this.signer.address, scrub: scrubber([ZG_API_KEY, this.key, RPC_SECRET]) };
+    return { ctx, doors, verifier: () => this.signer.address, opened: async () => [], titles: async () => ({}), scrub: scrubber([ZG_API_KEY, this.key, RPC_SECRET]) };
   }
 
   /** What the gate is holding against this Box. */

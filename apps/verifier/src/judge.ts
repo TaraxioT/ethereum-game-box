@@ -200,6 +200,11 @@ export class Judge {
     return { record: hearing.payment?.record ?? null, root: hearing.keeping?.root ?? null, tx: hearing.keeping?.tx ?? null };
   }
 
+  /** The sealed record's exact text, or null before it is sealed and after it has landed. */
+  async recordText(): Promise<string | null> {
+    return (await getText(this.deps.store, RECORD)) ?? null;
+  }
+
   /** Opens the one judgement this pot gets. A repeat of the same log gets the running one. */
   begin(job: JudgeJob): Promise<JudgeStatus | typeof ANOTHER_LOG> {
     return this.serial(async () => {

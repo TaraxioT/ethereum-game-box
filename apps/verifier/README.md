@@ -13,7 +13,12 @@ The agent's code is [`container/`](container/README.md). The rest of this folder
 | `POST /judge` | `JudgeRequest` | `202` with a `JudgeStatus` for a new judgement, `200` for a repeat of the same log |
 | `GET /judge/<box>/<round>` | | `JudgeStatus`, or `404` |
 | `GET /audit/<box>/<round>` | | `{ record, root, tx }`: the record's hash, and its root and transaction on 0G Storage, null until it lands |
+| `GET /judge/<box>` | | `{ box, runs }`: the Box's newest 200 store pots, read from `StorePot`'s events. A browser gets the index page |
 | `GET /health` | | `{ verifier }`: the verifier key's address |
+
+A request that accepts `text/html` gets a page at `/judge/<box>/<round>` too, unless it adds `?format=json`. The Box's own
+polling sends no such header and keeps the JSON. The pages run no script, and the log and the model's words are escaped.
+A run's match and verdict show until its record lands on 0G Storage, when the Worker drops its copy.
 
 The types are `@egb/shared/store`. A refusal is `{ error }`, with the relayer's codes: `400` a bad field or log, `401` a
 bad signature, `403` a Box that isn't known, live and active, `404` no such bundle, `409` a pot that isn't open or
