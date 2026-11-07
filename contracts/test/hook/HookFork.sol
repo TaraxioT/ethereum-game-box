@@ -2,7 +2,9 @@
 pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -14,6 +16,7 @@ import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {HookMiner} from "../../script/HookMiner.sol";
+import {GbxPool} from "../../script/uniswap/GbxPool.sol";
 import {GameBoxHook} from "../../src/hook/GameBoxHook.sol";
 import {IGameBoxHook} from "../../src/hook/IGameBoxHook.sol";
 import {GBX} from "../../src/token/GBX.sol";
@@ -27,9 +30,8 @@ abstract contract HookFork is NamesFork {
     using StateLibrary for IPoolManager;
 
     string internal constant BOX = "egbt-swap";
-    /// @dev About 0.10 USDC per GBX, a multiple of the tick spacing: 1.0001^-299340 × 1e18 / 1e6 ≈ 0.1002.
-    int24 internal constant GBX_PRICE_TICK = -299_340;
-    int24 internal constant MAX_RANGE_TICK = 887_220;
+    int24 internal constant GBX_PRICE_TICK = GbxPool.PRICE_TICK;
+    int24 internal constant MAX_RANGE_TICK = GbxPool.FULL_RANGE_TICK;
     bytes32 internal constant SWAP_EVENT =
         keccak256("Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)");
 
@@ -70,7 +72,12 @@ abstract contract HookFork is NamesFork {
         approveRouters(trader);
 
         registerBox(BOX, 30 days);
-        manager.initialize(key, TickMath.getSqrtPriceAtTick(gbxIsToken0 ? GBX_PRICE_TICK : -GBX_PRICE_TICK));
+        openPool();
+    }
+
+    /// @notice Opens the pool at 0.10 USDC per GBX with full-range liquidity.
+    function openPool() internal virtual {
+        manager.initialize(key, GbxPool.sqrtPriceX96(gbxIsToken0));
         addLiquidity(1e17);
     }
 
@@ -142,6 +149,11 @@ abstract contract HookFork is NamesFork {
     {
         vm.recordLogs();
         swap(via, who, params, hookData);
+        return recordedSwapFee();
+    }
+
+    /// @notice The fee of the pool manager's `Swap` among the logs recorded since `vm.recordLogs()`.
+    function recordedSwapFee() internal returns (uint24) {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(manager) && logs[i].topics[0] == SWAP_EVENT) {
@@ -174,6 +186,19 @@ abstract contract HookFork is NamesFork {
         (bytes32 r, bytes32 s) = p256Sign(signer, digest);
         return abi.encode(
             IGameBoxHook.TapSwapData({box: BOX, badge: badge, nonce: nonce, deadline: deadline, r: r, s: s})
+        );
+    }
+
+    /// @notice Expects the next swap to revert inside the hook with `reason`, as the pool manager wraps it.
+    function expectHookRevert(bytes memory reason) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CustomRevert.WrappedError.selector,
+                address(hook),
+                IHooks.beforeSwap.selector,
+                reason,
+                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+            )
         );
     }
 

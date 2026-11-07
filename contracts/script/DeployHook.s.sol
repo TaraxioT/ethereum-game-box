@@ -14,7 +14,7 @@ import {HookMiner} from "./HookMiner.sol";
 
 /// @notice Deploys `GameBoxHook` through the CREATE2 factory, at an address carrying its permission flags, with the
 ///         deployer as admin, and records the GBX/USDC pool's key as `.pools.GBX_USDC`. Skips the hook if it is already
-///         deployed. It doesn't initialize the pool: the launch auction does, at its clearing price.
+///         deployed. It doesn't open the pool: `SeedPool` does.
 contract DeployHook is Deployments {
     uint160 internal constant FLAGS = Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG;
 

@@ -2,9 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {Pool} from "@uniswap/v4-core/src/libraries/Pool.sol";
@@ -36,19 +34,6 @@ contract GameBoxHookTest is HookFork {
     // ----------------------------------------------------------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------------------------------------------------------
-
-    /// @notice Expects the next swap to revert inside the hook with `reason`, as the pool manager wraps it.
-    function expectHookRevert(bytes memory reason) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                CustomRevert.WrappedError.selector,
-                address(hook),
-                IHooks.beforeSwap.selector,
-                reason,
-                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
-            )
-        );
-    }
 
     function tap(IPoolManager.SwapParams memory params, uint256 nonce) internal view returns (bytes memory) {
         return tapData(router, params, nonce, deadline, boxKey);
