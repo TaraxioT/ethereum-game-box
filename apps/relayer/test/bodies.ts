@@ -27,6 +27,7 @@ import {
   storeVerdictTypedData,
   storeVoidTypedData,
 } from '@egb/shared/store';
+import { type LobbyBuy, lobbyTapSwap, tapSwapDigest } from '@egb/shared/swap';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import {
   type Address,
@@ -209,4 +210,11 @@ export async function voidBody(signer: PrivateKeyAccount, options: Partial<Store
 export function highSignature(signature: Hex): Hex {
   const s = secp256k1.Point.CURVE().n - BigInt(slice(signature, 32, 64));
   return concatHex([slice(signature, 0, 32), numberToHex(s, { size: 32 }), hexToNumber(slice(signature, 64)) === 27 ? '0x1c' : '0x1b']);
+}
+
+/** A 10 USDC GBX buy by `badge`, its `TapSwap` signed by the Box. */
+export function buyBody(world: World, badge: Address, options: Partial<LobbyBuy> & { key?: Key } = {}) {
+  const { key = world.key, ...fields } = options;
+  const buy: LobbyBuy = { box: BOX, badge, usdcIn: usdc(10), nonce: 1n, deadline: BigInt(NOW + 600), ...fields };
+  return { ...buy, ...key.sign(tapSwapDigest(lobbyTapSwap(buy, addresses.lobby!), addresses.lobby!.hook)) };
 }

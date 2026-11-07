@@ -83,6 +83,18 @@ export interface TopupRequest {
   player: string;
 }
 
+/** `POST /swap/buy`: a badge's GBX buy at the Box, its `TapSwap` signed by the Box's P-256 key (`lobbyTapSwap`). */
+export interface BuyRequest {
+  box: string;
+  badge: Address;
+  /** USDC, 6 decimals. */
+  usdcIn: JsonUint;
+  nonce: JsonUint;
+  deadline: JsonUint;
+  r: Hex;
+  s: Hex;
+}
+
 /** `POST /duel/open`: a match's stakes the Box's P-256 key signed (`stakeDigest`). */
 export interface StakeRequest {
   stake: {
@@ -184,7 +196,8 @@ export type TxKind =
   | 'store-settle'
   | 'store-void'
   | 'store-refund'
-  | 'store-topup';
+  | 'store-topup'
+  | 'buy';
 export type TxStatus = 'signed' | 'sent' | 'in-block' | 'done' | 'failed';
 
 /** One transaction of a request. */

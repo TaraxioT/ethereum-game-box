@@ -16,6 +16,7 @@ import {
   storePotAbi,
   universalResolverAbi,
 } from '@egb/shared/names';
+import { gameBoxLobbyAbi } from '@egb/shared/swap';
 import { p256 } from '@noble/curves/nist.js';
 import {
   type Abi,
@@ -47,6 +48,8 @@ export const NOW = 1_800_000_000;
 export const REGISTRY: Address = '0x00000000000000000000000000000000000000a4';
 export const STORE_POT: Address = '0x00000000000000000000000000000000000000ab';
 export const STORE_USDC: Address = '0x00000000000000000000000000000000000000ac';
+export const LOBBY: Address = '0x00000000000000000000000000000000000000ad';
+export const HOOK: Address = '0x00000000000000000000000000000000000000ae';
 export const addresses: Addresses = {
   names: '0x00000000000000000000000000000000000000a1',
   results: '0x00000000000000000000000000000000000000a2',
@@ -55,6 +58,7 @@ export const addresses: Addresses = {
   pot: '0x00000000000000000000000000000000000000a8',
   storePot: STORE_POT,
   storeUsdc: STORE_USDC,
+  lobby: { lobby: LOBBY, hook: HOOK, usdcIsToken0: false },
   cups: '0x00000000000000000000000000000000000000a9',
   seats: '0x00000000000000000000000000000000000000aa',
   factory: '0x00000000000000000000000000000000000000a6',
@@ -188,6 +192,8 @@ export class World {
   readonly ensNames = new Map<string, Address>();
   /** Signatures (lower-cased) each account's `isValidSignature` accepts. */
   readonly erc1271 = new Map<string, Set<string>>();
+  /** The GBX `GameBoxLobby.buy` returns. */
+  gbxOut = 99_750_000_000_000_000_000n;
   /** Function name -> the contract error its `eth_call` reverts with. */
   readonly reverts = new Map<string, [Abi, string, unknown[]]>();
   readonly relay: Relay;
@@ -270,6 +276,9 @@ export class World {
         settle: () => this.fail('settle'),
         voidPot: () => this.fail('voidPot'),
         refund: () => this.fail('refund'),
+      })
+      .contract(LOBBY, gameBoxLobbyAbi as Abi, {
+        buy: () => (this.fail('buy'), [this.gbxOut, false]),
       })
       .contract(addresses.cups, championshipsAbi as Abi, {
         openCup: ([game]) => this.openCups.get(String(game)) ?? 0n,

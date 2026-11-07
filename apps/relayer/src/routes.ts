@@ -6,6 +6,7 @@ import { corsHeaders, originAllowed } from './cors.ts';
 import { guarded } from './guard.ts';
 import { Refusal } from './refusal.ts';
 import type { Context, Prepared } from './request.ts';
+import { prepareBuy } from './requests/buy.ts';
 import { prepareClaim } from './requests/claim.ts';
 import { prepareCupClose } from './requests/cup.ts';
 import { prepareDeploy } from './requests/deploy.ts';
@@ -55,6 +56,7 @@ const prepare: Record<string, (ctx: Context, body: unknown) => Promise<Prepared>
   '/store/void': prepareStoreVoid,
   '/store/refund': prepareStoreRefund,
   '/store/topup': prepareStoreTopup,
+  '/swap/buy': prepareBuy,
 };
 
 const json = (status: number, body: unknown, headers: Record<string, string>) =>

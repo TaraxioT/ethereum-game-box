@@ -3,6 +3,7 @@
 
 import { CREATES_STORAGE_GAS, type TxKind, contractAddress, ensAddress, namesProxies, ourContract } from '@egb/shared/names';
 import { storePotAddress, storeUsdcAddress } from '@egb/shared/store';
+import { type LobbyPool, lobbyPool } from '@egb/shared/swap';
 import type { Address, Hex } from 'viem';
 
 import type { Client } from './chain.ts';
@@ -24,6 +25,8 @@ export interface Addresses {
    *  routes refuse until then. */
   storePot: Address | undefined;
   storeUsdc: Address | undefined;
+  /** `GameBoxLobby` and its pool: `undefined` until the lobby is deployed, and `/swap/buy` refuses until then. */
+  lobby: LobbyPool | undefined;
   /** `Championships`. */
   cups: Address;
   /** `BoxSeats`: player names a Box vouched for. */
@@ -50,6 +53,7 @@ export function deployedAddresses(): Addresses {
     pot: contractAddress('DuelPot'),
     storePot: storePotAddress(),
     storeUsdc: storeUsdcAddress(),
+    lobby: lobbyPool(),
     cups: contractAddress('Championships'),
     seats: contractAddress('BoxSeats'),
     factory: factory.address,
@@ -110,9 +114,11 @@ async function refusingReverts<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Runs the exact call with `eth_call` from the relayer. A revert is a 422 named by its contract error. */
-export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<void> {
-  await refusingReverts(() => ctx.client.call({ account: ctx.relayer, ...call }));
+/** Runs the exact call with `eth_call` from the relayer, and returns what it returned. A revert is a 422 named by its
+ *  contract error. */
+export async function simulate(ctx: Context, call: { to: Address; data: Hex; value?: bigint }): Promise<Hex | undefined> {
+  const { data } = await refusingReverts(() => ctx.client.call({ account: ctx.relayer, ...call }));
+  return data;
 }
 
 /** `eth_estimateGas` plus 50%. The chain can move on after the `eth_call`, so a revert here is a 422 too. */

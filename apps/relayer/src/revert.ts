@@ -20,6 +20,7 @@ import {
   universalResolverAbi,
   verifiableFactoryAbi,
 } from '@egb/shared/names';
+import { gameBoxLobbyAbi } from '@egb/shared/swap';
 
 const errors: Abi = [
   gameBoxNamesAbi,
@@ -27,6 +28,7 @@ const errors: Abi = [
   boxResultsAbi,
   duelPotAbi,
   storePotAbi,
+  gameBoxLobbyAbi,
   championshipsAbi,
   boxSeatsAbi,
   fakeUsdcAbi,

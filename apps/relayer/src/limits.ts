@@ -17,8 +17,9 @@ const DAY = 86_400;
 const POPUP_TERM = 600;
 
 /** The limits a request from `ip` counts against. Executes count per account, top-ups per player and per IP, each token
- *  apart, and store pots per Box; results and team stakes are bounded by the Box keys, verdicts and voids by the
- *  verifier's key, and a refund or a close can succeed only once. */
+ *  apart, GBX buys per badge and per Box (`GameBoxLobby` caps each Box's USDC a day as well), and store pots per Box;
+ *  results and team stakes are bounded by the Box keys, verdicts and voids by the verifier's key, and a refund or a
+ *  close can succeed only once. */
 export function limitsFor({ kind, account, box }: Pick<Prepared, 'kind' | 'account' | 'box'>, ip: string): Limit[] {
   switch (kind) {
     case 'claim':
@@ -52,6 +53,11 @@ export function limitsFor({ kind, account, box }: Pick<Prepared, 'kind' | 'accou
       ];
     case 'seat':
       return [{ key: 'seat:all', max: 200, windowSeconds: DAY, what: '200 Box-vouched names per day' }];
+    case 'buy':
+      return [
+        { key: `buy:badge:${account?.toLowerCase()}`, max: 3, windowSeconds: HOUR, what: '3 GBX buys per hour from one badge' },
+        { key: `buy:box:${box}`, max: 60, windowSeconds: DAY, what: '60 GBX buys per day from one Box' },
+      ];
     case 'store-open':
       return [{ key: `store-open:box:${box}`, max: 30, windowSeconds: HOUR, what: '30 store pots per hour from one Box' }];
     case 'result':

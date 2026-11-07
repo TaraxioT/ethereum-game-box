@@ -21,6 +21,7 @@ for closing a championship that has ended, and for nothing else. Live at **https
 | `POST /store/refund` | `{ box, round }` | as `/duel/refund`, on `StorePot`; anyone may ask | `StorePot.refund`, every stake back |
 | `POST /players/box-claim` | `{ seat, r, s }` | the labels; an unexpired deadline; the Box and its signature over `Seat`, as for a result; the badge has no name, the label is free and was never a Box (as for a claim); `eth_call` | `BoxSeats.claim`, which claims `<label>.gamebox.eth` for the badge (`claimPlayerFor`) |
 | `POST /usdc/topup` | `{ player }`: an address, or an ENS name (resolved with stock viem through the Universal Resolver) | the name resolves; `eth_call` | `FakeUSDC.mint` of 100 USDC to the player |
+| `POST /swap/buy` | `{ box, badge, usdcIn, nonce, deadline, r, s }` | the label; 0 < `usdcIn` ≤ 100 USDC; an unexpired deadline; the Box and its signature over `GameBoxHook`'s `TapSwap`, with `GameBoxLobby` as its sender (`lobbyTapSwap`); `GameBoxLobby` is deployed; `eth_call`, whose GBX less 2% is the sent `minGbxOut` | `GameBoxLobby.buy`: the lobby mints the USDC, swaps it for GBX at the 0.25% tap fee, and sends the GBX to the badge, or stakes it to a bonded Box |
 | `POST /store/topup` | `{ player }`, as `/usdc/topup` | as `/usdc/topup`, on Store USDC | Store USDC's `mint` of 100 USDC to the player |
 | `POST /cup/close` | `{ game }` | the label; the game has an open championship; its `ends` has passed; `eth_call` | `Championships.close`: the prize to the winner, the name to the winner for good, the records frozen |
 | `POST /box/popup` | `{ label }` | the label rule; `popup-<label>` is not live (`getPopup`); `eth_call` | `DemoLicences.openPopup` |
@@ -71,7 +72,7 @@ No call may send ETH. Whatever the call, its `eth_call` must succeed.
 | pop-up | `DemoLicences.openPopup` (a new name, linked to its Box's record) | 2^24 + 4M |
 | result | `BoxResults.submit` (the title moves, both players' stats, the pot, the championship's records under a 3M cap) | estimate + 50%, or 2^24 + 4M if the estimate is above 1M (a v3 result's always is) |
 | Box-vouched name | `BoxSeats.claim` (a new resolver) | 2^24 + 4M |
-| stake, refund, top-up | `DuelPot.open`, `DuelPot.refund`, `FakeUSDC.mint` | estimate + 50% |
+| stake, refund, top-up, GBX buy | `DuelPot.open`, `DuelPot.refund`, `FakeUSDC.mint`, `GameBoxLobby.buy` | estimate + 50% |
 | store pot, store top-up | `StorePot.open`, `settle`, `voidPot`, `refund`, Store USDC's `mint` | estimate + 50% |
 | championship close | `Championships.close` (the name unregistered and registered again) | 2^24 + 4M |
 
@@ -114,7 +115,7 @@ The live smoke test prints the gas each request used, with its Etherscan link.
 - **Rate limits**: claims 5 per IP per hour and 200 per day; pop-ups 3 per IP per hour and 5 live at once; drips one
   per badge and 50 per day; account calls 30 per account per hour and 1,500 per day in all; account deploys 3 per IP
   per hour and 30 per day; top-ups one per player per 10 minutes, 60 per IP per day and 300 per day, on each token
-  apart; store pots 30 per Box per hour; Box-vouched names 200 per day. Results and stakes come from known Box keys
+  apart; GBX buys 3 per badge per hour and 60 per Box per day; store pots 30 per Box per hour; Box-vouched names 200 per day. Results and stakes come from known Box keys
   only, verdicts and voids from a key with `VERIFIER_ROLE`, and a refund or a close can succeed only once.
 - **Done** means the head is a block past the receipt's; read at the receipt's block (`TxView.block`).
 - The wallet is the deployer's (`sepolia-deployer`). It pays gas, and it is the minter of `FakeUSDC` and Store USDC, for
