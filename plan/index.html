@@ -206,15 +206,16 @@
 
 <section id="games">
   <h2><span class="n">03</span>Games and the token</h2>
-  <p class="sub">Two games play today and two more are planned, and the token ties the games, the Boxes and Uniswap
+  <p class="sub">Two team games and the store's games play today, two more are planned, and the token ties the games,
+    the Boxes and Uniswap
     together. Where we are says what runs today.</p>
 
   <h3>The games</h3>
   <div class="table-scroll">
   <table>
     <tr><th>Game</th><th>How it plays</th><th>Tier</th></tr>
-    <tr><td><strong>Quick Draw</strong></td><td>The screen says "draw". First tap wins. The simplest game, and the
-      first one we build end to end.</td><td>Refereed</td></tr>
+    <tr><td><strong>Quick Draw</strong></td><td>Best of three. After a countdown the screen says "draw", and the first
+      tap takes the round. Tapping a red decoy word gives the round away.</td><td>Refereed</td></tr>
     <tr><td><strong>Stock Duel</strong></td><td>Best of three. Each player plays a stock from a spinning Rolodex; once
       both cards are down, the two badges' randomness picks the stat (price, average price, 24-hour move or
       liquidity), read live from Robinhood Chain's stock pools. Cards flip together; a timer plays for a slow
@@ -336,19 +337,21 @@
 
 <section id="status">
   <h2><span class="n">05</span>Where we are</h2>
-  <p class="sub">What runs today, as of 6 November, what we have to decide, and what comes next.</p>
+  <p class="sub">What runs today, as of 7 November, what we have to decide, and what comes next.</p>
 
-  <div class="callout"><p><strong>Where it stands:</strong> the Box and the chain are joined. Staked USDC matches,
-    names, titles and championships are wired up on the Pi and live on Sepolia. What's left is a recorded match with
-    hand taps, live prices, and the token's money: the pool, the game fee and the burn.</p></div>
+  <div class="callout"><p><strong>Where it stands:</strong> the Box and the chain are joined. <code>mumbai-01</code>
+    has opened 52 staked USDC pots on Sepolia and settled 50, and the game store has paid and refunded real matches
+    through an AI judge on 0G. What's left is a recorded match with hand taps, live prices and four seats on the Pi,
+    and the token's money: the pool, the game fee and the burn.</p></div>
 
   <h3>What runs today</h3>
   <div class="table-scroll">
   <table>
     <tr><th>Piece</th><th>State</th><th>Detail</th></tr>
     <tr><td><strong>The Box</strong></td><td>On chain</td><td>The Pi runs the chain port: stakes, results, refunds,
-      top-ups and seats go through the relayer, and the lobby reads live balances, titles and standings. PR #21
-      records no full staked match with hand taps yet.</td></tr>
+      top-ups and seats go through the relayer, and the lobby reads live balances, titles and standings. On Sepolia,
+      <code>mumbai-01</code> has opened 52 <code>DuelPot</code> pots, settled 50 and refunded 1, and round 30 is still
+      open. No full match with hand taps is recorded yet, and four seats are tested only on fake stations.</td></tr>
     <tr><td><strong>Box key</strong></td><td>Live</td><td>The HYP2003 signer runs on the Pi, and its key matches
       <code>mumbai-01</code>.</td></tr>
     <tr><td><strong>Game builder</strong></td><td>On <code>main</code></td><td>It built a game on the Pi and played
@@ -358,17 +361,17 @@
     <tr><td><strong>Names, pots and cups</strong></td><td>Live</td><td><code>gamebox.eth</code>, names, titles, signed
       results, <code>DuelPot</code>, <code>BoxSeats</code>, <code>Championships</code> and test USDC. ENS and
       <code>deployments/sepolia.json</code> agree.</td></tr>
-    <tr><td><strong>Public site</strong></td><td>Live</td><td><a
-      href="https://gamebox-names.pages.dev:">https://gamebox-names.pages.dev:</a> the lobby, championships and the
-      five-step Story.</td></tr>
+    <tr><td><strong>Public site</strong></td><td>Live</td><td>The lobby, championships and the five-step Story, at <a
+      href="https://gamebox-names.pages.dev">gamebox-names.pages.dev</a>. PR #28 proposes a new dashboard.</td></tr>
     <tr><td><strong>Operator site</strong></td><td>Live, off <code>main</code></td><td><a
       href="https://gamebox-operator.pages.dev">https://gamebox-operator.pages.dev</a> comes from
       <code>names-operator</code>, which has no PR and holds the older addresses. Operators edit records with a
       passkey; an admin issues licences.</td></tr>
-    <tr><td><strong>GBX</strong></td><td>Live</td><td>Deployed, with no pool and nothing burned.</td></tr>
+    <tr><td><strong>GBX</strong></td><td>Live</td><td>Deployed, with no pool and nothing burned. <code>BoxLease</code>
+      lets GBX staked on a Box keep its name active.</td></tr>
     <tr><td><strong>Staking and the hook</strong></td><td>Deployed</td><td><code>BoxStaking</code> and
       <code>GameBoxHook</code> run on test USDC. The pool isn't initialized, the hook has no daily cap yet, no game
-      sends them fees, and neither is verified on Etherscan.</td></tr>
+      sends them fees, and neither they nor <code>BoxLease</code> are verified on Etherscan.</td></tr>
     <tr><td><strong>Stock Duel data</strong></td><td>Built, not on the Pi</td><td>The Box reads the 20 stocks'
       Uniswap pools on Robinhood Chain mainnet through a Chainstack node every 5 minutes, and each match's transcript
       records the block. No staked match on the Pi with live prices yet, and no checker that replays a
@@ -377,10 +380,14 @@
       and the lobby's swap. The Box's lobby tops up test USDC today.</td></tr>
     <tr><td><strong>Trust</strong></td><td>Not built</td><td>Pot caps, the challenge window and proof of cheating.
       Nobody can slash a Box until a dispute contract exists.</td></tr>
-    <tr><td><strong>Game store</strong></td><td>Planned</td><td>Team-published game bundles, judged by an agent on 0G's
-      private inference. See <a href="game-store.html">the game store plan</a>.</td></tr>
-    <tr><td><strong>The network</strong></td><td>Not built</td><td>The operator auction, Bet on X, B17 and
-      0G.</td></tr>
+    <tr><td><strong>Game store</strong></td><td>Live</td><td>The store and the verifier are live, with Tap Rush and a
+      rigged test game listed. <code>StorePot</code> has opened 4 pots: 3 paid and 1 voided. Round 51 paid on the
+      judge's verdict, and round 55, the rigged game, refunded. Round 51's audit record hasn't reached 0G Storage, and
+      four seats haven't played on the Pi. See <a href="game-store.html">the game store plan</a>.</td></tr>
+    <tr><td><strong>Chainlink</strong></td><td>Planned</td><td>CRE and CCIP builds are written up in
+      <code>plan/chainlink.md</code>. No code yet.</td></tr>
+    <tr><td><strong>The network</strong></td><td>Not built</td><td>The operator auction, Bet on X, B17, and 0G's voice
+      bets and practice opponent.</td></tr>
   </table>
   </div>
   <p>Our done rule needs a run on the Pi with real badges, so the staked match is the one to record next.</p>
@@ -402,10 +409,13 @@
   <h3>What comes next</h3>
   <ol class="steps">
     <li><strong>Record the staked match.</strong> Two new badges claim names, top up, stake and play to the end with
-      hand taps. That closes milestone 2 and moves a title for milestone 5.</li>
+      hand taps. That closes milestone 2 and moves a title for milestone 5. Refund <code>DuelPot</code> round 30 too:
+      its stakes are still in the pot.</li>
     <li><strong>Close milestone 1.</strong> Have the real Box send a heartbeat, and show a forged one refused.</li>
     <li><strong>Play Stock Duel live on the Pi.</strong> Set <code>ROBINHOOD_RPC_URL</code> there, play a staked
       match with live prices, and recheck its block for milestone 3.</li>
+    <li><strong>Finish the store's proof.</strong> Get round 51's audit record onto 0G Storage, then play a store game
+      with four real badges on the Pi.</li>
     <li><strong>Finish the token.</strong> Settle the fee and the launch, initialize the pool, add the buyback and the
       lobby's swap, and fill in <code>FEEDBACK.md</code>, which has no entries yet.</li>
     <li><strong>Bring in the operator site.</strong> Move <code>names-operator</code> onto the live addresses and open
@@ -440,8 +450,8 @@
       <code>mumbai-01</code>. The real Box sends no heartbeat yet.</td></tr>
     <tr><td>2</td><td><strong>First game</strong></td><td>Badges join and get tokens, one-tap staked entry, the game
       escrow with refunds, and Quick Draw.</td><td>Two badges play Quick Draw for stakes without holding any ETH, and
-      the winner is paid.</td><td>Built and live on the Pi. A staked match with hand taps isn't recorded
-      yet.</td></tr>
+      the winner is paid.</td><td>Built and live: <code>mumbai-01</code> has settled 50 pots on Sepolia. A staked
+      match with hand taps isn't recorded yet.</td></tr>
     <tr><td>3</td><td><strong>Stock Duel</strong></td><td>Live Robinhood Chain prices, two-badge randomness, best of
       three, and the replay proof.</td><td>A staked match runs on the Box with live prices, and its proof checks
       out.</td><td>Rules, stakes and live prices done, with the block in each transcript. No staked match on the Pi with
@@ -455,7 +465,8 @@
       site are live, and the site's Story moves a title. A win on the real Box isn't recorded yet.</td></tr>
     <tr><td>6</td><td><strong>The network</strong></td><td>The operator auction, Bet on X, B17, and 0G once credits
       arrive.</td><td>An operator wins a licence and registers a Box; both new games play a round.</td><td>Not
-      started, apart from an operator site on a branch.</td></tr>
+      started, apart from an operator site on a branch. 0G judges store games, but voice bets and the practice
+      opponent aren't built.</td></tr>
   </table>
   </div>
 
