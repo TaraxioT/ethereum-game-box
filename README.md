@@ -14,6 +14,7 @@
   <a href="https://gamebox-names.pages.dev"><b>Explore the live names</b></a> &nbsp;·&nbsp;
   <a href="ens-usage.md"><b>ENS integration</b></a> &nbsp;·&nbsp;
   <a href="0g-usage.md"><b>0G integration</b></a> &nbsp;·&nbsp;
+  <a href="#live-links"><b>All live links</b></a> &nbsp;·&nbsp;
   <a href="#run-it-locally"><b>Run it locally</b></a>
 </p>
 
@@ -151,6 +152,32 @@ The public site reads ENS through the Universal Resolver and discovers names fro
 </table>
 
 See [0G usage](0g-usage.md) for live verifier responses, audit status, and code links. Contract addresses live in [deployments/sepolia.json](deployments/sepolia.json).
+
+## Live links
+
+Everything below runs on Sepolia with test USDC. Contract addresses are in [deployments/sepolia.json](deployments/sepolia.json).
+
+**Pages to open**
+
+| Page | URL | What it shows |
+| --- | --- | --- |
+| Browser demo | <https://ethereum-game-box.pages.dev/> | The Box's screen and core in a browser, simulated, for verification. Nothing goes on chain. The real Box runs on a Raspberry Pi with NFC badges and a hardware key. |
+| Names site | <https://gamebox-names.pages.dev> | The ENS names under `gamebox.eth` and what the Boxes write to them: [Tree](https://gamebox-names.pages.dev/#/), [Players](https://gamebox-names.pages.dev/#/players), [Lobby](https://gamebox-names.pages.dev/#/lobby), [Titles](https://gamebox-names.pages.dev/#/champions), [Cups](https://gamebox-names.pages.dev/#/championships), [Boxes](https://gamebox-names.pages.dev/#/boxes), [Agent](https://gamebox-names.pages.dev/#/agent) |
+| Operator site | <https://gamebox-operator.pages.dev> | A Box's operator signs in with a passkey and edits the Box's four keys |
+| Verifier dashboard | <https://gamebox-verifier.mathew.workers.dev/judge/mumbai-01> | The store matches the AI judge decided for `mumbai-01` |
+| ENS app | <https://sepolia.app.ens.domains/gamebox.eth> | `gamebox.eth` and its names in the ENS app |
+| Project plan | <https://plans.georgekm.com/ethereum-game-box-2026-11-05/> | The plan, with the [game UI](https://plans.georgekm.com/ethereum-game-box-game-ui-2026-11-06/) and [Box server](https://plans.georgekm.com/ethereum-game-box-box-server-2026-11-06/) plans |
+
+**APIs** (JSON)
+
+| Worker | Base URL | Try |
+| --- | --- | --- |
+| Relayer | <https://gamebox-relayer.mathew.workers.dev> | [`/health`](https://gamebox-relayer.mathew.workers.dev/health): the gas wallet, its balance and the pending requests |
+| Demo Box | <https://gamebox-demo-box.mathew.workers.dev> | [`/box`](https://gamebox-demo-box.mathew.workers.dev/box): `demo-01`'s key and last heartbeat. [`/agent`](https://gamebox-demo-box.mathew.workers.dev/agent): `bot.gamebox.eth`. `POST /mcp`: the agent's MCP endpoint |
+| Store | <https://gamebox-store.mathew.workers.dev> | [`/index.json`](https://gamebox-store.mathew.workers.dev/index.json): every listed game |
+| Verifier | <https://gamebox-verifier.mathew.workers.dev> | [`/health`](https://gamebox-verifier.mathew.workers.dev/health), [`/judge/mumbai-01/51`](https://gamebox-verifier.mathew.workers.dev/judge/mumbai-01/51): a verdict, [`/audit/mumbai-01/51`](https://gamebox-verifier.mathew.workers.dev/audit/mumbai-01/51): its record on 0G Storage |
+
+Each Worker's routes are in its README: [relayer](apps/relayer/README.md), [demo Box](apps/demo-box/README.md), [store](apps/store/README.md), [verifier](apps/verifier/README.md).
 
 ## Run it locally
 
