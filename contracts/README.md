@@ -221,7 +221,7 @@ F="--rpc-url sepolia --account sepolia-deployer --password '' --broadcast --skip
 forge script script/names/DeployNames.s.sol $F       # factory, names, stats, USDC, pots, championships, results,
                                                      # licences, seats; roles, stats writer, championships, spender
 forge script script/names/DeployNames.s.sol --rpc-url sepolia --account sepolia-deployer --password ''   # record
-forge script script/names/AddGames.s.sol $F          # stockduel (7 days), quickdraw (15 minutes)
+forge script script/names/AddGames.s.sol $F          # stockduel, stockduel-uniswap (7 days), quickdraw (15 minutes)
 forge script script/names/PointGameBox.s.sol $F      # gamebox.eth -> our registry, and its default-record resolver
 BOX_LABEL=mumbai-01 BOX_QX=0x… BOX_QY=0x… BOX_ACCOUNT=MumbaiBoxAccount \
   forge script script/names/RegisterBox.s.sol $F     # 30 days, the Box's account made if missing

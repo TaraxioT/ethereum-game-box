@@ -163,7 +163,8 @@
     "gameResolver": "0x55230cDf86b62875efeFce1Cc1753C93aD9DcA9F",
     "titles": {
       "stockduel": "0x42E7284B1C129640C9A58392B8cBC38a38C2E8DA",
-      "quickdraw": "0xB951D0b89c02d4E7cC9587f98313b7F7d2a52CE1"
+      "quickdraw": "0xB951D0b89c02d4E7cC9587f98313b7F7d2a52CE1",
+      "stockduel-uniswap": "0x0458117C23e17540F4Bf81C99144E9C68F51DA79"
     },
     "gameboxResolver": "0xa4054304EA92A52D96Fc68dacEe3582f9f3Bc3C8"
   },
