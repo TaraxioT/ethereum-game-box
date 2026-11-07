@@ -8,8 +8,8 @@ Foundry. Every contract, its tests and its deploy scripts. All of it deploys to 
 |---|---|
 | `src/box/` | The P-256 account every role-holder uses (`P256Account`), its factory (`P256AccountFactory`), and P-256 verification through the EIP-7951 precompile with low `s` enforced. Box licences and key rotation live in `names/GameBoxNames.sol` |
 | `src/game/` | Match escrow: `DuelPot`, one USDC pot per match (open, settle, refund), and `StorePot`, one Store USDC pot per store game's match (open, settle, void, refund) |
-| `src/token/` | The Game Box token and its launch through Uniswap's auction, and the demo's test USDC (`FakeUSDC`) |
-| `src/hook/` | The Uniswap v4 hook: three fee levels and the time-weighted price |
+| `src/token/` | The Game Box token, and the demo's test USDC (`FakeUSDC`) |
+| `src/hook/` | The Uniswap v4 hook (three fee levels and the time-weighted price) and the lobby's tap-to-buy |
 | `src/staking/` | Staking to a Box, rewards, commission, and the operator auction |
 | `src/names/` | ENS names under `gamebox.eth`: Boxes, players, titles, championships |
 | `test/` | Forge tests: every rule and every refusal. `test/e2e/` holds `StubNames`, which `pnpm store:e2e` runs on instead of `GameBoxNames` |
@@ -89,6 +89,7 @@ resolver: it has no record for that name, so it answers with its default record.
 | `GameBoxNames.championships` | `Championships` | set once (`setChampionships`); `addGame` grants it its title-registry roles |
 | `FakeUSDC` (OpenZeppelin `AccessControl`) | deployer | `DEFAULT_ADMIN_ROLE` (sets the game spender once) and `MINTER_ROLE` |
 | | `DuelPot` | the game spender: `transferFrom` with no allowance |
+| | `GameBoxLobby` | `MINTER_ROLE`: mints what a tap buy's swap owes, at most `DAILY_CAP` per Box per day |
 | `StoreUSDC` (a second `FakeUSDC`) | deployer | `DEFAULT_ADMIN_ROLE` and `MINTER_ROLE` |
 | | `StorePot` | the game spender: `transferFrom` with no allowance |
 | `StorePot` (OpenZeppelin `AccessControl`) | `STORE_ADMIN`, a team account that is neither the relayer nor the verifier key | `DEFAULT_ADMIN_ROLE` (rotates the keys below). The deployer gives it up during the deploy |
@@ -347,19 +348,58 @@ pool it serves: `afterInitialize` refuses any other key, and only once.
 
 | Rule | |
 |---|---|
-| Fee | 1% on a plain swap. 0.25% on a tap swap. 0% for a router with `FEE_EXEMPT_ROLE` (the lobby and the buyback, later) |
+| Fee | 1% on a plain swap. 0.25% on a tap swap. 0% for a router with `FEE_EXEMPT_ROLE` (the buyback, later) |
 | Tap swap | The swap's hook data is a `TapSwapData`: a Box, a badge, a nonce, a deadline and the Box's P-256 signature over the EIP-712 `TapSwap` (`tapSwapDigest`). The signature covers the router, direction and amount, so it can't be reused on another swap. The Box must be `Active` and unexpired in `GameBoxNames`, and each nonce works once per Box. A bad tap reverts the swap rather than falling back to 1% |
 | Price | `PriceOracle` keeps 512 observations of the pool's tick, written before the first swap of each second, so a price moved inside one block counts for nothing. `observe` and `meanTick(window)` give the time-weighted price for the buyback and the dynamic floor |
 
 The hook's address must carry its permission bits (`afterInitialize`, `beforeSwap`), so `DeployHook.s.sol` mines a
 CREATE2 salt (`HookMiner.sol`) and deploys through the CREATE2 factory. It records the hook and the pool key
-(`.pools.GBX_USDC`) but doesn't initialize the pool: the launch auction does, at its clearing price.
+(`.pools.GBX_USDC`) but doesn't open the pool: `SeedPool.s.sol` does.
 
 ```sh
 forge script script/DeployHook.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
   --skip-simulation -g 150
 ```
 
+### Opening the pool
+
+`SeedPool.s.sol` opens the pool at 0.10 USDC per GBX (tick −299,340, GBX being `currency0`) and deposits 1,000,000 GBX
+against 100,000 USDC over the full range (±887,220). The deposit goes through Uniswap's v4 `PositionManager` and
+`Permit2` (`external` in `deployments/sepolia.json`), so it is an ERC-721 position the deployer owns: liquidity added
+through the test router would belong to the router, and anyone could take it out. The deployer pays the GBX and mints
+the USDC. The opening price can't be changed once set. Run again, it skips what is done; and since anyone can open a
+v4 pool, it refuses to deposit into one opened at another price. `script/uniswap/` holds the seed (`PoolSeed`), its
+numbers (`GbxPool`) and the two Uniswap interfaces it needs.
+
+```sh
+forge script script/SeedPool.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
+### Lobby: tap to buy
+
+`hook/GameBoxLobby.sol` lets a badge buy GBX with one tap at the Box, at the hook's 0.25% tap fee. A badge can't sign
+an approval or a permit, so nothing can pull its USDC. The lobby is a top-up paid in GBX instead: it holds
+`FakeUSDC`'s `MINTER_ROLE` and is its own v4 router. `buy` unlocks the pool manager, swaps USDC in with the Box's
+`TapSwap` as hook data (`sender` is the lobby, so the signature can't be spent through another router), mints exactly
+what the swap owes straight to the pool manager, and takes the GBX. If the Box is bonded in `BoxStaking`, the GBX is
+staked to it for the badge (`stakeFor`) in the same transaction; otherwise it goes to the badge.
+
+| Rule | |
+|---|---|
+| Amount | 1 base unit to `MAX_BUY` (100 USDC) per buy |
+| Cap | `DAILY_CAP`, 1,000 USDC per Box per UTC day, so a Box key can't mint without end |
+| Slippage | `minGbxOut` isn't signed: the sender (the relayer) sets it from a simulation |
+| Approval | The hook checks the Box, its signature, the nonce and the deadline. `tapSwapOf(order)` is the `TapSwap` the Box signs |
+
+`DeployLobby.s.sol` deploys it over the recorded hook and `BoxStaking` and grants it `MINTER_ROLE` (the deployer is
+`FakeUSDC`'s admin).
+
+```sh
+forge script script/DeployLobby.s.sol --rpc-url sepolia --account sepolia-deployer --password '' --broadcast \
+  --skip-simulation -g 150
+```
+
 `test/hook/` runs against Sepolia's real v4 `PoolManager` and test routers on the names fork, with the fork's
-`FakeUSDC`.
+`FakeUSDC`. `PoolSeed.t.sol` uses the real `PositionManager` and `Permit2`.
 `SwapVectors.t.sol` writes `packages/shared/src/swap/vectors.json`.
