@@ -1,0 +1,182 @@
+{
+  "chainId": 4663,
+  "external": {
+    "USDG": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "StockTokenBeacon": "0xe10b6f6b275de231345c20d14ab812db62151b00",
+    "UniswapV3Factory": "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
+    "StateView": "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b",
+    "Multicall3": "0xcA11bde05977b3631167028862bE2a173976CA11"
+  },
+  "stocks": {
+    "META": {
+      "token": "0xc0d6457c16cc70d6790dd43521c899c87ce02f35",
+      "pool": {
+        "version": 4,
+        "id": "0x5875d407a42965b0e768c8925cea290e06fa50603ef34fc99eb92a1050e6ae36",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "NVDA": {
+      "token": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+      "pool": {
+        "version": 3,
+        "address": "0xd4EB21209C4D6093f80B5b84f5C45cc093EA14a3",
+        "fee": 500
+      }
+    },
+    "CRCL": {
+      "token": "0xdf0992e440dd0be65bd8439b609d6d4366bf1cb5",
+      "pool": {
+        "version": 3,
+        "address": "0x654E4143e82a5824445Ade0824351C2A9ACD95a8",
+        "fee": 3000
+      }
+    },
+    "SPCX": {
+      "token": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+      "pool": {
+        "version": 3,
+        "address": "0xc61284332117c3FB23A2A56cceFFD07F7aF60029",
+        "fee": 500
+      }
+    },
+    "MSTR": {
+      "token": "0xec262a75e413fafd0df80480274532c79d42da09",
+      "pool": {
+        "version": 3,
+        "address": "0x17578C0e0D15da44f31677263114F71aE76653EA",
+        "fee": 10000
+      }
+    },
+    "MU": {
+      "token": "0xff080c8ce2e5feadaca0da81314ae59d232d4afd",
+      "pool": {
+        "version": 3,
+        "address": "0xd057B1Bc54917855BBee58eAd58647f47caB35E5",
+        "fee": 3000
+      }
+    },
+    "HIMS": {
+      "token": "0xccee82fe024c36fa15e1005ede3e9e4787e23d09",
+      "pool": {
+        "version": 3,
+        "address": "0xC8C90d3a1c1a24967E773ac2aD0d456BA3E31F64",
+        "fee": 3000
+      }
+    },
+    "RDDT": {
+      "token": "0x05b37fb53a299a1b874a619e1c4c404d52c36f4c",
+      "pool": {
+        "version": 3,
+        "address": "0xa8744E76aED23B05F0126335E7BD38f7935D19fe",
+        "fee": 10000
+      }
+    },
+    "GOOGL": {
+      "token": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+      "pool": {
+        "version": 3,
+        "address": "0x34D0dC122CF9A8Eb296fC5e0D3A233625D7d19b7",
+        "fee": 500
+      }
+    },
+    "TSLA": {
+      "token": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+      "pool": {
+        "version": 3,
+        "address": "0xf4ACdAEEB7022862A763C9B1B885e11191c889E3",
+        "fee": 3000
+      }
+    },
+    "AMZN": {
+      "token": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+      "pool": {
+        "version": 3,
+        "address": "0x8AC92DA74AB5F3b1d024Dc1943Ad7e15Dc4179Ef",
+        "fee": 3000
+      }
+    },
+    "COIN": {
+      "token": "0x6330d8c3178a418788df01a47479c0ce7ccf450b",
+      "pool": {
+        "version": 4,
+        "id": "0x007a13fa152f6dc383cad20a8eaab4e1e2538b606936eae2a424f8aa47d6db31",
+        "fee": 10000,
+        "tickSpacing": 200,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "AAPL": {
+      "token": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+      "pool": {
+        "version": 4,
+        "id": "0xc748f4671a867db48b552f6b7650bf3255e05f80f00e3f7aad1b17ccb7898fdb",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "COST": {
+      "token": "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2",
+      "pool": {
+        "version": 3,
+        "address": "0x0a2121A50A09eD0796ae81F9c53fF9398355a398",
+        "fee": 3000
+      }
+    },
+    "PLTR": {
+      "token": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+      "pool": {
+        "version": 4,
+        "id": "0xee430ee1003e1985e1828a01b9a20dad67ad4302994fe2abb4a173de4ac54623",
+        "fee": 10000,
+        "tickSpacing": 200,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "GME": {
+      "token": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+      "pool": {
+        "version": 3,
+        "address": "0xE9713f453aDB9245B19559790c96F470a18F2fDF",
+        "fee": 10000
+      }
+    },
+    "AMD": {
+      "token": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+      "pool": {
+        "version": 3,
+        "address": "0x48D284A2A4d3DC1b3Da08231Fe44317e7e7Aa51f",
+        "fee": 3000
+      }
+    },
+    "AMC": {
+      "token": "0x05a3d1cd21d0c88145e82600e62e7e496e0f222b",
+      "pool": {
+        "version": 4,
+        "id": "0x7499938c352d5b5b8f0c648722aca5ee964ef9b85c3a3041f1ec379726291d9d",
+        "fee": 1000,
+        "tickSpacing": 10,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "INTC": {
+      "token": "0xc72b96e0e48ecd4dc75e1e45396e26300bc39681",
+      "pool": {
+        "version": 3,
+        "address": "0x2e5a92f5013a64661A49312111be2e8aBd33F56a",
+        "fee": 3000
+      }
+    },
+    "LLY": {
+      "token": "0x8005d266423c7ea827372c9c864491e5786600ea",
+      "pool": {
+        "version": 3,
+        "address": "0xD2038788ebe1e0BFd7C0A6112f09778F3aeAecA6",
+        "fee": 3000
+      }
+    }
+  }
+}

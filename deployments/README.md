@@ -1,7 +1,9 @@
 # deployments
 
 One file per chain with every deployed address. Deploy scripts write it; `@egb/shared` reads it; nothing else
-hard-codes an address. Only `sepolia.json` exists, because every contract is on Sepolia.
+hard-codes an address. Every contract is on Sepolia (`sepolia.json`). `robinhood.json` holds no contract of ours: it
+is what Stock Duel reads on Robinhood Chain mainnet (USDG, Uniswap's v3 factory and v4 StateView, Multicall3, the
+stock-token beacon), and each deck stock's token with its deepest pool against USDG, written by `pnpm market:discover`.
 
 ```json
 {
