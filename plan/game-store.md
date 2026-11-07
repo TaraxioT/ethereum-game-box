@@ -3,8 +3,9 @@
 The plan for games that live online instead of on the Box. A team-published zip holds a game's page and the rules an
 AI judge follows. The Box downloads the game each time it runs, up to four players stake and play, and an agent on 0G's
 private inference reads the match's log and says who gets paid how much. If it can't, everyone gets their stake back.
-Built and tested on the branch `game-store`, on fakes and up to four seats: nothing is deployed, 0G hasn't judged a real
-match, and it hasn't run on the Pi or on real badges. `pnpm store:e2e` plays it end to end on one laptop: anvil, the real
+It's on `main` and live: the store, the verifier and `StorePot` are deployed, and `mumbai-01` has staked four two-player
+pots on Sepolia, judged on mainnet 0G: three paid and one voided. Four seats haven't played on the Pi, and no audit
+record has reached 0G Storage yet. `pnpm store:e2e` plays it end to end on one laptop: anvil, the real
 Workers on `wrangler dev`, a real container and the real Box in a real browser, with 0G, `GameBoxNames`, the Box's hardware
 key and the badges faked.
 
@@ -214,13 +215,17 @@ Each step ends with tests, and step 1 can stop the plan.
    0G Storage SDK run in a Worker? Done: tool calls work, `tee_verified` doesn't come back so the Worker checks the
    enclave's signature itself, and the SDK runs in the Worker with a `fetch` transport, so no second container.
 2. **The bundle.** The format, the reader and a sample game, Tap Rush.
-3. **The store.** The Worker, R2, `store:publish` and a deploy.
-4. **The contract.** `StorePot`, its forge tests, Store USDC, the deploy and the relayer's routes.
-5. **The verifier.** The Worker, the container, the agent and the failure paths, against a fake 0G.
-6. **The Box, two seats.** The library, the frame's powers, the log and the chain. A full staked match on the Pi.
+3. **The store.** The Worker, R2, `store:publish` and a deploy. Done: live, with Tap Rush and a rigged test game.
+4. **The contract.** `StorePot`, its forge tests, Store USDC, the deploy and the relayer's routes. Done, but its roles still
+   sit on one key (§13).
+5. **The verifier.** The Worker, the container, the agent and the failure paths, against a fake 0G. Done, and
+   deployed.
+6. **The Box, two seats.** The library, the frame's powers, the log and the chain. A full staked match on the Pi. `mumbai-01` has
+   settled three Tap Rush pots on Sepolia; nothing records whether those taps were by hand.
 7. **Four seats.** The core, the settings, the stations and every screen. Done on the fake stations, and every screen
    rendered with 2, 3 and 4 seats in a real browser. Not yet played on the Pi with real badges.
-8. **Mainnet 0G.** Deploy with the real key and play one match.
+8. **Mainnet 0G.** Deploy with the real key and play one match. Done for the judge: rounds 51, 53 and 54
+   paid, and round 55, the rigged game, refunded. Storage isn't done: every record's `root` is still null.
 
 ## 12. Build detail
 
@@ -285,12 +290,11 @@ arrives, and steps 5 to 7 get their detail from its results.
 
 ## 13. Needed from the team
 
-- A mainnet 0G key from pc.0g.ai before step 8.
-- A wallet funded with real 0G, for Storage.
-- A new verifier key, as a Worker secret.
-- An admin address for `StorePot`, held apart from the relayer and the verifier key, as `STORE_ADMIN` for step 4.
-- A funded Sepolia deployer key in `.env`, for step 4.
-- `forge`: Foundry isn't on the main development Mac yet, so contract tests need it installed.
+- **An admin for `StorePot`, held apart from the relayer and the verifier key.** One key, the relayer's, holds the
+  admin, lister and verifier roles on chain today, beside the verifier's own key. Hand them over and revoke them.
+- **Why 0G Storage hasn't taken a record.** Every round's upload is still pending. Check the Storage wallet holds real 0G.
+- Done: the mainnet 0G key, the verifier key, the Sepolia deployer key and Foundry (`~/.foundry/bin` on the main
+  development Mac, which isn't on its `PATH`).
 
 ## 14. Still to confirm
 
@@ -300,8 +304,8 @@ These came up while writing the plan. Each has a default the build will use unle
 - **The tier's name:** `judged`.
 - **Who pays for 0G:** the team, from one balance. Players pay nothing extra, and a Box can't run up the bill beyond
   one run per open pot.
-- **The one-chain rule:** `CLAUDE.md` says not to add other chains. 0G Storage needs transactions on 0G's chain, so
-  the rule gets one exception: storage payments only, and no contracts there.
+- **The one-chain rule:** 0G Storage needs transactions on 0G's chain, so `CLAUDE.md` has one exception: storage
+  payments only, and no contracts there.
 - **The refund delay:** one hour, as `DuelPot`.
 - **Player names:** `StorePot` doesn't need them, but the Box's stake flow keeps asking for one, as it does today.
 - **Icons:** store cartridges use the fallback icon in this pass.
@@ -309,17 +313,27 @@ These came up while writing the plan. Each has a default the build will use unle
 
 ## 15. Done when
 
-- [ ] A team member publishes a game, and it appears in the rack on the Pi.
-- [ ] A changed zip is refused, and an unlisted hash can't be staked.
-- [ ] Four real badges on four stations stake and play a store game on the Pi.
-- [ ] The agent's verdict pays a split on Sepolia, and the Box shows it.
-- [ ] Killing the verifier mid-run retries once, then refunds each stake to its address.
-- [ ] A forged verdict, one that doesn't add up, and one from a wrong key are all refused.
-- [ ] With the verifier down, the refund works after the delay.
-- [ ] Every model turn passes the TEE check, on mainnet 0G.
-- [ ] The audit record is on 0G Storage, and its hash matches the chain.
-- [ ] The container has no secrets and can't reach the internet, proved by a test run from its shell.
-- [ ] `pnpm typecheck`, the tests and `pnpm contracts:test` pass.
+As of 7 November. `store:e2e` means `pnpm store:e2e` passed on one laptop, with 0G faked. The Pi couldn't be reached for
+this update, so whatever needs it stays open.
+
+- [ ] A team member publishes a game, and it appears in the rack on the Pi. (Both games are published, and `mumbai-01`
+      staked them. Still to see in the rack on the Pi.)
+- [x] A changed zip is refused, and an unlisted hash can't be staked. (`store:e2e`.)
+- [ ] Four real badges on four stations stake and play a store game on the Pi. (All four pots so far had two players.)
+- [ ] The agent's verdict pays a split on Sepolia, and the Box shows it. (Paid on Sepolia in rounds 51, 53 and 54,
+      each the whole pot to one player. Still to see on the Box's screen.)
+- [x] Killing the verifier mid-run retries once, then refunds each stake to its address. (`store:e2e` kills the
+      container. Its test of the Worker dying is skipped.)
+- [x] A forged verdict, one that doesn't add up, and one from a wrong key are all refused. (`store:e2e`.)
+- [x] With the verifier down, the refund works after the delay. (`store:e2e`.)
+- [x] Every model turn passes the TEE check, on mainnet 0G. (Rounds 51, 53 and 54 paid, and a failed turn refunds.
+      That shows a registered enclave handled each turn, not that it signed this text.)
+- [ ] The audit record is on 0G Storage, and its hash matches the chain. (The hashes are on chain. All four `root`s
+      are null.)
+- [x] The container has no secrets and can't reach the internet, proved by a test run from its shell. (`store:e2e`, on
+      Docker Desktop. Not repeated on Cloudflare.)
+- [x] `pnpm typecheck`, the tests and `pnpm contracts:test` pass. (The 3 HYP2003 client tests need a node path with no
+      spaces.)
 
 ## Sources
 

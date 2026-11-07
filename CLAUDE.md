@@ -8,11 +8,14 @@ The project plan is [`plan/index.html`](plan/index.html).
 
 A pnpm monorepo. Each folder's README says what goes in it; read it before adding to that folder.
 
-- `apps/box/`: the Box: core, Pi server, taps, game builder, screen and games (`@egb/box`).
+- `apps/box/`: the Box: core, chain port, signer, Pi server, taps, game builder, screen and games (`@egb/box`).
 - `apps/relayer/`: the Cloudflare Worker that pays the gas for signed requests (`@egb/relayer`).
 - `apps/demo-box/`: a Box with no hardware, a Worker with a software P-256 key (`@egb/demo-box`).
+- `apps/store/`: the game store, a Worker with its bundles in R2 (`@egb/store`).
+- `apps/verifier/`: the Worker and container that judge store matches on 0G (`@egb/verifier`).
+- `apps/store-e2e/`: the store's end-to-end run on one laptop (`@egb/store-e2e`).
 - `apps/web/`: the public site (`@egb/web`).
-- `packages/sdk/`: the contract between the Box and its games (`@egb/sdk`).
+- `packages/sdk/`: the contract between the Box and its games, and the game bundle format (`@egb/sdk`).
 - `packages/shared/`: message digests, the badge entry, ABIs and the deployments loader (`@egb/shared`), and the
   sites' browser code (`@egb/shared/web`).
 - `packages/ui/`: the sites' look, element builder, Sepolia tag and transaction strip (`@egb/ui`).
@@ -20,14 +23,18 @@ A pnpm monorepo. Each folder's README says what goes in it; read it before addin
 - `deployments/`: `sepolia.json`, every deployed address.
 - `firmware/tap-station/`: the ESP32 tap stations and their receiver.
 - `deploy/pi/`: Pi setup, the update script and systemd units.
-- `plan/`: the project plan page.
+- `deploy/p256-signer/`: the HYP2003 signer the Box server starts.
+- `plan/`: the project plan page and the plans behind it.
 
 Workspace packages extend `tsconfig.base.json` and define `typecheck`, `test` and `build` scripts, which the root
-runs across all of them (`pnpm typecheck`, `pnpm test`, `pnpm build`). Contracts: `pnpm contracts:test`.
+runs across all of them (`pnpm typecheck`, `pnpm test`, `pnpm build`). Contracts: `pnpm contracts:test`. The store's
+end-to-end run is `pnpm store:e2e`, which `pnpm test` leaves out.
 
 ## Rules
 
-- **Sepolia for every contract.** Robinhood Chain mainnet is read only, for stock prices. Don't add other chains.
+- **Sepolia for every contract.** Robinhood Chain mainnet is read only, for stock prices. 0G's chain is for 0G alone:
+  the verifier reads its serving contract and pays for Storage, and no contract of ours goes there. Don't add other
+  chains.
 - Addresses live in `deployments/sepolia.json`. Nothing hard-codes an address.
 - Keys live only in `.env` and Worker secrets. Never commit, print or log one. Redact RPC URLs from errors (they
   carry the API key).
@@ -53,3 +60,5 @@ plans publish plan/index.html --name ethereum-game-box --date 2026-11-05
 ```
 
 It goes to https://plans.georgekm.com/ethereum-game-box-2026-11-05/, replacing the previous version.
+
+`plan/README.md` mirrors `plan/index.html`, and each `plan/*.md` with an `.html` twin matches it. Change them together.

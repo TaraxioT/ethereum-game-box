@@ -370,8 +370,8 @@
     <tr><td><strong>GBX</strong></td><td>Live</td><td>Deployed, with no pool and nothing burned. <code>BoxLease</code>
       lets GBX staked on a Box keep its name active.</td></tr>
     <tr><td><strong>Staking and the hook</strong></td><td>Deployed</td><td><code>BoxStaking</code> and
-      <code>GameBoxHook</code> run on test USDC. The pool isn't initialized, the hook has no daily cap yet, no game
-      sends them fees, and neither they nor <code>BoxLease</code> are verified on Etherscan.</td></tr>
+      <code>GameBoxHook</code> run on test USDC. The pool isn't initialised, the hook has no daily cap yet, no game
+      sends them fees, and neither they nor <code>BoxLease</code> is verified on Etherscan.</td></tr>
     <tr><td><strong>Stock Duel data</strong></td><td>Built, not on the Pi</td><td>The Box reads the 20 stocks'
       Uniswap pools on Robinhood Chain mainnet through a Chainstack node every 5 minutes, and each match's transcript
       records the block. No staked match on the Pi with live prices yet, and no checker that replays a
@@ -382,8 +382,7 @@
       Nobody can slash a Box until a dispute contract exists.</td></tr>
     <tr><td><strong>Game store</strong></td><td>Live</td><td>The store and the verifier are live, with Tap Rush and a
       rigged test game listed. <code>StorePot</code> has opened 4 pots: 3 paid and 1 voided. Round 51 paid on the
-      judge's verdict, and round 55, the rigged game, refunded. Round 51's audit record hasn't reached 0G Storage, and
-      four seats haven't played on the Pi. See <a href="game-store.html">the game store plan</a>.</td></tr>
+      judge's verdict, and round 55, the rigged game, refunded. No audit record has reached 0G Storage, and four seats haven't played on the Pi. See <a href="game-store.html">the game store plan</a>.</td></tr>
     <tr><td><strong>Chainlink</strong></td><td>Planned</td><td>CRE and CCIP builds are written up in
       <code>plan/chainlink.md</code>. No code yet.</td></tr>
     <tr><td><strong>The network</strong></td><td>Not built</td><td>The operator auction, Bet on X, B17, and 0G's voice
@@ -414,9 +413,9 @@
     <li><strong>Close milestone 1.</strong> Have the real Box send a heartbeat, and show a forged one refused.</li>
     <li><strong>Play Stock Duel live on the Pi.</strong> Set <code>ROBINHOOD_RPC_URL</code> there, play a staked
       match with live prices, and recheck its block for milestone 3.</li>
-    <li><strong>Finish the store's proof.</strong> Get round 51's audit record onto 0G Storage, then play a store game
+    <li><strong>Finish the store's proof.</strong> Get the audit records onto 0G Storage, then play a store game
       with four real badges on the Pi.</li>
-    <li><strong>Finish the token.</strong> Settle the fee and the launch, initialize the pool, add the buyback and the
+    <li><strong>Finish the token.</strong> Settle the fee and the launch, initialise the pool, add the buyback and the
       lobby's swap, and fill in <code>FEEDBACK.md</code>, which has no entries yet.</li>
     <li><strong>Bring in the operator site.</strong> Move <code>names-operator</code> onto the live addresses and open
       a PR.</li>
@@ -458,7 +457,7 @@
       live prices, and no replay checker.</td></tr>
     <tr><td>4</td><td><strong>The token</strong></td><td>The auction launch, the fee hook, buyback and burn, lobby
       swaps, and staking to Boxes.</td><td>Each fee level shows on a real swap, and a settled game burns tokens and
-      pays its stakers.</td><td>GBX, staking and the hook are deployed. The pool isn't initialized, and there's no
+      pays its stakers.</td><td>GBX, staking and the hook are deployed. The pool isn't initialised, and there's no
       auction, game fee, buyback or swap lobby.</td></tr>
     <tr><td>5</td><td><strong>Names</strong></td><td>Box and player names, the champion title, and the public
       site.</td><td>A new player claims a name, wins, and the site shows the title move.</td><td>Names, cups and the

@@ -268,11 +268,11 @@ What runs today, as of 7 November, what we have to decide, and what comes next.
 | **Public site** | Live | The lobby, championships and the five-step Story, at https://gamebox-names.pages.dev. PR #28 proposes a new dashboard. |
 | **Operator site** | Live, off `main` | https://gamebox-operator.pages.dev comes from `names-operator`, which has no PR and holds the older addresses. Operators edit records with a passkey; an admin issues licences. |
 | **GBX** | Live | Deployed, with no pool and nothing burned. `BoxLease` lets GBX staked on a Box keep its name active. |
-| **Staking and the hook** | Deployed | `BoxStaking` and `GameBoxHook` run on test USDC. The pool isn't initialized, the hook has no daily cap yet, no game sends them fees, and neither they nor `BoxLease` are verified on Etherscan. |
+| **Staking and the hook** | Deployed | `BoxStaking` and `GameBoxHook` run on test USDC. The pool isn't initialised, the hook has no daily cap yet, no game sends them fees, and neither they nor `BoxLease` is verified on Etherscan. |
 | **Stock Duel data** | Built, not on the Pi | The Box reads the 20 stocks' Uniswap pools on Robinhood Chain mainnet through a Chainstack node every 5 minutes, and each match's transcript records the block. No staked match on the Pi with live prices yet, and no checker that replays a transcript. |
 | **Token flows** | Not built | The launch auction, the game fee, buyback and burn, and the lobby's swap. The Box's lobby tops up test USDC today. |
 | **Trust** | Not built | Pot caps, the challenge window and proof of cheating. Nobody can slash a Box until a dispute contract exists. |
-| **Game store** | Live | The store and the verifier are live, with Tap Rush and a rigged test game listed. `StorePot` has opened 4 pots: 3 paid and 1 voided. Round 51 paid on the judge's verdict, and round 55, the rigged game, refunded. Round 51's audit record hasn't reached 0G Storage, and four seats haven't played on the Pi. See [the game store plan](game-store.md). |
+| **Game store** | Live | The store and the verifier are live, with Tap Rush and a rigged test game listed. `StorePot` has opened 4 pots: 3 paid and 1 voided. Round 51 paid on the judge's verdict, and round 55, the rigged game, refunded. No audit record has reached 0G Storage, and four seats haven't played on the Pi. See [the game store plan](game-store.md). |
 | **Chainlink** | Planned | CRE and CCIP builds are written up in `plan/chainlink.md`. No code yet. |
 | **The network** | Not built | The operator auction, Bet on X, B17, and 0G's voice bets and practice opponent. |
 
@@ -298,9 +298,9 @@ Our done rule needs a run on the Pi with real badges, so the staked match is the
 2. **Close milestone 1.** Have the real Box send a heartbeat, and show a forged one refused.
 3. **Play Stock Duel live on the Pi.** Set `ROBINHOOD_RPC_URL` there, play a staked match with live prices, and
    recheck its block for milestone 3.
-4. **Finish the store's proof.** Get round 51's audit record onto 0G Storage, then play a store game with four real
+4. **Finish the store's proof.** Get the audit records onto 0G Storage, then play a store game with four real
    badges on the Pi.
-5. **Finish the token.** Settle the fee and the launch, initialize the pool, add the buyback and the lobby's swap, and
+5. **Finish the token.** Settle the fee and the launch, initialise the pool, add the buyback and the lobby's swap, and
    fill in `FEEDBACK.md`, which has no entries yet.
 6. **Bring in the operator site.** Move `names-operator` onto the live addresses and open a PR.
 7. **Then the network.** Milestone 6 is the first thing to cut.
@@ -325,7 +325,7 @@ Our done rule needs a run on the Pi with real badges, so the staked match is the
 | 1 | **The Box on chain** | The monorepo and deploy pipeline, Box licences with a P-256 key, and the relayer. | The Box's token signs a heartbeat on the Pi, the relayer sends it, and a forged one is refused. | Part done. The HYP2003 signer runs on the Pi and its key matches `mumbai-01`. The real Box sends no heartbeat yet. |
 | 2 | **First game** | Badges join and get tokens, one-tap staked entry, the game escrow with refunds, and Quick Draw. | Two badges play Quick Draw for stakes without holding any ETH, and the winner is paid. | Built and live: `mumbai-01` has settled 50 pots on Sepolia. A staked match with hand taps isn't recorded yet. |
 | 3 | **Stock Duel** | Live Robinhood Chain prices, two-badge randomness, best of three, and the replay proof. | A staked match runs on the Box with live prices, and its proof checks out. | Rules, stakes and live prices done, with the block in each transcript. No staked match on the Pi with live prices, and no replay checker. |
-| 4 | **The token** | The auction launch, the fee hook, buyback and burn, lobby swaps, and staking to Boxes. | Each fee level shows on a real swap, and a settled game burns tokens and pays its stakers. | GBX, staking and the hook are deployed. The pool isn't initialized, and there's no auction, game fee, buyback or swap lobby. |
+| 4 | **The token** | The auction launch, the fee hook, buyback and burn, lobby swaps, and staking to Boxes. | Each fee level shows on a real swap, and a settled game burns tokens and pays its stakers. | GBX, staking and the hook are deployed. The pool isn't initialised, and there's no auction, game fee, buyback or swap lobby. |
 | 5 | **Names** | Box and player names, the champion title, and the public site. | A new player claims a name, wins, and the site shows the title move. | Names, cups and the site are live, and the site's Story moves a title. A win on the real Box isn't recorded yet. |
 | 6 | **The network** | The operator auction, Bet on X, B17, and 0G once credits arrive. | An operator wins a licence and registers a Box; both new games play a round. | Not started, apart from an operator site on a branch. 0G judges store games, but voice bets and the practice opponent aren't built. |
 
