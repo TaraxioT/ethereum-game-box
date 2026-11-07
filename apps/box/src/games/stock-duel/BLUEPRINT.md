@@ -39,7 +39,7 @@ reveal (the dial turns to the stat, the cards turn over, the seals come down) â†
 The team screen wears the Slab look: a dark room with each player's colour pooling up from their side, thick
 graphite slabs lit from above, chunky Unbounded type, and the seat colours (orange, cyan) as fills and rims. A
 Rolodex stands down each side, the cards upright on a drum with an index tab each. The front card shows its four
-stats, each a number over a bar filled by its rank in the deck, red for the deck's weakest through amber to green for
+stats as bars, no numbers, each filled by its rank in the deck, red for the deck's weakest through amber to green for
 its strongest, so a player can wait for a strong card; which stat counts is unknown until both are down. Between the
 Rolodexes a tray holds the stat wheel over two wells, where the played cards land face down and turn over at the
 reveal (the round's stat large, the other three as bars), the winner's lifting.
@@ -86,8 +86,8 @@ The comps it was built to, at the Pi's 1280Ã—800: [the match](look/slab-match.pn
 
 ## Pitfalls
 
-- The hand cards show their numbers, so both players see both hands. That is fine: the stat is not known until both
-  cards are down, and a tap plays only the card in front.
+- The hand cards show their stats as bars only, never a number, and both players see both hands. That is fine: the
+  stat is not known until both cards are down, and a tap plays only the card in front.
 - A roll takes up to a second on the chip. The team game holds the card from the touch, so a turn never ends under a
   badge that is still rolling. A built game hears of a tap only once its roll is back: a tap whose turn ran out
   meanwhile is too late (its card was played for it). Keep the last turn long (a whole drum turn here).

@@ -120,7 +120,7 @@ export function createReveal(places: RevealPlaces, label: (seat: DuelSeat) => st
     const value = el("b", "sd-rc-value", formatStat(stat, stock[stat]));
     feature.append(el("span", "sd-rc-label", STAT_LABEL[stat]), value, bar(stat, stock[stat]));
     const rows = el("ul", "sd-rc-rows");
-    for (const key of STATS) if (key !== stat) rows.append(statRow("li", stock, key));
+    for (const key of STATS) if (key !== stat) rows.append(statRow("li", stock, key, true));
     slot.face.replaceChildren(head, feature, rows, el("i", "sd-rc-dim"));
     // A long number ($1,002.35) shrinks to fit across the card.
     fitToSize(value, places.rests[0].w - VALUE_INSET);

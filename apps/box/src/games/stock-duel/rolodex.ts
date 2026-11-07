@@ -1,8 +1,8 @@
 // One player's hand as a Rolodex: the cards stand upright on a graphite drum with the seat's colour in its end caps.
 // Every card has an index tab sticking up from its top edge, each tab at its own place across the card, so all the
 // hand's tickers show at once. The front card is face up: the stock's colour along its top, its ticker and name, a "?"
-// that the draining ring runs round, and its four stats as bars ranked against the deck, so a player can wait for
-// their strongest card. The drum indexes one card
+// that the draining ring runs round, and its four stats as bars ranked against the deck (no numbers), so a player
+// can wait for a strong card. The drum indexes one card
 // at a time: the front card turns back over the top and lands upright at the back, and the next card is at the front.
 // A played card lifts off the drum toward the tray.
 import type { Rect } from "../../screen/shell/layout.ts";
@@ -128,7 +128,7 @@ export function createRolodex(seat: DuelSeat, at: Placement, sound: Sound): Rolo
     const ticker = el("b", "sd-card-ticker", stock.ticker);
     ticker.style.fontSize = `${tickerSize(stock.ticker)}px`;
     const stats = el("div", "sd-card-stats");
-    stats.append(...STATS.map((stat) => statRow("div", stock, stat)));
+    stats.append(...STATS.map((stat) => statRow("div", stock, stat, false)));
     body.append(ticker, el("span", "sd-card-name", stock.name), stats, el("i", "sd-card-ask"));
     const shade = el("i", "sd-card-shade");
     card.append(tab, body, shade);
