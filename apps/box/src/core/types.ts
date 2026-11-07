@@ -89,9 +89,9 @@ export interface ChainState {
   readonly gasGwei: number;
 }
 
-/** `topup`: 100 USDC from the lobby. `claim`: a player name. `open`: every stake into the pot. `settle`: the result,
- * which pays the pot. `refund`: an unsettled pot back to every player. */
-export type TxKind = "topup" | "claim" | "open" | "settle" | "refund";
+/** `topup`: 100 USDC from the lobby. `buy`: GBX from the lobby, at the tap fee. `claim`: a player name. `open`: every
+ * stake into the pot. `settle`: the result, which pays the pot. `refund`: an unsettled pot back to every player. */
+export type TxKind = "topup" | "buy" | "claim" | "open" | "settle" | "refund";
 /** The relayer's steps: signed by the Box, sent, mined, then confirmed (`paid`), or `failed` at any point. */
 export type TxStep = "signed" | "sent" | "in-block" | "paid" | "failed";
 
@@ -336,6 +336,8 @@ export interface BoxState {
   /** Transactions still on screen, newest last. */
   readonly txs: readonly Tx[];
   readonly lobby: Lobby;
+  /** Whether the lobby sells GBX (`ChainPort.buy`). */
+  readonly buys: boolean;
   /** What each tap station's OLED shows (`@egb/sdk`'s model: tag, big, small and the tap overrides), a station a seat. */
   readonly stations: Seated<StationView>;
 }
@@ -436,6 +438,8 @@ export type ScreenCommand =
   | { readonly type: "lobby" }
   /** The lobby's Top up 100 USDC, for the badge on show. */
   | { readonly type: "topup" }
+  /** The lobby's Buy GBX (`BUY_USDC` of it), for the badge on show. */
+  | { readonly type: "buy" }
   /** The lobby: another label to claim, or claim one: the label typed on the screen, else the one proposed. */
   | { readonly type: "propose" }
   | { readonly type: "claim"; readonly label?: string }

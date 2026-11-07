@@ -102,6 +102,8 @@ export const END_HOLD_MS = 2_400;
 export const REFUND_DONE_MS = 2_000;
 /** The lobby's top-up, in USDC (the relayer mints it). */
 export const TOPUP_USDC = 100;
+/** The USDC a lobby buy spends on GBX. */
+export const BUY_USDC = 10;
 /** The game's title and championship are read again this often while Stake, the lobby or the result shows. */
 export const BOARD_MS = 5_000;
 /** Sepolia's pace, for the screen's block clock between heads. */
@@ -416,6 +418,7 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
       match,
       txs: book.list(),
       lobby,
+      buys: port.buy !== undefined,
     };
     return { ...input, stations: stationViews(input, clock.now(), stations) };
   }
@@ -1211,6 +1214,17 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
     );
   }
 
+  /** Buys GBX for the badge on show. Its USDC stays as it was: the lobby mints what the swap takes. */
+  function buyGbx(): void {
+    const badge = lobby.badge;
+    if (!badge || !port.buy) return;
+    send(
+      { kind: "buy", seat: null, direction: "out", amount: BUY_USDC },
+      (watch) => port.buy?.(badge.address, BUY_USDC, watch),
+      (tx) => reread([badge.address], tx),
+    );
+  }
+
   /** Claims `typed` (a label typed on the screen), else the label proposed, for the badge on show. */
   function claimName(typed: string | undefined): void {
     const { badge, proposal, card } = lobby;
@@ -1471,6 +1485,9 @@ export function createCore(ports: CorePorts, options: CoreOptions = {}): Core {
         return;
       case "topup":
         if (phase === "lobby") topUp();
+        return;
+      case "buy":
+        if (phase === "lobby") buyGbx();
         return;
       case "propose":
         if (phase === "lobby") proposeAnother();

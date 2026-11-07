@@ -163,6 +163,12 @@ export interface ChainPort {
   refund(round: number, watch: TxWatch): void;
   /** 100 USDC to a badge. */
   topup(address: `0x${string}`, watch: TxWatch): void;
+  /**
+   * GBX for a badge, bought with `amount` test USDC on the GBX/USDC pool at the tap fee (a Box-signed `TapSwap` to
+   * `GameBoxLobby`), and staked to this Box once it is bonded. Absent: no lobby to buy from (the demo, or Sepolia
+   * before `GameBoxLobby` is deployed).
+   */
+  buy?(address: `0x${string}`, amount: number, watch: TxWatch): void;
   /** `<label>.gamebox.eth` for a badge (a Box-signed `Seat`). */
   claim(label: string, address: `0x${string}`, watch: TxWatch): void;
   /**

@@ -229,6 +229,7 @@
 .lobby-leaders li.you .who { color: var(--sys-hot); }
 .lobby-keys egb-key { flex: 0 1 150px; }
 .lobby-keys egb-key:last-child { flex-basis: 220px; }
+.lobby-keys egb-key[hidden] { display: none; }
 [data-orientation="portrait"] .lobby-card, [data-orientation="portrait"] .lobby-board { padding: 12px 14px; }
 [data-orientation="portrait"] .lobby-name { font-size: 22px; }
 [data-orientation="portrait"] .lobby-balance { font-size: 18px; }

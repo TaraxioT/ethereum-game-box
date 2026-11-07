@@ -20,6 +20,8 @@ function kindOf(tx: Tx, players: number): string {
   switch (tx.kind) {
     case "topup":
       return `TOP UP +${tx.amount} USDC`;
+    case "buy":
+      return `BUY GBX ${tx.amount} USDC`;
     case "claim":
       return "NAME";
     case "open":

@@ -79,6 +79,7 @@ export function parseCommand(data: string): ScreenCommand | null {
     case "build":
     case "lobby":
     case "topup":
+    case "buy":
     case "propose":
     case "hall":
     case "quit":

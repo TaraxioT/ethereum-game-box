@@ -140,8 +140,8 @@ export function createMachine(layout: Layout, scale: number, options: MachineOpt
     // An open has two stakes at least, even once its seats have gone.
     txbar.show(tx, Math.max(players.length, 2));
     clearTimeout(hideTx);
-    // A lobby's top-up or name belongs to no seat: it lights the core, and runs no packet to a port.
-    const seated = tx.kind !== "topup" && tx.kind !== "claim";
+    // A lobby's top-up, buy or name belongs to no seat: it lights the core, and runs no packet to a port.
+    const seated = tx.kind !== "topup" && tx.kind !== "buy" && tx.kind !== "claim";
     if (tx.step === "sent" && tx.direction === "in" && seated) void packet("port", tx.seat).then(() => core.swell());
     if (tx.step === "in-block") core.swell();
     if (tx.step === "in-block" && tx.direction === "out" && seated) void packet("core", tx.seat);

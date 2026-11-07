@@ -14,13 +14,14 @@ import {
   stakeDigest,
   verifyP256,
 } from "@egb/shared/names";
+import { type LobbyPool, lobbyTapSwap, tapSwapDigest } from "@egb/shared/swap";
 import { hexToBytes, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 import type { ChainTxUpdate, ResultOrder } from "../core/ports.ts";
 import { createFakeClock } from "../core/fake-clock.ts";
 import { softwareSigner } from "../signer/software.ts";
 import type { BoxSigner } from "../signer/signer.ts";
-import { createSepoliaChain, REFUND_AFTER_MS, resultOf, seatOf, settlementOf, stakeOf } from "./port.ts";
+import { buyOf, createSepoliaChain, REFUND_AFTER_MS, resultOf, seatOf, settlementOf, stakeOf } from "./port.ts";
 import { GIVE_UP_MS, POLL_MS } from "./requests.ts";
 import { roundsFile } from "./rounds.ts";
 import { memoryReads, mockRelayer } from "./testing.ts";
@@ -31,12 +32,17 @@ const DEADLINE = STAKE_VECTOR.stake.deadline;
 /** The vectors' deadline is 600 s (the port's) after this. */
 const NOW = (Number(DEADLINE) - 600) * 1000;
 const KEY = { qx: P256_VECTOR_KEY.qx, qy: P256_VECTOR_KEY.qy };
+const LOBBY: LobbyPool = {
+  lobby: "0x00000000000000000000000000000000000000ad",
+  hook: "0x00000000000000000000000000000000000000ae",
+  usdcIsToken0: false,
+};
 
 const flush = async (rounds = 8): Promise<void> => {
   for (let i = 0; i < rounds; i++) await new Promise<void>((resolve) => setImmediate(resolve));
 };
 
-function rig(signer: BoxSigner = softwareSigner(P256_VECTOR_KEY.privateKey)) {
+function rig(signer: BoxSigner = softwareSigner(P256_VECTOR_KEY.privateKey), lobby?: LobbyPool) {
   const clock = createFakeClock(NOW);
   const relayer = mockRelayer();
   const reads = memoryReads();
@@ -52,6 +58,7 @@ function rig(signer: BoxSigner = softwareSigner(P256_VECTOR_KEY.privateKey)) {
     clock,
     log: (text) => logs.push(text),
     contracts: { duelPot: STAKE_VECTOR.duelPot, boxResults: RESULT_VECTOR.boxResults, boxSeats: SEAT_VECTOR.boxSeats },
+    lobby,
   });
   const steps: ChainTxUpdate[] = [];
   const watch = (update: ChainTxUpdate) => void steps.push(update);
@@ -202,6 +209,22 @@ describe("the Sepolia port on a mocked relayer", () => {
     expect(verifyP256(KEY, sr, s, hexToBytes(SEAT_VECTOR.digest))).toBe(true);
     expect(topup).toEqual({ path: "/usdc/topup", body: { player: B } });
     expect(refund).toEqual({ path: "/duel/refund", body: { box: "mumbai-01", round: "7" } });
+  });
+
+  it("buys GBX with a Box-signed TapSwap the lobby sends, its nonce the Box's clock", async () => {
+    const r = rig(undefined, LOBBY);
+    r.chain.buy?.(A, 10, r.watch);
+    await flush();
+    const posted = r.relayer.posted.find((p) => p.path === "/swap/buy");
+    const buy = buyOf("mumbai-01", A, 10, BigInt(NOW), DEADLINE);
+    expect(posted?.body).toMatchObject({ box: "mumbai-01", badge: A, usdcIn: "10000000", nonce: String(NOW), deadline: String(DEADLINE) });
+    const digest = tapSwapDigest(lobbyTapSwap(buy, LOBBY), LOBBY.hook);
+    const { r: sr, s } = signatureOf(posted!.body);
+    expect(verifyP256(KEY, sr, s, hexToBytes(digest))).toBe(true);
+  });
+
+  it("sells no GBX without a lobby", () => {
+    expect(rig().chain.buy).toBeUndefined();
   });
 
   it("fails a request the key can't sign, and sends nothing", async () => {

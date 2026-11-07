@@ -11,7 +11,7 @@
 // Both panels lay their lines out inside their frames: names scroll, and the leaderboard shows the rows that fit. A
 // list is redrawn only when it changes, so its names keep scrolling. The transaction bar follows each claim and
 // top-up. BACK returns Home, or to Stake when a short balance sent the player here.
-import type { Board, BoxState, Leader, Lobby, PlayerRecord } from "../../core/types.ts";
+import type { Board, BoxState, Leader, Lobby, PlayerRecord, Tx } from "../../core/types.ts";
 import { DEFAULT_FOCUS } from "../../core/catalogue.ts";
 import type { View, ViewContext } from "./view.ts";
 import type { EgbKey } from "../parts/key.ts";
@@ -105,7 +105,7 @@ export function lobbyView(ctx: ViewContext): View {
 
   const keys = el("div", "page-keys lobby-keys");
   place(keys, page.keys);
-  const key = (text: string, command: "back" | "propose" | "claim" | "topup", variant?: string): EgbKey => {
+  const key = (text: string, command: "back" | "propose" | "claim" | "buy" | "topup", variant?: string): EgbKey => {
     const k = document.createElement("egb-key") as EgbKey;
     if (variant) k.setAttribute("variant", variant);
     k.textContent = text;
@@ -118,8 +118,9 @@ export function lobbyView(ctx: ViewContext): View {
   const back = key("BACK", "back", "ghost");
   const another = key("ANOTHER", "propose", "ghost");
   const claim = key("CLAIM", "claim");
+  const buy = key("BUY GBX", "buy", "ghost");
   const topup = key("TOP UP 100 USDC", "topup");
-  keys.append(back, another, claim, topup);
+  keys.append(back, another, claim, buy, topup);
   root.append(card, board, plate, keys);
 
   /** Puts `text` in place of the field's selection (or at its caret), then reads the field as typed. */
@@ -161,8 +162,10 @@ export function lobbyView(ctx: ViewContext): View {
   });
 
   function drawCard(lobby: Lobby, state: BoxState): void {
-    const claiming = state.txs.some((tx) => tx.kind === "claim" && tx.step !== "paid" && tx.step !== "failed");
-    const topping = state.txs.some((tx) => tx.kind === "topup" && tx.step !== "paid" && tx.step !== "failed");
+    const pending = (kind: Tx["kind"]): boolean => state.txs.some((tx) => tx.kind === kind && tx.step !== "paid" && tx.step !== "failed");
+    const claiming = pending("claim");
+    const topping = pending("topup");
+    const buying = pending("buy");
     const c = lobby.card;
     card.toggleAttribute("lit", lobby.badge !== null);
     const naming = Boolean(lobby.badge && c && !c.name);
@@ -196,15 +199,19 @@ export function lobbyView(ctx: ViewContext): View {
     claim.toggleAttribute("disabled", !naming || claiming || problem !== null);
     nameKeys.claimable(naming && !claiming && problem === null);
     topup.toggleAttribute("disabled", !lobby.badge || topping);
+    buy.hidden = !state.buys;
+    buy.toggleAttribute("disabled", !lobby.badge || buying);
     plate.textContent = !lobby.badge
       ? `TAP YOUR BADGE ON ${state.stations.length > 2 ? "ANY" : "EITHER"} STATION`
       : claiming
         ? "CLAIMING YOUR NAME ON SEPOLIA…"
         : topping
           ? "TOPPING UP 100 USDC…"
-          : lobby.from === "stake"
-            ? `YOUR STAKE IS ${usdc(state.stake)}: TOP UP, THEN BACK`
-            : "TAP ANOTHER BADGE TO SEE IT";
+          : buying
+            ? "BUYING GBX AT THE TAP FEE…"
+            : lobby.from === "stake"
+              ? `YOUR STAKE IS ${usdc(state.stake)}: TOP UP, THEN BACK`
+              : "TAP ANOTHER BADGE TO SEE IT";
   }
 
   /** The player's stats from its name's `stats` record, and its place on the leaderboard. */

@@ -12,6 +12,7 @@ for the test page's Admin tab: `server/admin.ts`.)
 | The result, which settles the pot | `POST /box/result { result, r, s }` | `Result` ("Game Box Results" v1, `BoxResults`), the stake's round and badges |
 | An unsettled pot back to both | `POST /duel/refund { box, round }` | no (anyone, an hour after the open) |
 | 100 USDC to a badge | `POST /usdc/topup { player }` | no |
+| 10 USDC of GBX for a badge, at the tap fee | `POST /swap/buy { box, badge, usdcIn, nonce, deadline, r, s }` | `TapSwap` ("Game Box Hook" v1, `GameBoxHook`), with `GameBoxLobby` as its sender; only when the lobby is deployed |
 | A player name for a badge | `POST /players/box-claim { seat, r, s }` | `Seat` ("Game Box Seats" v1, `BoxSeats`): a HaLo badge can't sign a `ClaimName` |
 | A store game's stakes into its pot | `POST /store/open { stake, r, s }` | `Stake` ("Game Box Store Pots" v1, `StorePot`), naming the bundle's hash |
 | An unsettled store pot back to its players | `POST /store/refund { box, round }` | no (anyone, an hour after the open) |

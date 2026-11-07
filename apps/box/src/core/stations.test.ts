@@ -29,6 +29,7 @@ function input(phase: Phase, seats: readonly [SeatState, SeatState] = [EMPTY, EM
     match,
     txs: [],
     lobby: { badge: null, card: null, proposal: null, from: "home" },
+    buys: false,
   };
 }
 

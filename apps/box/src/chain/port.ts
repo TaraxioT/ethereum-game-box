@@ -8,6 +8,7 @@
 // - refund: `POST /duel/refund`. A pot the Box lost track of (a restart, a reset) is refunded by the sweep once its
 //   delay has run.
 // - topup: `POST /usdc/topup`. claim: a `Seat` to `POST /players/box-claim` (a badge can't sign a `ClaimName`).
+// - buy: a `TapSwap` to `POST /swap/buy`, once `GameBoxLobby` is deployed: GBX at the hook's tap fee.
 // - store: a store game's money and judge (`store.ts`), once `StorePot` is deployed and the verifier is set.
 import {
   type Result,
@@ -19,6 +20,7 @@ import {
   stakeDigest,
   usdc,
 } from "@egb/shared/names";
+import { type LobbyBuy, type LobbyPool, lobbyTapSwap, tapSwapDigest } from "@egb/shared/swap";
 import { DUEL_SEATS, type DuelSeat } from "@egb/sdk";
 import { type Address, type Hex, isAddressEqual } from "viem";
 import type { ChainHead, ChainPort, Clock, ResultOrder, StakeOrder, TxWatch } from "../core/ports.ts";
@@ -55,6 +57,8 @@ export interface SepoliaChainOptions {
   readonly contracts?: { readonly duelPot: Address; readonly boxResults: Address; readonly boxSeats: Address };
   /** Store games' pot and judge. Absent: this Box has none. */
   readonly store?: { readonly storePot: Address; readonly verifier: Verifier } | undefined;
+  /** `GameBoxLobby` and its pool (`lobbyPool()`). Absent: the lobby sells no GBX. */
+  readonly lobby?: LobbyPool | undefined;
 }
 
 export interface SepoliaChain extends ChainPort {
@@ -101,6 +105,11 @@ export function resultOf(box: string, order: ResultOrder, deadline: bigint): Res
 /** A badge's player name as the Box vouches for it. */
 export function seatOf(box: string, labelText: string, badge: Address, deadline: bigint): Seat {
   return { label: labelText, badge, box, deadline };
+}
+
+/** A badge's GBX buy as the Box signs it. `nonce` must not repeat for this Box: the hook refuses a used one. */
+export function buyOf(box: string, badge: Address, amount: number, nonce: bigint, deadline: bigint): LobbyBuy {
+  return { box, badge, usdcIn: usdc(amount), nonce, deadline };
 }
 
 /** What the result did, from what the chain says at its receipt: the facts the result screen announces, and its lines. */
@@ -180,12 +189,21 @@ export function createSepoliaChain(options: SepoliaChainOptions): SepoliaChain {
     );
   }
 
+  /** The lobby's buy: the Box's clock in ms is the nonce, so no two buys from this Box share one. */
+  const buyFrom = (pool: LobbyPool) => (address: Address, amount: number, watch: TxWatch): void => {
+    const buy = buyOf(box, address, amount, BigInt(clock.now()), deadline());
+    const json = { ...buy, usdcIn: String(buy.usdcIn), nonce: String(buy.nonce), deadline: String(buy.deadline) };
+    const digest = tapSwapDigest(lobbyTapSwap(buy, pool), pool.hook);
+    signed(`buy ${amount} USDC of GBX for ${address}`, digest, "/swap/buy", (sig) => ({ ...json, ...sig }), watch);
+  };
+
   const port: SepoliaChain = {
     onChain: (game) => chainLabel(game) !== null,
     nextRound: () => rounds.take(),
     refundAfterMs: REFUND_AFTER_MS,
     stakeNeedsName: true,
     store,
+    ...(options.lobby && { buy: buyFrom(options.lobby) }),
     async player(address, block) {
       const at = block === undefined ? undefined : BigInt(block);
       const [name, balance] = await Promise.all([reads.nameOf(address, at), reads.balance(address, at)]);

@@ -149,6 +149,7 @@ function stateOf(scene: Scene): BoxState {
     match: matchOf(scene),
     txs: scene.phase === "stake" ? [open] : [],
     lobby: { badge: null, card: null, proposal: null, from: "home" },
+    buys: false,
     stations: [view, view],
   };
 }

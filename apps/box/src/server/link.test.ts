@@ -72,6 +72,7 @@ describe("the screen's link", () => {
       build: { type: "build" },
       lobby: { type: "lobby" },
       topup: { type: "topup" },
+      buy: { type: "buy" },
       propose: { type: "propose" },
       claim: { type: "claim" },
       frame: { type: "frame", word: { t: "event", name: "score", data: { seat: 0 } } },

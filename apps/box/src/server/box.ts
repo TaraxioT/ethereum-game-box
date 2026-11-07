@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SEATS } from "@egb/sdk";
 import { storePotAddress } from "@egb/shared/store";
+import { lobbyPool } from "@egb/shared/swap";
 import type { ChainPort, Clock } from "../core/ports.ts";
 import { createCore, type Core } from "../core/core.ts";
 import { seatsInUse } from "../core/seats.ts";
@@ -118,6 +119,7 @@ export async function startBox(options: BoxOptions): Promise<Box> {
           clock,
           log,
           store: settings.store && storePot ? { storePot, verifier: verifierAt(settings.store.verifierUrl) } : undefined,
+          lobby: lobbyPool(),
         });
   const chain: ChainPort & { stop?(): void } = options.chain?.(clock) ?? sepolia ?? createDemoChain(clock);
   const sessions = createSessionLog(settings.dataDir, log);

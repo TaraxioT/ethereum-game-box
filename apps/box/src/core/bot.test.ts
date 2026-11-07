@@ -41,6 +41,7 @@ function box(patch: Partial<BoxState>): BoxState {
     match: null,
     txs: [],
     lobby: { badge: null, card: null, proposal: null, from: "home" },
+    buys: false,
     stations: [stationView("", "", ""), stationView("", "", "")],
     ...patch,
   };

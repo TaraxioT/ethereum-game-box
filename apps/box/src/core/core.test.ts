@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32, type Seat, type StationView, type Transcript } from "@egb/sdk";
 import type { ChainHead, ChainPort, LibraryPort, ResultOrder, StakeOrder, TxWatch } from "./ports.ts";
 import type { Badge, Board, BoxEvent, BoxState, GameInfo } from "./types.ts";
-import { BOARD_MS, BUILD_IDLE_MS, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, REREAD_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
+import { BOARD_MS, BUILD_IDLE_MS, BUY_USDC, createCore, END_HOLD_MS, IDLE_MS, REFUND_DONE_MS, REREAD_MS, SEATED_IDLE_MS, TOPUP_USDC, type Core } from "./core.ts";
 import { REMATCH_TAP_MS } from "./plan.ts";
 import type { TapSource } from "./ports.ts";
 import { createFakeClock, type FakeClock } from "./fake-clock.ts";
@@ -25,7 +25,7 @@ const LABEL = /^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])$/;
 
 /** One request a recording port took, with the watch the test moves it on with. */
 interface Sent {
-  readonly kind: "open" | "settle" | "refund" | "topup" | "claim";
+  readonly kind: "open" | "settle" | "refund" | "topup" | "buy" | "claim";
   readonly order: unknown;
   readonly watch: TxWatch;
 }
@@ -80,6 +80,7 @@ function recordingPort(): Recording {
     settle: take("settle"),
     refund: (round, watch) => void sent.push({ kind: "refund", order: round, watch }),
     topup: (address, watch) => void sent.push({ kind: "topup", order: address, watch }),
+    buy: (address, amount, watch) => void sent.push({ kind: "buy", order: { address, amount }, watch }),
     claim: (label, address, watch) => void sent.push({ kind: "claim", order: { label, address }, watch }),
     outcome(order, hash) {
       outcomes.push([order, hash]);
@@ -913,6 +914,29 @@ describe("the lobby", () => {
     expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "topup", amount: TOPUP_USDC });
     await until(r, (state) => state.lobby.card?.balance === 200);
     expect(r.chain.sent).toEqual([`topup ${KITE.address}`]);
+  });
+
+  it("buys GBX at the tap fee for the badge in the lobby, and reads it again once it is paid", async () => {
+    const r = rigOn(recordingPort);
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    expect(r.core.state().buys).toBe(true);
+    instantTap(r.core, 0, KITE, 1);
+    await flush();
+    const before = r.chain.reads.length;
+    r.core.send({ type: "buy" });
+    expect(r.core.state().txs.at(-1)).toMatchObject({ kind: "buy", amount: BUY_USDC });
+    expect(r.chain.sent.map((sent) => [sent.kind, sent.order])).toEqual([["buy", { address: KITE.address, amount: BUY_USDC }]]);
+    pay(r.chain.sent[0]);
+    await flush();
+    expect(r.chain.reads.slice(before).map(([address]) => address)).toContain(KITE.address);
+  });
+
+  it("sells no GBX on a chain without a lobby", () => {
+    const r = rig();
+    r.core.send({ type: "booted" });
+    r.core.send({ type: "lobby" });
+    expect(r.core.state().buys).toBe(false);
   });
 
   it("reads the title and the championship of the focused game, or Stock Duel's for a game not on chain", async () => {
